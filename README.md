@@ -77,6 +77,19 @@ flow. A few acceptance tests read the local sample photo at
 `/home/lavx/Downloads/IMG20260830150231.jpg`; on another machine, adjust that
 path or skip those tests. Tests never print.
 
+## Portable AppImage
+
+```bash
+./packaging/build-appimage.sh
+# build/release/PhotoPrint-<version>-x86_64.AppImage
+```
+
+The script downloads the standard AppImage tooling once into
+`build/appimage-tools`, bundles Qt, LittleCMS2, CUPS and ImageMagick, and adds
+the XCB, Wayland and offscreen platform plugins. The resulting AppImage runs on
+Wayland and X11 desktops without installing PhotoPrint. If FUSE is unavailable,
+run it with `--appimage-extract-and-run`.
+
 ## Fedora package
 
 ```bash
