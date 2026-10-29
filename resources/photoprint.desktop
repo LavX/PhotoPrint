@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=PhotoPrint
+Comment=Fotók rendezése és nyomtatása
+Exec=photoprint
+Icon=photoprint
+Terminal=false
+Categories=Graphics;Photography;Qt;
+Keywords=photo;print;paper;fotó;nyomtatás;

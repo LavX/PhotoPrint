@@ -1,0 +1,832 @@
+{
+  "note": "Read-only capability snapshot captured 2026-10-29 from the local CUPS queues. Live discovery is authoritative; this file is reference material, never a silent fallback.",
+  "device": "Brother DCP-T730DW",
+  "paper": {
+    "name": "SWAN glossy photo paper",
+    "widthMm": 100.0,
+    "heightMm": 150.0,
+    "grammage": 200,
+    "ean": "6949853615204"
+  },
+  "queues": [
+    {
+      "colorOptions": [
+        "FullColor",
+        "Mono"
+      ],
+      "defaultColor": "FullColor",
+      "defaultDuplex": "None",
+      "defaultMediaType": "Glossy",
+      "defaultPageSize": "BrPostC4x6_S",
+      "defaultQuality": "Fine",
+      "deviceUri": "lpd://192.168.100.156/binary_p1",
+      "display": "Brother DCP-T730DW - gyari meghajto",
+      "driverIdentity": "brother-native",
+      "duplexOptions": [
+        "DuplexTumble",
+        "DuplexNoTumble",
+        "None"
+      ],
+      "manufacturer": "Brother",
+      "mediaTypes": [
+        {
+          "display": "Plain Paper",
+          "option": "Plain",
+          "photo": false
+        },
+        {
+          "display": "Glossy Paper",
+          "option": "Glossy",
+          "photo": true
+        },
+        {
+          "display": "Inkjet Paper",
+          "option": "Inkjet",
+          "photo": false
+        }
+      ],
+      "model": "Brother DCPT730DW",
+      "nickName": "Brother DCPT730DW CUPS",
+      "online": true,
+      "pageSizes": [
+        {
+          "borderless": false,
+          "display": "A4",
+          "heightMm": 297.03888888888883,
+          "imageableKnown": true,
+          "imageableMm": [
+            3.175,
+            3.1749999999999594,
+            206.72777777777776,
+            293.8638888888888
+          ],
+          "option": "A4",
+          "widthMm": 209.90277777777777
+        },
+        {
+          "borderless": true,
+          "display": "A4 (Borderless)",
+          "heightMm": 297.03888888888883,
+          "imageableKnown": true,
+          "imageableMm": [
+            0,
+            -4.010618997401454e-14,
+            209.90277777777777,
+            297.03888888888883
+          ],
+          "option": "BrA4_B",
+          "widthMm": 209.90277777777777
+        },
+        {
+          "borderless": false,
+          "display": "Letter",
+          "heightMm": 279.4,
+          "imageableKnown": true,
+          "imageableMm": [
+            3.175,
+            3.175,
+            212.725,
+            276.22499999999997
+          ],
+          "option": "Letter",
+          "widthMm": 215.89999999999998
+        },
+        {
+          "borderless": true,
+          "display": "US Letter (Borderless)",
+          "heightMm": 279.4,
+          "imageableKnown": true,
+          "imageableMm": [
+            0,
+            0,
+            215.89999999999998,
+            279.4
+          ],
+          "option": "BrLetter_B",
+          "widthMm": 215.89999999999998
+        },
+        {
+          "borderless": false,
+          "display": "Legal",
+          "heightMm": 355.59999999999997,
+          "imageableKnown": true,
+          "imageableMm": [
+            3.175,
+            3.175,
+            212.725,
+            352.42499999999995
+          ],
+          "option": "Legal",
+          "widthMm": 215.89999999999998
+        },
+        {
+          "borderless": false,
+          "display": "Executive",
+          "heightMm": 266.7,
+          "imageableKnown": true,
+          "imageableMm": [
+            3.175,
+            3.175,
+            180.975,
+            263.525
+          ],
+          "option": "Executive",
+          "widthMm": 184.14999999999998
+        },
+        {
+          "borderless": false,
+          "display": "A5",
+          "heightMm": 209.90277777777777,
+          "imageableKnown": true,
+          "imageableMm": [
+            3.175,
+            3.175,
+            144.99166666666665,
+            206.72777777777776
+          ],
+          "option": "A5",
+          "widthMm": 148.16666666666666
+        },
+        {
+          "borderless": false,
+          "display": "A6",
+          "heightMm": 148.16666666666666,
+          "imageableKnown": true,
+          "imageableMm": [
+            3.175,
+            3.175,
+            101.6,
+            144.99166666666665
+          ],
+          "option": "A6",
+          "widthMm": 104.77499999999999
+        },
+        {
+          "borderless": true,
+          "display": "A6 (Borderless)",
+          "heightMm": 148.16666666666666,
+          "imageableKnown": true,
+          "imageableMm": [
+            0,
+            0,
+            104.77499999999999,
+            148.16666666666666
+          ],
+          "option": "BrA6_B",
+          "widthMm": 104.77499999999999
+        },
+        {
+          "borderless": false,
+          "display": "JIS B5",
+          "heightMm": 257.17499999999995,
+          "imageableKnown": true,
+          "imageableMm": [
+            3.175,
+            3.1749999999999594,
+            178.85833333333332,
+            253.99999999999994
+          ],
+          "option": "B5",
+          "widthMm": 182.0333333333333
+        },
+        {
+          "borderless": false,
+          "display": "JIS B6",
+          "heightMm": 182.0333333333333,
+          "imageableKnown": true,
+          "imageableMm": [
+            3.175,
+            3.175,
+            124.88333333333333,
+            178.85833333333332
+          ],
+          "option": "JISB6",
+          "widthMm": 128.0583333333333
+        },
+        {
+          "borderless": false,
+          "display": "4 x 6 in",
+          "heightMm": 152.39999999999998,
+          "imageableKnown": true,
+          "imageableMm": [
+            3.175,
+            3.175,
+            98.425,
+            149.225
+          ],
+          "option": "BrPostC4x6_S",
+          "widthMm": 101.6
+        },
+        {
+          "borderless": true,
+          "display": "4 x 6 in (Borderless)",
+          "heightMm": 152.39999999999998,
+          "imageableKnown": true,
+          "imageableMm": [
+            0,
+            0,
+            101.6,
+            152.39999999999998
+          ],
+          "option": "BrPostC4x6_B",
+          "widthMm": 101.6
+        },
+        {
+          "borderless": false,
+          "display": "5 x 8 in",
+          "heightMm": 203.2,
+          "imageableKnown": true,
+          "imageableMm": [
+            3.175,
+            3.175,
+            123.82499999999999,
+            200.02499999999998
+          ],
+          "option": "BrIndexC5x8_S",
+          "widthMm": 126.99999999999999
+        },
+        {
+          "borderless": true,
+          "display": "5 x 8 in (Borderless)",
+          "heightMm": 203.2,
+          "imageableKnown": true,
+          "imageableMm": [
+            0,
+            0,
+            126.99999999999999,
+            203.2
+          ],
+          "option": "BrIndexC5x8_B",
+          "widthMm": 126.99999999999999
+        },
+        {
+          "borderless": false,
+          "display": "3.5 x 5 in",
+          "heightMm": 126.99999999999999,
+          "imageableKnown": true,
+          "imageableMm": [
+            3.175,
+            3.175,
+            85.725,
+            123.82499999999999
+          ],
+          "option": "BrPhotoL_S",
+          "widthMm": 88.89999999999999
+        },
+        {
+          "borderless": true,
+          "display": "3.5 x 5 in (Borderless)",
+          "heightMm": 126.99999999999999,
+          "imageableKnown": true,
+          "imageableMm": [
+            0,
+            0,
+            88.89999999999999,
+            126.99999999999999
+          ],
+          "option": "BrPhotoL_B",
+          "widthMm": 88.89999999999999
+        },
+        {
+          "borderless": false,
+          "display": "5 x 7 in",
+          "heightMm": 178.15277777777777,
+          "imageableKnown": true,
+          "imageableMm": [
+            3.175,
+            3.175,
+            123.47222222222221,
+            174.97777777777776
+          ],
+          "option": "BrPhoto2L_S",
+          "widthMm": 126.64722222222221
+        },
+        {
+          "borderless": true,
+          "display": "5 x 7 in (Borderless)",
+          "heightMm": 178.15277777777777,
+          "imageableKnown": true,
+          "imageableMm": [
+            0,
+            0,
+            126.64722222222221,
+            178.15277777777777
+          ],
+          "option": "BrPhoto2L_B",
+          "widthMm": 126.64722222222221
+        },
+        {
+          "borderless": false,
+          "display": "DL",
+          "heightMm": 220.13333333333333,
+          "imageableKnown": true,
+          "imageableMm": [
+            3.175,
+            11.994444444444444,
+            106.89166666666665,
+            208.13888888888886
+          ],
+          "option": "EnvDL",
+          "widthMm": 110.06666666666666
+        },
+        {
+          "borderless": false,
+          "display": "C5",
+          "heightMm": 228.95277777777775,
+          "imageableKnown": true,
+          "imageableMm": [
+            3.175,
+            11.994444444444444,
+            158.74999999999997,
+            216.95833333333331
+          ],
+          "option": "EnvC5",
+          "widthMm": 161.92499999999998
+        },
+        {
+          "borderless": false,
+          "display": "Com-10",
+          "heightMm": 241.29999999999998,
+          "imageableKnown": true,
+          "imageableMm": [
+            3.175,
+            11.994444444444444,
+            101.6,
+            229.30555555555554
+          ],
+          "option": "Env10",
+          "widthMm": 104.77499999999999
+        },
+        {
+          "borderless": false,
+          "display": "Monarch",
+          "heightMm": 190.49999999999997,
+          "imageableKnown": true,
+          "imageableMm": [
+            3.175,
+            11.994444444444444,
+            95.24999999999999,
+            178.50555555555553
+          ],
+          "option": "EnvMonarch",
+          "widthMm": 98.425
+        },
+        {
+          "borderless": false,
+          "display": "Folio",
+          "heightMm": 330.2,
+          "imageableKnown": true,
+          "imageableMm": [
+            3.175,
+            3.175,
+            212.725,
+            327.025
+          ],
+          "option": "FanFoldGermanLegal",
+          "widthMm": 215.89999999999998
+        },
+        {
+          "borderless": false,
+          "display": "16K(195x270mm)",
+          "heightMm": 269.875,
+          "imageableKnown": true,
+          "imageableMm": [
+            3.175,
+            3.17500000000004,
+            191.9111111111111,
+            266.70000000000005
+          ],
+          "option": "195x270mm",
+          "widthMm": 195.08611111111108
+        },
+        {
+          "borderless": false,
+          "display": "Mexico Legal",
+          "heightMm": 339.72499999999997,
+          "imageableKnown": true,
+          "imageableMm": [
+            3.175,
+            3.175,
+            212.725,
+            336.54999999999995
+          ],
+          "option": "MexicanLegal",
+          "widthMm": 215.89999999999998
+        },
+        {
+          "borderless": false,
+          "display": "India Legal",
+          "heightMm": 345.01666666666665,
+          "imageableKnown": true,
+          "imageableMm": [
+            3.175,
+            3.175,
+            211.66666666666666,
+            341.84166666666664
+          ],
+          "option": "IndianLegal",
+          "widthMm": 214.84166666666664
+        }
+      ],
+      "ppdFileName": "DCPT730DW.PPD",
+      "ppdFingerprint": "e3ff5e2ec767b9cf4e8078c7554a8fe87c47198d1a695a3446d185700a849403",
+      "qualityOptions": [
+        "Draft",
+        "Normal",
+        "Fine"
+      ],
+      "queue": "DCPT730DW"
+    },
+    {
+      "colorOptions": [
+        "RGB",
+        "Gray"
+      ],
+      "defaultColor": "RGB",
+      "defaultDuplex": "None",
+      "defaultMediaType": "Stationery",
+      "defaultPageSize": "A4",
+      "defaultQuality": "Normal",
+      "deviceUri": "ipp://MiWiFi-RA82-srv.local:631/ipp/print",
+      "display": "Brother DCP-T730DW",
+      "driverIdentity": "ipp-everywhere",
+      "duplexOptions": [
+        "None",
+        "DuplexNoTumble",
+        "DuplexTumble"
+      ],
+      "manufacturer": "Brother",
+      "mediaTypes": [
+        {
+          "display": "Stationery",
+          "option": "Stationery",
+          "photo": false
+        },
+        {
+          "display": "PhotographicGlossy",
+          "option": "PhotographicGlossy",
+          "photo": true
+        },
+        {
+          "display": "StationeryInkjet",
+          "option": "StationeryInkjet",
+          "photo": false
+        },
+        {
+          "display": "Com.brotherBp71",
+          "option": "Com.brotherBp71",
+          "photo": false
+        }
+      ],
+      "model": "DCP-T730DW",
+      "nickName": "DCP-T730DW - IPP Everywhere",
+      "online": true,
+      "pageSizes": [
+        {
+          "borderless": false,
+          "display": "215x345mm",
+          "heightMm": 345.00000000000006,
+          "imageableKnown": true,
+          "imageableMm": [
+            2.9999999999999942,
+            2.9999999999999996,
+            212.00000000000006,
+            342.00000000000006
+          ],
+          "option": "215x345mm",
+          "widthMm": 215.00000000000006
+        },
+        {
+          "borderless": false,
+          "display": "3.5x5",
+          "heightMm": 126.99999999999999,
+          "imageableKnown": true,
+          "imageableMm": [
+            2.9999999999999942,
+            2.9999999999999996,
+            85.9,
+            123.99999999999999
+          ],
+          "option": "3.5x5",
+          "widthMm": 88.89999999999999
+        },
+        {
+          "borderless": true,
+          "display": "3.5x5.Borderless",
+          "heightMm": 126.99999999999999,
+          "imageableKnown": true,
+          "imageableMm": [
+            0,
+            0,
+            88.89999999999999,
+            126.99999999999999
+          ],
+          "option": "3.5x5.Borderless",
+          "widthMm": 88.89999999999999
+        },
+        {
+          "borderless": false,
+          "display": "4x6",
+          "heightMm": 152.39999999999998,
+          "imageableKnown": true,
+          "imageableMm": [
+            2.9999999999999942,
+            2.9999999999999996,
+            98.6,
+            149.39999999999998
+          ],
+          "option": "4x6",
+          "widthMm": 101.6
+        },
+        {
+          "borderless": true,
+          "display": "4x6.Borderless",
+          "heightMm": 152.39999999999998,
+          "imageableKnown": true,
+          "imageableMm": [
+            0,
+            0,
+            101.6,
+            152.39999999999998
+          ],
+          "option": "4x6.Borderless",
+          "widthMm": 101.6
+        },
+        {
+          "borderless": false,
+          "display": "5x7",
+          "heightMm": 177.79999999999998,
+          "imageableKnown": true,
+          "imageableMm": [
+            2.9999999999999942,
+            2.9999999999999996,
+            123.99999999999999,
+            174.79999999999998
+          ],
+          "option": "5x7",
+          "widthMm": 126.99999999999999
+        },
+        {
+          "borderless": true,
+          "display": "5x7.Borderless",
+          "heightMm": 177.79999999999998,
+          "imageableKnown": true,
+          "imageableMm": [
+            0,
+            0,
+            126.99999999999999,
+            177.79999999999998
+          ],
+          "option": "5x7.Borderless",
+          "widthMm": 126.99999999999999
+        },
+        {
+          "borderless": false,
+          "display": "5x8",
+          "heightMm": 203.2,
+          "imageableKnown": true,
+          "imageableMm": [
+            2.9999999999999942,
+            2.9999999999999996,
+            123.99999999999999,
+            200.2
+          ],
+          "option": "5x8",
+          "widthMm": 126.99999999999999
+        },
+        {
+          "borderless": true,
+          "display": "5x8.Borderless",
+          "heightMm": 203.2,
+          "imageableKnown": true,
+          "imageableMm": [
+            0,
+            0,
+            126.99999999999999,
+            203.2
+          ],
+          "option": "5x8.Borderless",
+          "widthMm": 126.99999999999999
+        },
+        {
+          "borderless": false,
+          "display": "A4",
+          "heightMm": 297.00000000000017,
+          "imageableKnown": true,
+          "imageableMm": [
+            2.9999999999999942,
+            3.0000000000000395,
+            206.99999999999997,
+            294.00000000000017
+          ],
+          "option": "A4",
+          "widthMm": 209.99999999999997
+        },
+        {
+          "borderless": true,
+          "display": "A4.Borderless",
+          "heightMm": 297.00000000000017,
+          "imageableKnown": true,
+          "imageableMm": [
+            0,
+            4.010618997401454e-14,
+            209.99999999999997,
+            297.00000000000017
+          ],
+          "option": "A4.Borderless",
+          "widthMm": 209.99999999999997
+        },
+        {
+          "borderless": false,
+          "display": "A5",
+          "heightMm": 209.99999999999997,
+          "imageableKnown": true,
+          "imageableMm": [
+            2.9999999999999942,
+            2.9999999999999996,
+            144.99999999999994,
+            206.99999999999997
+          ],
+          "option": "A5",
+          "widthMm": 147.99999999999994
+        },
+        {
+          "borderless": false,
+          "display": "A6",
+          "heightMm": 147.99999999999994,
+          "imageableKnown": true,
+          "imageableMm": [
+            2.9999999999999942,
+            2.9999999999999996,
+            102.00000000000016,
+            144.99999999999994
+          ],
+          "option": "A6",
+          "widthMm": 105.00000000000014
+        },
+        {
+          "borderless": true,
+          "display": "A6.Borderless",
+          "heightMm": 147.99999999999994,
+          "imageableKnown": true,
+          "imageableMm": [
+            0,
+            0,
+            105.00000000000014,
+            147.99999999999994
+          ],
+          "option": "A6.Borderless",
+          "widthMm": 105.00000000000014
+        },
+        {
+          "borderless": false,
+          "display": "Env10",
+          "heightMm": 241.29999999999998,
+          "imageableKnown": true,
+          "imageableMm": [
+            2.9999999999999942,
+            11.999999999999957,
+            101.77000000000015,
+            229.29999999999995
+          ],
+          "option": "Env10",
+          "widthMm": 104.77000000000015
+        },
+        {
+          "borderless": false,
+          "display": "EnvC5",
+          "heightMm": 229.00000000000014,
+          "imageableKnown": true,
+          "imageableMm": [
+            2.9999999999999942,
+            12.000000000000318,
+            159.00000000000006,
+            217.00000000000014
+          ],
+          "option": "EnvC5",
+          "widthMm": 162.00000000000003
+        },
+        {
+          "borderless": false,
+          "display": "EnvDL",
+          "heightMm": 219.9999999999998,
+          "imageableKnown": true,
+          "imageableMm": [
+            2.9999999999999942,
+            11.999999999999998,
+            106.9999999999999,
+            207.99999999999986
+          ],
+          "option": "EnvDL",
+          "widthMm": 109.9999999999999
+        },
+        {
+          "borderless": false,
+          "display": "EnvMonarch",
+          "heightMm": 190.49999999999997,
+          "imageableKnown": true,
+          "imageableMm": [
+            2.9999999999999942,
+            11.999999999999977,
+            95.42000000000014,
+            178.5
+          ],
+          "option": "EnvMonarch",
+          "widthMm": 98.42000000000014
+        },
+        {
+          "borderless": false,
+          "display": "Executive",
+          "heightMm": 266.7,
+          "imageableKnown": true,
+          "imageableMm": [
+            2.9999999999999942,
+            2.9999999999999996,
+            181.14999999999998,
+            263.7
+          ],
+          "option": "Executive",
+          "widthMm": 184.14999999999998
+        },
+        {
+          "borderless": false,
+          "display": "FanFoldGermanLegal",
+          "heightMm": 330.2,
+          "imageableKnown": true,
+          "imageableMm": [
+            2.9999999999999942,
+            2.9999999999999996,
+            212.89999999999998,
+            327.2
+          ],
+          "option": "FanFoldGermanLegal",
+          "widthMm": 215.89999999999998
+        },
+        {
+          "borderless": false,
+          "display": "Legal",
+          "heightMm": 355.59999999999997,
+          "imageableKnown": true,
+          "imageableMm": [
+            2.9999999999999942,
+            2.9999999999999996,
+            212.89999999999998,
+            352.59999999999997
+          ],
+          "option": "Legal",
+          "widthMm": 215.89999999999998
+        },
+        {
+          "borderless": false,
+          "display": "Letter",
+          "heightMm": 279.4,
+          "imageableKnown": true,
+          "imageableMm": [
+            2.9999999999999942,
+            2.9999999999999996,
+            212.89999999999998,
+            276.4
+          ],
+          "option": "Letter",
+          "widthMm": 215.89999999999998
+        },
+        {
+          "borderless": true,
+          "display": "Letter.Borderless",
+          "heightMm": 279.4,
+          "imageableKnown": true,
+          "imageableMm": [
+            0,
+            0,
+            215.89999999999998,
+            279.4
+          ],
+          "option": "Letter.Borderless",
+          "widthMm": 215.89999999999998
+        },
+        {
+          "borderless": false,
+          "display": "Oficio",
+          "heightMm": 340.35999999999996,
+          "imageableKnown": true,
+          "imageableMm": [
+            2.9999999999999942,
+            2.999999999999959,
+            212.89999999999998,
+            337.35999999999996
+          ],
+          "option": "Oficio",
+          "widthMm": 215.89999999999998
+        }
+      ],
+      "ppdFileName": "ippeve.ppd",
+      "ppdFingerprint": "d6a4852cc99c38578c21dd0001f4087fe7bb31b692a8e9518724563064c980a5",
+      "qualityOptions": [
+        "Draft",
+        "Normal",
+        "High"
+      ],
+      "queue": "DCP-T730DW"
+    }
+  ]
+}

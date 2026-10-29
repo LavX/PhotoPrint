@@ -1,0 +1,68 @@
+*PPD-Adobe: "4.3"
+*FormatVersion: "4.3"
+*FileVersion: "2.4"
+*LanguageVersion: English
+*LanguageEncoding: ISOLatin1
+*Manufacturer: "Brother"
+*ModelName: "DCP-T730DW"
+*NickName: "Brother DCP-T730DW"
+*ShortNickName: "Brother DCP-T730DW"
+*PCFileName: "DCPT730DW.PPD"
+*ColorDevice: True
+*cupsFilter: "application/vnd.cups-pdf 0 brother_lpdwrapper_dcpt730dw"
+*OpenUI *PageSize/Media Size: PickOne
+*DefaultPageSize: BrPostC4x6_S
+*PageSize A4/A4: "          "
+*PageSize A5/A5: "          "
+*PageSize A6/A6: "          "
+*PageSize BrPhotoL_S/3.5 x 5 in: "          "
+*PageSize BrPhotoL_B/3.5 x 5 in (Borderless): "          "
+*PageSize BrPostC4x6_S/4 x 6 in: "          "
+*PageSize BrPostC4x6_B/4 x 6 in (Borderless): "          "
+*PageSize BrPhoto2L_S/5 x 7 in: "          "
+*PageSize BrPhoto2L_B/5 x 7 in (Borderless): "          "
+*CloseUI: *PageSize
+*DefaultImageableArea: BrPostC4x6_S
+*DefaultPaperDimension: BrPostC4x6_S
+*ImageableArea A4/A4: "9 9 586 833"
+*ImageableArea A5/A5: "9 9 411 587"
+*ImageableArea A6/A6: "9 9 289 411"
+*ImageableArea BrPhotoL_S/3.5 x 5 in: "9 9 243 351"
+*ImageableArea BrPhotoL_B/3.5 x 5 in (Borderless): "0 0 252 360"
+*ImageableArea BrPostC4x6_S/4 x 6 in: "9 9 279 423"
+*ImageableArea BrPostC4x6_B/4 x 6 in (Borderless): "0 0 288 432"
+*ImageableArea BrPhoto2L_S/5 x 7 in: "9 9 350 496"
+*ImageableArea BrPhoto2L_B/5 x 7 in (Borderless): "0 0 359 505"
+*PaperDimension A4/A4: "595 842"
+*PaperDimension A5/A5: "420 595"
+*PaperDimension A6/A6: "298 420"
+*PaperDimension BrPhotoL_S/3.5 x 5 in: "252 360"
+*PaperDimension BrPhotoL_B/3.5 x 5 in (Borderless): "252 360"
+*PaperDimension BrPostC4x6_S/4 x 6 in: "288 432"
+*PaperDimension BrPostC4x6_B/4 x 6 in (Borderless): "288 432"
+*PaperDimension BrPhoto2L_S/5 x 7 in: "359 505"
+*PaperDimension BrPhoto2L_B/5 x 7 in (Borderless): "359 505"
+*OpenUI *Duplex/Two-Sided: PickOne
+*DefaultDuplex: None
+*Duplex DuplexTumble/Short-Edge Binding: "          "
+*Duplex DuplexNoTumble/Long-Edge Binding: "          "
+*Duplex None/Off: "          "
+*CloseUI: *Duplex
+*OpenUI *BRResolution/Print Quality: PickOne
+*DefaultBRResolution: Fine
+*BRResolution Draft/Draft: "          "
+*BRResolution Normal/Normal: "          "
+*BRResolution Fine/High: "          "
+*CloseUI: *BRResolution
+*OpenUI *BRMonoColor/Color / Mono: PickOne
+*DefaultBRMonoColor: FullColor
+*BRMonoColor FullColor/Color: "          "
+*BRMonoColor Mono/Mono: "          "
+*CloseUI: *BRMonoColor
+*OpenUI *BRMediaType/Media Type: PickOne
+*DefaultBRMediaType: Glossy
+*BRMediaType Plain/Plain: "          "
+*BRMediaType Glossy/Glossy: "          "
+*BRMediaType Inkjet/Inkjet: "          "
+*CloseUI: *BRMediaType
+*DefaultFont: Courier

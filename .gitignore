@@ -1,0 +1,13 @@
+build/
+*.user
+*.o
+*.so
+*.rpm
+*.pdf
+*.png
+!resources/**/*.png
+!tests/fixtures/**/*.png
+planning-initial/
+/docs/
+/planning/
+/planning-initial/

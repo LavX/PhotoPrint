@@ -1,0 +1,67 @@
+{
+    "currentPage": 0,
+    "fineQuality": true,
+    "format": "photoprint-project",
+    "pages": [
+        {
+            "frames": [
+                {
+                    "angleDeg": 0,
+                    "autoPlaced": false,
+                    "autoTone": true,
+                    "brightness": 0.43,
+                    "cropCenter": [
+                        0.5,
+                        0.5
+                    ],
+                    "cx": 49.32796282486599,
+                    "cy": 41.3530113785701,
+                    "filter": "vivid",
+                    "filterStrength": 80,
+                    "fit": "full",
+                    "height": 151.72264260971994,
+                    "id": "frame-337a9acc-d0cc-44f0-8f9a-2af34e65bb09",
+                    "imageRotationDeg": 0,
+                    "original": "/home/lavx/Downloads/IMG20260819120712.jpg",
+                    "sha256": "029b74b56328bc2ba3b7a496b858dd04e214ac32a0cba243d62c78ebf39033d7",
+                    "source": "../Downloads/IMG20260819120712.jpg",
+                    "tone": {
+                        "exposureEv": 0,
+                        "highlightCompress": 0.04826979472140769,
+                        "shadowLift": 0
+                    },
+                    "upscale": true,
+                    "width": 207.94926898861618,
+                    "zoom": 1
+                }
+            ],
+            "id": "page-d621e9ad-0f12-4e7d-84a1-a15e77e582eb",
+            "landscape": true,
+            "paper": {
+                "borderlessSupported": true,
+                "custom": false,
+                "hasCheckedOffset": false,
+                "logicalHeightMm": 152.4,
+                "logicalWidthMm": 101.6,
+                "name": "10 × 15 cm",
+                "offsetXMm": 0,
+                "offsetYMm": 0,
+                "physicalHeightMm": 150,
+                "physicalWidthMm": 100,
+                "type": "glossy"
+            }
+        }
+    ],
+    "recipe": {
+        "autoEnhance": false,
+        "grayscale": false,
+        "paperStrength": 0,
+        "tone": {
+            "exposureEv": 0,
+            "highlightCompress": 0,
+            "shadowLift": 0
+        },
+        "version": 1
+    },
+    "version": 1
+}
