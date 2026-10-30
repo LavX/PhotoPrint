@@ -1,7 +1,17 @@
 [Desktop Entry]
 Type=Application
 Name=PhotoPrint
-Comment=Fotók rendezése és nyomtatása
+Comment=Arrange, crop and print photos on paper
+Comment[hu]=Fotók rendezése, vágása és nyomtatása papírra
+Comment[de]=Fotos anordnen, zuschneiden und auf Papier drucken
+Comment[es]=Ordena, recorta e imprime fotos en papel
+Comment[fr]=Disposez, recadrez et imprimez vos photos sur papier
+Comment[hi]=फ़ोटो को कागज़ पर सजाएँ, काटें और प्रिंट करें
+Comment[it]=Disponi, ritaglia e stampa le foto su carta
+Comment[ja]=写真を並べて切り抜き、紙に印刷します
+Comment[pt]=Organize, recorte e imprima fotos em papel
+Comment[ru]=Раскладывайте, обрезайте и печатайте фотографии на бумаге
+Comment[zh_CN]=把照片排版、裁剪并打印到纸上
 Exec=photoprint
 Icon=photoprint
 StartupWMClass=photoprint
