@@ -77,6 +77,7 @@ private slots:
     void correctAndHighKeyFramesNeedNoHelp();
     void brightWindowProtectsHighlights();
     void suggestionIsDeterministic();
+    void nonRgba64InputMatchesTheConvertedSample();
     void curveIsMonotonicAndProtectsEnds();
     void disabledToneIsTheIdentity();
     void brightnessOffsetIsApplied();
@@ -152,6 +153,35 @@ void TestToneEngine::suggestionIsDeterministic()
 {
     const QImage sample = linearImage({{0.08, 120}, {0.3, 80}});
     QCOMPARE(ToneEngine::suggest(sample), ToneEngine::suggest(sample));
+}
+
+void TestToneEngine::nonRgba64InputMatchesTheConvertedSample()
+{
+    // The engine is handed whatever the pipeline has; it must not assume the
+    // sample is already RGBA64. Same values in two layouts must agree exactly.
+    const int width = 64;
+    const int height = 64;
+    const int level8 = 20; // dark enough to produce a real suggestion
+    const quint16 level16 = static_cast<quint16>(level8 * 257);
+
+    QImage eightBit(width, height, QImage::Format_RGB32);
+    QImage sixtyFour(width, height, QImage::Format_RGBA64_Premultiplied);
+    for (int y = 0; y < height; ++y) {
+        auto *line = reinterpret_cast<QRgb *>(eightBit.scanLine(y));
+        auto *wide = reinterpret_cast<QRgba64 *>(sixtyFour.scanLine(y));
+        for (int x = 0; x < width; ++x) {
+            line[x] = qRgb(level8, level8, level8);
+            wide[x] = qRgba64(level16, level16, level16, 65535);
+        }
+    }
+
+    const PhotoTone reference = ToneEngine::suggest(sixtyFour);
+    QVERIFY(reference.exposureEv > 0.0);
+    QCOMPARE(ToneEngine::suggest(eightBit), reference);
+    QCOMPARE(ToneEngine::suggest(eightBit.convertToFormat(QImage::Format_Grayscale8)), reference);
+
+    // A null sample stays neutral instead of reading a missing scanline.
+    QCOMPARE(ToneEngine::suggest(QImage()), PhotoTone{});
 }
 
 void TestToneEngine::curveIsMonotonicAndProtectsEnds()

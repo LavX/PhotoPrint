@@ -7,8 +7,10 @@
 #include <QByteArray>
 #include <QHash>
 #include <QImage>
+#include <QPointF>
 #include <QSizeF>
 #include <QString>
+#include <QTransform>
 
 #include <stop_token>
 

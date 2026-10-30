@@ -54,13 +54,6 @@ QPointF cornerMm(const Frame &frame, int corner)
     return QPointF(frame.cx + rotated.x(), frame.cy + rotated.y());
 }
 
-QPointF rotateHandleMm(const Frame &frame, double offsetMm)
-{
-    const QPointF rotated = rotatePoint(QPointF(0.0, -frame.height / 2.0 - offsetMm),
-                                        frame.angleDeg);
-    return QPointF(frame.cx + rotated.x(), frame.cy + rotated.y());
-}
-
 QPointF toFrameLocalMm(const Frame &frame, const QPointF &pagePoint)
 {
     return rotatePoint(pagePoint - QPointF(frame.cx, frame.cy), -frame.angleDeg);
@@ -97,6 +90,12 @@ Frame resizedFromCorner(const Frame &frame, int corner, const QPointF &pagePoint
 
 Frame clampCrop(Frame frame, const QSize &pixels)
 {
+    // std::clamp compares with `<`, and every comparison involving NaN is
+    // false, so a NaN centre passes through untouched. Reset unusable centres
+    // before clamping instead of trusting the clamp.
+    if (!std::isfinite(frame.cropCenter.x()) || !std::isfinite(frame.cropCenter.y()))
+        frame.cropCenter = QPointF(0.5, 0.5);
+
     const QSizeF image = LayoutEngine::imageSizeMm(frame, pixels);
     if (image.width() <= 0.0 || image.height() <= 0.0)
         return frame;
@@ -105,6 +104,8 @@ Frame clampCrop(Frame frame, const QSize &pixels)
         (std::abs(frame.width * std::cos(rad)) + std::abs(frame.height * std::sin(rad))) / 2.0;
     const double halfSpanY =
         (std::abs(frame.width * std::sin(rad)) + std::abs(frame.height * std::cos(rad))) / 2.0;
+    if (!std::isfinite(halfSpanX) || !std::isfinite(halfSpanY))
+        return frame;
 
     const double halfX = halfSpanX / image.width();
     const double halfY = halfSpanY / image.height();
@@ -117,6 +118,12 @@ Frame zoomAt(Frame frame, const QPointF &pagePoint, double factor, const QSize &
 {
     if (!(factor > 0.0) || !std::isfinite(factor))
         return frame;
+    if (!std::isfinite(pagePoint.x()) || !std::isfinite(pagePoint.y()))
+        return frame;
+    // A non-finite or non-positive zoom poisons every scale below; treat it as
+    // the neutral value instead of propagating NaN into the crop centre.
+    if (!std::isfinite(frame.zoom) || frame.zoom <= 0.0)
+        frame.zoom = 1.0;
     const QSizeF before = LayoutEngine::imageSizeMm(frame, pixels);
     if (before.width() <= 0.0 || before.height() <= 0.0)
         return frame;

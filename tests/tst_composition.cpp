@@ -2,6 +2,7 @@
 #include "ImageSource.h"
 #include "LayoutEngine.h"
 #include "PageRenderer.h"
+#include "Result.h"
 
 #include <QColor>
 #include <QDir>
@@ -166,6 +167,7 @@ class TestComposition : public QObject
 
 private slots:
     void initTestCase();
+    void emptyCodeStillMeansFailure();
     void alphaOverlayBlendsInLinearSpace();
     void pdfMatchesThePageRender();
 
@@ -179,6 +181,29 @@ void TestComposition::initTestCase()
     QVERIFY(m_dir.isValid());
     ImageStore store;
     QVERIFY2(buildCase(m_case, store), qPrintable(m_case.error));
+}
+
+void TestComposition::emptyCodeStillMeansFailure()
+{
+    // A failure constructed without a code is still a failure; the message a
+    // person would read must never be discarded.
+    const Result<void> failure = error(QString(), QStringLiteral("missing detail"));
+    QVERIFY(!failure.ok());
+    QVERIFY(!failure);
+    QCOMPARE(failure.error().code, QString());
+    QCOMPARE(failure.error().message, QStringLiteral("missing detail"));
+
+    const Result<void> success;
+    QVERIFY(success.ok());
+    QVERIFY(success);
+
+    const Result<int> value(7);
+    QVERIFY(value.ok());
+    QCOMPARE(value.value(), 7);
+
+    const Result<int> failed = error(QStringLiteral("render"), QStringLiteral("failed"));
+    QVERIFY(!failed.ok());
+    QCOMPARE(failed.error().code, QStringLiteral("render"));
 }
 
 void TestComposition::alphaOverlayBlendsInLinearSpace()
