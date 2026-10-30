@@ -2468,6 +2468,16 @@ void MainWindow::exportPdf(bool allPages)
         }
         options.mediaSizeMm = ticket.value().geometry.logicalSizeMm();
         options.contentOffsetMm = ticket.value().geometry.physicalOriginInLogicalMm;
+        if (ticket.value().geometry.borderless) {
+            // The exported PDF has to match what the print path sends, bleed
+            // included, otherwise the paper proof differs from the print.
+            const BorderlessPlacement placement = borderlessPlacement(
+                ticket.value().geometry.physicalSizeMm(),
+                ticket.value().geometry.logicalSizeMm(),
+                ticket.value().geometry.physicalOriginInLogicalMm);
+            options.contentScale = placement.scale;
+            options.contentOffsetMm = placement.offsetMm;
+        }
         const PrintContext context = PrinterAdapter::contextFor(ticket.value());
         if (const auto preset = m_presets.match(context))
             document.recipe.paperStrength = preset->paperEv;
