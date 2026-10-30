@@ -319,9 +319,12 @@
         <source>Húzd ide a fotókat, vagy válaszd a Fotók hozzáadása gombot.</source>
         <translation>Drop photos here, or choose Add photos.</translation>
     </message>
-    <message>
-        <source>%1. fotó</source>
-        <translation>Photo %1</translation>
+    <message numerus="yes">
+        <source>%n. fotó</source>
+        <translation>
+            <numerusform>Photo %n</numerusform>
+            <numerusform>Photo %n</numerusform>
+        </translation>
     </message>
     <message>
         <source>A matt papírt a nyomtató tintasugaras papírként kezeli.</source>
@@ -421,7 +424,7 @@
     </message>
     <message>
         <source>%1. változat</source>
-        <translation>Version %1</translation>
+        <translation>Variant %1</translation>
     </message>
     <message>
         <source>Próbanyomat nyomtatása</source>
@@ -439,9 +442,12 @@
         <source>A papírbeállítás elmentve.</source>
         <translation>The paper setting is saved.</translation>
     </message>
-    <message>
-        <source>%1 oldal nyomtatása</source>
-        <translation>Print %1 pages</translation>
+    <message numerus="yes">
+        <source>%n oldal nyomtatása</source>
+        <translation>
+            <numerusform>Print %n page</numerusform>
+            <numerusform>Print %n pages</numerusform>
+        </translation>
     </message>
     <message>
         <source>A projekt elmentve.</source>
@@ -472,7 +478,7 @@
         <translation>Photos (*.jpg *.jpeg *.png *.JPG *.JPEG *.PNG)</translation>
     </message>
     <message>
-        <source>Mented a munkát kilépés előtt?</source>
+        <source>Mentetted a munkát kilépés előtt?</source>
         <translation>Save the work before quitting?</translation>
     </message>
     <message>
@@ -533,7 +539,7 @@
     </message>
     <message>
         <source>A nyomtatási jegyzék nem írható.</source>
-        <translation>The print record cannot be written.</translation>
+        <translation>The print manifest cannot be written.</translation>
     </message>
     <message>
         <source>A nyomtatási napló nem írható.</source>

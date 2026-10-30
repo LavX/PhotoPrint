@@ -1738,7 +1738,8 @@ void MainWindow::refreshPhotoList()
             auto *item = new QListWidgetItem(QString());
             item->setToolTip(QFileInfo(frame.sourcePath).fileName());
             item->setData(Qt::AccessibleTextRole,
-                          QCoreApplication::translate("PhotoPrint", "%1. fotó").arg(page.frames.indexOf(frame) + 1));
+                          QCoreApplication::translate("PhotoPrint", "%n. fotó", nullptr,
+                                                      page.frames.indexOf(frame) + 1));
             item->setData(Qt::UserRole, frame.id);
             if (const std::optional<SourceImage> source = m_store.cached(frame.sourcePath)) {
                 const Result<QImage> thumb = m_store.srgb(*source, document.recipe, 96);
@@ -2789,8 +2790,9 @@ void MainWindow::updatePrintButton()
     if (!m_printButton)
         return;
     const int pages = m_controller.document().pages.size();
-    m_printButton->setText(pages > 1 ? QCoreApplication::translate("PhotoPrint", "%1 oldal nyomtatása").arg(pages)
-                                     : QCoreApplication::translate("PhotoPrint", "Nyomtatás"));
+    m_printButton->setText(pages > 1
+                               ? QCoreApplication::translate("PhotoPrint", "%n oldal nyomtatása", nullptr, pages)
+                               : QCoreApplication::translate("PhotoPrint", "Nyomtatás"));
 }
 
 void MainWindow::updateNoticeBar()

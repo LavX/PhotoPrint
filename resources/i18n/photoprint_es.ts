@@ -319,9 +319,12 @@
         <source>Húzd ide a fotókat, vagy válaszd a Fotók hozzáadása gombot.</source>
         <translation>Arrastra fotos aquí o elige Añadir fotos.</translation>
     </message>
-    <message>
-        <source>%1. fotó</source>
-        <translation>Foto %1</translation>
+    <message numerus="yes">
+        <source>%n. fotó</source>
+        <translation>
+            <numerusform>Foto %n</numerusform>
+            <numerusform>Foto %n</numerusform>
+        </translation>
     </message>
     <message>
         <source>A matt papírt a nyomtató tintasugaras papírként kezeli.</source>
@@ -421,7 +424,7 @@
     </message>
     <message>
         <source>%1. változat</source>
-        <translation>Versión %1</translation>
+        <translation>Variante %1</translation>
     </message>
     <message>
         <source>Próbanyomat nyomtatása</source>
@@ -439,9 +442,12 @@
         <source>A papírbeállítás elmentve.</source>
         <translation>El ajuste de papel se ha guardado.</translation>
     </message>
-    <message>
-        <source>%1 oldal nyomtatása</source>
-        <translation>Imprimir %1 páginas</translation>
+    <message numerus="yes">
+        <source>%n oldal nyomtatása</source>
+        <translation>
+            <numerusform>Imprimir %n página</numerusform>
+            <numerusform>Imprimir %n páginas</numerusform>
+        </translation>
     </message>
     <message>
         <source>A projekt elmentve.</source>
@@ -472,7 +478,7 @@
         <translation>Fotos (*.jpg *.jpeg *.png *.JPG *.JPEG *.PNG)</translation>
     </message>
     <message>
-        <source>Mented a munkát kilépés előtt?</source>
+        <source>Mentetted a munkát kilépés előtt?</source>
         <translation>¿Guardar el trabajo antes de salir?</translation>
     </message>
     <message>

@@ -177,7 +177,7 @@
     </message>
     <message>
         <source>Papírlap</source>
-        <translation>用紙</translation>
+        <translation>用紙シート</translation>
     </message>
     <message>
         <source>Nagyításnál a középső egérgombbal mozgatható a lap.</source>
@@ -213,7 +213,7 @@
     </message>
     <message>
         <source>Színek</source>
-        <translation>色</translation>
+        <translation>色モード</translation>
     </message>
     <message>
         <source>Példány</source>
@@ -221,7 +221,7 @@
     </message>
     <message>
         <source>Példányszám</source>
-        <translation>部数</translation>
+        <translation>印刷部数</translation>
     </message>
     <message>
         <source>Nyomtatás</source>
@@ -319,9 +319,11 @@
         <source>Húzd ide a fotókat, vagy válaszd a Fotók hozzáadása gombot.</source>
         <translation>ここに写真をドロップするか、写真を追加を選びます。</translation>
     </message>
-    <message>
-        <source>%1. fotó</source>
-        <translation>%1枚目の写真</translation>
+    <message numerus="yes">
+        <source>%n. fotó</source>
+        <translation>
+            <numerusform>%n枚目の写真</numerusform>
+        </translation>
     </message>
     <message>
         <source>A matt papírt a nyomtató tintasugaras papírként kezeli.</source>
@@ -439,9 +441,11 @@
         <source>A papírbeállítás elmentve.</source>
         <translation>用紙の設定を保存しました。</translation>
     </message>
-    <message>
-        <source>%1 oldal nyomtatása</source>
-        <translation>%1ページを印刷</translation>
+    <message numerus="yes">
+        <source>%n oldal nyomtatása</source>
+        <translation>
+            <numerusform>%nページを印刷</numerusform>
+        </translation>
     </message>
     <message>
         <source>A projekt elmentve.</source>
@@ -472,7 +476,7 @@
         <translation>写真 (*.jpg *.jpeg *.png *.JPG *.JPEG *.PNG)</translation>
     </message>
     <message>
-        <source>Mented a munkát kilépés előtt?</source>
+        <source>Mentetted a munkát kilépés előtt?</source>
         <translation>終了する前に作業を保存しますか?</translation>
     </message>
     <message>

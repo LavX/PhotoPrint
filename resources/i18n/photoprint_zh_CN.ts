@@ -209,11 +209,11 @@
     </message>
     <message>
         <source>Szürkeárnyalatos</source>
-        <translation>黑白</translation>
+        <translation>灰度</translation>
     </message>
     <message>
         <source>Színek</source>
-        <translation>色彩</translation>
+        <translation>颜色模式</translation>
     </message>
     <message>
         <source>Példány</source>
@@ -221,7 +221,7 @@
     </message>
     <message>
         <source>Példányszám</source>
-        <translation>份数</translation>
+        <translation>打印份数</translation>
     </message>
     <message>
         <source>Nyomtatás</source>
@@ -319,9 +319,11 @@
         <source>Húzd ide a fotókat, vagy válaszd a Fotók hozzáadása gombot.</source>
         <translation>将照片拖到这里，或选择“添加照片”。</translation>
     </message>
-    <message>
-        <source>%1. fotó</source>
-        <translation>第 %1 张照片</translation>
+    <message numerus="yes">
+        <source>%n. fotó</source>
+        <translation>
+            <numerusform>第 %n 张照片</numerusform>
+        </translation>
     </message>
     <message>
         <source>A matt papírt a nyomtató tintasugaras papírként kezeli.</source>
@@ -439,9 +441,11 @@
         <source>A papírbeállítás elmentve.</source>
         <translation>纸张设置已保存。</translation>
     </message>
-    <message>
-        <source>%1 oldal nyomtatása</source>
-        <translation>打印 %1 页</translation>
+    <message numerus="yes">
+        <source>%n oldal nyomtatása</source>
+        <translation>
+            <numerusform>打印 %n 页</numerusform>
+        </translation>
     </message>
     <message>
         <source>A projekt elmentve.</source>
@@ -472,7 +476,7 @@
         <translation>照片 (*.jpg *.jpeg *.png *.JPG *.JPEG *.PNG)</translation>
     </message>
     <message>
-        <source>Mented a munkát kilépés előtt?</source>
+        <source>Mentetted a munkát kilépés előtt?</source>
         <translation>退出前要保存工作吗？</translation>
     </message>
     <message>

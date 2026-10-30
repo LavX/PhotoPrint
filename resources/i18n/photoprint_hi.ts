@@ -209,11 +209,11 @@
     </message>
     <message>
         <source>Szürkeárnyalatos</source>
-        <translation>श्वेत-श्याम</translation>
+        <translation>ग्रेस्केल</translation>
     </message>
     <message>
         <source>Színek</source>
-        <translation>रंग</translation>
+        <translation>रंग मोड</translation>
     </message>
     <message>
         <source>Példány</source>
@@ -319,9 +319,12 @@
         <source>Húzd ide a fotókat, vagy válaszd a Fotók hozzáadása gombot.</source>
         <translation>फ़ोटो यहाँ छोड़ें, या फ़ोटो जोड़ें चुनें।</translation>
     </message>
-    <message>
-        <source>%1. fotó</source>
-        <translation>फ़ोटो %1</translation>
+    <message numerus="yes">
+        <source>%n. fotó</source>
+        <translation>
+            <numerusform>फ़ोटो %n</numerusform>
+            <numerusform>फ़ोटो %n</numerusform>
+        </translation>
     </message>
     <message>
         <source>A matt papírt a nyomtató tintasugaras papírként kezeli.</source>
@@ -373,7 +376,7 @@
     </message>
     <message>
         <source>Törlés</source>
-        <translation>हटाएँ</translation>
+        <translation>मिटाएँ</translation>
     </message>
     <message>
         <source>Ez a név már egy beépített papíré. Adj másik nevet.</source>
@@ -439,9 +442,12 @@
         <source>A papírbeállítás elmentve.</source>
         <translation>कागज़ की सेटिंग सहेज दी गई।</translation>
     </message>
-    <message>
-        <source>%1 oldal nyomtatása</source>
-        <translation>%1 पृष्ठ प्रिंट करें</translation>
+    <message numerus="yes">
+        <source>%n oldal nyomtatása</source>
+        <translation>
+            <numerusform>%n पृष्ठ प्रिंट करें</numerusform>
+            <numerusform>%n पृष्ठ प्रिंट करें</numerusform>
+        </translation>
     </message>
     <message>
         <source>A projekt elmentve.</source>
@@ -472,7 +478,7 @@
         <translation>फ़ोटो (*.jpg *.jpeg *.png *.JPG *.JPEG *.PNG)</translation>
     </message>
     <message>
-        <source>Mented a munkát kilépés előtt?</source>
+        <source>Mentetted a munkát kilépés előtt?</source>
         <translation>बाहर निकलने से पहले काम सहेजें?</translation>
     </message>
     <message>
