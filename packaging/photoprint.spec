@@ -16,7 +16,7 @@ BuildRequires:  zlib-devel
 BuildRequires:  ImageMagick-devel
 Requires:       ImageMagick-libs
 Requires:       qt6-qtbase
-Requires:       lcms2-libs
+Requires:       lcms2
 Requires:       cups-libs
 Requires:       zlib
 
