@@ -119,7 +119,19 @@ const PageSizeCapability *findBySize(const PrinterCapabilities &capabilities, do
 struct ChosenPage {
     PageSizeCapability page;
     bool found = false;
+    /// The page came from the driver's own name for the paper, so the sheet it
+    /// describes may be taken as the logical sheet.
+    bool named = false;
 };
+
+/// Whether the paper declares a logical sheet at all. A half declaration counts:
+/// PaperGeometry then falls back to the physical sheet for the whole rectangle,
+/// and the one axis the user did declare must not be silently ignored.
+bool declaresAnyLogicalAxis(const PaperSpec &paper)
+{
+    return (std::isfinite(paper.logicalWidthMm) && paper.logicalWidthMm > 0.0)
+        || (std::isfinite(paper.logicalHeightMm) && paper.logicalHeightMm > 0.0);
+}
 
 QString dimensionText(double millimetres)
 {
@@ -139,8 +151,10 @@ ChosenPage choosePage(const PrinterCapabilities &capabilities,
     // The driver page and the PDF media box must describe the same sheet, so the
     // logical size is used only when both of its axes are declared, exactly as
     // PaperGeometry decides it. A per-axis fallback here produced a page option
-    // for one sheet and a media box for another.
-    const QSizeF target = PaperGeometry::forPaper(paper, false).logicalSizeMm();
+    // for one sheet and a media box for another. The landscape flag is part of
+    // the same decision: the box is rotated by the ticket geometry, so the sheet
+    // this option names has to be rotated by the same amount.
+    const QSizeF target = PaperGeometry::forPaper(paper, selection.landscape).logicalSizeMm();
     const double targetWidth = target.width();
     const double targetHeight = target.height();
 
@@ -167,14 +181,22 @@ ChosenPage choosePage(const PrinterCapabilities &capabilities,
     }
 
     if (const PageSizeCapability *page = findNamed(capabilities, names, selection.borderless)) {
-        // A named mode is the driver's own page for this paper, so it decides
-        // the sheet: the photo papers are sold by their centimetre name and made
-        // in inches, and a mode that is 1.6 mm larger than the physical sheet is
-        // still the right page for it. The size-based searches below have no
-        // such authority and therefore have to match the media box exactly.
-        chosen.page = *page;
-        chosen.found = true;
-        return chosen;
+        // A named mode is the driver's own page for this paper, so it has
+        // authority over the exact sheet: the photo papers are sold by their
+        // centimetre name and made in inches, and a 4x6 mode is 1.6 mm larger
+        // than the 10 x 15 cm paper it prints. That authority stops where the
+        // paper declares a logical size: the mode then has to agree with it,
+        // otherwise the project contradicts itself and the option would name
+        // one sheet while the media box describes another. A paper that
+        // declares nothing is the plain "this is what the driver calls it"
+        // case, which is what the mapping exists for.
+        if (!declaresAnyLogicalAxis(paper)
+            || sameSize(page->widthMm, page->heightMm, targetWidth, targetHeight)) {
+            chosen.page = *page;
+            chosen.found = true;
+            chosen.named = true;
+            return chosen;
+        }
     }
     if (const PageSizeCapability *page = findBySize(capabilities, targetWidth, targetHeight,
                                                     selection.borderless)) {
@@ -276,8 +298,10 @@ Result<PrintTicket> PrinterAdapter::resolve(const PrinterCapabilities &capabilit
                      QCoreApplication::translate("PhotoPrint", "Ehhez a papírhoz nincs szélig nyomtatás."));
     }
     // The sheet the driver is asked for is the logical one, so the custom range
-    // is checked against the same size the page option and the media box use.
-    const QSizeF driverSheet = PaperGeometry::forPaper(paper, false).logicalSizeMm();
+    // is checked against the same size the page option and the media box use,
+    // rotation included.
+    const QSizeF driverSheet =
+        PaperGeometry::forPaper(paper, selection.landscape).logicalSizeMm();
     if (paper.custom && !photoMapping(paper)
         && !customSizeInRange(driverSheet.width(), driverSheet.height())) {
         return error(QStringLiteral("custom-size-range"),
@@ -370,6 +394,15 @@ Result<PrintTicket> PrinterAdapter::resolve(const PrinterCapabilities &capabilit
     ticket.scaleToFit = selection.scaleToFit;
 
     ticket.geometry = PaperGeometry::forPaper(paper, selection.landscape);
+    if (chosen.named) {
+        // The named mode is the driver's own page for this paper, so it decides
+        // the logical sheet. The media box is built from the same rectangle,
+        // which keeps the option and the box on one sheet even when the paper's
+        // own logical declaration is only within tolerance of the mode, and when
+        // a 4x6 mode is 1.6 mm larger than the 10 x 15 cm paper.
+        ticket.geometry.paper.logicalWidthMm = chosen.page.widthMm;
+        ticket.geometry.paper.logicalHeightMm = chosen.page.heightMm;
+    }
     ticket.geometry.pageSizeOption = chosen.page.option;
     ticket.geometry.borderless = chosen.page.borderless;
     ticket.geometry.imageableMm =

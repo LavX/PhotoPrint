@@ -24,6 +24,8 @@
 #define WIN32_LEAN_AND_MEAN
 #endif
 #include <windows.h>
+
+#include <io.h>
 #endif
 
 #include <algorithm>
@@ -68,11 +70,13 @@ Result<void> syncToDisk(QFile &file)
     if (::fdatasync(file.handle()) != 0)
         return writeError();
 #elif defined(Q_OS_WIN)
-    // QFile::handle() is a Win32 HANDLE, not a CRT file descriptor, so the
-    // _commit()/fsync() family does not apply to it. FlushFileBuffers is the
-    // Win32 flush-to-device call for a handle. Not exercised by the test suite,
-    // which runs on Linux.
-    if (!::FlushFileBuffers(reinterpret_cast<HANDLE>(file.handle())))
+    // QFile::handle() is a CRT file descriptor on Windows, not a Win32 HANDLE:
+    // casting the descriptor straight to HANDLE hands FlushFileBuffers a small
+    // integer that is not a handle, so every append failed here. _get_osfhandle
+    // converts the descriptor, and -1 (errno EBADF) means there is no handle to
+    // flush. Not exercised by the test suite, which runs on Linux.
+    const intptr_t raw = ::_get_osfhandle(static_cast<int>(file.handle()));
+    if (raw == -1 || !::FlushFileBuffers(reinterpret_cast<HANDLE>(raw)))
         return writeError();
 #endif
     return Result<void>();

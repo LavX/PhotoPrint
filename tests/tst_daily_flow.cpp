@@ -19,6 +19,7 @@
 #include <QtTest>
 
 #include <cmath>
+#include <limits>
 
 using namespace pp;
 
@@ -77,6 +78,8 @@ private slots:
     void digestIgnoresSignedZero();
     void digestIsPinnedToAKnownRecipe();
     void brightnessSliderAndPipelineRangeAgree();
+    void infiniteBrightnessSaturatesAtTheBounds();
+    void craftedToneStaysInsideTheSaneRange();
 };
 
 void TestDailyFlow::threePhotosOnA4WithoutHelp()
@@ -496,6 +499,68 @@ void TestDailyFlow::brightnessSliderAndPipelineRangeAgree()
     // Out-of-range values cannot walk the slider off its ends.
     QCOMPARE(brightnessEvToSlider(kMaxBrightnessEv + 5.0), kBrightnessSliderMax);
     QCOMPARE(brightnessEvToSlider(kMinBrightnessEv - 5.0), kBrightnessSliderMin);
+}
+
+void TestDailyFlow::infiniteBrightnessSaturatesAtTheBounds()
+{
+    // An infinity is a direction, so it is pulled to the bound it points at
+    // instead of turning into the neutral offset: otherwise a corrupted +inf
+    // silently printed as "no correction".
+    QCOMPARE(clampBrightnessEv(std::numeric_limits<double>::infinity()), kMaxBrightnessEv);
+    QCOMPARE(clampBrightnessEv(-std::numeric_limits<double>::infinity()), kMinBrightnessEv);
+    QCOMPARE(brightnessEvToSlider(std::numeric_limits<double>::infinity()),
+             kBrightnessSliderMax);
+    QCOMPARE(brightnessEvToSlider(-std::numeric_limits<double>::infinity()),
+             kBrightnessSliderMin);
+
+    // NaN has no direction and would poison every pixel, so it is neutral.
+    QCOMPARE(clampBrightnessEv(std::numeric_limits<double>::quiet_NaN()), 0.0);
+
+    Frame frame;
+    frame.brightness = std::numeric_limits<double>::infinity();
+    QCOMPARE(effectiveTone(frame).exposureEv, kMaxBrightnessEv);
+}
+
+void TestDailyFlow::craftedToneStaysInsideTheSaneRange()
+{
+    // A project file can carry any number in a frame's tone. The document
+    // boundary clamps every finite field and rejects a non-finite one, so the
+    // renderer cannot be driven to solid black or white.
+    Frame crafted;
+    crafted.tone.exposureEv = 1.0e9;
+    crafted.tone.shadowLift = 4.0;
+    crafted.tone.highlightCompress = 3.0;
+    const PhotoTone sane = effectiveTone(crafted);
+    QCOMPARE(sane.exposureEv, kMaxToneExposureEv);
+    QCOMPARE(sane.shadowLift, kMaxToneShadowLift);
+    QCOMPARE(sane.highlightCompress, kMaxToneHighlightCompress);
+
+    crafted.tone.exposureEv = -1.0e9;
+    QCOMPARE(effectiveTone(crafted).exposureEv, kMinToneExposureEv);
+
+    // A non-finite tone field is corruption, not a direction: it becomes
+    // neutral instead of saturating the correction.
+    Frame poisoned;
+    poisoned.tone = PhotoTone{std::numeric_limits<double>::infinity(),
+                              -std::numeric_limits<double>::infinity(),
+                              std::numeric_limits<double>::quiet_NaN()};
+    QCOMPARE(effectiveTone(poisoned), PhotoTone{});
+
+    // The suggested tone and the manual offset together stay in the same range.
+    Frame combined;
+    combined.tone.exposureEv = kMaxToneExposureEv;
+    combined.brightness = kMaxBrightnessEv;
+    QCOMPARE(effectiveTone(combined).exposureEv, kMaxToneExposureEv);
+
+    // A valid project is unchanged: every value the tone engine can suggest
+    // passes through, with the manual offset added once.
+    Frame valid;
+    valid.tone = PhotoTone{0.21, 0.09, 0.03};
+    valid.brightness = 0.2;
+    const PhotoTone untouched = effectiveTone(valid);
+    QCOMPARE(untouched.exposureEv, 0.41);
+    QCOMPARE(untouched.shadowLift, 0.09);
+    QCOMPARE(untouched.highlightCompress, 0.03);
 }
 
 QTEST_MAIN(TestDailyFlow)
