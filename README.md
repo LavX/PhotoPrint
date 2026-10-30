@@ -5,6 +5,8 @@ cropping them, and printing them. It is built for people who do not want to
 learn image processing or printer technology: add photos, choose the paper,
 place them on the sheet, and print.
 
+![PhotoPrint arranging a photo on a 10 x 15 cm sheet](assets/screenshot.jpg)
+
 Built with C++20 and Qt 6 Widgets. Colour conversion uses LittleCMS2, printing
 uses the existing CUPS queues, and photo filters/upscaling use ImageMagick's
 MagickWand.

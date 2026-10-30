@@ -96,6 +96,51 @@ for _ in 1 2 3; do
     done
 done
 
+# Replace the symlinked AppRun with a launcher that also registers a desktop
+# entry the first time the AppImage runs. Wayland compositors take the window
+# icon and the launcher name from that entry, not from the binary, so without
+# it KDE and GNOME show a generic icon in the title bar.
+rm -f "$appdir/AppRun"
+cat > "$appdir/AppRun" <<'LAUNCHER'
+#!/bin/sh
+here="$(dirname "$(readlink -f "$0")")"
+
+# Wayland compositors take the window icon and the launcher entry from a
+# desktop file the session can see, not from the binary. Register one on the
+# first run and refresh the caches so the icon appears without a re-login.
+configure_desktop() {
+    [ -n "${APPIMAGE:-}" ] || return 0
+    data="${XDG_DATA_HOME:-$HOME/.local/share}"
+    mkdir -p "$data/applications" "$data/icons/hicolor" || return 0
+    cp -R "$here/usr/share/icons/hicolor/." "$data/icons/hicolor/" 2>/dev/null || true
+    if [ ! -f "$data/applications/photoprint.desktop" ] \
+        && [ ! -f /usr/share/applications/photoprint.desktop ]; then
+        sed "s|^Exec=.*|Exec=\"$APPIMAGE\" %F|" \
+            "$here/usr/share/applications/photoprint.desktop" \
+            > "$data/applications/photoprint.desktop" || return 0
+        command -v update-desktop-database >/dev/null 2>&1 \
+            && update-desktop-database -q "$data/applications" 2>/dev/null
+        command -v kbuildsycoca6 >/dev/null 2>&1 \
+            && kbuildsycoca6 --noincremental >/dev/null 2>&1 &
+    fi
+    command -v gtk-update-icon-cache >/dev/null 2>&1 \
+        && gtk-update-icon-cache -f -t "$data/icons/hicolor" >/dev/null 2>&1
+    return 0
+}
+configure_desktop
+exec "$here/usr/bin/photoprint" "$@"
+LAUNCHER
+chmod +x "$appdir/AppRun"
+
+# Ship fixed-size PNGs as well as the SVG: some compositors only look at the
+# theme's PNG entries for the window icon.
+icons_dir="$appdir/usr/share/icons/hicolor"
+for size in 16 22 24 32 48 64 128 256 512; do
+    mkdir -p "$icons_dir/${size}x${size}/apps"
+    magick "$root/resources/photoprint.svg" -background none -resize "${size}x${size}" \
+        "$icons_dir/${size}x${size}/apps/photoprint.png"
+done
+
 # AppImage root icon and .DirIcon.
 magick "$root/resources/photoprint.svg" -background none -resize 256x256 \
     "$appdir/photoprint.png"
