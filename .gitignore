@@ -6,8 +6,10 @@
 # Editor and tool state
 *.user
 
-# Local environment files
+# Local environment files, anywhere in the tree; a committed template such as
+# .env.example stays tracked
 .env*
+!.env.example
 
 # Compiled shared libraries and their Windows/macOS equivalents
 *.so

@@ -394,9 +394,10 @@ void TestI18n::everyCatalogueTranslatesCountedMessages()
     QVERIFY2(catalogue.loaded(), qPrintable(code));
 
     // Both counted messages carry a numerus entry in every catalogue. The
-    // number always comes from the argument: a leftover %n, a text that is
-    // still the Hungarian fallback, or a dropped placeholder would mean the
-    // entry was never converted.
+    // number always comes from the argument: a text that is still the
+    // Hungarian fallback, or one without the number in it, would mean the
+    // entry was never converted. A leftover %n cannot be observed from here:
+    // QCoreApplication::translate substitutes it before the text comes back.
     for (const QString &source : {kPages, kPageTooltip}) {
         for (const int count : {1, 2, 5, 22}) {
             const QString text = translatedWithCount("PhotoPrint", source, count);
@@ -404,12 +405,14 @@ void TestI18n::everyCatalogueTranslatesCountedMessages()
             QVERIFY2(!text.isEmpty(), qPrintable(where + QStringLiteral(": empty")));
             QVERIFY2(text != hungarianFallback(source, count),
                      qPrintable(where + QStringLiteral(": still the Hungarian fallback")));
-            QVERIFY2(text.contains(QString::number(count)),
+            // %1 is the paper name and stays a placeholder here; it can itself
+            // hold the digits of the count ("%1 · 1 photo"), so it is taken out
+            // before the count is looked for.
+            const QString withoutPaper = QString(text).replace(QStringLiteral("%1"), QString());
+            QVERIFY2(withoutPaper.contains(QString::number(count)),
                      qPrintable(where + QStringLiteral(": the count is missing")));
-            QVERIFY2(!text.contains(QStringLiteral("%n")),
-                     qPrintable(where + QStringLiteral(": %n left in the text")));
-            // %1 is the paper name, filled in later by the caller. It has to
-            // survive exactly when the source has it.
+            // %1 is filled in later by the caller. It has to survive exactly
+            // when the source has it.
             QCOMPARE(text.contains(QStringLiteral("%1")), source.contains(QStringLiteral("%1")));
         }
     }

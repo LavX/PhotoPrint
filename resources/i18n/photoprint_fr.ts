@@ -795,11 +795,11 @@
     </message>
     <message>
         <source>A napló jelenleg használatban van.</source>
-        <translation>Le journal d’impression est en cours d’utilisation.</translation>
+        <translation>Le journal d'impression est en cours d'utilisation.</translation>
     </message>
     <message>
         <source>Az eredményt nem sikerült a naplóba írni.</source>
-        <translation>Le résultat n’a pas pu être écrit dans le journal d’impression.</translation>
+        <translation>Le résultat n'a pas pu être écrit dans le journal d'impression.</translation>
     </message>
 </context>
 </TS>

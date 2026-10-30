@@ -615,7 +615,7 @@
     </message>
     <message>
         <source>A munkamenet mentését nem sikerült törölni.</source>
-        <translation>No se pudo borrar la sesión guardada.</translation>
+        <translation>No se pudo eliminar la sesión guardada.</translation>
     </message>
     <message>
         <source>Nincs folytatható munka.</source>
@@ -795,11 +795,11 @@
     </message>
     <message>
         <source>A napló jelenleg használatban van.</source>
-        <translation>El registro de impresión está en uso.</translation>
+        <translation>El historial de impresión está en uso.</translation>
     </message>
     <message>
         <source>Az eredményt nem sikerült a naplóba írni.</source>
-        <translation>No se pudo escribir el resultado en el registro de impresión.</translation>
+        <translation>No se pudo escribir el resultado en el historial de impresión.</translation>
     </message>
 </context>
 </TS>
