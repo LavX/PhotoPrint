@@ -244,10 +244,6 @@
         <translation>言語</translation>
     </message>
     <message>
-        <source>A nyelv a következő indításnál lép életbe.</source>
-        <translation>言語は次回の起動時に反映されます。</translation>
-    </message>
-    <message>
         <source>Projekt megnyitása…</source>
         <translation>プロジェクトを開く…</translation>
     </message>
@@ -319,11 +315,9 @@
         <source>Húzd ide a fotókat, vagy válaszd a Fotók hozzáadása gombot.</source>
         <translation>ここに写真をドロップするか、写真を追加を選びます。</translation>
     </message>
-    <message numerus="yes">
-        <source>%n. fotó</source>
-        <translation>
-            <numerusform>%n枚目の写真</numerusform>
-        </translation>
+    <message>
+        <source>%1. fotó</source>
+        <translation>%1枚目の写真</translation>
     </message>
     <message numerus="yes">
         <source>%1 · %n fotó</source>
@@ -392,6 +386,10 @@
         <translation>プリンターがありません</translation>
     </message>
     <message>
+        <source>Nincs beállított nyomtató.</source>
+        <translation>プリンターが設定されていません。</translation>
+    </message>
+    <message>
         <source>A nyomtató most nem érhető el. Ellenőrizd, hogy be van-e kapcsolva.</source>
         <translation>プリンターは現在利用できません。電源が入っているか確認してください。</translation>
     </message>
@@ -456,6 +454,10 @@
     <message>
         <source>A projekt elmentve.</source>
         <translation>プロジェクトを保存しました。</translation>
+    </message>
+    <message>
+        <source>Nincs mit elmenteni.</source>
+        <translation>保存するものがありません。</translation>
     </message>
     <message>
         <source>Projekt mentése</source>
@@ -550,6 +552,10 @@
         <translation>印刷ログを書き込めません。</translation>
     </message>
     <message>
+        <source>A nyomtatási napló nem olvasható.</source>
+        <translation>印刷ログを読み取れません。</translation>
+    </message>
+    <message>
         <source>Ez az oldal nem található.</source>
         <translation>このページが見つかりません。</translation>
     </message>
@@ -590,12 +596,12 @@
         <translation>持ち運べるコピーのフォルダーを作成できません。</translation>
     </message>
     <message>
-        <source>Ugyanilyen nevű fotó már van a másolatban.</source>
-        <translation>同じ名前の写真がコピーにすでにあります。</translation>
-    </message>
-    <message>
         <source>A fotót nem sikerült a másolatba tenni.</source>
         <translation>写真をコピーに入れられませんでした。</translation>
+    </message>
+    <message>
+        <source>A projektfájl nem másolható a fotók közé.</source>
+        <translation>プロジェクトファイルを写真と一緒にコピーできません。</translation>
     </message>
     <message>
         <source>A fotó másolata nem egyezik az eredetivel.</source>
@@ -608,6 +614,10 @@
     <message>
         <source>A munkamenet mentése nem sikerült.</source>
         <translation>セッションを保存できませんでした。</translation>
+    </message>
+    <message>
+        <source>A munkamenet mentését nem sikerült törölni.</source>
+        <translation>保存したセッションを削除できませんでした。</translation>
     </message>
     <message>
         <source>Nincs folytatható munka.</source>
@@ -642,6 +652,14 @@
         <translation>用紙の設定を保存できません。</translation>
     </message>
     <message>
+        <source>A papírbeállítások nem olvashatók.</source>
+        <translation>用紙設定を読み取れません。</translation>
+    </message>
+    <message>
+        <source>A papírbeállítások fájlja sérült.</source>
+        <translation>用紙設定のファイルが壊れています。</translation>
+    </message>
+    <message>
         <source>Adj nevet a papírnak.</source>
         <translation>用紙に名前を付けてください。</translation>
     </message>
@@ -650,12 +668,20 @@
         <translation>用紙を保存できませんでした。</translation>
     </message>
     <message>
+        <source>Ezt a papírt nem találjuk.</source>
+        <translation>この用紙が見つかりません。</translation>
+    </message>
+    <message>
         <source>A papírt nem sikerült törölni.</source>
         <translation>用紙を削除できませんでした。</translation>
     </message>
     <message>
         <source>Nincs mit kipróbálni.</source>
         <translation>試せるものがありません。</translation>
+    </message>
+    <message>
+        <source>Ez a papír túl kicsi a próbalaphoz.</source>
+        <translation>この用紙は試し印刷には小さすぎます。</translation>
     </message>
     <message>
         <source>Új lap</source>
@@ -676,10 +702,6 @@
     <message>
         <source>Lap hátrébb</source>
         <translation>ページを後ろに移動</translation>
-    </message>
-    <message>
-        <source>%1 · %2 fotó</source>
-        <translation>%1 · %2 枚</translation>
     </message>
     <message>
         <source>Eredeti</source>

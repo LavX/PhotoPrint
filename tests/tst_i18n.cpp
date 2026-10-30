@@ -13,6 +13,8 @@
 #include <QTranslator>
 #include <QtTest>
 
+#include <tuple>
+
 using namespace pp;
 
 namespace {
@@ -23,8 +25,11 @@ const QString kAbout = QStringLiteral("Névjegy");
 
 /// The messages that carry a count and therefore have plural forms.
 const QString kPages = QStringLiteral("%n oldal nyomtatása");
-const QString kPhoto = QStringLiteral("%n. fotó");
 const QString kPageTooltip = QStringLiteral("%1 · %n fotó");
+
+/// The position of a photo on the page. It is an index, not a count, so it
+/// carries a plain %1 and has no plural forms.
+const QString kPhotoIndex = QStringLiteral("%1. fotó");
 
 QString translated(const char *context, const QString &source)
 {
@@ -34,6 +39,15 @@ QString translated(const char *context, const QString &source)
 QString translatedWithCount(const char *context, const QString &source, int count)
 {
     return QCoreApplication::translate(context, source.toUtf8().constData(), nullptr, count);
+}
+
+/// What an untranslated message looks like: the source text with %n expanded,
+/// which is what Qt produces when no catalogue has an entry for it. Comparing a
+/// counted translation against the bare source is not enough, because
+/// QCoreApplication::translate substitutes %n in the source as well.
+QString hungarianFallback(const QString &source, int count)
+{
+    return QString(source).replace(QStringLiteral("%n"), QString::number(count));
 }
 
 QString cataloguePath(const QString &code)
@@ -94,8 +108,10 @@ private slots:
     void pageTooltipKeepsThePaperAndPluralises();
     void everyCatalogueTranslatesCountedMessages_data();
     void everyCatalogueTranslatesCountedMessages();
+    void everyCatalogueTranslatesThePhotoIndex_data();
+    void everyCatalogueTranslatesThePhotoIndex();
     void hungarianSourceSubstitutesTheCount();
-    void repeatedLanguageSwitchingKeepsOwnershipSane();
+    void repeatedLanguageSwitchingLeavesTranslatorsUnparented();
 
 private:
     QTemporaryDir m_settingsDir;
@@ -378,22 +394,52 @@ void TestI18n::everyCatalogueTranslatesCountedMessages()
     QVERIFY2(catalogue.loaded(), qPrintable(code));
 
     // Both counted messages carry a numerus entry in every catalogue. The
-    // number always comes from the argument: a leftover %n, or the %1 of the
-    // old placeholder, would mean the entry was never converted.
-    for (const QString &source : {kPages, kPhoto}) {
+    // number always comes from the argument: a leftover %n, a text that is
+    // still the Hungarian fallback, or a dropped placeholder would mean the
+    // entry was never converted.
+    for (const QString &source : {kPages, kPageTooltip}) {
         for (const int count : {1, 2, 5, 22}) {
             const QString text = translatedWithCount("PhotoPrint", source, count);
             const QString where = QStringLiteral("%1, count %2, %3").arg(code).arg(count).arg(source);
             QVERIFY2(!text.isEmpty(), qPrintable(where + QStringLiteral(": empty")));
-            QVERIFY2(text != source, qPrintable(where + QStringLiteral(": still Hungarian")));
+            QVERIFY2(text != hungarianFallback(source, count),
+                     qPrintable(where + QStringLiteral(": still the Hungarian fallback")));
             QVERIFY2(text.contains(QString::number(count)),
                      qPrintable(where + QStringLiteral(": the count is missing")));
             QVERIFY2(!text.contains(QStringLiteral("%n")),
                      qPrintable(where + QStringLiteral(": %n left in the text")));
-            QVERIFY2(!text.contains(QStringLiteral("%1")),
-                     qPrintable(where + QStringLiteral(": old %1 placeholder left in the text")));
+            // %1 is the paper name, filled in later by the caller. It has to
+            // survive exactly when the source has it.
+            QCOMPARE(text.contains(QStringLiteral("%1")), source.contains(QStringLiteral("%1")));
         }
     }
+}
+
+void TestI18n::everyCatalogueTranslatesThePhotoIndex_data()
+{
+    QTest::addColumn<QString>("code");
+    for (const QString &code : i18n::targetCodes())
+        QTest::newRow(qPrintable(code)) << code;
+}
+
+void TestI18n::everyCatalogueTranslatesThePhotoIndex()
+{
+    QFETCH(QString, code);
+
+    InstalledCatalogue catalogue(code);
+    QVERIFY2(catalogue.loaded(), qPrintable(code));
+
+    // The photo index is an ordinal, not a quantity, so it is translated as a
+    // plain %1 message with no numerus entry.
+    const QString text = translated("PhotoPrint", kPhotoIndex).arg(4);
+    const QString where = QStringLiteral("%1: %2").arg(code, kPhotoIndex);
+    QVERIFY2(!text.isEmpty(), qPrintable(where + QStringLiteral(" is empty")));
+    QVERIFY2(text != QStringLiteral("4. fotó"),
+             qPrintable(where + QStringLiteral(" is still Hungarian")));
+    QVERIFY2(text.contains(QLatin1Char('4')),
+             qPrintable(where + QStringLiteral(" lost the index")));
+    QVERIFY2(!text.contains(QStringLiteral("%1")),
+             qPrintable(where + QStringLiteral(" left the %1 placeholder in the text")));
 }
 
 void TestI18n::hungarianSourceSubstitutesTheCount()
@@ -406,21 +452,29 @@ void TestI18n::hungarianSourceSubstitutesTheCount()
     QVERIFY(i18n::installLanguage(QString()));
     QCOMPARE(translatedWithCount("PhotoPrint", kPages, 1), QStringLiteral("1 oldal nyomtatása"));
     QCOMPARE(translatedWithCount("PhotoPrint", kPages, 2), QStringLiteral("2 oldal nyomtatása"));
-    QCOMPARE(translatedWithCount("PhotoPrint", kPhoto, 3), QStringLiteral("3. fotó"));
+    QCOMPARE(translated("PhotoPrint", kPhotoIndex).arg(3), QStringLiteral("3. fotó"));
 }
 
-void TestI18n::repeatedLanguageSwitchingKeepsOwnershipSane()
+void TestI18n::repeatedLanguageSwitchingLeavesTranslatorsUnparented()
 {
-    // Every switch installs a fresh pair of translators and drops the previous
-    // pair. Translation.cpp is their only owner; when QCoreApplication owned
-    // them as well, the process double deleted them at shutdown.
+    // Switching languages repeatedly keeps working, and every translator stays
+    // unparented while it is installed. Translation.cpp is their only owner;
+    // the shutdown double free this guards against cannot be observed from
+    // inside a test, but its cause can: a translator parented to the
+    // application would be deleted by QCoreApplication as well.
     for (int round = 0; round < 3; ++round) {
         QVERIFY(i18n::installLanguage(QStringLiteral("de")));
         QCOMPARE(translated("PhotoPrint", kPrint), QStringLiteral("Drucken"));
+        QVERIFY2(QCoreApplication::instance()->findChildren<QTranslator *>().isEmpty(),
+                 "a translator is parented to the application");
         QVERIFY(i18n::installLanguage(QStringLiteral("zh_CN")));
         QVERIFY(translated("PhotoPrint", kPrint) != kPrint);
+        QVERIFY2(QCoreApplication::instance()->findChildren<QTranslator *>().isEmpty(),
+                 "a translator is parented to the application");
         QVERIFY(i18n::installLanguage(QString()));
         QCOMPARE(translated("PhotoPrint", kPrint), kPrint);
+        QVERIFY2(QCoreApplication::instance()->findChildren<QTranslator *>().isEmpty(),
+                 "a translator is parented to the application");
     }
 }
 

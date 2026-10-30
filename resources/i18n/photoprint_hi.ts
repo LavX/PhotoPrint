@@ -244,10 +244,6 @@
         <translation>भाषा</translation>
     </message>
     <message>
-        <source>A nyelv a következő indításnál lép életbe.</source>
-        <translation>भाषा अगली बार शुरू करने पर लागू होगी।</translation>
-    </message>
-    <message>
         <source>Projekt megnyitása…</source>
         <translation>प्रोजेक्ट खोलें…</translation>
     </message>
@@ -319,12 +315,9 @@
         <source>Húzd ide a fotókat, vagy válaszd a Fotók hozzáadása gombot.</source>
         <translation>फ़ोटो यहाँ छोड़ें, या फ़ोटो जोड़ें चुनें।</translation>
     </message>
-    <message numerus="yes">
-        <source>%n. fotó</source>
-        <translation>
-            <numerusform>फ़ोटो %n</numerusform>
-            <numerusform>फ़ोटो %n</numerusform>
-        </translation>
+    <message>
+        <source>%1. fotó</source>
+        <translation>फ़ोटो %1</translation>
     </message>
     <message numerus="yes">
         <source>%1 · %n fotó</source>
@@ -394,6 +387,10 @@
         <translation>कोई प्रिंटर नहीं</translation>
     </message>
     <message>
+        <source>Nincs beállított nyomtató.</source>
+        <translation>कोई प्रिंटर सेट नहीं है।</translation>
+    </message>
+    <message>
         <source>A nyomtató most nem érhető el. Ellenőrizd, hogy be van-e kapcsolva.</source>
         <translation>प्रिंटर अभी उपलब्ध नहीं है। जाँचें कि वह चालू है।</translation>
     </message>
@@ -459,6 +456,10 @@
     <message>
         <source>A projekt elmentve.</source>
         <translation>प्रोजेक्ट सहेज दिया गया।</translation>
+    </message>
+    <message>
+        <source>Nincs mit elmenteni.</source>
+        <translation>सहेजने के लिए कुछ नहीं है।</translation>
     </message>
     <message>
         <source>Projekt mentése</source>
@@ -553,6 +554,10 @@
         <translation>प्रिंट लॉग लिखा नहीं जा सकता।</translation>
     </message>
     <message>
+        <source>A nyomtatási napló nem olvasható.</source>
+        <translation>प्रिंट लॉग पढ़ा नहीं जा सकता।</translation>
+    </message>
+    <message>
         <source>Ez az oldal nem található.</source>
         <translation>यह पृष्ठ नहीं मिला।</translation>
     </message>
@@ -593,12 +598,12 @@
         <translation>पोर्टेबल प्रतिलिपि का फ़ोल्डर नहीं बनाया जा सकता।</translation>
     </message>
     <message>
-        <source>Ugyanilyen nevű fotó már van a másolatban.</source>
-        <translation>इस नाम की फ़ोटो प्रतिलिपि में पहले से है।</translation>
-    </message>
-    <message>
         <source>A fotót nem sikerült a másolatba tenni.</source>
         <translation>फ़ोटो प्रतिलिपि में नहीं रखी जा सकी।</translation>
+    </message>
+    <message>
+        <source>A projektfájl nem másolható a fotók közé.</source>
+        <translation>प्रोजेक्ट फ़ाइल को फ़ोटो के साथ कॉपी नहीं किया जा सकता।</translation>
     </message>
     <message>
         <source>A fotó másolata nem egyezik az eredetivel.</source>
@@ -611,6 +616,10 @@
     <message>
         <source>A munkamenet mentése nem sikerült.</source>
         <translation>सत्र सहेजा नहीं जा सका।</translation>
+    </message>
+    <message>
+        <source>A munkamenet mentését nem sikerült törölni.</source>
+        <translation>सहेजा गया सत्र हटाया नहीं जा सका।</translation>
     </message>
     <message>
         <source>Nincs folytatható munka.</source>
@@ -645,6 +654,14 @@
         <translation>कागज़ की सेटिंग सहेजी नहीं जा सकती।</translation>
     </message>
     <message>
+        <source>A papírbeállítások nem olvashatók.</source>
+        <translation>कागज़ की सेटिंग पढ़ी नहीं जा सकती।</translation>
+    </message>
+    <message>
+        <source>A papírbeállítások fájlja sérült.</source>
+        <translation>कागज़ सेटिंग की फ़ाइल खराब है।</translation>
+    </message>
+    <message>
         <source>Adj nevet a papírnak.</source>
         <translation>कागज़ को एक नाम दें।</translation>
     </message>
@@ -653,12 +670,20 @@
         <translation>कागज़ सहेजा नहीं जा सका।</translation>
     </message>
     <message>
+        <source>Ezt a papírt nem találjuk.</source>
+        <translation>यह कागज़ नहीं मिल रहा।</translation>
+    </message>
+    <message>
         <source>A papírt nem sikerült törölni.</source>
         <translation>कागज़ हटाया नहीं जा सका।</translation>
     </message>
     <message>
         <source>Nincs mit kipróbálni.</source>
         <translation>आज़माने के लिए कुछ नहीं है।</translation>
+    </message>
+    <message>
+        <source>Ez a papír túl kicsi a próbalaphoz.</source>
+        <translation>यह कागज़ परीक्षण शीट के लिए बहुत छोटा है।</translation>
     </message>
     <message>
         <source>Új lap</source>
@@ -679,10 +704,6 @@
     <message>
         <source>Lap hátrébb</source>
         <translation>पृष्ठ पीछे करें</translation>
-    </message>
-    <message>
-        <source>%1 · %2 fotó</source>
-        <translation>%1 · %2 फ़ोटो</translation>
     </message>
     <message>
         <source>Eredeti</source>

@@ -1737,9 +1737,11 @@ void MainWindow::refreshPhotoList()
         for (const Frame &frame : page.frames) {
             auto *item = new QListWidgetItem(QString());
             item->setToolTip(QFileInfo(frame.sourcePath).fileName());
+            // The position of the frame is an index, not a quantity: it has no
+            // plural forms, so it stays a plain %1 placeholder.
             item->setData(Qt::AccessibleTextRole,
-                          QCoreApplication::translate("PhotoPrint", "%n. fotó", nullptr,
-                                                      page.frames.indexOf(frame) + 1));
+                          QCoreApplication::translate("PhotoPrint", "%1. fotó")
+                              .arg(page.frames.indexOf(frame) + 1));
             item->setData(Qt::UserRole, frame.id);
             if (const std::optional<SourceImage> source = m_store.cached(frame.sourcePath)) {
                 const Result<QImage> thumb = m_store.srgb(*source, document.recipe, 96);

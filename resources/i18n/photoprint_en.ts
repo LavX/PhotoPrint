@@ -244,10 +244,6 @@
         <translation>Language</translation>
     </message>
     <message>
-        <source>A nyelv a következő indításnál lép életbe.</source>
-        <translation>The language takes effect the next time you start PhotoPrint.</translation>
-    </message>
-    <message>
         <source>Projekt megnyitása…</source>
         <translation>Open project…</translation>
     </message>
@@ -319,12 +315,9 @@
         <source>Húzd ide a fotókat, vagy válaszd a Fotók hozzáadása gombot.</source>
         <translation>Drop photos here, or choose Add photos.</translation>
     </message>
-    <message numerus="yes">
-        <source>%n. fotó</source>
-        <translation>
-            <numerusform>Photo %n</numerusform>
-            <numerusform>Photo %n</numerusform>
-        </translation>
+    <message>
+        <source>%1. fotó</source>
+        <translation>Photo %1</translation>
     </message>
     <message numerus="yes">
         <source>%1 · %n fotó</source>
@@ -394,6 +387,10 @@
         <translation>No printer</translation>
     </message>
     <message>
+        <source>Nincs beállított nyomtató.</source>
+        <translation>No printer is configured.</translation>
+    </message>
+    <message>
         <source>A nyomtató most nem érhető el. Ellenőrizd, hogy be van-e kapcsolva.</source>
         <translation>The printer is not available right now. Check that it is switched on.</translation>
     </message>
@@ -459,6 +456,10 @@
     <message>
         <source>A projekt elmentve.</source>
         <translation>The project is saved.</translation>
+    </message>
+    <message>
+        <source>Nincs mit elmenteni.</source>
+        <translation>There is nothing to save.</translation>
     </message>
     <message>
         <source>Projekt mentése</source>
@@ -553,6 +554,10 @@
         <translation>The print log cannot be written.</translation>
     </message>
     <message>
+        <source>A nyomtatási napló nem olvasható.</source>
+        <translation>The print log cannot be read.</translation>
+    </message>
+    <message>
         <source>Ez az oldal nem található.</source>
         <translation>This page cannot be found.</translation>
     </message>
@@ -593,12 +598,12 @@
         <translation>The folder for the portable copy cannot be created.</translation>
     </message>
     <message>
-        <source>Ugyanilyen nevű fotó már van a másolatban.</source>
-        <translation>A photo with this name is already in the copy.</translation>
-    </message>
-    <message>
         <source>A fotót nem sikerült a másolatba tenni.</source>
         <translation>The photo could not be put into the copy.</translation>
+    </message>
+    <message>
+        <source>A projektfájl nem másolható a fotók közé.</source>
+        <translation>The project file cannot be copied in with the photos.</translation>
     </message>
     <message>
         <source>A fotó másolata nem egyezik az eredetivel.</source>
@@ -611,6 +616,10 @@
     <message>
         <source>A munkamenet mentése nem sikerült.</source>
         <translation>The session could not be saved.</translation>
+    </message>
+    <message>
+        <source>A munkamenet mentését nem sikerült törölni.</source>
+        <translation>The saved session could not be deleted.</translation>
     </message>
     <message>
         <source>Nincs folytatható munka.</source>
@@ -645,6 +654,14 @@
         <translation>The paper setting cannot be saved.</translation>
     </message>
     <message>
+        <source>A papírbeállítások nem olvashatók.</source>
+        <translation>The paper settings cannot be read.</translation>
+    </message>
+    <message>
+        <source>A papírbeállítások fájlja sérült.</source>
+        <translation>The paper settings file is damaged.</translation>
+    </message>
+    <message>
         <source>Adj nevet a papírnak.</source>
         <translation>Give the paper a name.</translation>
     </message>
@@ -653,12 +670,20 @@
         <translation>The paper could not be saved.</translation>
     </message>
     <message>
+        <source>Ezt a papírt nem találjuk.</source>
+        <translation>We cannot find this paper.</translation>
+    </message>
+    <message>
         <source>A papírt nem sikerült törölni.</source>
         <translation>The paper could not be deleted.</translation>
     </message>
     <message>
         <source>Nincs mit kipróbálni.</source>
         <translation>There is nothing to try.</translation>
+    </message>
+    <message>
+        <source>Ez a papír túl kicsi a próbalaphoz.</source>
+        <translation>This paper is too small for the test sheet.</translation>
     </message>
     <message>
         <source>Új lap</source>
@@ -679,10 +704,6 @@
     <message>
         <source>Lap hátrébb</source>
         <translation>Move the page later</translation>
-    </message>
-    <message>
-        <source>%1 · %2 fotó</source>
-        <translation>%1 · %2 photos</translation>
     </message>
     <message>
         <source>Eredeti</source>
