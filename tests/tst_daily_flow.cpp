@@ -74,6 +74,9 @@ private slots:
     void pageCountAppearsOnThePrintButton();
     void selectionReadsStayValidAcrossSelections();
     void cachedSourceStaysValidAfterLaterLoads();
+    void digestIgnoresSignedZero();
+    void digestIsPinnedToAKnownRecipe();
+    void brightnessSliderAndPipelineRangeAgree();
 };
 
 void TestDailyFlow::threePhotosOnA4WithoutHelp()
@@ -443,6 +446,56 @@ void TestDailyFlow::cachedSourceStaysValidAfterLaterLoads()
     QVERIFY(!store.cached(photos.at(0)));
     QCOMPARE(first->sha256, loaded.value().sha256);
     QCOMPARE(first->size(), expectedSize);
+}
+
+void TestDailyFlow::digestIgnoresSignedZero()
+{
+    // -0.0 compares equal to 0.0, so both must land on the same cache entry.
+    ColorRecipe positive;
+    ColorRecipe negative;
+    negative.tone.exposureEv = -0.0;
+    QCOMPARE(negative.digest(), positive.digest());
+
+    // A tiny negative residual rounds to "-0.000000" in the canonical text.
+    // That is the same number as zero for the digest as well.
+    ColorRecipe tinyNegative;
+    tinyNegative.tone.exposureEv = -1e-9;
+    QCOMPARE(tinyNegative.digest(), positive.digest());
+
+    // The normalisation must not swallow real values.
+    ColorRecipe different;
+    different.tone.exposureEv = -0.001;
+    QVERIFY(different.digest() != positive.digest());
+}
+
+void TestDailyFlow::digestIsPinnedToAKnownRecipe()
+{
+    // A hard-coded value: if a Qt upgrade or a formatting change alters the
+    // canonical stream, this fails instead of silently invalidating every
+    // digest already written to a project or a recovery file.
+    ColorRecipe recipe;
+    recipe.autoEnhance = true;
+    recipe.tone = PhotoTone{0.125, 0.25, -0.375};
+    recipe.paperStrength = 0.5;
+    recipe.grayscale = true;
+    QCOMPARE(recipe.digest().toHex(),
+             QByteArray("05938672d916cbc0da16139a1b77bffb939fef87670c7250266c8209e5972b5c"));
+}
+
+void TestDailyFlow::brightnessSliderAndPipelineRangeAgree()
+{
+    // The slider is the only UI for the manual offset, and the pipeline clamps
+    // to the same range; the endpoint conversions must agree with it.
+    QCOMPARE(sliderToBrightnessEv(kBrightnessSliderMin), kMinBrightnessEv);
+    QCOMPARE(sliderToBrightnessEv(kBrightnessSliderMax), kMaxBrightnessEv);
+    QCOMPARE(sliderToBrightnessEv(kBrightnessSliderNeutral), 0.0);
+
+    for (int slider = kBrightnessSliderMin; slider <= kBrightnessSliderMax; ++slider)
+        QCOMPARE(brightnessEvToSlider(sliderToBrightnessEv(slider)), slider);
+
+    // Out-of-range values cannot walk the slider off its ends.
+    QCOMPARE(brightnessEvToSlider(kMaxBrightnessEv + 5.0), kBrightnessSliderMax);
+    QCOMPARE(brightnessEvToSlider(kMinBrightnessEv - 5.0), kBrightnessSliderMin);
 }
 
 QTEST_MAIN(TestDailyFlow)

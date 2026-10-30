@@ -204,7 +204,7 @@ private:
     Frame makeInitialFrame(const SourceImage &source, const Page &page) const;
     bool pageOverflows() const;
     bool projectPrintGeometryConsistent(const DocumentSnapshot &document) const;
-    std::optional<Frame> selectedFrame();
+    std::optional<Frame> selectedFrame() const;
     PaperSpec currentPaper() const;
     const PrinterCapabilities *printerByQueue(const QString &queue) const;
 

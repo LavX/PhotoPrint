@@ -1117,8 +1117,8 @@ void MainWindow::buildUi()
 
     m_brightnessSlider = new QSlider(Qt::Horizontal, side);
     m_brightnessSlider->setAccessibleName(QCoreApplication::translate("PhotoPrint", "Világosítás"));
-    m_brightnessSlider->setRange(0, 100);
-    m_brightnessSlider->setValue(50);
+    m_brightnessSlider->setRange(kBrightnessSliderMin, kBrightnessSliderMax);
+    m_brightnessSlider->setValue(kBrightnessSliderNeutral);
     m_brightnessSlider->setTracking(false);
     sideLayout->addWidget(new QLabel(QCoreApplication::translate("PhotoPrint", "Világosítás"), side));
     sideLayout->addWidget(m_brightnessSlider);
@@ -1799,7 +1799,7 @@ void MainWindow::selectFrame(const QString &frameId, bool fromList)
     syncFrameControls();
 }
 
-std::optional<Frame> MainWindow::selectedFrame()
+std::optional<Frame> MainWindow::selectedFrame() const
 {
     if (m_selectedId.isEmpty())
         return std::nullopt;
@@ -1814,7 +1814,12 @@ std::optional<Frame> MainWindow::selectedFrame()
 
 void MainWindow::syncFrameControls()
 {
-    const bool hasSelection = selectedFrame().has_value();
+    // One snapshot for the whole sync: document() returns by value, so each
+    // extra selectedFrame() call copies every page and frame again.
+    const DocumentSnapshot document = m_controller.document();
+    const Frame *frame =
+        m_selectedId.isEmpty() ? nullptr : findFrame(document, m_selectedId);
+    const bool hasSelection = frame != nullptr;
     if (m_inspectorPanel)
         m_inspectorPanel->setVisible(hasSelection);
     m_fitButton->setEnabled(hasSelection);
@@ -1826,16 +1831,14 @@ void MainWindow::syncFrameControls()
     m_autoCheck->setEnabled(hasSelection);
     m_brightnessSlider->setEnabled(hasSelection);
     m_filterCombo->setEnabled(hasSelection);
-    const std::optional<Frame> current = selectedFrame();
-    m_filterStrength->setEnabled(hasSelection && current
-                                 && current->filter != QLatin1String("original"));
+    m_filterStrength->setEnabled(frame && frame->filter != QLatin1String("original"));
     m_upscaleCheck->setEnabled(hasSelection);
     m_originalButton->setEnabled(hasSelection);
     m_advancedToggle->setEnabled(hasSelection);
 
     m_syncing = true;
     m_resolutionHint->clear();
-    if (const std::optional<Frame> frame = selectedFrame()) {
+    if (frame) {
         m_widthSpin->setValue(frame->width / 10.0);
         m_heightSpin->setValue(frame->height / 10.0);
         m_angleSpin->setValue(frame->angleDeg);
@@ -1848,8 +1851,7 @@ void MainWindow::syncFrameControls()
             else
                 m_autoHint->setText(QCoreApplication::translate("PhotoPrint", "Finom fény- és színjavítás"));
         }
-        m_brightnessSlider->setValue(
-            std::clamp(qRound(50.0 + frame->brightness * 100.0), 0, 100));
+        m_brightnessSlider->setValue(brightnessEvToSlider(frame->brightness));
         int filterIndex = 0;
         for (int i = 0; i < m_filterCombo->count(); ++i) {
             if (m_filterCombo->itemData(i).toString() == frame->filter)
@@ -2574,7 +2576,7 @@ void MainWindow::brightnessChanged(int value)
     if (!frame)
         return;
     Frame updated = *frame;
-    updated.brightness = (value - 50) / 100.0;
+    updated.brightness = sliderToBrightnessEv(value);
     m_controller.apply(FrameChange{updated.id, updated});
 }
 
