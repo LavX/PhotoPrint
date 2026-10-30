@@ -86,8 +86,8 @@ path or skip those tests. Tests never print.
 
 The script downloads the standard AppImage tooling once into
 `build/appimage-tools`, bundles Qt, LittleCMS2, CUPS and ImageMagick, and adds
-the XCB, Wayland and offscreen platform plugins. The resulting AppImage runs on
-Wayland and X11 desktops without installing PhotoPrint. If FUSE is unavailable,
+the XCB, Wayland and offscreen platform plugins. The resulting AppImage is
+about 47 MB and runs on Wayland and X11 desktops without installing PhotoPrint. If FUSE is unavailable,
 run it with `--appimage-extract-and-run`.
 
 ## Fedora package

@@ -64,6 +64,20 @@ done
 if [ -f /usr/lib64/libQt6WaylandClient.so.6 ]; then
     cp -a /usr/lib64/libQt6WaylandClient.so.6* "$appdir/usr/lib/" 2>/dev/null || true
 fi
+# Drop Qt modules and image-format plugins the application never loads. Qt's
+# PNG support is built in; only the JPEG plugin is needed.
+rm -rf "$appdir/usr/qml" "$appdir/usr/plugins/qmltooling" \
+    "$appdir/usr/plugins/platforminputcontexts" "$appdir/usr/plugins/platformthemes" \
+    "$appdir/usr/plugins/styles" "$appdir/usr/plugins/iconengines"
+find "$appdir/usr/plugins/imageformats" -type f ! -name 'libqjpeg.so' -delete
+for lib in libQt6Pdf libQt6Quick libQt6Qml libQt6QmlModels libQt6QmlMeta \
+           libQt6QmlWorkerScript libQt6Network libQt6PrintSupport \
+           libQt6OpenGLWidgets libQt6Svg libKF6Archive libaom librav1e \
+           libSvtAv1Enc libjxl libOpenEXR libOpenEXRCore libIex libIlmThread \
+           libImath libheif libavif libtiff libwebp libopenjp2 libraw; do
+    rm -f "$appdir"/usr/lib/${lib}*.so*
+done
+
 # Pull in anything the new plugins need that linuxdeploy did not see.
 for _ in 1 2 3; do
     missing="$(find "$appdir" -name '*.so*' -type f -exec ldd {} \; 2>/dev/null \
