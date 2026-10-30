@@ -85,11 +85,15 @@ bool usableLogicalMm(double value)
     return std::isfinite(value) && value >= 0.0;
 }
 
+/// A stored sheet. The offsets count too: they are added to the placement, so a
+/// hand-edited NaN or infinity would travel through every page as a usable
+/// paper. Any sign is a real correction; only a non-finite value is not.
 bool isUsableStoredPaper(const PaperSpec &paper)
 {
     return !paper.name.isEmpty() && usablePhysicalMm(paper.physicalWidthMm)
         && usablePhysicalMm(paper.physicalHeightMm) && usableLogicalMm(paper.logicalWidthMm)
-        && usableLogicalMm(paper.logicalHeightMm);
+        && usableLogicalMm(paper.logicalHeightMm) && std::isfinite(paper.offsetXMm)
+        && std::isfinite(paper.offsetYMm);
 }
 
 Result<QList<PaperSpec>> corruptPaperFile()
@@ -283,12 +287,25 @@ Result<QList<PaperSpec>> CustomPaperStore::readAll() const
     // QSettings reads an unparsable array count as "no entries" without any
     // error, which looks exactly like an empty store. The count key is written
     // by every save, so entries without it can only come from a damaged file.
-    if (count == 0) {
-        const QString prefix = QStringLiteral("customPapers/");
-        for (const QString &key : settings->allKeys()) {
-            if (key.startsWith(prefix) && key != prefix + QStringLiteral("size"))
-                return corruptPaperFile();
-        }
+    //
+    // A count that is merely too small is the same loss, only harder to notice:
+    // a file with `size=1` but entries 1 and 2 is read as one paper, and the
+    // next save rewrites it from the shorter list. Every key under the prefix is
+    // therefore checked against the count. QSettings numbers array entries from
+    // 1, so the only scalar key allowed there is `size`; an index below 1 or
+    // above the count, or a key without a field name, is damage.
+    const QString prefix = QStringLiteral("customPapers/");
+    for (const QString &key : settings->allKeys()) {
+        if (!key.startsWith(prefix))
+            continue;
+        const QString rest = key.mid(prefix.size());
+        if (rest == QLatin1String("size"))
+            continue;
+        const QStringList parts = rest.split(QLatin1Char('/'));
+        bool numeric = false;
+        const int index = parts.isEmpty() ? 0 : parts.first().toInt(&numeric);
+        if (!numeric || parts.size() != 2 || parts.at(1).isEmpty() || index < 1 || index > count)
+            return corruptPaperFile();
     }
     return papers;
 }

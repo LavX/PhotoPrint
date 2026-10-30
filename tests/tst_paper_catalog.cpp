@@ -42,6 +42,8 @@ private slots:
     void damagedPaperFileIsNotOverwritten();
     void unparsablePaperFileKeepsItsReadablePaper();
     void corruptPaperEntryIsNotDropped();
+    void truncatedArrayCountIsNotTrusted();
+    void nonFiniteOffsetsAreRejected();
     void nonFiniteSizesAreRejected();
     void settingsFailureIsNotSticky();
     void aConcurrentWriterIsRefused();
@@ -339,6 +341,10 @@ void TestPaperCatalog::damagedPaperFileIsNotOverwritten()
     QFile file(path);
     QVERIFY(file.open(QIODevice::ReadOnly));
     QCOMPARE(file.readAll(), content);
+    // And the store keeps reporting it instead of settling on an empty list.
+    const auto again = store.readAll();
+    QVERIFY(!again.ok());
+    QCOMPARE(again.error().code, QStringLiteral("paper-corrupt"));
 }
 
 void TestPaperCatalog::unparsablePaperFileKeepsItsReadablePaper()
@@ -366,16 +372,16 @@ void TestPaperCatalog::unparsablePaperFileKeepsItsReadablePaper()
     paper.name = QStringLiteral("Új");
     paper.physicalWidthMm = 100.0;
     paper.physicalHeightMm = 150.0;
-    // Either the save refuses the file or it repairs it; both keep what the file
-    // still holds in full.
+    // The first read reports the parse damage, but QSettings keeps the parsed
+    // values in a process-wide cache: the save's own read sees the paper that
+    // was recovered and can repair the file. That is the outcome asserted
+    // below, without a branch.
     const auto saved = store.save(paper);
-    if (!saved.ok())
-        QCOMPARE(saved.error().code, QStringLiteral("paper-corrupt"));
+    QVERIFY2(saved.ok(), "the readable paper lets the save repair the file");
 
     const QStringList names = paperNames(store.all());
     QVERIFY2(names.contains(QStringLiteral("Regi")), "the readable paper must survive");
-    if (saved.ok())
-        QVERIFY(names.contains(QStringLiteral("Új")));
+    QVERIFY(names.contains(QStringLiteral("Új")));
 }
 
 void TestPaperCatalog::corruptPaperEntryIsNotDropped()
@@ -419,6 +425,106 @@ void TestPaperCatalog::corruptPaperEntryIsNotDropped()
         QVERIFY(file.open(QIODevice::ReadOnly));
         QCOMPARE(file.readAll(), content);
     }
+}
+
+void TestPaperCatalog::truncatedArrayCountIsNotTrusted()
+{
+    // A count that is too small is the same loss as a missing one, only harder
+    // to see: QSettings reads exactly one paper, reports no error, and the next
+    // save rewrites the file from that shorter list. QSettings numbers array
+    // entries from 1, so entry 2 above a count of 1 can only be damage.
+    QTemporaryDir dir;
+    QVERIFY(dir.isValid());
+    const QString path = QDir(dir.path()).filePath(QStringLiteral("papers.ini"));
+    const QByteArray content =
+        QByteArray("[customPapers]\nsize=1\n1\\name=Regi\n1\\widthMm=100\n1\\heightMm=150\n"
+                   "2\\name=Masik\n2\\widthMm=100\n2\\heightMm=150\n");
+    {
+        QFile file(path);
+        QVERIFY(file.open(QIODevice::WriteOnly));
+        QCOMPARE(file.write(content), qint64(content.size()));
+    }
+
+    CustomPaperStore store(path);
+    const auto read = store.readAll();
+    QVERIFY2(!read.ok(), "the hidden second paper must not look like a clean one-paper store");
+    QCOMPARE(read.error().code, QStringLiteral("paper-corrupt"));
+    QVERIFY(store.all().isEmpty());
+
+    PaperSpec paper;
+    paper.name = QStringLiteral("Új");
+    paper.physicalWidthMm = 100.0;
+    paper.physicalHeightMm = 150.0;
+    const auto saved = store.save(paper);
+    QVERIFY2(!saved.ok(), "saving would rewrite the file without the hidden paper");
+    QCOMPARE(saved.error().code, QStringLiteral("paper-corrupt"));
+
+    const auto removed = store.remove(QStringLiteral("Regi"));
+    QVERIFY(!removed.ok());
+    QCOMPARE(removed.error().code, QStringLiteral("paper-corrupt"));
+
+    QFile file(path);
+    QVERIFY(file.open(QIODevice::ReadOnly));
+    QCOMPARE(file.readAll(), content);
+}
+
+void TestPaperCatalog::nonFiniteOffsetsAreRejected()
+{
+    // The offsets are added to the placement, so a hand-edited NaN or infinity
+    // is not a correction but a paper no geometry can draw. Any finite value,
+    // either sign, stays valid.
+    const QList<QByteArray> damaged = {
+        QByteArray("[customPapers]\nsize=1\n1\\name=Regi\n1\\widthMm=100\n1\\heightMm=150\n"
+                   "1\\offsetXMm=nan\n"),
+        QByteArray("[customPapers]\nsize=1\n1\\name=Regi\n1\\widthMm=100\n1\\heightMm=150\n"
+                   "1\\offsetYMm=inf\n"),
+    };
+
+    for (const QByteArray &content : damaged) {
+        QTemporaryDir dir;
+        QVERIFY(dir.isValid());
+        const QString path = QDir(dir.path()).filePath(QStringLiteral("papers.ini"));
+        {
+            QFile file(path);
+            QVERIFY(file.open(QIODevice::WriteOnly));
+            QCOMPARE(file.write(content), qint64(content.size()));
+        }
+
+        CustomPaperStore store(path);
+        const auto read = store.readAll();
+        QVERIFY2(!read.ok(), content.constData());
+        QCOMPARE(read.error().code, QStringLiteral("paper-corrupt"));
+
+        PaperSpec paper;
+        paper.name = QStringLiteral("Új");
+        paper.physicalWidthMm = 100.0;
+        paper.physicalHeightMm = 150.0;
+        QVERIFY(!store.save(paper).ok());
+    }
+
+    // The write side refuses the same values.
+    QTemporaryDir dir;
+    QVERIFY(dir.isValid());
+    CustomPaperStore store(QDir(dir.path()).filePath(QStringLiteral("papers.ini")));
+    PaperSpec paper;
+    paper.name = QStringLiteral("Eltolt");
+    paper.physicalWidthMm = 100.0;
+    paper.physicalHeightMm = 150.0;
+    paper.offsetXMm = std::numeric_limits<double>::quiet_NaN();
+    const auto nanOffset = store.save(paper);
+    QVERIFY2(!nanOffset.ok(), "a NaN offset must not reach the settings file");
+    QCOMPARE(nanOffset.error().code, QStringLiteral("paper-size"));
+
+    paper.offsetXMm = -1.5;
+    paper.offsetYMm = std::numeric_limits<double>::infinity();
+    QVERIFY(!store.save(paper).ok());
+
+    // A finite offset keeps its sign and survives the round trip.
+    paper.offsetYMm = 2.25;
+    QVERIFY(store.save(paper).ok());
+    QCOMPARE(store.all().size(), 1);
+    QCOMPARE(store.all().first().offsetXMm, -1.5);
+    QCOMPARE(store.all().first().offsetYMm, 2.25);
 }
 
 void TestPaperCatalog::nonFiniteSizesAreRejected()
