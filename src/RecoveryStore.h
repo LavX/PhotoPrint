@@ -34,6 +34,7 @@ private:
     int nextSlotFromDisk() const;
 
     QString m_directory;
+    /// Always 0 or 1; every writer of this field keeps that invariant.
     int m_nextSlot = 0;
 };
 

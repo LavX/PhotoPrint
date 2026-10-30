@@ -13,6 +13,11 @@ enum class SaveMode { Normal, Portable };
 struct SourceIssue {
     QString frameId;
     QString path;
+    /// Cleaned form of the project-relative `source` this load refused. Purely
+    /// informational: a relink dialog can start next to it. It is never
+    /// resolved, opened or written back, so it must not be treated as trusted.
+    /// Empty when nothing was refused or there was no project directory.
+    QString refusedPath;
     QByteArray expectedSha256;
     bool missing = false;
     bool changed = false;
@@ -41,8 +46,8 @@ struct LoadedProject {
 ///    folder, so it keeps working on the author's machine. It is never written
 ///    into a portable copy: those carry only contained relative paths.
 ///  * A portable copy only writes inside its own `.files` folder and only
-///    copies regular, readable files; a failed copy rolls the whole bundle
-///    back.
+///    copies regular, readable files. A failed copy removes what it added and
+///    puts back any file it replaced, so the previous bundle stays usable.
 class ProjectStore
 {
 public:

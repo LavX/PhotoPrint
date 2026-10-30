@@ -13,8 +13,10 @@
 #include <QJsonObject>
 #include <QJsonParseError>
 #include <QMap>
+#include <QPair>
 #include <QSaveFile>
 #include <QSet>
+#include <QTemporaryFile>
 
 #include <algorithm>
 
@@ -304,6 +306,7 @@ Result<ParsedProject> parseDocument(const QJsonObject &root, const QString &proj
 
             bool blocked = false;
             QString contained;
+            QString refused; // untrusted, kept only as a relink hint
             if (!stored.isEmpty()) {
                 if (QDir::isAbsolutePath(stored)) {
                     // 1.0.0 never wrote an absolute source, but a recorded one
@@ -312,8 +315,12 @@ Result<ParsedProject> parseDocument(const QJsonObject &root, const QString &proj
                 } else if (projectDir.isEmpty()) {
                     blocked = true;
                 } else {
+                    const QString joined =
+                        QDir::cleanPath(QDir(projectDir).absoluteFilePath(stored));
                     contained = resolveProjectSource(projectDir, stored);
                     blocked = contained.isEmpty();
+                    if (blocked)
+                        refused = joined;
                 }
             }
 
@@ -331,6 +338,7 @@ Result<ParsedProject> parseDocument(const QJsonObject &root, const QString &proj
             SourceIssue issue;
             issue.frameId = frame.id;
             issue.path = frame.sourcePath;
+            issue.refusedPath = refused;
             issue.expectedSha256 = frame.sourceSha256;
             if (!frame.sourcePath.isEmpty() && QFileInfo::exists(frame.sourcePath)) {
                 const QByteArray current = fileSha256(frame.sourcePath);
@@ -357,10 +365,35 @@ Result<ParsedProject> parseDocument(const QJsonObject &root, const QString &proj
     return parsed;
 }
 
+/// What a portable copy changed on disk, so a failed save can put the previous
+/// bundle back instead of leaving it half rewritten.
+struct PortableChanges {
+    /// Files this save created; removed on rollback.
+    QList<QString> added;
+    /// backup -> target. `target` already existed with other content and was
+    /// moved to `backup` first; rollback restores it, a commit drops it.
+    QList<QPair<QString, QString>> replaced;
+};
+
+/// A free name in `directory` for a temporary backup of one file.
+QString unusedBackupPath(const QString &directory)
+{
+    QTemporaryFile probe(QDir(directory).filePath(QStringLiteral(".ppj-previous-XXXXXX")));
+    if (!probe.open())
+        return QString();
+    probe.setAutoRemove(false);
+    const QString path = probe.fileName();
+    probe.close();
+    // QFile::rename() refuses an existing destination, and this empty probe
+    // file is not the backup itself.
+    QFile::remove(path);
+    return path;
+}
+
 /// Copies every unique source into the portable folder. The caller rolls the
-/// listed targets back when any later step fails.
+/// listed changes back when any later step fails.
 Result<void> copyPortableSources(const DocumentSnapshot &document, const QString &portableDir,
-                                 const QString &projectFile, QList<QString> *created)
+                                 const QString &projectFile, PortableChanges *changes)
 {
     const QHash<QString, QString> names = portableFileNames(document);
     const QString projectPath = lexicalPath(projectFile);
@@ -397,16 +430,21 @@ Result<void> copyPortableSources(const DocumentSnapshot &document, const QString
             if (QFileInfo::exists(target)) {
                 if (fileSha256(target) == frame.sourceSha256)
                     continue; // already carried by an earlier save
-                if (!QFile::remove(target)) {
+                // The previous bundle already has a different photo under this
+                // name. Move it aside rather than deleting it: a failure later
+                // in this save has to be able to put it back.
+                const QString backup = unusedBackupPath(portableDir);
+                if (backup.isEmpty() || !QFile::rename(target, backup)) {
                     return error(QStringLiteral("portable-write"),
                                  QCoreApplication::translate("PhotoPrint", "A fotót nem sikerült a másolatba tenni."));
                 }
+                changes->replaced.append(qMakePair(backup, target));
             }
             if (!QFile::copy(source, target)) {
                 return error(QStringLiteral("portable-copy"),
                              QCoreApplication::translate("PhotoPrint", "A fotót nem sikerült a másolatba tenni."));
             }
-            created->append(target);
+            changes->added.append(target);
             if (!frame.sourceSha256.isEmpty() && fileSha256(target) != frame.sourceSha256) {
                 return error(QStringLiteral("portable-hash"),
                              QCoreApplication::translate("PhotoPrint", "A fotó másolata nem egyezik az eredetivel."));
@@ -492,15 +530,26 @@ Result<void> ProjectStore::save(const QString &path, const DocumentSnapshot &doc
 
     QString portableDir;
     bool createdPortableDir = false;
-    QList<QString> created;
+    PortableChanges changes;
     auto rollback = [&] {
-        for (const QString &file : created)
+        // Remove the new copies first: a replaced target holds the half-written
+        // copy at this point, and the backup has to land on a free name.
+        for (const QString &file : changes.added)
             QFile::remove(file);
+        for (const auto &entry : changes.replaced) {
+            QFile::remove(entry.second);
+            QFile::rename(entry.first, entry.second);
+        }
         if (createdPortableDir) {
             QDir dir(portableDir);
             if (dir.exists() && dir.isEmpty())
                 QDir().rmdir(portableDir);
         }
+    };
+    // The bundle is only rewritable until the project file itself is in place.
+    auto discardBackups = [&] {
+        for (const auto &entry : changes.replaced)
+            QFile::remove(entry.first);
     };
 
     if (mode == SaveMode::Portable) {
@@ -511,7 +560,7 @@ Result<void> ProjectStore::save(const QString &path, const DocumentSnapshot &doc
                          QCoreApplication::translate("PhotoPrint", "A hordozható másolat mappája nem hozható létre."));
         }
         const auto copied =
-            copyPortableSources(document, portableDir, info.absoluteFilePath(), &created);
+            copyPortableSources(document, portableDir, info.absoluteFilePath(), &changes);
         if (!copied) {
             rollback();
             return copied.error();
@@ -536,6 +585,7 @@ Result<void> ProjectStore::save(const QString &path, const DocumentSnapshot &doc
         return error(QStringLiteral("project-write"),
                      QCoreApplication::translate("PhotoPrint", "A projektet nem sikerült menteni."));
     }
+    discardBackups();
     return Result<void>();
 }
 

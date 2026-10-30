@@ -94,6 +94,16 @@ DocumentSnapshot sampleDocument(const SourceImage &red, const SourceImage &blue)
     return document;
 }
 
+DocumentSnapshot singleFrameDocument(const SourceImage &source, const QString &id)
+{
+    DocumentSnapshot document;
+    Page page;
+    page.id = QStringLiteral("page-single");
+    page.frames.append(sampleFrame(source, id));
+    document.pages.append(page);
+    return document;
+}
+
 bool closeFrame(const Frame &a, const Frame &b)
 {
     return a.id == b.id && a.sourcePath == b.sourcePath && a.sourceSha256 == b.sourceSha256
@@ -159,10 +169,13 @@ private slots:
     void emptyDocumentIsNotSaved();
     void zeroPageProjectIsRejected();
     void escapingSourceIsNotRead();
+    void blockedRelativeSourceKeepsRelinkInformation();
     void absoluteOriginalKeepsNormalProjectsWorking();
     void portableCopyDoesNotStoreAbsolutePaths();
     void portableCopyKeepsSameNamedSourcesApart();
     void portableCopyRollsBackOnFailure();
+    void portableCopyReplacementRollsBack();
+    void portableCopyReplacementLeavesNoBackup();
     void craftedBrightnessCannotReachTheRenderer();
     void versionOneProjectWithoutNewKeysStillLoads();
     void missingAndChangedSourcesKeepTheLayout();
@@ -304,6 +317,40 @@ void TestProjectStore::escapingSourceIsNotRead()
     QVERIFY(!loaded.value().issues.first().path.contains(QStringLiteral("secret")));
 }
 
+void TestProjectStore::blockedRelativeSourceKeepsRelinkInformation()
+{
+    // A frame whose stored path escapes and whose recorded `original` is gone
+    // keeps no usable path. The layout is still restored, so the refusal has to
+    // leave something a relink dialog can start from, and the photo must not be
+    // read through the refused path.
+    const QString projectDir = m_dir.filePath(QStringLiteral("relink"));
+    QVERIFY(QDir().mkpath(projectDir));
+    const QString path = QDir(projectDir).filePath(QStringLiteral("r.ppj"));
+    ProjectStore store;
+    QVERIFY(store.save(path, sampleDocument(m_red, m_blue), SaveMode::Normal).ok());
+
+    const QString elsewhere = m_dir.filePath(QStringLiteral("relink-elsewhere.png"));
+    QVERIFY(QFile::copy(m_redPath, elsewhere));
+    const QString escaping = QDir(projectDir).relativeFilePath(elsewhere);
+    QVERIFY(escaping.startsWith(QStringLiteral("..")));
+    QVERIFY(patchFirstFrame(path, escaping, false));
+
+    const auto loaded = store.load(path);
+    if (!loaded)
+        QFAIL(qPrintable(loaded.error().message));
+    const Frame frame = loaded.value().document.pages.at(0).frames.at(0);
+    QVERIFY(frame.sourcePath.isEmpty());
+    QCOMPARE(loaded.value().issues.size(), 1);
+
+    const SourceIssue issue = loaded.value().issues.first();
+    QCOMPARE(issue.frameId, QStringLiteral("frame-red"));
+    QVERIFY(issue.missing);
+    QVERIFY(issue.blocked);
+    QVERIFY(issue.path.isEmpty());
+    // The hint is the cleaned stored path, not a resolved or verified file.
+    QCOMPARE(issue.refusedPath, QDir::cleanPath(m_dir.filePath(QStringLiteral("relink-elsewhere.png"))));
+}
+
 void TestProjectStore::absoluteOriginalKeepsNormalProjectsWorking()
 {
     // 1.0.0 wrote the relative path even when the photo lived outside the
@@ -430,6 +477,88 @@ void TestProjectStore::portableCopyRollsBackOnFailure()
     QCOMPARE(saved.error().code, QStringLiteral("source-missing"));
     QVERIFY(!QFileInfo::exists(path));
     QVERIFY(!QDir(path + QStringLiteral(".files")).exists());
+}
+
+void TestProjectStore::portableCopyReplacementRollsBack()
+{
+    const QString projectDir = m_dir.filePath(QStringLiteral("replace-rollback"));
+    QVERIFY(QDir().mkpath(projectDir));
+    const QString path = QDir(projectDir).filePath(QStringLiteral("p.ppj"));
+    ProjectStore store;
+    QVERIFY(store.save(path, sampleDocument(m_red, m_blue), SaveMode::Portable).ok());
+
+    const QString filesDir = path + QStringLiteral(".files");
+    const QString carried = QDir(filesDir).filePath(QStringLiteral("red.png"));
+    QCOMPARE(fileSha256(carried), m_redSha);
+
+    // Another photo under the same base name would replace the carried copy,
+    // and a later frame fails. Both the previous bundle and the previous
+    // project file have to survive that.
+    const QString otherDir = m_dir.filePath(QStringLiteral("replace-rollback-other"));
+    QVERIFY(QDir().mkpath(otherDir));
+    const QString otherPath = QDir(otherDir).filePath(QStringLiteral("red.png"));
+    QVERIFY(QFile::copy(m_bluePath, otherPath));
+    ImageStore images;
+    const auto other = images.load(otherPath, ImportPolicy{});
+    QVERIFY(other.ok());
+    QVERIFY(other.value().sha256 != m_redSha);
+
+    DocumentSnapshot document =
+        singleFrameDocument(other.value(), QStringLiteral("frame-replaced"));
+    Frame broken = sampleFrame(other.value(), QStringLiteral("frame-broken"));
+    broken.sourcePath = m_dir.filePath(QStringLiteral("no-such-photo.png"));
+    document.pages[0].frames.append(broken);
+
+    const auto saved = store.save(path, document, SaveMode::Portable);
+    QVERIFY(!saved.ok());
+    QCOMPARE(saved.error().code, QStringLiteral("source-missing"));
+
+    QCOMPARE(fileSha256(carried), m_redSha);
+    // Nothing half-written is left behind, not even a hidden backup.
+    QCOMPARE(QDir(filesDir).entryList(QDir::Files | QDir::Hidden | QDir::System).size(), 2);
+
+    const auto reloaded = store.load(path);
+    if (!reloaded)
+        QFAIL(qPrintable(reloaded.error().message));
+    QVERIFY(reloaded.value().issues.isEmpty());
+    QCOMPARE(reloaded.value().document.pages.size(), 2);
+}
+
+void TestProjectStore::portableCopyReplacementLeavesNoBackup()
+{
+    const QString projectDir = m_dir.filePath(QStringLiteral("replace-commit"));
+    QVERIFY(QDir().mkpath(projectDir));
+    const QString path = QDir(projectDir).filePath(QStringLiteral("p.ppj"));
+    ProjectStore store;
+    QVERIFY(store.save(path, sampleDocument(m_red, m_blue), SaveMode::Portable).ok());
+
+    const QString filesDir = path + QStringLiteral(".files");
+    const QString carried = QDir(filesDir).filePath(QStringLiteral("red.png"));
+    QCOMPARE(fileSha256(carried), m_redSha);
+
+    const QString otherDir = m_dir.filePath(QStringLiteral("replace-commit-other"));
+    QVERIFY(QDir().mkpath(otherDir));
+    const QString otherPath = QDir(otherDir).filePath(QStringLiteral("red.png"));
+    QVERIFY(QFile::copy(m_bluePath, otherPath));
+    ImageStore images;
+    const auto other = images.load(otherPath, ImportPolicy{});
+    QVERIFY(other.ok());
+
+    const auto saved = store.save(path, singleFrameDocument(other.value(), QStringLiteral("frame-replaced")),
+                                  SaveMode::Portable);
+    if (!saved)
+        QFAIL(qPrintable(saved.error().message));
+
+    // The replacement landed and the file it displaced is not kept around.
+    QCOMPARE(fileSha256(carried), other.value().sha256);
+    QCOMPARE(QDir(filesDir).entryList(QDir::Files | QDir::Hidden | QDir::System).size(), 2);
+
+    const auto loaded = store.load(path);
+    if (!loaded)
+        QFAIL(qPrintable(loaded.error().message));
+    QVERIFY(loaded.value().issues.isEmpty());
+    const Frame frame = loaded.value().document.pages.at(0).frames.at(0);
+    QCOMPARE(fileSha256(frame.sourcePath), other.value().sha256);
 }
 
 void TestProjectStore::craftedBrightnessCannotReachTheRenderer()
