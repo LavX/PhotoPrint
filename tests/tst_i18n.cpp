@@ -21,9 +21,10 @@ namespace {
 const QString kPrint = QStringLiteral("Nyomtatás");
 const QString kAbout = QStringLiteral("Névjegy");
 
-/// The two messages that carry a count and therefore have plural forms.
+/// The messages that carry a count and therefore have plural forms.
 const QString kPages = QStringLiteral("%n oldal nyomtatása");
 const QString kPhoto = QStringLiteral("%n. fotó");
+const QString kPageTooltip = QStringLiteral("%1 · %n fotó");
 
 QString translated(const char *context, const QString &source)
 {
@@ -90,6 +91,7 @@ private slots:
     void choosingALanguageAppliesImmediately();
     void singularFormIsUsedForOne_data();
     void singularFormIsUsedForOne();
+    void pageTooltipKeepsThePaperAndPluralises();
     void everyCatalogueTranslatesCountedMessages_data();
     void everyCatalogueTranslatesCountedMessages();
     void hungarianSourceSubstitutesTheCount();
@@ -335,6 +337,30 @@ void TestI18n::singularFormIsUsedForOne()
     QCOMPARE(translatedWithCount("PhotoPrint", kPages, 2), plural);
     // Eleven is plural in both languages, so the singular must not come back.
     QVERIFY(translatedWithCount("PhotoPrint", kPages, 11) != singular);
+}
+
+void TestI18n::pageTooltipKeepsThePaperAndPluralises()
+{
+    // The page list tooltip is "%1 · %n fotó": the paper name stays a
+    // placeholder and the photo count is the numerus argument.
+    for (const auto &[code, one, two] :
+         {std::tuple<QString, QString, QString>{QStringLiteral("en"),
+                                               QStringLiteral("A4 · 1 photo"),
+                                               QStringLiteral("A4 · 2 photos")},
+          std::tuple<QString, QString, QString>{QStringLiteral("de"),
+                                               QStringLiteral("A4 · 1 Foto"),
+                                               QStringLiteral("A4 · 2 Fotos")}}) {
+        InstalledCatalogue catalogue(code);
+        QVERIFY2(catalogue.loaded(), qPrintable(code));
+        const QString singular =
+            QCoreApplication::translate("PhotoPrint", kPageTooltip.toUtf8().constData(), nullptr, 1)
+                .arg(QStringLiteral("A4"));
+        const QString plural =
+            QCoreApplication::translate("PhotoPrint", kPageTooltip.toUtf8().constData(), nullptr, 2)
+                .arg(QStringLiteral("A4"));
+        QCOMPARE(singular, one);
+        QCOMPARE(plural, two);
+    }
 }
 
 void TestI18n::everyCatalogueTranslatesCountedMessages_data()

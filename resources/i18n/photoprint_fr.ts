@@ -326,6 +326,13 @@
             <numerusform>Photo %n</numerusform>
         </translation>
     </message>
+    <message numerus="yes">
+        <source>%1 · %n fotó</source>
+        <translation>
+            <numerusform>%1 · %n photo</numerusform>
+            <numerusform>%1 · %n photos</numerusform>
+        </translation>
+    </message>
     <message>
         <source>A matt papírt a nyomtató tintasugaras papírként kezeli.</source>
         <translation>L'imprimante traite le papier mat comme du papier jet d'encre.</translation>

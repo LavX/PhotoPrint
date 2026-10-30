@@ -327,6 +327,14 @@
             <numerusform>Фото %n</numerusform>
         </translation>
     </message>
+    <message numerus="yes">
+        <source>%1 · %n fotó</source>
+        <translation>
+            <numerusform>%1 · %n фото</numerusform>
+            <numerusform>%1 · %n фото</numerusform>
+            <numerusform>%1 · %n фото</numerusform>
+        </translation>
+    </message>
     <message>
         <source>A matt papírt a nyomtató tintasugaras papírként kezeli.</source>
         <translation>Принтер считает матовую бумагу струйной.</translation>

@@ -94,9 +94,9 @@ void PagesPanel::setPages(const QList<Page> &pages, int current)
         auto *item = new QListWidgetItem(QStringLiteral("%1").arg(i + 1));
         item->setTextAlignment(Qt::AlignCenter);
         item->setSizeHint(QSize(34, 30));
-        item->setToolTip(QCoreApplication::translate("PhotoPrint", "%1 · %2 fotó")
-                             .arg(page.paper.name)
-                             .arg(page.frames.size()));
+        item->setToolTip(QCoreApplication::translate("PhotoPrint", "%1 · %n fotó", nullptr,
+                                                     page.frames.size())
+                             .arg(page.paper.name));
         m_list->addItem(item);
     }
     if (current >= 0 && current < m_list->count())

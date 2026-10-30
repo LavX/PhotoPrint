@@ -325,6 +325,12 @@
             <numerusform>%n枚目の写真</numerusform>
         </translation>
     </message>
+    <message numerus="yes">
+        <source>%1 · %n fotó</source>
+        <translation>
+            <numerusform>%1 · %n枚の写真</numerusform>
+        </translation>
+    </message>
     <message>
         <source>A matt papírt a nyomtató tintasugaras papírként kezeli.</source>
         <translation>プリンターはマット紙をインクジェット紙として扱います。</translation>
