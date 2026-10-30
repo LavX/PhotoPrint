@@ -2,8 +2,8 @@ Name:           photoprint
 Version:        1.0.0
 Release:        1%{?dist}
 Summary:        Egyszerű helyi fotónyomtatás
-License:        Proprietary
-URL:            https://example.invalid/photoprint
+License:        MIT
+URL:            https://github.com/LavX/PhotoPrint
 Source0:        %{photoprint_source}
 BuildRequires:  cmake
 BuildRequires:  ninja-build
@@ -27,7 +27,7 @@ nyomtatásához. A meglévő CUPS-sorokat használja, nem telepít drivert.
 %prep
 rm -rf %{_builddir}/photoprint-build
 mkdir -p %{_builddir}/photoprint-build
-for item in CMakeLists.txt CMakePresets.json src tests resources packaging docs; do
+for item in CMakeLists.txt CMakePresets.json src tests resources; do
   cp -a %{photoprint_source}/$item %{_builddir}/photoprint-build/
 done
 
