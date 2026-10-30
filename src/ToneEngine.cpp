@@ -4,6 +4,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstring>
 #include <vector>
 
 namespace pp {
@@ -12,39 +13,64 @@ namespace {
 
 struct Stats {
     double mean = 0.0;
-    double p05 = 0.0;
     double p50 = 0.0;
-    double p95 = 0.0;
-    double p99 = 0.0;
     double p995 = 0.0;
 };
 
 Stats analyse(const QImage &image)
 {
     Stats stats;
+    if (image.isNull())
+        return stats;
+    const QImage source = image.format() == QImage::Format_RGBA64_Premultiplied
+        ? image
+        : image.convertToFormat(QImage::Format_RGBA64_Premultiplied);
+    if (source.format() != QImage::Format_RGBA64_Premultiplied || source.width() <= 0
+        || source.height() <= 0)
+        return stats;
+
     const int bins = 1024;
     std::vector<double> histogram(bins, 0.0);
     double sum = 0.0;
     double count = 0.0;
 
-    const QImage source = image.format() == QImage::Format_RGBA64_Premultiplied
-        ? image
-        : image.convertToFormat(QImage::Format_RGBA64_Premultiplied);
+    auto accumulate = [&](const QRgba64 &pixel) {
+        const quint16 alpha = pixel.alpha();
+        if (alpha == 0)
+            return;
+        const double scale = 65535.0 / alpha;
+        const double red = std::min(1.0, pixel.red() * scale / 65535.0);
+        const double green = std::min(1.0, pixel.green() * scale / 65535.0);
+        const double blue = std::min(1.0, pixel.blue() * scale / 65535.0);
+        const double luminance = 0.2126 * red + 0.7152 * green + 0.0722 * blue;
+        sum += luminance;
+        ++count;
+        const int bin = std::clamp(static_cast<int>(luminance * (bins - 1)), 0, bins - 1);
+        histogram[bin] += 1.0;
+    };
+
+    const qsizetype pixelBytes = qsizetype(sizeof(QRgba64));
+    // The fast path reads whole 64-bit pixels straight out of the scanline, so
+    // it is only taken when the layout actually is that: a full-width stride of
+    // whole pixels, starting at an address aligned for QRgba64.
+    const bool direct =
+        source.bytesPerLine() % pixelBytes == 0
+        && source.bytesPerLine() >= source.width() * pixelBytes;
+
     for (int y = 0; y < source.height(); ++y) {
-        const QRgba64 *line = reinterpret_cast<const QRgba64 *>(source.constScanLine(y));
-        for (int x = 0; x < source.width(); ++x) {
-            const quint16 alpha = line[x].alpha();
-            if (alpha == 0)
-                continue;
-            const double scale = 65535.0 / alpha;
-            const double red = std::min(1.0, line[x].red() * scale / 65535.0);
-            const double green = std::min(1.0, line[x].green() * scale / 65535.0);
-            const double blue = std::min(1.0, line[x].blue() * scale / 65535.0);
-            const double luminance = 0.2126 * red + 0.7152 * green + 0.0722 * blue;
-            sum += luminance;
-            ++count;
-            const int bin = std::clamp(static_cast<int>(luminance * (bins - 1)), 0, bins - 1);
-            histogram[bin] += 1.0;
+        const uchar *line = source.constScanLine(y);
+        if (direct && reinterpret_cast<quintptr>(line) % alignof(QRgba64) == 0) {
+            const QRgba64 *pixels = reinterpret_cast<const QRgba64 *>(line);
+            for (int x = 0; x < source.width(); ++x)
+                accumulate(pixels[x]);
+        } else {
+            // Same pixels, read bytewise, so an unexpected layout can never be
+            // interpreted as RGBA64 or read past the scanline.
+            for (int x = 0; x < source.width(); ++x) {
+                QRgba64 pixel = qRgba64(0, 0, 0, 0);
+                std::memcpy(&pixel, line + x * pixelBytes, sizeof(QRgba64));
+                accumulate(pixel);
+            }
         }
     }
     if (count <= 0.0)
@@ -61,10 +87,7 @@ Stats analyse(const QImage &image)
         }
         return 1.0;
     };
-    stats.p05 = percentile(0.05);
     stats.p50 = percentile(0.50);
-    stats.p95 = percentile(0.95);
-    stats.p99 = percentile(0.99);
     stats.p995 = percentile(0.995);
     return stats;
 }

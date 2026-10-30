@@ -14,6 +14,7 @@
 #include <QtTest>
 
 #include <algorithm>
+#include <limits>
 
 using namespace pp;
 
@@ -147,6 +148,8 @@ class TestPaperGeometry : public QObject
 private slots:
     void physicalAndLogicalSizesStaySeparate();
     void orientationSwapsBothRectangles();
+    void degenerateSizesAreNormalised();
+    void logicalFallbackKeepsTheSheetWhole();
     void portraitLogicalPdfHasExactMediaBox();
     void landscapeLogicalPdfHasExactMediaBox();
     void physicalPdfKeepsTheSmallSheet();
@@ -175,6 +178,72 @@ void TestPaperGeometry::orientationSwapsBothRectangles()
     const PaperGeometry a4 = PaperGeometry::forPaper(a4Paper(), true);
     QCOMPARE(a4.physicalSizeMm(), QSizeF(297.0, 210.0));
     QCOMPARE(a4.logicalSizeMm(), QSizeF(297.0, 210.0));
+}
+
+void TestPaperGeometry::degenerateSizesAreNormalised()
+{
+    const double nan = std::numeric_limits<double>::quiet_NaN();
+    const double inf = std::numeric_limits<double>::infinity();
+
+    QList<PaperSpec> papers;
+    for (const double width : {0.0, -210.0, nan, inf}) {
+        PaperSpec paper = a4Paper();
+        paper.physicalWidthMm = width;
+        papers.append(paper);
+    }
+    for (const double height : {0.0, -297.0, nan, -inf}) {
+        PaperSpec paper = a4Paper();
+        paper.physicalHeightMm = height;
+        papers.append(paper);
+    }
+
+    for (const PaperSpec &paper : papers) {
+        for (const bool landscape : {false, true}) {
+            const PaperGeometry geometry = PaperGeometry::forPaper(paper, landscape);
+
+            // Neither an inverted nor a non-finite rectangle may reach the
+            // print path; the unusable axis collapses to zero instead.
+            const QRectF rect = geometry.physicalRectMm();
+            QVERIFY(std::isfinite(rect.width()) && rect.width() >= 0.0);
+            QVERIFY(std::isfinite(rect.height()) && rect.height() >= 0.0);
+            QVERIFY(!rect.isValid());
+            QCOMPARE(rect.topLeft(), QPointF(0.0, 0.0));
+
+            const QSizeF physical = geometry.physicalSizeMm();
+            QVERIFY(std::isfinite(physical.width()) && physical.width() >= 0.0);
+            QVERIFY(std::isfinite(physical.height()) && physical.height() >= 0.0);
+
+            const QSizeF logical = geometry.logicalSizeMm();
+            QVERIFY(std::isfinite(logical.width()) && logical.width() >= 0.0);
+            QVERIFY(std::isfinite(logical.height()) && logical.height() >= 0.0);
+        }
+    }
+}
+
+void TestPaperGeometry::logicalFallbackKeepsTheSheetWhole()
+{
+    // Only one logical axis declared: the logical sheet is not known, so both
+    // axes come from the physical sheet. A per-axis fallback would describe a
+    // hybrid sheet that neither the paper nor the driver has.
+    PaperSpec half = a4Paper();
+    half.physicalWidthMm = 100.0;
+    half.physicalHeightMm = 150.0;
+    half.logicalWidthMm = 101.6;
+    half.logicalHeightMm = 0.0;
+    QCOMPARE(PaperGeometry::forPaper(half, false).logicalSizeMm(), QSizeF(100.0, 150.0));
+
+    PaperSpec nanHeight = half;
+    nanHeight.logicalHeightMm = std::numeric_limits<double>::quiet_NaN();
+    QCOMPARE(PaperGeometry::forPaper(nanHeight, false).logicalSizeMm(), QSizeF(100.0, 150.0));
+
+    PaperSpec negativeWidth = half;
+    negativeWidth.logicalWidthMm = -101.6;
+    QCOMPARE(PaperGeometry::forPaper(negativeWidth, false).logicalSizeMm(),
+             QSizeF(100.0, 150.0));
+
+    // A fully declared logical sheet is still used, as one piece.
+    QCOMPARE(PaperGeometry::forPaper(photoPaper(), true).logicalSizeMm(),
+             QSizeF(152.4, 101.6));
 }
 
 void TestPaperGeometry::portraitLogicalPdfHasExactMediaBox()

@@ -41,6 +41,9 @@ private slots:
     void oddRotationKeepsImageCentre();
     void inverseRoundTrip();
     void invalidFramesAreRejected();
+    void nanRotationAndCropAreRejected();
+    void unusableFrameHasUnknownResolution();
+    void nanCropCentreIsResetNotPropagated();
     void effectivePpiUsesTheVisibleCrop();
     void resizeKeepsAspectAndFixedCorner();
     void cropBoundsKeepTheFrameCovered();
@@ -149,8 +152,95 @@ void TestLayout::invalidFramesAreRejected()
     for (const Frame &frame : frames) {
         QVERIFY(!LayoutEngine::validFrame(frame));
         QCOMPARE(LayoutEngine::baseScale(frame, pixels), 0.0);
-        QVERIFY(LayoutEngine::imageToPage(frame, pixels).isIdentity());
+        // A rejected frame must not masquerade as a valid identity mapping.
+        QVERIFY(!LayoutEngine::imageToPage(frame, pixels).isInvertible());
+        QVERIFY(!LayoutEngine::pageToImage(frame, pixels).isInvertible());
     }
+
+    // A usable frame with no pixels is equally unmappable.
+    const Frame usable = makeFrame(100.0, 100.0);
+    QVERIFY(!LayoutEngine::imageToPage(usable, QSize(0, 0)).isInvertible());
+    QVERIFY(LayoutEngine::imageToPage(usable, pixels).isInvertible());
+}
+
+void TestLayout::nanRotationAndCropAreRejected()
+{
+    const QSize pixels(400, 200);
+
+    Frame rotated = makeFrame(100.0, 100.0);
+    rotated.imageRotationDeg = std::numeric_limits<double>::quiet_NaN();
+    QVERIFY(!LayoutEngine::validFrame(rotated));
+    QCOMPARE(LayoutEngine::baseScale(rotated, pixels), 0.0);
+    QVERIFY(!LayoutEngine::imageToPage(rotated, pixels).isInvertible());
+
+    Frame infiniteCrop = makeFrame(100.0, 100.0);
+    infiniteCrop.cropCenter = QPointF(std::numeric_limits<double>::infinity(), 0.5);
+    QVERIFY(!LayoutEngine::validFrame(infiniteCrop));
+
+    Frame nanCrop = makeFrame(100.0, 100.0);
+    nanCrop.cropCenter = QPointF(0.5, std::numeric_limits<double>::quiet_NaN());
+    QVERIFY(!LayoutEngine::validFrame(nanCrop));
+
+    // The failure must not look like a valid mapping: identity would be
+    // invertible and would map points to plausible page coordinates.
+    const QTransform forward = LayoutEngine::imageToPage(nanCrop, pixels);
+    QVERIFY(!forward.isInvertible());
+    QVERIFY(forward != QTransform());
+    QVERIFY(!LayoutEngine::pageToImage(nanCrop, pixels).isInvertible());
+}
+
+void TestLayout::unusableFrameHasUnknownResolution()
+{
+    const QSize pixels(400, 200);
+
+    const Frame zeroWidth = makeFrame(0.0, 100.0);
+    QCOMPARE(LayoutEngine::effectivePpi(zeroWidth, pixels), 0.0);
+    QCOMPARE(LayoutEngine::resolutionHint(zeroWidth, pixels),
+             LayoutEngine::ResolutionHint::Unknown);
+
+    Frame nanRotation = makeFrame(100.0, 50.0, FitMode::Fill);
+    nanRotation.imageRotationDeg = std::numeric_limits<double>::quiet_NaN();
+    QCOMPARE(LayoutEngine::effectivePpi(nanRotation, pixels), 0.0);
+    QCOMPARE(LayoutEngine::resolutionHint(nanRotation, pixels),
+             LayoutEngine::ResolutionHint::Unknown);
+
+    // No pixels is also unknown, never "good".
+    const Frame frame = makeFrame(100.0, 50.0, FitMode::Fill);
+    QCOMPARE(LayoutEngine::effectivePpi(frame, QSize(0, 200)), 0.0);
+    QCOMPARE(LayoutEngine::resolutionHint(frame, QSize()), LayoutEngine::ResolutionHint::Unknown);
+}
+
+void TestLayout::nanCropCentreIsResetNotPropagated()
+{
+    const QSize pixels(400, 200);
+
+    // std::clamp lets NaN through, so the guard has to happen before it.
+    Frame frame = makeFrame(100.0, 100.0, FitMode::Fill);
+    frame.cropCenter = QPointF(std::numeric_limits<double>::quiet_NaN(),
+                               std::numeric_limits<double>::infinity());
+    const Frame clamped = PhotoItem::clampCrop(frame, pixels);
+    QCOMPARE(clamped.cropCenter, QPointF(0.5, 0.5));
+
+    Frame nanAngle = makeFrame(100.0, 100.0, FitMode::Fill);
+    nanAngle.angleDeg = std::numeric_limits<double>::quiet_NaN();
+    const Frame angleClamped = PhotoItem::clampCrop(nanAngle, pixels);
+    QVERIFY(std::isfinite(angleClamped.cropCenter.x()));
+    QVERIFY(std::isfinite(angleClamped.cropCenter.y()));
+
+    Frame zoomed = makeFrame(100.0, 60.0, FitMode::Fill);
+    zoomed.cropCenter = QPointF(0.4, 0.6);
+    QCOMPARE(PhotoItem::zoomAt(zoomed,
+                               QPointF(std::numeric_limits<double>::quiet_NaN(), 145.0), 1.5,
+                               pixels),
+             zoomed);
+
+    Frame nanZoom = zoomed;
+    nanZoom.zoom = std::numeric_limits<double>::quiet_NaN();
+    const Frame recovered = PhotoItem::zoomAt(nanZoom, QPointF(120.0, 145.0), 1.5, pixels);
+    QVERIFY(std::isfinite(recovered.zoom));
+    QVERIFY(recovered.zoom > 1.0);
+    QVERIFY(std::isfinite(recovered.cropCenter.x()));
+    QVERIFY(std::isfinite(recovered.cropCenter.y()));
 }
 
 void TestLayout::effectivePpiUsesTheVisibleCrop()

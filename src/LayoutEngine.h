@@ -25,20 +25,26 @@ public:
     /// rotation. Used by crop bounds and zoom-at-cursor maths.
     static QSizeF imageSizeMm(const Frame &frame, const QSize &orientedPixels);
 
-    /// source pixel coordinates -> page millimetres.
+    /// source pixel coordinates -> page millimetres. Returns an explicitly
+    /// non-invertible transform when the frame or the pixel size cannot be
+    /// mapped; callers must check isInvertible() before using it.
     static QTransform imageToPage(const Frame &frame, const QSize &orientedPixels);
 
-    /// Inverse of imageToPage; useful for crop dragging.
+    /// Inverse of imageToPage; useful for crop dragging. Non-invertible for the
+    /// same inputs that imageToPage rejects.
     static QTransform pageToImage(const Frame &frame, const QSize &orientedPixels);
 
     /// Effective resolution of the visible crop in the final printed size.
+    /// Zero means the frame or the pixel size is not usable, never "perfect".
     static double effectivePpi(const Frame &frame, const QSize &orientedPixels);
 
-    enum class ResolutionHint { Good, Soft, Low };
+    enum class ResolutionHint { Good, Soft, Low, Unknown };
     /// Everyday-language hint thresholds: below 150 ppi is low, 150-240 soft.
+    /// Unknown is returned when no resolution can be computed at all.
     static ResolutionHint resolutionHint(const Frame &frame, const QSize &orientedPixels);
 
-    /// True when the frame geometry is usable (positive, finite size).
+    /// True when the frame geometry is usable: positive finite size and finite
+    /// position, rotation, zoom and crop centre.
     static bool validFrame(const Frame &frame);
 
     /// First-use grid for a page: two columns up to four photographs, three

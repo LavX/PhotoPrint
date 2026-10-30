@@ -1,6 +1,9 @@
 #pragma once
 
 #include <QString>
+#include <QtGlobal>
+
+#include <optional>
 #include <utility>
 #include <variant>
 
@@ -31,17 +34,34 @@ public:
     bool ok() const { return std::holds_alternative<T>(m_value); }
     explicit operator bool() const { return ok(); }
 
-    const T &value() const { return std::get<T>(m_value); }
-    T &value() { return std::get<T>(m_value); }
+    /// Only valid on a successful result; a failed result has no value.
+    const T &value() const
+    {
+        Q_ASSERT_X(ok(), "Result::value", "called on a failed result");
+        return std::get<T>(m_value);
+    }
+    T &value()
+    {
+        Q_ASSERT_X(ok(), "Result::value", "called on a failed result");
+        return std::get<T>(m_value);
+    }
     const T *operator->() const { return &value(); }
     T *operator->() { return &value(); }
 
-    const Error &error() const { return std::get<Error>(m_value); }
+    /// Only valid on a failed result; a successful result carries no error.
+    const Error &error() const
+    {
+        Q_ASSERT_X(!ok(), "Result::error", "called on a successful result");
+        return std::get<Error>(m_value);
+    }
 
 private:
     std::variant<T, Error> m_value;
 };
 
+/// A result that only carries failure information. Success is the absence of an
+/// error, not an empty error code: every Error, even one without a code, means
+/// failure, so a message can never be swallowed by an "empty code is fine" rule.
 template <>
 class Result<void>
 {
@@ -49,12 +69,19 @@ public:
     Result() = default;
     Result(Error err) : m_error(std::move(err)) {}
 
-    bool ok() const { return m_error.code.isEmpty(); }
+    bool ok() const { return !m_error.has_value(); }
     explicit operator bool() const { return ok(); }
-    const Error &error() const { return m_error; }
+
+    /// Only valid on a failed result; returns an empty Error otherwise.
+    const Error &error() const
+    {
+        Q_ASSERT_X(!ok(), "Result::error", "called on a successful result");
+        static const Error noError;
+        return m_error.has_value() ? *m_error : noError;
+    }
 
 private:
-    Error m_error;
+    std::optional<Error> m_error;
 };
 
 } // namespace pp

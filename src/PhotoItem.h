@@ -14,9 +14,6 @@ QPolygonF frameQuadMm(const Frame &frame);
 /// Handle centre for a corner (0..3, clockwise from top-left) in page mm.
 QPointF cornerMm(const Frame &frame, int corner);
 
-/// Handle centre of the rotation grip, `offsetMm` above the top edge.
-QPointF rotateHandleMm(const Frame &frame, double offsetMm);
-
 /// Page point expressed in the unrotated frame axes, origin at frame centre.
 QPointF toFrameLocalMm(const Frame &frame, const QPointF &pagePoint);
 

@@ -22,6 +22,14 @@ double normalizedDegrees(double degrees)
     return value;
 }
 
+/// A mapping that cannot be used and cannot be mistaken for a valid one: the
+/// matrix is singular, so isInvertible() is false. A plain identity would
+/// silently claim "no transformation" and still be invertible.
+QTransform invalidTransform()
+{
+    return QTransform(0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0);
+}
+
 } // namespace
 
 double LayoutEngine::baseScale(const Frame &frame, const QSize &orientedPixels)
@@ -62,7 +70,7 @@ QTransform LayoutEngine::imageToPage(const Frame &frame, const QSize &orientedPi
 {
     const double scale = baseScale(frame, orientedPixels);
     if (scale <= 0.0)
-        return {};
+        return invalidTransform();
 
     const double iw = orientedPixels.width();
     const double ih = orientedPixels.height();
@@ -90,12 +98,12 @@ QTransform LayoutEngine::pageToImage(const Frame &frame, const QSize &orientedPi
 {
     bool invertible = false;
     const QTransform inverse = imageToPage(frame, orientedPixels).inverted(&invertible);
-    return invertible ? inverse : QTransform();
+    return invertible ? inverse : invalidTransform();
 }
 
 double LayoutEngine::effectivePpi(const Frame &frame, const QSize &orientedPixels)
 {
-    if (!validFrame(frame) || orientedPixels.width() <= 0)
+    if (!validFrame(frame) || orientedPixels.width() <= 0 || orientedPixels.height() <= 0)
         return 0.0;
     const double scale = baseScale(frame, orientedPixels);
     if (scale <= 0.0)
@@ -110,7 +118,7 @@ LayoutEngine::ResolutionHint LayoutEngine::resolutionHint(const Frame &frame,
 {
     const double ppi = effectivePpi(frame, orientedPixels);
     if (ppi <= 0.0)
-        return ResolutionHint::Good;
+        return ResolutionHint::Unknown;
     if (ppi < 150.0)
         return ResolutionHint::Low;
     if (ppi < 240.0)
@@ -192,7 +200,9 @@ QList<Frame> LayoutEngine::appendPhoto(const Page &page, const QList<Frame> &fra
 bool LayoutEngine::validFrame(const Frame &frame)
 {
     return finitePositive(frame.width) && finitePositive(frame.height) && std::isfinite(frame.cx)
-        && std::isfinite(frame.cy) && std::isfinite(frame.angleDeg) && std::isfinite(frame.zoom);
+        && std::isfinite(frame.cy) && std::isfinite(frame.angleDeg)
+        && std::isfinite(frame.imageRotationDeg) && std::isfinite(frame.zoom)
+        && std::isfinite(frame.cropCenter.x()) && std::isfinite(frame.cropCenter.y());
 }
 
 } // namespace pp
