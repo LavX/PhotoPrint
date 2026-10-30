@@ -50,12 +50,15 @@ Stats analyse(const QImage &image)
     };
 
     const qsizetype pixelBytes = qsizetype(sizeof(QRgba64));
+    // Both paths read width whole pixels from the start of the line, so a
+    // stride shorter than the pixel data would read past the scanline. Qt
+    // should never hand us one; refusing it keeps the fallback honest.
+    if (source.bytesPerLine() < source.width() * pixelBytes)
+        return stats;
     // The fast path reads whole 64-bit pixels straight out of the scanline, so
-    // it is only taken when the layout actually is that: a full-width stride of
-    // whole pixels, starting at an address aligned for QRgba64.
-    const bool direct =
-        source.bytesPerLine() % pixelBytes == 0
-        && source.bytesPerLine() >= source.width() * pixelBytes;
+    // it is only taken when the layout actually is that: a stride of whole
+    // pixels, starting at an address aligned for QRgba64.
+    const bool direct = source.bytesPerLine() % pixelBytes == 0;
 
     for (int y = 0; y < source.height(); ++y) {
         const uchar *line = source.constScanLine(y);

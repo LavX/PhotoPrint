@@ -67,6 +67,9 @@ constexpr double kMaxBrightnessEv = 0.5;
 
 inline double clampBrightnessEv(double ev)
 {
+    // std::clamp passes NaN through, and a NaN here poisons every pixel.
+    if (!std::isfinite(ev))
+        return 0.0;
     return std::clamp(ev, kMinBrightnessEv, kMaxBrightnessEv);
 }
 

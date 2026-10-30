@@ -139,7 +139,9 @@ Result<void> PaperPresetStore::save(const PaperPreset &preset)
 
     // The read-modify-write below must not interleave with another instance.
     QLockFile lock(QFileInfo(m_path).absoluteFilePath() + QStringLiteral(".lock"));
-    if (!lock.tryLock(3000))
+    // Called on the GUI thread: never freeze the window behind another
+    // instance's lock. Failing fast with the real reason is better.
+    if (!lock.tryLock(250))
         return error(QStringLiteral("preset-lock"), QCoreApplication::translate("PhotoPrint", "A papírbeállítás nem menthető."));
 
     const auto existing = readAll();
