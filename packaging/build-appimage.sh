@@ -56,9 +56,10 @@ check_hash() {
         echo "$name failed its SHA-256 check; it was not used"
         echo "  expected: $expected"
         echo "  actual:   $actual"
-        echo "Re-run the build to download the pinned build again (a cached copy"
-        echo "must be deleted first: $path), or set $override to the hash you"
-        echo "trust."
+        echo "A cached copy is discarded and fetched again automatically. If this"
+        echo "was a fresh download, the upstream continuous build changed and the"
+        echo "pin in this script must be updated. Alternatively set $override to"
+        echo "the hash you trust."
     } >&2
     return 1
 }
@@ -68,15 +69,23 @@ check_hash() {
 ensure_tool() {
     local name="$1" expected="$2" url="$3" override="$4"
     local path="$tools_dir/$name"
-    local partial="$path.part"
+    # Per-process temp name: two builds sharing the tools cache must not write
+    # the same partial file.
+    local partial="$path.part.$$"
     if [ -f "$path" ]; then
-        check_hash "$path" "$expected" "$name" "$override" || return 1
-        [ -x "$path" ] || chmod +x "$path"
-        return 0
+        if check_hash "$path" "$expected" "$name" "$override"; then
+            [ -x "$path" ] || chmod +x "$path"
+            return 0
+        fi
+        echo "Discarding the stale cached copy of $name" >&2
+        rm -f "$path"
     fi
     echo "Downloading $name"
     rm -f "$partial"
-    curl -L --fail --max-time 300 -o "$partial" "$url"
+    if ! curl -L --fail --max-time 300 -o "$partial" "$url"; then
+        rm -f "$partial"
+        return 1
+    fi
     if ! check_hash "$partial" "$expected" "$name" "$override"; then
         rm -f "$partial"
         return 1
@@ -182,6 +191,10 @@ desktop_exec_value() {
         | sed -e 's/[\\"`$]/\\&/g' -e 's/\\/\\\\/g' -e 's/%/%%/g'
 }
 
+# Known limitation: a '%' in the AppImage path cannot be represented in a
+# desktop Exec line that every reader accepts (GLib rejects %% in a quoted
+# argument), so such a path keeps the generic icon.
+#
 # Wayland compositors take the window icon and the launcher entry from a
 # desktop file the session can see, not from the binary. Register one on the
 # first run and refresh the caches so the icon appears without a re-login.
