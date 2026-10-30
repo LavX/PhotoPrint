@@ -16,6 +16,7 @@
 #include <QCheckBox>
 #include <QComboBox>
 #include <QCoreApplication>
+#include <QDebug>
 #include <QDialog>
 #include <QDialogButtonBox>
 #include <QPixmap>
@@ -935,10 +936,11 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), m_renderer(m_stor
                 this, QStringLiteral("PhotoPrint"),
                 QCoreApplication::translate("PhotoPrint", "Korábbi, nem mentett munka található. Folytatod?"),
                 QMessageBox::Yes | QMessageBox::No, QMessageBox::Yes);
-            if (answer == QMessageBox::Yes)
+            if (answer == QMessageBox::Yes) {
                 applyLoadedProject(latest.value(), true);
-            else
-                m_recovery.clear();
+            } else if (const auto cleared = m_recovery.clear(); !cleared) {
+                showProblem(cleared.error().message);
+            }
         }
     }
 }
@@ -1744,14 +1746,15 @@ void MainWindow::refreshPhotoList()
     const DocumentSnapshot document = m_controller.document();
     if (!document.pages.isEmpty()) {
         const Page &page = document.pages.at(document.currentPage);
-        for (const Frame &frame : page.frames) {
+        for (int frameIndex = 0; frameIndex < page.frames.size(); ++frameIndex) {
+            const Frame &frame = page.frames.at(frameIndex);
             auto *item = new QListWidgetItem(QString());
             item->setToolTip(QFileInfo(frame.sourcePath).fileName());
             // The position of the frame is an index, not a quantity: it has no
             // plural forms, so it stays a plain %1 placeholder.
             item->setData(Qt::AccessibleTextRole,
                           QCoreApplication::translate("PhotoPrint", "%1. fotó")
-                              .arg(page.frames.indexOf(frame) + 1));
+                              .arg(frameIndex + 1));
             item->setData(Qt::UserRole, frame.id);
             if (const std::optional<SourceImage> source = m_store.cached(frame.sourcePath)) {
                 const Result<QImage> thumb = m_store.srgb(*source, document.recipe, 96);
@@ -2803,7 +2806,7 @@ void MainWindow::updatePrintButton()
 {
     if (!m_printButton)
         return;
-    const int pages = m_controller.document().pages.size();
+    const int pages = m_controller.pageCount();
     m_printButton->setText(pages > 1
                                ? QCoreApplication::translate("PhotoPrint", "%n oldal nyomtatása", nullptr, pages)
                                : QCoreApplication::translate("PhotoPrint", "Nyomtatás"));
@@ -2856,7 +2859,8 @@ void MainWindow::saveProject()
         return;
     }
     m_dirty = false;
-    m_recovery.clear();
+    if (const auto cleared = m_recovery.clear(); !cleared)
+        showProblem(cleared.error().message);
     updateTitle();
     statusBar()->showMessage(QCoreApplication::translate("PhotoPrint", "A projekt elmentve."), 4000);
 }
@@ -2947,7 +2951,8 @@ void MainWindow::applyLoadedProject(const LoadedProject &loaded, bool recovery)
         m_checkpointTimer->start();
     } else {
         m_dirty = false;
-        m_recovery.clear();
+        if (const auto cleared = m_recovery.clear(); !cleared)
+            showProblem(cleared.error().message);
     }
     updateTitle();
     promptMissingSources();
@@ -3080,8 +3085,8 @@ void MainWindow::closeEvent(QCloseEvent *event)
             event->ignore();
             return;
         }
-    } else {
-        m_recovery.clear();
+    } else if (const auto cleared = m_recovery.clear(); !cleared) {
+        qWarning() << "recovery cleanup failed:" << cleared.error().message;
     }
     event->accept();
 }

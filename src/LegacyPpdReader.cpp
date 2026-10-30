@@ -66,17 +66,6 @@ void splitOption(const QString &raw, QString *option, QString *display)
         *display = *option;
 }
 
-QString pickOption(const QStringList &options, const QStringList &preferred, const QString &fallback)
-{
-    for (const QString &wanted : preferred) {
-        for (const QString &option : options) {
-            if (option.compare(wanted, Qt::CaseInsensitive) == 0)
-                return option;
-        }
-    }
-    return fallback;
-}
-
 } // namespace
 
 QString LegacyPpdReader::fingerprint(const QByteArray &ppdText)

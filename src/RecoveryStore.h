@@ -19,7 +19,7 @@ public:
 
     /// Removes both slots and the manifest. Reports a failure to remove an
     /// existing file instead of pretending the recovery data is gone.
-    Result<void> clear();
+    [[nodiscard]] Result<void> clear();
 
     QString directory() const { return m_directory; }
     static QString defaultDirectory();
