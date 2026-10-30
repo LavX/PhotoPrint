@@ -386,10 +386,6 @@
         <translation>无打印机</translation>
     </message>
     <message>
-        <source>Nincs beállított nyomtató.</source>
-        <translation>尚未设置打印机。</translation>
-    </message>
-    <message>
         <source>A nyomtató most nem érhető el. Ellenőrizd, hogy be van-e kapcsolva.</source>
         <translation>打印机现在不可用。请检查是否已开机。</translation>
     </message>
@@ -794,6 +790,14 @@
     <message>
         <source>Vintage</source>
         <translation>复古</translation>
+    </message>
+    <message>
+        <source>A napló jelenleg használatban van.</source>
+        <translation>打印日志正在使用中。</translation>
+    </message>
+    <message>
+        <source>Az eredményt nem sikerült a naplóba írni.</source>
+        <translation>无法将结果写入打印日志。</translation>
     </message>
 </context>
 </TS>

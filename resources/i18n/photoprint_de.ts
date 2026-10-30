@@ -387,10 +387,6 @@
         <translation>Kein Drucker</translation>
     </message>
     <message>
-        <source>Nincs beállított nyomtató.</source>
-        <translation>Es ist kein Drucker eingerichtet.</translation>
-    </message>
-    <message>
         <source>A nyomtató most nem érhető el. Ellenőrizd, hogy be van-e kapcsolva.</source>
         <translation>Der Drucker ist gerade nicht erreichbar. Prüfen Sie, ob er eingeschaltet ist.</translation>
     </message>
@@ -796,6 +792,14 @@
     <message>
         <source>Vintage</source>
         <translation>Vintage</translation>
+    </message>
+    <message>
+        <source>A napló jelenleg használatban van.</source>
+        <translation>Das Druckprotokoll wird gerade verwendet.</translation>
+    </message>
+    <message>
+        <source>Az eredményt nem sikerült a naplóba írni.</source>
+        <translation>Das Ergebnis konnte nicht ins Druckprotokoll geschrieben werden.</translation>
     </message>
 </context>
 </TS>

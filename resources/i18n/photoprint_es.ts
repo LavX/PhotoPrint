@@ -387,10 +387,6 @@
         <translation>Sin impresora</translation>
     </message>
     <message>
-        <source>Nincs beállított nyomtató.</source>
-        <translation>No hay ninguna impresora configurada.</translation>
-    </message>
-    <message>
         <source>A nyomtató most nem érhető el. Ellenőrizd, hogy be van-e kapcsolva.</source>
         <translation>La impresora no está disponible ahora. Comprueba que esté encendida.</translation>
     </message>
@@ -796,6 +792,14 @@
     <message>
         <source>Vintage</source>
         <translation>Vintage</translation>
+    </message>
+    <message>
+        <source>A napló jelenleg használatban van.</source>
+        <translation>El registro de impresión está en uso.</translation>
+    </message>
+    <message>
+        <source>Az eredményt nem sikerült a naplóba írni.</source>
+        <translation>No se pudo escribir el resultado en el registro de impresión.</translation>
     </message>
 </context>
 </TS>

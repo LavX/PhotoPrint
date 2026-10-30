@@ -388,10 +388,6 @@
         <translation>Нет принтера</translation>
     </message>
     <message>
-        <source>Nincs beállított nyomtató.</source>
-        <translation>Принтер не настроен.</translation>
-    </message>
-    <message>
         <source>A nyomtató most nem érhető el. Ellenőrizd, hogy be van-e kapcsolva.</source>
         <translation>Принтер сейчас недоступен. Проверьте, включён ли он.</translation>
     </message>
@@ -798,6 +794,14 @@
     <message>
         <source>Vintage</source>
         <translation>Винтаж</translation>
+    </message>
+    <message>
+        <source>A napló jelenleg használatban van.</source>
+        <translation>Журнал печати сейчас используется.</translation>
+    </message>
+    <message>
+        <source>Az eredményt nem sikerült a naplóba írni.</source>
+        <translation>Не удалось записать результат в журнал печати.</translation>
     </message>
 </context>
 </TS>

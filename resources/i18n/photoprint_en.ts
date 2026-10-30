@@ -387,10 +387,6 @@
         <translation>No printer</translation>
     </message>
     <message>
-        <source>Nincs beállított nyomtató.</source>
-        <translation>No printer is configured.</translation>
-    </message>
-    <message>
         <source>A nyomtató most nem érhető el. Ellenőrizd, hogy be van-e kapcsolva.</source>
         <translation>The printer is not available right now. Check that it is switched on.</translation>
     </message>
@@ -796,6 +792,14 @@
     <message>
         <source>Vintage</source>
         <translation>Vintage</translation>
+    </message>
+    <message>
+        <source>A napló jelenleg használatban van.</source>
+        <translation>The print log is currently in use.</translation>
+    </message>
+    <message>
+        <source>Az eredményt nem sikerült a naplóba írni.</source>
+        <translation>The result could not be written to the print log.</translation>
     </message>
 </context>
 </TS>

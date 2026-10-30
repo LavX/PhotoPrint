@@ -386,10 +386,6 @@
         <translation>プリンターがありません</translation>
     </message>
     <message>
-        <source>Nincs beállított nyomtató.</source>
-        <translation>プリンターが設定されていません。</translation>
-    </message>
-    <message>
         <source>A nyomtató most nem érhető el. Ellenőrizd, hogy be van-e kapcsolva.</source>
         <translation>プリンターは現在利用できません。電源が入っているか確認してください。</translation>
     </message>
@@ -794,6 +790,14 @@
     <message>
         <source>Vintage</source>
         <translation>ヴィンテージ</translation>
+    </message>
+    <message>
+        <source>A napló jelenleg használatban van.</source>
+        <translation>印刷ログは現在使用中です。</translation>
+    </message>
+    <message>
+        <source>Az eredményt nem sikerült a naplóba írni.</source>
+        <translation>結果を印刷ログに書き込めませんでした。</translation>
     </message>
 </context>
 </TS>

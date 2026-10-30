@@ -387,10 +387,6 @@
         <translation>कोई प्रिंटर नहीं</translation>
     </message>
     <message>
-        <source>Nincs beállított nyomtató.</source>
-        <translation>कोई प्रिंटर सेट नहीं है।</translation>
-    </message>
-    <message>
         <source>A nyomtató most nem érhető el. Ellenőrizd, hogy be van-e kapcsolva.</source>
         <translation>प्रिंटर अभी उपलब्ध नहीं है। जाँचें कि वह चालू है।</translation>
     </message>
@@ -796,6 +792,14 @@
     <message>
         <source>Vintage</source>
         <translation>विंटेज</translation>
+    </message>
+    <message>
+        <source>A napló jelenleg használatban van.</source>
+        <translation>प्रिंट लॉग अभी उपयोग में है।</translation>
+    </message>
+    <message>
+        <source>Az eredményt nem sikerült a naplóba írni.</source>
+        <translation>परिणाम प्रिंट लॉग में नहीं लिखा जा सका।</translation>
     </message>
 </context>
 </TS>

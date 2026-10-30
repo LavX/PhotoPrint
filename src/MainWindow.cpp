@@ -912,7 +912,17 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), m_renderer(m_stor
     m_dirty = false;
     updateTitle();
     refreshPrinters();
-    if (JobJournal(jobConfig.journalPath).uncertainCount() > 0) {
+    const int pendingPrints = JobJournal(jobConfig.journalPath).uncertainCount();
+    if (pendingPrints < 0) {
+        // The journal exists but cannot be read: do not claim there is nothing
+        // to check, because a print may be waiting for an answer.
+        statusBar()->showMessage(
+            QCoreApplication::translate("PhotoPrint", "A nyomtatási napló nem olvasható.")
+                + QLatin1Char(' ')
+                + QCoreApplication::translate(
+                    "PhotoPrint", "Korábbi nyomtatás eredménye bizonytalan. Nézd meg a nyomtatót."),
+            0);
+    } else if (pendingPrints > 0) {
         statusBar()->showMessage(
             QCoreApplication::translate("PhotoPrint", "Korábbi nyomtatás eredménye bizonytalan. Nézd meg a nyomtatót."),
             0);
