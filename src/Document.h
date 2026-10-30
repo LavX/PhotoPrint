@@ -9,6 +9,7 @@
 #include <QUuid>
 
 #include <algorithm>
+#include <cmath>
 
 namespace pp {
 
@@ -58,13 +59,37 @@ struct Frame {
 
 /// Bounds of the manual brightness offset, in EV. The slider and the colour
 /// pipeline share this range, so the stores clamp to it on the way in and the
-/// tone path clamps again on the way out.
+/// tone path clamps again on the way out. The slider positions and the EV
+/// values are converted only by the two helpers below, so the panel cannot
+/// drift away from the range.
 constexpr double kMinBrightnessEv = -0.5;
 constexpr double kMaxBrightnessEv = 0.5;
 
 inline double clampBrightnessEv(double ev)
 {
     return std::clamp(ev, kMinBrightnessEv, kMaxBrightnessEv);
+}
+
+/// Slider positions for the manual brightness control: whole steps, 0..100,
+/// with the neutral position in the middle.
+constexpr int kBrightnessSliderMin = 0;
+constexpr int kBrightnessSliderNeutral = 50;
+constexpr int kBrightnessSliderMax = 100;
+
+/// Brightness offset for a slider position.
+inline double sliderToBrightnessEv(int slider)
+{
+    return (std::clamp(slider, kBrightnessSliderMin, kBrightnessSliderMax)
+            - kBrightnessSliderNeutral)
+        / 100.0;
+}
+
+/// Slider position for a brightness offset; the inverse of the above.
+inline int brightnessEvToSlider(double ev)
+{
+    return std::clamp(
+        int(std::lround(kBrightnessSliderNeutral + clampBrightnessEv(ev) * 100.0)),
+        kBrightnessSliderMin, kBrightnessSliderMax);
 }
 
 /// What the sheet is made of. The driver has no separate matt mode; matt

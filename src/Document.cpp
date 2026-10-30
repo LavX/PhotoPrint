@@ -10,13 +10,20 @@ namespace {
 
 void writeDouble(QDataStream &stream, double value)
 {
-    // One canonical text form: a negative zero and a positive zero are the
-    // same number in the document, so they must produce the same digest.
-    if (value == 0.0)
-        value = 0.0;
     // Fixed textual precision keeps the digest stable across platforms while
     // still covering the 0.01 mm model precision.
-    stream << QString::number(value, 'f', 6);
+    QString text = QString::number(value, 'f', 6);
+    // A negative value that rounds to zero formats as "-0.000000", which is the
+    // same number as "0.000000". Normalise the text, not the double: the double
+    // check alone misses values such as -1e-9.
+    if (text.startsWith(QLatin1Char('-'))) {
+        QString digits = text.mid(1);
+        digits.remove(QLatin1Char('.'));
+        digits.remove(QLatin1Char('0'));
+        if (digits.isEmpty())
+            text.remove(0, 1);
+    }
+    stream << text;
 }
 
 } // namespace
