@@ -1,5 +1,5 @@
 Name:           photoprint
-Version:        0.1.0
+Version:        1.0.0
 Release:        1%{?dist}
 Summary:        Egyszerű helyi fotónyomtatás
 License:        Proprietary
@@ -48,5 +48,5 @@ install -D -m 0644 resources/photoprint.svg %{buildroot}%{_datadir}/icons/hicolo
 %{_datadir}/icons/hicolor/scalable/apps/photoprint.svg
 
 %changelog
-* Thu Oct 29 2026 Laszlo Toth <lavx@lavx.hu> - 0.1.0-1
+* Fri Oct 30 2026 Laszlo Toth <lavx@lavx.hu> - 1.0.0-1
 - First local build
