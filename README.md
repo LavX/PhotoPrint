@@ -157,10 +157,10 @@ from the print path.
 
 ## Limitations
 
-Physical print acceptance on the Brother DCP-T730DW with SWAN 100 × 150 mm
-paper is still open, as are the Wayland performance measurement and the
-20-source memory target. Matte paper has no distinct driver media type and is
-sent as inkjet paper. Multi-select and cross-page dragging are not implemented.
+Printing was verified on a Brother DCP-T730DW with 10 × 15 cm photo paper.
+Matte paper has no distinct driver media type and is sent as inkjet paper.
+The Wayland performance measurement and the 20-source memory target have not
+been measured yet. Multi-select and cross-page dragging are not implemented.
 
 ## License
 
