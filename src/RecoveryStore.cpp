@@ -59,16 +59,16 @@ int RecoveryStore::nextSlotFromDisk() const
     if (latest == kSlotB)
         return 0;
 
-    // No usable manifest. Overwrite the older slot when both exist, so the
-    // other complete snapshot stays readable.
+    // No usable manifest, so the slots themselves decide. A single slot is the
+    // only complete snapshot there is: the next checkpoint goes to the empty
+    // partner, never over that one. Only when both exist is the older slot the
+    // sacrificial one, so the other complete snapshot stays readable.
     const QFileInfo a(QDir(m_directory).filePath(kSlotA));
     const QFileInfo b(QDir(m_directory).filePath(kSlotB));
-    if (!a.exists() && !b.exists())
-        return 0;
     if (!a.exists())
-        return 1;
-    if (!b.exists())
         return 0;
+    if (!b.exists())
+        return 1;
     return a.lastModified() <= b.lastModified() ? 0 : 1;
 }
 
@@ -78,9 +78,8 @@ Result<void> RecoveryStore::checkpoint(const DocumentSnapshot &document)
         return error(QStringLiteral("recovery-dir"),
                      QCoreApplication::translate("PhotoPrint", "A munkamenet mentése nem sikerült."));
     }
-    if (m_nextSlot != 0 && m_nextSlot != 1)
-        m_nextSlot = 0;
 
+    // nextSlotFromDisk(), checkpoint() and clear() keep m_nextSlot at 0 or 1.
     const int index = m_nextSlot;
     const QString slot = slotName(index);
     ProjectStore store;

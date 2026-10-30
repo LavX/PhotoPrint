@@ -55,6 +55,7 @@ private slots:
     void checkpointsReplaceEachOtherAtomically();
     void corruptNewestSlotFallsBackToTheOlderSnapshot();
     void restartDoesNotOverwriteTheNewestSlot();
+    void oneSlotWithoutManifestUsesTheEmptySlot();
     void manifestCannotPointOutsideTheDirectory();
     void bothCorruptSlotsAreReported();
     void clearRemovesBothSlots();
@@ -147,6 +148,63 @@ void TestRecovery::restartDoesNotOverwriteTheNewestSlot()
     if (!latest)
         QFAIL(qPrintable(latest.error().message));
     QCOMPARE(latest.value().document.pages.at(0).frames.at(0).cx, 95.0);
+}
+
+void TestRecovery::oneSlotWithoutManifestUsesTheEmptySlot()
+{
+    ImageStore store;
+    const auto loaded = store.load(m_imagePath, ImportPolicy{});
+    QVERIFY(loaded.ok());
+
+    // Slot a was written and the process died before the manifest named it.
+    // One complete snapshot, no manifest: the next checkpoint must use slot b.
+    const QString directory = m_dir.filePath(QStringLiteral("recovery7"));
+    {
+        RecoveryStore recovery(directory);
+        QVERIFY(recovery.checkpoint(documentWith(loaded.value(), 15.0)).ok());
+    }
+    QVERIFY(QFile::remove(QDir(directory).filePath(QStringLiteral("latest.txt"))));
+
+    ProjectStore projects;
+    {
+        RecoveryStore restarted(directory);
+        QVERIFY(restarted.checkpoint(documentWith(loaded.value(), 65.0)).ok());
+    }
+
+    QFile manifest(QDir(directory).filePath(QStringLiteral("latest.txt")));
+    QVERIFY(manifest.open(QIODevice::ReadOnly));
+    QCOMPARE(QString::fromLatin1(manifest.readAll()).trimmed(),
+             QStringLiteral("recovery-b.json"));
+    manifest.close();
+
+    const auto first = projects.load(QDir(directory).filePath(QStringLiteral("recovery-a.json")));
+    if (!first)
+        QFAIL(qPrintable(first.error().message));
+    QCOMPARE(first.value().document.pages.at(0).frames.at(0).cx, 15.0);
+
+    const auto second = projects.load(QDir(directory).filePath(QStringLiteral("recovery-b.json")));
+    if (!second)
+        QFAIL(qPrintable(second.error().message));
+    QCOMPARE(second.value().document.pages.at(0).frames.at(0).cx, 65.0);
+
+    // The mirror image: only slot b on disk, so slot a is the free one.
+    const QString mirrored = m_dir.filePath(QStringLiteral("recovery8"));
+    QVERIFY(QDir().mkpath(mirrored));
+    QVERIFY(QFile::copy(QDir(directory).filePath(QStringLiteral("recovery-a.json")),
+                        QDir(mirrored).filePath(QStringLiteral("recovery-b.json"))));
+    RecoveryStore mirroredStore(mirrored);
+    QVERIFY(mirroredStore.checkpoint(documentWith(loaded.value(), 35.0)).ok());
+
+    QFile mirroredManifest(QDir(mirrored).filePath(QStringLiteral("latest.txt")));
+    QVERIFY(mirroredManifest.open(QIODevice::ReadOnly));
+    QCOMPARE(QString::fromLatin1(mirroredManifest.readAll()).trimmed(),
+             QStringLiteral("recovery-a.json"));
+    mirroredManifest.close();
+
+    const auto spare = projects.load(QDir(mirrored).filePath(QStringLiteral("recovery-b.json")));
+    if (!spare)
+        QFAIL(qPrintable(spare.error().message));
+    QCOMPARE(spare.value().document.pages.at(0).frames.at(0).cx, 15.0);
 }
 
 void TestRecovery::manifestCannotPointOutsideTheDirectory()
