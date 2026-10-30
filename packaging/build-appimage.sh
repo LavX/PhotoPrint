@@ -168,12 +168,18 @@ cat > "$appdir/AppRun" <<'LAUNCHER'
 #!/bin/sh
 here="$(dirname "$(readlink -f "$0")")"
 
-# A desktop Exec argument is double quoted, so \ " ` and $ inside it need a
-# backslash of their own, and % starts a field code, so a literal % has to be
-# doubled. Nothing else is special, and the line is written directly instead of
-# going through a sed replacement, so & and | in the path stay literal too.
+# A desktop entry value is a string, and the key file runs its own escape pass
+# before the quoting pass: a backslash is an escape character in the file as
+# well, and an escape the file does not know (\") makes the whole entry
+# unreadable. The quoted argument therefore gets one backslash in front of
+# \ " ` and $, and the file doubles every one of them again, so a literal
+# backslash in the path is written as four. % starts a field code and a literal
+# one is doubled. Nothing else is special, and the line is written directly
+# instead of going through a sed replacement, so & and | in the path stay
+# literal too.
 desktop_exec_value() {
-    printf '%s' "$1" | sed -e 's/[\\"`$]/\\&/g' -e 's/%/%%/g'
+    printf '%s' "$1" \
+        | sed -e 's/[\\"`$]/\\&/g' -e 's/\\/\\\\/g' -e 's/%/%%/g'
 }
 
 # Wayland compositors take the window icon and the launcher entry from a
@@ -187,26 +193,35 @@ configure_desktop() {
     if [ -f "$here/usr/share/applications/photoprint.desktop" ] \
         && [ ! -f "$data/applications/photoprint.desktop" ] \
         && [ ! -f /usr/share/applications/photoprint.desktop ]; then
-        # Written to a temporary file and renamed into place: a truncated entry
-        # left behind by a failed write would look like a finished registration,
-        # and the guard above would never regenerate it.
-        partial="$data/applications/photoprint.desktop.part"
-        if {
+        # Written to a private temporary file and renamed into place: a
+        # truncated entry left behind by a failed write would look like a
+        # finished registration, and the guard above would never regenerate it.
+        # The name carries the pid so two first runs cannot share one file, and
+        # nothing is renamed unless every line made it into the file: the exit
+        # status of the loop below is only that of its last command.
+        partial="$data/applications/photoprint.desktop.part.$$"
+        failed=0
+        {
             while IFS= read -r line || [ -n "$line" ]; do
                 case "$line" in
-                Exec=*) printf 'Exec="%s" %%F\n' "$(desktop_exec_value "$APPIMAGE")" ;;
-                *) printf '%s\n' "$line" ;;
+                Exec=*)
+                    exec_value="$(desktop_exec_value "$APPIMAGE")" \
+                        || { failed=1; break; }
+                    printf 'Exec="%s" %%F\n' "$exec_value" \
+                        || { failed=1; break; }
+                    ;;
+                *)
+                    printf '%s\n' "$line" || { failed=1; break; }
+                    ;;
                 esac
             done < "$here/usr/share/applications/photoprint.desktop"
-        } > "$partial"; then
-            if mv -f "$partial" "$data/applications/photoprint.desktop"; then
-                command -v update-desktop-database >/dev/null 2>&1 \
-                    && update-desktop-database -q "$data/applications" 2>/dev/null
-                command -v kbuildsycoca6 >/dev/null 2>&1 \
-                    && kbuildsycoca6 --noincremental >/dev/null 2>&1 &
-            else
-                rm -f "$partial"
-            fi
+        } > "$partial" || failed=1
+        if [ "$failed" -eq 0 ] \
+            && mv -f "$partial" "$data/applications/photoprint.desktop"; then
+            command -v update-desktop-database >/dev/null 2>&1 \
+                && update-desktop-database -q "$data/applications" 2>/dev/null
+            command -v kbuildsycoca6 >/dev/null 2>&1 \
+                && kbuildsycoca6 --noincremental >/dev/null 2>&1 &
         else
             rm -f "$partial"
         fi

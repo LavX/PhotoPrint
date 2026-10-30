@@ -376,7 +376,7 @@
     </message>
     <message>
         <source>Törlés</source>
-        <translation>मिटाएँ</translation>
+        <translation>हटाएँ</translation>
     </message>
     <message>
         <source>Ez a név már egy beépített papíré. Adj másik nevet.</source>
