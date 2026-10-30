@@ -18,6 +18,7 @@
 #include <QtTest>
 
 #include <atomic>
+#include <cmath>
 #include <thread>
 
 using namespace pp;

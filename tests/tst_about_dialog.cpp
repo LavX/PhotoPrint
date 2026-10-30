@@ -115,7 +115,9 @@ void TestAboutDialog::versionComesFromTheBuild()
     QVERIFY2(!expected.isEmpty(),
              "CMakeLists.txt does not declare project(PhotoPrint VERSION ...)");
     QCOMPARE(AboutDialog::versionString(), expected);
-    QVERIFY2(QRegularExpression(QStringLiteral("^\\d+\\.\\d+\\.\\d+$"))
+    // Only the shape is checked: any digit group count is legitimate, so a 1.0
+    // or 1.0.0.1 bump does not have to touch this test.
+    QVERIFY2(QRegularExpression(QStringLiteral("^\\d+(?:\\.\\d+)*$"))
                  .match(AboutDialog::versionString())
                  .hasMatch(),
              qPrintable(AboutDialog::versionString()));
@@ -124,8 +126,6 @@ void TestAboutDialog::versionComesFromTheBuild()
     QLabel *version = labelNamed(&dialog, QStringLiteral("aboutVersion"));
     QVERIFY2(version, "the version label is missing");
     QVERIFY2(version->text().contains(expected), qPrintable(version->text()));
-    QVERIFY2(version->text().contains(AboutDialog::versionString()),
-             qPrintable(version->text()));
 }
 
 void TestAboutDialog::labelsAreAccessible()

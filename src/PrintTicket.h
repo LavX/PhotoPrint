@@ -101,6 +101,16 @@ struct PrintTicket {
     bool scaleToFit = false;
 };
 
+/// The one millimetre comparison used for print-context identity. PPD parsing
+/// and a JSON round trip both add sub-0.01 mm noise, so two contexts describe
+/// the same queue even when the driver reports 101.59999 instead of 101.6. A
+/// non-finite value never compares equal, not even to itself: an unset or
+/// corrupted dimension must not look like a known sheet.
+inline bool sameMillimetres(double a, double b)
+{
+    return std::isfinite(a) && std::isfinite(b) && std::abs(a - b) < 0.01;
+}
+
 /// Identity of the print environment a paper preset belongs to.
 struct PrintContext {
     QString queueName;
@@ -118,22 +128,19 @@ struct PrintContext {
     bool landscape = false;
     bool borderless = false;
 
-    /// Millimetre values come from PPD parsing and are compared with the same
-    /// 0.01 mm tolerance as PaperPresetStore::samePrintContext(), so two
-    /// contexts that describe the same queue are equal even when the driver
-    /// reports 101.59999 instead of 101.6.
+    /// Millimetre values go through sameMillimetres(), the single tolerance
+    /// predicate shared with PaperPresetStore::samePrintContext().
     bool operator==(const PrintContext &other) const
     {
-        const auto sameMm = [](double a, double b) { return std::abs(a - b) < 0.01; };
         return queueName == other.queueName && driverIdentity == other.driverIdentity
             && ppdFingerprint == other.ppdFingerprint
             && pageSizeOption == other.pageSizeOption
             && mediaTypeOption == other.mediaTypeOption && qualityOption == other.qualityOption
             && colorOption == other.colorOption && inkIdentity == other.inkIdentity
-            && sameMm(physicalWidthMm, other.physicalWidthMm)
-            && sameMm(physicalHeightMm, other.physicalHeightMm)
-            && sameMm(logicalWidthMm, other.logicalWidthMm)
-            && sameMm(logicalHeightMm, other.logicalHeightMm)
+            && sameMillimetres(physicalWidthMm, other.physicalWidthMm)
+            && sameMillimetres(physicalHeightMm, other.physicalHeightMm)
+            && sameMillimetres(logicalWidthMm, other.logicalWidthMm)
+            && sameMillimetres(logicalHeightMm, other.logicalHeightMm)
             && landscape == other.landscape && borderless == other.borderless;
     }
 };

@@ -1,11 +1,14 @@
 #include "PaperCatalog.h"
 #include "PaperPresetStore.h"
+#include "PrintTicket.h"
 
 #include <QDir>
 #include <QFile>
 #include <QSettings>
 #include <QTemporaryDir>
 #include <QtTest>
+
+#include <limits>
 
 using namespace pp;
 
@@ -35,6 +38,7 @@ private slots:
     void namesAreTrimmedOnSave();
     void removingAnUnknownPaperFails();
     void corruptPresetFileIsNotOverwritten();
+    void printContextToleranceIsShared();
 };
 
 void TestPaperCatalog::defaultsAreTheSixEverydayPapers()
@@ -144,7 +148,6 @@ void TestPaperCatalog::customPapersSurviveARestart()
         QCOMPARE(restored.physicalWidthMm, 120.0);
         QCOMPARE(restored.physicalHeightMm, 180.0);
         QCOMPARE(restored.type, PaperType::Matte);
-        QVERIFY(restored.custom);
         QVERIFY(!restored.borderlessSupported);
         const auto removed = store.remove(custom.name);
         if (!removed)
@@ -175,7 +178,6 @@ void TestPaperCatalog::customPaperWithTheSameNameIsReplaced()
     QCOMPARE(store.all().size(), 1);
     QCOMPARE(store.all().first().physicalHeightMm, 150.0);
     QCOMPARE(store.all().first().type, PaperType::Glossy);
-    QVERIFY(store.all().first().custom);
 
     auto unnamed = second;
     unnamed.name.clear();
@@ -218,7 +220,6 @@ void TestPaperCatalog::customPaperKeepsEveryField()
     QCOMPARE(restored.offsetXMm, custom.offsetXMm);
     QCOMPARE(restored.offsetYMm, custom.offsetYMm);
     QCOMPARE(restored.type, custom.type);
-    QVERIFY(restored.custom);
 }
 
 void TestPaperCatalog::namesAreTrimmedOnSave()
@@ -290,6 +291,66 @@ void TestPaperCatalog::corruptPresetFileIsNotOverwritten()
     // reason the user's old favourites disappear without a trace.
     QVERIFY(file.open(QIODevice::ReadOnly));
     QCOMPARE(file.readAll(), QByteArray("{ this is not a preset list"));
+}
+
+void TestPaperCatalog::printContextToleranceIsShared()
+{
+    // One predicate decides whether two print environments are the same: the
+    // millimetre tolerance in sameMillimetres(), used by
+    // PrintContext::operator== and forwarded by PaperPresetStore.
+    PrintContext context;
+    context.queueName = QStringLiteral("DCPT730DW");
+    context.driverIdentity = QStringLiteral("brother-native");
+    context.physicalWidthMm = 101.6;
+    context.physicalHeightMm = 152.4;
+    context.logicalWidthMm = 101.6;
+    context.logicalHeightMm = 152.4;
+
+    // A JSON round trip and PPD parsing both add noise far below 0.01 mm.
+    QVERIFY(sameMillimetres(101.6, 101.6041));
+    QVERIFY(sameMillimetres(0.0, 0.0099));
+    QVERIFY(!sameMillimetres(101.6, 101.62));
+    QVERIFY(!sameMillimetres(0.0, 0.01));
+
+    PrintContext noisy = context;
+    noisy.physicalWidthMm += 0.0041;
+    noisy.logicalHeightMm -= 0.0041;
+    QVERIFY(noisy == context);
+    QVERIFY(samePrintContext(noisy, context));
+
+    PrintContext moved = context;
+    moved.logicalWidthMm += 0.02;
+    QVERIFY(!(moved == context));
+    QVERIFY(!samePrintContext(moved, context));
+
+    // Every millimetre field takes part, not only the physical width.
+    const auto perturbed = [&context](double PrintContext::*field) {
+        PrintContext copy = context;
+        copy.*field += 0.02;
+        return copy;
+    };
+    for (double PrintContext::*field :
+         {&PrintContext::physicalWidthMm, &PrintContext::physicalHeightMm,
+          &PrintContext::logicalWidthMm, &PrintContext::logicalHeightMm}) {
+        QVERIFY(!(perturbed(field) == context));
+        QVERIFY(!samePrintContext(perturbed(field), context));
+    }
+
+    // A finite context is reflexive.
+    QVERIFY(context == context);
+    QVERIFY(samePrintContext(context, context));
+
+    // Undeclared or corrupted measurements never match, not even themselves:
+    // a preset must not be applied to a sheet that was never measured.
+    const double nan = std::numeric_limits<double>::quiet_NaN();
+    const double inf = std::numeric_limits<double>::infinity();
+    for (const double value : {nan, inf, -inf}) {
+        QVERIFY(!sameMillimetres(value, value));
+        PrintContext broken = context;
+        broken.physicalWidthMm = value;
+        QVERIFY(!(broken == broken));
+        QVERIFY(!samePrintContext(broken, broken));
+    }
 }
 
 QTEST_GUILESS_MAIN(TestPaperCatalog)

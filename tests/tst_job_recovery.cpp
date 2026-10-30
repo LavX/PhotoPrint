@@ -5,12 +5,11 @@
 
 #include <QDir>
 #include <QFile>
+#include <QFileInfo>
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QTemporaryDir>
 #include <QtTest>
-
-#include <cmath>
 
 using namespace pp;
 

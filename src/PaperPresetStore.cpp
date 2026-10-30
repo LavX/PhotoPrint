@@ -12,8 +12,6 @@
 #include <QStandardPaths>
 #include <QUuid>
 
-#include <cmath>
-
 namespace pp {
 
 namespace {
@@ -78,15 +76,9 @@ PaperPresetStore::PaperPresetStore(QString path)
 
 bool samePrintContext(const PrintContext &a, const PrintContext &b)
 {
-    return a.queueName == b.queueName && a.driverIdentity == b.driverIdentity
-        && a.ppdFingerprint == b.ppdFingerprint && a.pageSizeOption == b.pageSizeOption
-        && a.mediaTypeOption == b.mediaTypeOption && a.qualityOption == b.qualityOption
-        && a.colorOption == b.colorOption && a.inkIdentity == b.inkIdentity
-        && std::abs(a.physicalWidthMm - b.physicalWidthMm) < 0.01
-        && std::abs(a.physicalHeightMm - b.physicalHeightMm) < 0.01
-        && std::abs(a.logicalWidthMm - b.logicalWidthMm) < 0.01
-        && std::abs(a.logicalHeightMm - b.logicalHeightMm) < 0.01
-        && a.landscape == b.landscape && a.borderless == b.borderless;
+    // PrintContext::operator== owns the comparison; this name stays as the
+    // store-side spelling so both paths cannot drift apart.
+    return a == b;
 }
 
 QList<PaperPreset> PaperPresetStore::all() const

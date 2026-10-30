@@ -14,6 +14,7 @@
 #include <QtTest>
 
 #include <algorithm>
+#include <cmath>
 #include <limits>
 
 using namespace pp;
