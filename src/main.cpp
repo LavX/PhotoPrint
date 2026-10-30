@@ -9,15 +9,18 @@
 #include "Translation.h"
 
 #include <QApplication>
-#include <QIcon>
+#include <QDebug>
 #include <QDir>
 #include <QElapsedTimer>
 #include <QFile>
 #include <QIcon>
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QScopeGuard>
 #include <QStandardPaths>
 #include <QTimer>
+
+#include <cstdio>
 
 int main(int argc, char *argv[])
 {
@@ -103,6 +106,9 @@ int main(int argc, char *argv[])
         const QString pdfPath = QDir(QStandardPaths::writableLocation(
                                          QStandardPaths::TempLocation))
                                     .filePath(QStringLiteral("photoprint-benchmark.pdf"));
+        // The benchmark PDF is scratch output: drop it on every exit, including
+        // a failed or partial export.
+        const auto removePdf = qScopeGuard([&pdfPath] { QFile::remove(pdfPath); });
         const auto artifact = renderer.writePdf(document, pdfPath, {},
                                                 pp::RenderOptions{});
         const qint64 exportMs = timer.elapsed();
@@ -132,7 +138,6 @@ int main(int argc, char *argv[])
                       double(source.value().size().width() * source.value().size().height()));
         fprintf(stdout, "%s\n", QJsonDocument(result).toJson(QJsonDocument::Compact).constData());
         fflush(stdout);
-        QFile::remove(pdfPath);
         return 0;
     }
 

@@ -67,11 +67,7 @@ QLabel *addLabel(QVBoxLayout *layout, QWidget *parent, const QString &objectName
 
 QString AboutDialog::versionString()
 {
-#ifdef PHOTOPRINT_VERSION
     return QStringLiteral(PHOTOPRINT_VERSION);
-#else
-    return QStringLiteral("0.0.0");
-#endif
 }
 
 AboutDialog::AboutDialog(QWidget *parent) : QDialog(parent)
@@ -163,7 +159,6 @@ AboutDialog::AboutDialog(QWidget *parent) : QDialog(parent)
     m_closeButton->setAccessibleName(QCoreApplication::translate("PhotoPrint", "Bezárás"));
     m_closeButton->setDefault(true);
     connect(buttons, &QDialogButtonBox::rejected, this, &QDialog::reject);
-    connect(m_closeButton, &QPushButton::clicked, this, &QDialog::accept);
     root->addWidget(buttons);
 
     m_closeButton->setFocus();

@@ -4,6 +4,7 @@
 
 #include <QColorSpace>
 #include <QCoreApplication>
+#include <QDebug>
 
 #include <algorithm>
 #include <memory>
@@ -95,6 +96,32 @@ struct WandDeleter {
 
 using WandPtr = std::unique_ptr<MagickWand, WandDeleter>;
 
+struct PixelWandDeleter {
+    void operator()(PixelWand *wand) const
+    {
+        if (wand)
+            DestroyPixelWand(wand);
+    }
+};
+
+using PixelWandPtr = std::unique_ptr<PixelWand, PixelWandDeleter>;
+
+/// Reports a failed MagickWand call with the wand's own exception text. The
+/// public API returns a QImage, so a failure falls back to the unfiltered frame
+/// in the caller; this warning is where the reason becomes visible.
+bool step(MagickWand *wand, MagickBooleanType result, const char *operation)
+{
+    if (result != MagickFalse)
+        return true;
+    ExceptionType severity = UndefinedException;
+    char *description = MagickGetException(wand, &severity);
+    qWarning("PhotoFilters: %s failed (severity %d): %s", operation,
+             static_cast<int>(severity), description ? description : "no description");
+    if (description)
+        MagickRelinquishMemory(description);
+    return false;
+}
+
 /// Copies the frame into an RGBA byte buffer and hands it to MagickWand as an
 /// sRGB image with an explicit alpha channel.
 WandPtr importFrame(const QImage &image)
@@ -119,12 +146,17 @@ WandPtr importFrame(const QImage &image)
         }
     }
 
-    if (MagickConstituteImage(wand.get(), static_cast<size_t>(width), static_cast<size_t>(height),
-                              "RGBA", CharPixel, pixels.data()) == MagickFalse)
+    if (!step(wand.get(),
+              MagickConstituteImage(wand.get(), static_cast<size_t>(width),
+                                    static_cast<size_t>(height), "RGBA", CharPixel,
+                                    pixels.data()),
+              "constitute image"))
         return {};
-    if (MagickSetImageColorspace(wand.get(), sRGBColorspace) == MagickFalse)
+    if (!step(wand.get(), MagickSetImageColorspace(wand.get(), sRGBColorspace),
+              "set colours"))
         return {};
-    if (MagickSetImageAlphaChannel(wand.get(), SetAlphaChannel) == MagickFalse)
+    if (!step(wand.get(), MagickSetImageAlphaChannel(wand.get(), SetAlphaChannel),
+              "set alpha channel"))
         return {};
     return wand;
 }
@@ -141,9 +173,11 @@ QImage exportFrame(MagickWand *wand, const QImage *alphaSource)
         return {};
 
     std::vector<unsigned char> pixels(static_cast<size_t>(width) * height * 4);
-    if (MagickExportImagePixels(wand, 0, 0, static_cast<size_t>(width),
-                                static_cast<size_t>(height), "RGBA", CharPixel,
-                                pixels.data()) == MagickFalse)
+    if (!step(wand,
+              MagickExportImagePixels(wand, 0, 0, static_cast<size_t>(width),
+                                      static_cast<size_t>(height), "RGBA", CharPixel,
+                                      pixels.data()),
+              "export pixels"))
         return {};
 
     QImage out(width, height, QImage::Format_ARGB32);
@@ -198,30 +232,36 @@ QImage blend(const QImage &original, const QImage &filtered, int strengthPercent
 /// blue without touching green.
 bool scaleChannel(MagickWand *wand, ChannelType channel, double factor)
 {
+    // Returns the previous mask, not a status, so there is nothing to check.
     MagickSetImageChannelMask(wand, channel);
-    const bool ok = MagickEvaluateImage(wand, MultiplyEvaluateOperator, factor) != MagickFalse;
+    const bool ok =
+        step(wand, MagickEvaluateImage(wand, MultiplyEvaluateOperator, factor),
+             "scale channel");
     MagickSetImageChannelMask(wand, DefaultChannels);
     return ok;
 }
 
 bool sepiaTone(MagickWand *wand, double percent)
 {
-    return MagickSepiaToneImage(wand, percent / 100.0 * static_cast<double>(QuantumRange))
-           != MagickFalse;
+    return step(wand,
+                MagickSepiaToneImage(wand, percent / 100.0 * static_cast<double>(QuantumRange)),
+                "sepia tone");
 }
 
 /// VignetteImage paints the area outside the vignette with the background
 /// colour, so the background has to be black for a darkening falloff.
 bool darkenCorners(MagickWand *wand)
 {
-    PixelWand *black = NewPixelWand();
+    PixelWandPtr black(NewPixelWand());
     if (!black)
         return false;
-    PixelSetColor(black, "black");
-    const bool ok = MagickSetImageBackgroundColor(wand, black) != MagickFalse
-                    && MagickVignetteImage(wand, 0.0, 40.0, 0.0, 0.0) != MagickFalse;
-    DestroyPixelWand(black);
-    return ok;
+    if (PixelSetColor(black.get(), "black") == MagickFalse) {
+        qWarning("PhotoFilters: set background pixel colour failed");
+        return false;
+    }
+    return step(wand, MagickSetImageBackgroundColor(wand, black.get()),
+                "set background colour")
+           && step(wand, MagickVignetteImage(wand, 0.0, 40.0, 0.0, 0.0), "vignette");
 }
 
 bool applyPreset(MagickWand *wand, FilterPreset preset)
@@ -230,8 +270,8 @@ bool applyPreset(MagickWand *wand, FilterPreset preset)
     case FilterPreset::Original:
         return true;
     case FilterPreset::Vivid:
-        return MagickModulateImage(wand, 103.0, 128.0, 100.0) != MagickFalse
-               && MagickContrastImage(wand, MagickTrue) != MagickFalse;
+        return step(wand, MagickModulateImage(wand, 103.0, 128.0, 100.0), "modulate")
+               && step(wand, MagickContrastImage(wand, MagickTrue), "contrast");
     case FilterPreset::Warm: {
         const bool red = scaleChannel(wand, RedChannel, 1.07);
         const bool green = scaleChannel(wand, GreenChannel, 1.01);
@@ -246,18 +286,21 @@ bool applyPreset(MagickWand *wand, FilterPreset preset)
     }
     case FilterPreset::Sepia:
         return sepiaTone(wand, 80.0)
-               && MagickContrastImage(wand, MagickTrue) != MagickFalse;
+               && step(wand, MagickContrastImage(wand, MagickTrue), "contrast");
     case FilterPreset::BlackWhite:
-        return MagickModulateImage(wand, 100.0, 0.0, 100.0) != MagickFalse
-               && MagickContrastImage(wand, MagickTrue) != MagickFalse;
+        return step(wand, MagickModulateImage(wand, 100.0, 0.0, 100.0), "desaturate")
+               && step(wand, MagickContrastImage(wand, MagickTrue), "contrast");
     case FilterPreset::Vintage:
-        return sepiaTone(wand, 70.0) && MagickModulateImage(wand, 102.0, 85.0, 100.0) != MagickFalse
-               && MagickSigmoidalContrastImage(wand, MagickFalse, 4.0,
-                                               0.5 * static_cast<double>(QuantumRange))
-                      != MagickFalse
+        return sepiaTone(wand, 70.0)
+               && step(wand, MagickModulateImage(wand, 102.0, 85.0, 100.0), "modulate")
+               && step(wand,
+                       MagickSigmoidalContrastImage(wand, MagickFalse, 4.0,
+                                                    0.5 * static_cast<double>(QuantumRange)),
+                       "sigmoidal contrast")
                && darkenCorners(wand);
     case FilterPreset::Crisp:
-        return MagickUnsharpMaskImage(wand, 0.0, 0.8, 0.7, 0.02) != MagickFalse;
+        return step(wand, MagickUnsharpMaskImage(wand, 0.0, 0.8, 0.7, 0.02),
+                    "unsharp mask");
     }
     return false;
 }
@@ -330,11 +373,13 @@ QImage PhotoFilters::upscale(const QImage &srgb, int factor)
     WandPtr wand = importFrame(working);
     if (!wand)
         return {};
-    if (MagickResizeImage(wand.get(), static_cast<size_t>(targetWidth),
-                          static_cast<size_t>(targetHeight), LanczosFilter)
-        == MagickFalse)
+    if (!step(wand.get(),
+              MagickResizeImage(wand.get(), static_cast<size_t>(targetWidth),
+                                static_cast<size_t>(targetHeight), LanczosFilter),
+              "resize"))
         return {};
-    if (MagickUnsharpMaskImage(wand.get(), 0.0, 0.7, 0.5, 0.0) == MagickFalse)
+    if (!step(wand.get(), MagickUnsharpMaskImage(wand.get(), 0.0, 0.7, 0.5, 0.0),
+              "unsharp mask"))
         return {};
 
     QImage result = exportFrame(wand.get(), nullptr);

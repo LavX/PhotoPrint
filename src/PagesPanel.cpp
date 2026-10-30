@@ -7,6 +7,27 @@
 
 namespace pp {
 
+namespace {
+
+/// Keeps the list and the callbacks quiet while the panel is rebuilt. The
+/// previous value is restored instead of cleared, so a nested setPages() cannot
+/// switch the guard off while the outer rebuild is still running.
+class SyncScope
+{
+public:
+    explicit SyncScope(bool &flag) : m_flag(flag), m_previous(flag) { m_flag = true; }
+    ~SyncScope() { m_flag = m_previous; }
+
+    SyncScope(const SyncScope &) = delete;
+    SyncScope &operator=(const SyncScope &) = delete;
+
+private:
+    bool &m_flag;
+    bool m_previous;
+};
+
+} // namespace
+
 PagesPanel::PagesPanel(QWidget *parent) : QWidget(parent)
 {
     auto *layout = new QHBoxLayout(this);
@@ -66,7 +87,7 @@ PagesPanel::PagesPanel(QWidget *parent) : QWidget(parent)
 
 void PagesPanel::setPages(const QList<Page> &pages, int current)
 {
-    m_syncing = true;
+    const SyncScope syncing(m_syncing);
     m_list->clear();
     for (int i = 0; i < pages.size(); ++i) {
         const Page &page = pages.at(i);
@@ -80,17 +101,19 @@ void PagesPanel::setPages(const QList<Page> &pages, int current)
     }
     if (current >= 0 && current < m_list->count())
         m_list->setCurrentRow(current);
+    // One page has no ordering or removal to offer, but it can still be
+    // duplicated, so the copy button follows "has pages", not "has many".
     const bool many = pages.size() > 1;
+    const bool hasPages = !pages.isEmpty();
     m_list->setVisible(many);
-    m_duplicate->setVisible(many);
+    m_duplicate->setVisible(hasPages);
     m_remove->setVisible(many);
     m_left->setVisible(many);
     m_right->setVisible(many);
     m_remove->setEnabled(many);
-    m_duplicate->setEnabled(!pages.isEmpty());
+    m_duplicate->setEnabled(hasPages);
     m_left->setEnabled(current > 0);
     m_right->setEnabled(current >= 0 && current < pages.size() - 1);
-    m_syncing = false;
 }
 
 } // namespace pp
