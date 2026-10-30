@@ -271,6 +271,7 @@ private:
     bool m_showOriginal = false;
     bool m_recoveryEnabled = true;
     QString m_projectPath;
+    QList<SourceIssue> m_sourceIssues;
     RecoveryStore m_recovery;
     QTimer *m_checkpointTimer = nullptr;
     RealCupsBackend m_cups;

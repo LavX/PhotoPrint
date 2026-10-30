@@ -2918,6 +2918,7 @@ void MainWindow::applyLoadedProject(const LoadedProject &loaded, bool recovery)
     m_restoringProject = true;
     m_controller.setDocument(loaded.document);
     m_restoringProject = false;
+    m_sourceIssues = loaded.issues;
     m_selectedId.clear();
     m_pageView->setSelectedFrame(QString());
     if (!loaded.document.pages.isEmpty()) {
@@ -2989,6 +2990,55 @@ void MainWindow::promptMissingSources()
             m_controller.apply(SetFramesEdit{p, frames});
             document = m_controller.document();
         }
+    }
+
+    // A blocked project-relative source has no path the frame can point at, so
+    // the loop above never sees it. Offer the same relink dialog starting next
+    // to the cleaned stored path, which is only used as a directory hint.
+    const QList<SourceIssue> issues = m_sourceIssues;
+    for (const SourceIssue &issue : issues) {
+        if (!issue.blocked || issue.refusedPath.isEmpty())
+            continue;
+        int pageIndex = -1;
+        const Frame *frame = findFrame(document, issue.frameId, &pageIndex);
+        if (!frame || !frame->sourcePath.isEmpty() || pageIndex < 0)
+            continue;
+
+        QMessageBox box(this);
+        box.setWindowTitle(QStringLiteral("PhotoPrint"));
+        box.setText(QCoreApplication::translate("PhotoPrint", "Ezt a fotót nem találjuk."));
+        QPushButton *find = box.addButton(QCoreApplication::translate("PhotoPrint", "Fotó megkeresése"),
+                                          QMessageBox::ActionRole);
+        box.addButton(QCoreApplication::translate("PhotoPrint", "Kihagyás"), QMessageBox::RejectRole);
+        box.exec();
+        if (box.clickedButton() != find)
+            continue;
+
+        const QString replacement = QFileDialog::getOpenFileName(
+            this, QCoreApplication::translate("PhotoPrint", "Fotó megkeresése"),
+            QFileInfo(issue.refusedPath).absolutePath(),
+            QCoreApplication::translate("PhotoPrint", "Fotók (*.jpg *.jpeg *.png *.JPG *.JPEG *.PNG)"));
+        if (replacement.isEmpty())
+            continue;
+        const auto loaded = m_store.load(replacement, ImportPolicy{});
+        if (!loaded) {
+            showProblem(loaded.error().message);
+            continue;
+        }
+        QList<Frame> frames = document.pages.at(pageIndex).frames;
+        int frameIndex = -1;
+        for (int i = 0; i < frames.size(); ++i) {
+            if (frames.at(i).id == issue.frameId) {
+                frameIndex = i;
+                break;
+            }
+        }
+        if (frameIndex < 0)
+            continue;
+        frames[frameIndex].sourcePath = loaded.value().path;
+        frames[frameIndex].sourceSha256 = loaded.value().sha256;
+        m_controller.apply(SetFramesEdit{pageIndex, frames});
+        document = m_controller.document();
     }
 }
 
