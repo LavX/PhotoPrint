@@ -101,13 +101,29 @@ BorderlessPlacement borderlessPlacement(const QSizeF &physicalMm, const QSizeF &
         return std::min(0.0, std::max(value, minimum));
     };
     placement.scale = cover;
+    // A (0,0) origin is the value PaperGeometry declares when nothing more
+    // specific is known, so it is a default, not an instruction to anchor at
+    // the top-left corner. With mismatched aspect ratios the overshoot belongs
+    // on both sides, which is what the pre-review code did; anchoring it would
+    // push the whole crop onto one edge.
+    if (originMm.isNull()) {
+        const auto centre = [](double logical, double covered) {
+            // The outer min() also keeps a rounding-level positive overshoot out.
+            return std::min(0.0, (logical - covered) / 2.0);
+        };
+        placement.offsetMm = QPointF(centre(logicalMm.width(), physicalMm.width() * cover),
+                                     centre(logicalMm.height(), physicalMm.height() * cover));
+        return placement;
+    }
     placement.offsetMm = QPointF(keepCovered(originMm.x(), minX), keepCovered(originMm.y(), minY));
     return placement;
 }
 
-JobController::JobController(ImageStore &store, JobConfig config, CupsBackend *backend)
+JobController::JobController(ImageStore &store, JobConfig config, CupsBackend *backend,
+                             std::unique_ptr<JobJournal> journal)
     : m_store(store), m_config(std::move(config)), m_backend(backend), m_renderer(store),
-      m_journal(m_config.journalPath)
+      m_journal(journal ? std::move(journal)
+                        : std::make_unique<JobJournal>(m_config.journalPath))
 {
 }
 
@@ -225,9 +241,26 @@ Result<JobResult> JobController::start(const DocumentSnapshot &document,
                      QCoreApplication::translate("PhotoPrint", "A művelet megszakadt."));
     }
 
-    const auto intent = m_journal.appendIntent(id, ticket.queueName,
-                                               QString::fromLatin1(artifact.value().sha256.toHex()));
+    const auto intent = m_journal->appendIntent(id, ticket.queueName,
+                                                QString::fromLatin1(artifact.value().sha256.toHex()));
     if (!intent) {
+        if (intent.error().code == QLatin1String("journal-uncertain")) {
+            // The record may be on disk after all, even though the journal
+            // could not confirm or withdraw it. Deleting the spool would leave
+            // an intent that no artifact can settle, so the evidence stays and
+            // the reported paths keep pointing at it. The message must say the
+            // print did not start: the submit call below never happened.
+            {
+                QMutexLocker locker(&m_artifactMutex);
+                m_lastPdf = pdfPath;
+            }
+            return error(QStringLiteral("journal-uncertain"),
+                         QCoreApplication::translate("PhotoPrint",
+                                                     "A naplóbejegyzést nem sikerült eltávolítani. "
+                                                     "A nyomtatás nem indult el, de a napló "
+                                                     "bizonytalan feladatot jelezhet, ezért a "
+                                                     "nyomtatási fájl megmarad."));
+        }
         // The intent never became durable, so nothing was submitted and no
         // evidence has to be kept.
         removeFile(pdfPath);
@@ -249,9 +282,9 @@ Result<JobResult> JobController::start(const DocumentSnapshot &document,
     SubmitStatus status = outcome.status;
     QString message = messageFor(status);
     const auto recorded =
-        m_journal.appendOutcome(id, stateFor(outcome.status), outcome.jobId, outcome.detail);
+        m_journal->appendOutcome(id, stateFor(outcome.status), outcome.jobId, outcome.detail);
     if (!recorded) {
-        const auto fallback = m_journal.appendOutcome(id, QStringLiteral("uncertain"),
+        const auto fallback = m_journal->appendOutcome(id, QStringLiteral("uncertain"),
                                                      outcome.jobId,
                                                      outcome.detail + QStringLiteral(" journal=")
                                                          + recorded.error().code);

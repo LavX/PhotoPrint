@@ -23,12 +23,16 @@ using namespace pp;
 namespace {
 
 /// Fails the durability step while the write itself succeeds, which is the one
-/// failure a real file cannot be made to produce on demand.
+/// failure a real file cannot be made to produce on demand. The rollback can be
+/// refused as well: on a healthy filesystem the truncation always succeeds, and
+/// the branch where it does not is the one that decides whether the spool may
+/// be deleted.
 class FailingSyncJournal : public JobJournal
 {
 public:
     using JobJournal::JobJournal;
     bool failSync = false;
+    bool failRollback = false;
     int syncCalls = 0;
 
 protected:
@@ -39,7 +43,35 @@ protected:
             return error(QStringLiteral("journal-write"), QStringLiteral("sync failed"));
         return JobJournal::syncFile(file);
     }
+
+    bool truncateTo(QFile &file, qint64 size) override
+    {
+        if (failRollback)
+            return false;
+        return JobJournal::truncateTo(file, size);
+    }
 };
+
+/// Cuts the journal at `size`, emulating a crash in the middle of the last
+/// record or just before its terminating newline.
+bool cutJournal(const QString &path, qint64 size)
+{
+    QFile file(path);
+    if (!file.open(QIODevice::ReadWrite))
+        return false;
+    return file.resize(size);
+}
+
+char lastByte(const QString &path)
+{
+    QFile file(path);
+    if (!file.open(QIODevice::ReadOnly) || file.size() == 0)
+        return '\0';
+    if (!file.seek(file.size() - 1))
+        return '\0';
+    const QByteArray one = file.read(1);
+    return one.isEmpty() ? '\0' : one.at(0);
+}
 
 quint64 inodeOf(const QString &path)
 {
@@ -91,6 +123,8 @@ private slots:
     void unreadableJournalReportsUnknownCount();
     void nonUuidIdIsSkipped();
     void failedSyncRollsTheRecordBack();
+    void failedRollbackIsReportedAsUncertain();
+    void partialLastLineDoesNotSwallowTheNextRecord();
     void appendWaitsForTheJournalLock();
     void compactionIsNotRepeatedOnEveryAppend();
     void largeJournalIsCompacted();
@@ -272,6 +306,96 @@ void TestJobRecovery::failedSyncRollsTheRecordBack()
     QCOMPARE(records.value().size(), 1);
     QCOMPARE(records.value().first().id, recorded);
     QCOMPARE(reread.uncertainCount(), 0);
+}
+
+void TestJobRecovery::failedRollbackIsReportedAsUncertain()
+{
+    QTemporaryDir dir;
+    QVERIFY(dir.isValid());
+    const QString path = dir.filePath(QStringLiteral("jobs.jsonl"));
+
+    FailingSyncJournal journal(path);
+    const QUuid settled = QUuid::createUuid();
+    QVERIFY(journal.appendOutcome(settled, QStringLiteral("queued"), 4).ok());
+    const qint64 before = QFileInfo(path).size();
+    QVERIFY(before > 0);
+
+    // Both steps fail: the record reached the file, the device never took it,
+    // and the rollback cannot take it back either.
+    journal.failSync = true;
+    journal.failRollback = true;
+    const QUuid ghost = QUuid::createUuid();
+    const auto appended = journal.appendIntent(ghost, QStringLiteral("Q1"), QStringLiteral("sha"));
+    QVERIFY(!appended.ok());
+    // Not 'journal-write': that would tell the caller nothing survived, and the
+    // caller would delete the spool of the job this record describes.
+    QCOMPARE(appended.error().code, QStringLiteral("journal-uncertain"));
+    QVERIFY(QFileInfo(path).size() > before);
+
+    // The record really is readable: the caller has to keep the evidence.
+    const JobJournal reread(path);
+    QCOMPARE(reread.uncertainCount(), 1);
+    QCOMPARE(reread.entries().last().id, ghost);
+}
+
+void TestJobRecovery::partialLastLineDoesNotSwallowTheNextRecord()
+{
+    QTemporaryDir dir;
+    QVERIFY(dir.isValid());
+
+    // A crash cut the last record in half, so the file does not end in a
+    // newline. Appending at that offset glued the next record onto the
+    // fragment, and readAll() dropped the merged, unparseable line: the fresh
+    // intent, the one whose durability the append had just confirmed, vanished
+    // with the fragment.
+    const QString cutPath = dir.filePath(QStringLiteral("cut.jsonl"));
+    JobJournal cut(cutPath);
+    QVERIFY(cut.appendIntent(QUuid::createUuid(), QStringLiteral("Q1"),
+                             QStringLiteral("sha1")).ok());
+    const qint64 written = QFileInfo(cutPath).size();
+    QVERIFY(written > 40);
+    QVERIFY(cutJournal(cutPath, written - 15)); // ends inside the record
+
+    const QUuid fresh = QUuid::createUuid();
+    QVERIFY(cut.appendIntent(fresh, QStringLiteral("Q2"), QStringLiteral("sha2")).ok());
+    QCOMPARE(lastByte(cutPath), '\n');
+
+    const JobJournal afterCut(cutPath);
+    const auto cutRecords = afterCut.readAll();
+    QVERIFY(cutRecords.ok());
+    QCOMPARE(cutRecords.value().size(), 1);
+    QCOMPARE(cutRecords.value().first().id, fresh);
+    QCOMPARE(cutRecords.value().first().queue, QStringLiteral("Q2"));
+    // The pending intent is visible after a restart instead of reading as a
+    // clean journal with nothing to warn about.
+    QCOMPARE(afterCut.uncertainCount(), 1);
+
+    // The terminator is not rewritten twice: the next append is still one
+    // record on one line.
+    const QUuid later = QUuid::createUuid();
+    QVERIFY(cut.appendIntent(later, QStringLiteral("Q3"), QStringLiteral("sha3")).ok());
+    const auto laterRecords = afterCut.readAll();
+    QVERIFY(laterRecords.ok());
+    QCOMPARE(laterRecords.value().size(), 2);
+    QCOMPARE(laterRecords.value().last().id, later);
+
+    // A record that is complete but lost its final newline is still a record:
+    // it and the appended one must both be readable, not merged into one line.
+    const QString unterminatedPath = dir.filePath(QStringLiteral("unterminated.jsonl"));
+    JobJournal unterminated(unterminatedPath);
+    const QUuid first = QUuid::createUuid();
+    QVERIFY(unterminated.appendIntent(first, QStringLiteral("Q1"), QStringLiteral("sha1")).ok());
+    QVERIFY(cutJournal(unterminatedPath, QFileInfo(unterminatedPath).size() - 1));
+    const QUuid second = QUuid::createUuid();
+    QVERIFY(unterminated.appendIntent(second, QStringLiteral("Q2"), QStringLiteral("sha2")).ok());
+
+    const JobJournal afterUnterminated(unterminatedPath);
+    const auto records = afterUnterminated.readAll();
+    QVERIFY(records.ok());
+    QCOMPARE(records.value().size(), 2);
+    QCOMPARE(records.value().at(0).id, first);
+    QCOMPARE(records.value().at(1).id, second);
+    QCOMPARE(afterUnterminated.uncertainCount(), 2);
 }
 
 void TestJobRecovery::appendWaitsForTheJournalLock()
