@@ -53,11 +53,12 @@ check_hash() {
     actual="$(hash_of "$path")"
     [ "$actual" = "$expected" ] && return 0
     {
-        echo "$name failed its SHA-256 check"
+        echo "$name failed its SHA-256 check; it was not used"
         echo "  expected: $expected"
         echo "  actual:   $actual"
-        echo "Delete $path to download the pinned build again, or set $override"
-        echo "to the hash you trust."
+        echo "Re-run the build to download the pinned build again (a cached copy"
+        echo "must be deleted first: $path), or set $override to the hash you"
+        echo "trust."
     } >&2
     return 1
 }
@@ -168,11 +169,11 @@ cat > "$appdir/AppRun" <<'LAUNCHER'
 here="$(dirname "$(readlink -f "$0")")"
 
 # A desktop Exec argument is double quoted, so \ " ` and $ inside it need a
-# backslash of their own. Nothing else is special, and the line is written
-# directly instead of going through a sed replacement, so & and | in the path
-# stay literal too.
+# backslash of their own, and % starts a field code, so a literal % has to be
+# doubled. Nothing else is special, and the line is written directly instead of
+# going through a sed replacement, so & and | in the path stay literal too.
 desktop_exec_value() {
-    printf '%s' "$1" | sed -e 's/[\\"`$]/\\&/g'
+    printf '%s' "$1" | sed -e 's/[\\"`$]/\\&/g' -e 's/%/%%/g'
 }
 
 # Wayland compositors take the window icon and the launcher entry from a
@@ -183,20 +184,32 @@ configure_desktop() {
     data="${XDG_DATA_HOME:-$HOME/.local/share}"
     mkdir -p "$data/applications" "$data/icons/hicolor" || return 0
     cp -R "$here/usr/share/icons/hicolor/." "$data/icons/hicolor/" 2>/dev/null || true
-    if [ ! -f "$data/applications/photoprint.desktop" ] \
+    if [ -f "$here/usr/share/applications/photoprint.desktop" ] \
+        && [ ! -f "$data/applications/photoprint.desktop" ] \
         && [ ! -f /usr/share/applications/photoprint.desktop ]; then
-        {
+        # Written to a temporary file and renamed into place: a truncated entry
+        # left behind by a failed write would look like a finished registration,
+        # and the guard above would never regenerate it.
+        partial="$data/applications/photoprint.desktop.part"
+        if {
             while IFS= read -r line || [ -n "$line" ]; do
                 case "$line" in
                 Exec=*) printf 'Exec="%s" %%F\n' "$(desktop_exec_value "$APPIMAGE")" ;;
                 *) printf '%s\n' "$line" ;;
                 esac
             done < "$here/usr/share/applications/photoprint.desktop"
-        } > "$data/applications/photoprint.desktop" || return 0
-        command -v update-desktop-database >/dev/null 2>&1 \
-            && update-desktop-database -q "$data/applications" 2>/dev/null
-        command -v kbuildsycoca6 >/dev/null 2>&1 \
-            && kbuildsycoca6 --noincremental >/dev/null 2>&1 &
+        } > "$partial"; then
+            if mv -f "$partial" "$data/applications/photoprint.desktop"; then
+                command -v update-desktop-database >/dev/null 2>&1 \
+                    && update-desktop-database -q "$data/applications" 2>/dev/null
+                command -v kbuildsycoca6 >/dev/null 2>&1 \
+                    && kbuildsycoca6 --noincremental >/dev/null 2>&1 &
+            else
+                rm -f "$partial"
+            fi
+        else
+            rm -f "$partial"
+        fi
     fi
     command -v gtk-update-icon-cache >/dev/null 2>&1 \
         && gtk-update-icon-cache -f -t "$data/icons/hicolor" >/dev/null 2>&1

@@ -4,6 +4,8 @@
 #include <QImage>
 #include <QtTest>
 
+#include <cmath>
+
 using namespace pp;
 
 namespace {
