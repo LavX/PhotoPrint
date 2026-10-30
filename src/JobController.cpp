@@ -3,6 +3,7 @@
 #include "JobJournal.h"
 
 #include <QCoreApplication>
+#include <QDateTime>
 #include <QDir>
 #include <QFile>
 #include <QJsonArray>
@@ -11,6 +12,7 @@
 #include <QSaveFile>
 
 #include <algorithm>
+#include <atomic>
 #include <cmath>
 
 namespace pp {
@@ -45,37 +47,106 @@ QString messageFor(SubmitStatus status)
     return QCoreApplication::translate("PhotoPrint", "Nem tudjuk, elindult-e a nyomtatás.");
 }
 
+/// Releases the single-flight gate on every exit path, including the early
+/// errors, so a failed job never leaves the controller permanently busy.
+class BusyGuard
+{
+public:
+    explicit BusyGuard(std::atomic<bool> &flag) : m_flag(flag) {}
+    ~BusyGuard() { m_flag.store(false, std::memory_order_release); }
+    BusyGuard(const BusyGuard &) = delete;
+    BusyGuard &operator=(const BusyGuard &) = delete;
+
+private:
+    std::atomic<bool> &m_flag;
+};
+
+void removeFile(const QString &path)
+{
+    if (!path.isEmpty())
+        QFile::remove(path);
+}
+
 } // namespace
+
+BorderlessPlacement borderlessPlacement(const QSizeF &physicalMm, const QSizeF &logicalMm,
+                                        const QPointF &originMm)
+{
+    BorderlessPlacement placement;
+    placement.offsetMm = originMm;
+    if (!(physicalMm.width() > 0.0) || !(physicalMm.height() > 0.0))
+        return placement;
+
+    // Just enough enlargement for the physical composition to reach every
+    // edge of the logical page.
+    const double cover =
+        std::max(logicalMm.width() / physicalMm.width(), logicalMm.height() / physicalMm.height());
+    if (!(cover > 1.0 + 1e-9))
+        return placement;
+
+    // Full coverage requires the content to start at or before 0 and to end at
+    // or after the logical edge, so the feasible top-left range is [min, 0].
+    const double minX = logicalMm.width() - physicalMm.width() * cover;
+    const double minY = logicalMm.height() - physicalMm.height() * cover;
+    // Keep the declared origin inside that range: it survives when the
+    // overshoot leaves room for it, otherwise it moves only as far as the page
+    // edge requires. It is never replaced by a constant. The outer min() also
+    // absorbs the rounding case where the ratio leaves minX a hair above zero.
+    const auto keepCovered = [](double value, double minimum) {
+        return std::min(0.0, std::max(value, minimum));
+    };
+    placement.scale = cover;
+    placement.offsetMm = QPointF(keepCovered(originMm.x(), minX), keepCovered(originMm.y(), minY));
+    return placement;
+}
 
 JobController::JobController(ImageStore &store, JobConfig config, CupsBackend *backend)
     : m_store(store), m_config(std::move(config)), m_backend(backend), m_renderer(store)
 {
 }
 
+QString JobController::lastManifestPath() const
+{
+    QMutexLocker locker(&m_artifactMutex);
+    return m_lastManifest;
+}
+
+QString JobController::lastPdfPath() const
+{
+    QMutexLocker locker(&m_artifactMutex);
+    return m_lastPdf;
+}
+
 Result<JobResult> JobController::start(const DocumentSnapshot &document,
                                        const PrintTicket &ticket, std::stop_token token)
 {
-    if (m_busy)
-        return error(QStringLiteral("job-busy"), QCoreApplication::translate("PhotoPrint", "A nyomtatás már folyamatban van."));
-    if (m_lastStart.isValid() && m_lastStart.msecsTo(QDateTime::currentDateTime()) < 1200) {
-        return error(QStringLiteral("job-double"),
-                     QCoreApplication::translate("PhotoPrint", "A nyomtatás már elindult. Várd meg az eredményét."));
-    }
     if (!ticket.valid || ticket.queueName.isEmpty())
         return error(QStringLiteral("job-ticket"), QCoreApplication::translate("PhotoPrint", "Válassz nyomtatót és papírt."));
     if (document.pages.isEmpty())
         return error(QStringLiteral("job-empty"), QCoreApplication::translate("PhotoPrint", "Nincs mit nyomtatni."));
 
-    m_busy = true;
-    auto release = [this] { m_busy = false; };
+    // The gate is a compare-exchange, not a read followed by a write: two
+    // concurrent calls can both see an idle controller, but only one can take
+    // the slot, so one user action can never submit twice.
+    bool idle = false;
+    if (!m_busy.compare_exchange_strong(idle, true))
+        return error(QStringLiteral("job-busy"), QCoreApplication::translate("PhotoPrint", "A nyomtatás már folyamatban van."));
+    BusyGuard gate(m_busy);
+
+    const qint64 startedAt = QDateTime::currentMSecsSinceEpoch();
+    const qint64 lastStart = m_lastStartMsecs.load(std::memory_order_acquire);
+    if (lastStart > 0 && startedAt - lastStart < 1200) {
+        return error(QStringLiteral("job-double"),
+                     QCoreApplication::translate("PhotoPrint", "A nyomtatás már elindult. Várd meg az eredményét."));
+    }
 
     const QUuid id = QUuid::createUuid();
-    if (!QDir().mkpath(m_config.workDir)) {
-        release();
+    if (!QDir().mkpath(m_config.workDir))
         return error(QStringLiteral("job-dir"), QCoreApplication::translate("PhotoPrint", "A nyomtatás előkészítése nem sikerült."));
-    }
-    const QString pdfPath = QDir(m_config.workDir).filePath(id.toString(QUuid::WithoutBraces)
-                                                           + QStringLiteral(".pdf"));
+    const QString base = QDir(m_config.workDir).filePath(id.toString(QUuid::WithoutBraces));
+    const QString pdfPath = base + QStringLiteral(".pdf");
+    const QString manifestPath = base + QStringLiteral(".json");
+
     RenderOptions options;
     options.verifySources = true;
     const bool fine =
@@ -92,59 +163,105 @@ Result<JobResult> JobController::start(const DocumentSnapshot &document,
     options.printPpi = std::clamp(ppi, 150.0, 1200.0);
     options.mediaSizeMm = ticket.geometry.logicalSizeMm();
     options.contentOffsetMm = ticket.geometry.physicalOriginInLogicalMm;
-    const QSizeF physical = ticket.geometry.physicalSizeMm();
-    const QSizeF logical = ticket.geometry.logicalSizeMm();
-    if (ticket.geometry.borderless && physical.width() > 0.0 && physical.height() > 0.0) {
-        const double cover =
-            std::max(logical.width() / physical.width(), logical.height() / physical.height());
-        if (cover > 1.0 + 1e-9) {
-            options.contentScale = cover;
-            options.contentOffsetMm =
-                QPointF((logical.width() - physical.width() * cover) / 2.0,
-                        (logical.height() - physical.height() * cover) / 2.0);
-        }
+    if (ticket.geometry.borderless) {
+        // A bleed leaves no margin: the physical composition is enlarged just
+        // enough to cover the logical page, keeping its declared origin where
+        // that is still compatible with full coverage.
+        const BorderlessPlacement placement =
+            borderlessPlacement(ticket.geometry.physicalSizeMm(),
+                                ticket.geometry.logicalSizeMm(),
+                                ticket.geometry.physicalOriginInLogicalMm);
+        options.contentScale = placement.scale;
+        options.contentOffsetMm = placement.offsetMm;
     }
     const auto artifact = m_renderer.writePdf(document, pdfPath, token, options);
     if (!artifact) {
-        release();
+        removeFile(pdfPath);  // a failed write must not leave a half spool behind
         return artifact.error();
     }
-    m_lastPdf = pdfPath;
 
-    const auto manifest = writeManifest(id, artifact.value().sha256, ticket, document);
-    if (!manifest) {
-        release();
-        return manifest.error();
+    // Cancellation is honoured until the journal intent is durable. After that
+    // the single submission must run to completion; stopping between the
+    // intent and the CUPS call would leave a job nobody can ever settle.
+    if (token.stop_requested()) {
+        removeFile(pdfPath);
+        return error(QStringLiteral("cancelled"),
+                     QCoreApplication::translate("PhotoPrint", "A művelet megszakadt."));
     }
 
-    m_lastStart = QDateTime::currentDateTime();
+    const auto manifest = writeManifest(manifestPath, id, artifact.value().sha256, ticket,
+                                        document);
+    if (!manifest) {
+        // No job exists yet, so the spool is not evidence: drop it.
+        removeFile(pdfPath);
+        return manifest.error();
+    }
+    {
+        QMutexLocker locker(&m_artifactMutex);
+        m_lastManifest = manifestPath;
+    }
+
+    if (token.stop_requested()) {
+        removeFile(pdfPath);
+        removeFile(manifestPath);
+        QMutexLocker locker(&m_artifactMutex);
+        m_lastManifest.clear();
+        return error(QStringLiteral("cancelled"),
+                     QCoreApplication::translate("PhotoPrint", "A művelet megszakadt."));
+    }
+
+    m_lastStartMsecs.store(QDateTime::currentMSecsSinceEpoch(), std::memory_order_release);
     JobJournal journal(m_config.journalPath);
     const auto intent = journal.appendIntent(id, ticket.queueName,
                                              QString::fromLatin1(artifact.value().sha256.toHex()));
     if (!intent) {
-        release();
+        // The intent never became durable, so nothing was submitted and no
+        // evidence has to be kept.
+        removeFile(pdfPath);
+        removeFile(manifestPath);
+        QMutexLocker locker(&m_artifactMutex);
+        m_lastManifest.clear();
         return intent.error();
     }
 
     const SubmitOutcome outcome = m_backend->submit(ticket.queueName, artifact.value(), ticket);
-    journal.appendOutcome(id, stateFor(outcome.status), outcome.jobId, outcome.detail);
+
+    // A submission whose outcome cannot be written down is not a finished job:
+    // the journal already holds the intent, and a restart treats an intent as
+    // uncertain. Record that explicitly and report it as uncertain instead of
+    // pretending the outcome is known.
+    SubmitStatus status = outcome.status;
+    const auto recorded =
+        journal.appendOutcome(id, stateFor(outcome.status), outcome.jobId, outcome.detail);
+    if (!recorded) {
+        journal.appendOutcome(id, QStringLiteral("uncertain"), outcome.jobId,
+                              outcome.detail + QStringLiteral(" journal=")
+                                  + recorded.error().code);
+        status = SubmitStatus::Uncertain;
+    }
 
     // Keep the spool only when the outcome is uncertain: then it is evidence,
     // not something a restart may silently resubmit. Normal closures drop it.
-    if (outcome.status != SubmitStatus::Uncertain)
-        QFile::remove(pdfPath);
+    // The manifest stays for every submitted job as the record of what was
+    // sent; pre-submit failures remove it with the spool.
+    const bool keepSpool = status == SubmitStatus::Uncertain;
+    if (!keepSpool)
+        removeFile(pdfPath);
 
     JobResult result;
     result.id = id;
-    result.status = outcome.status;
-    result.message = messageFor(outcome.status);
-    result.pdfPath = pdfPath;
-    release();
+    result.status = status;
+    result.message = messageFor(status);
+    result.pdfPath = keepSpool ? pdfPath : QString();
+    {
+        QMutexLocker locker(&m_artifactMutex);
+        m_lastPdf = result.pdfPath;
+    }
     return result;
 }
 
-Result<void> JobController::writeManifest(const QUuid &id, const QByteArray &pdfSha,
-                                          const PrintTicket &ticket,
+Result<void> JobController::writeManifest(const QString &path, const QUuid &id,
+                                          const QByteArray &pdfSha, const PrintTicket &ticket,
                                           const DocumentSnapshot &document)
 {
     QJsonObject manifest;
@@ -182,15 +299,12 @@ Result<void> JobController::writeManifest(const QUuid &id, const QByteArray &pdf
     }
     manifest.insert(QStringLiteral("pages"), pages);
 
-    const QString path = QDir(m_config.workDir).filePath(id.toString(QUuid::WithoutBraces)
-                                                         + QStringLiteral(".json"));
     QSaveFile file(path);
     if (!file.open(QIODevice::WriteOnly))
         return error(QStringLiteral("manifest-write"), QCoreApplication::translate("PhotoPrint", "A nyomtatási jegyzék nem írható."));
     const QByteArray data = QJsonDocument(manifest).toJson(QJsonDocument::Indented);
     if (file.write(data) != data.size() || !file.commit())
         return error(QStringLiteral("manifest-write"), QCoreApplication::translate("PhotoPrint", "A nyomtatási jegyzék nem írható."));
-    m_lastManifest = path;
     return Result<void>();
 }
 

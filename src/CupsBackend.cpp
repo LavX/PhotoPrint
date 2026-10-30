@@ -8,6 +8,9 @@ namespace pp {
 
 RealCupsBackend::RealCupsBackend() : m_owned(new RealCupsCall), m_call(m_owned.get()) {}
 
+// m_call is deliberately not owned: an injected CupsCall (tests) must outlive
+// the backend, so the caller keeps it. m_owned only keeps the default call
+// alive for the constructor above.
 RealCupsBackend::RealCupsBackend(CupsCall *call) : m_call(call)
 {
     if (!m_call) {
@@ -56,8 +59,11 @@ SubmitOutcome RealCupsBackend::submit(const QString &queue, const ExportArtifact
 
     add(QStringLiteral("media"), ticket.pageSizeOption);
     add(QStringLiteral("copies"), QString::number(ticket.copies));
-    add(QStringLiteral("fit-to-page"), QStringLiteral("false"));
-    add(QStringLiteral("cupsScaleToFit"), QStringLiteral("false"));
+    // The rendered PDF page is already the logical media size, so fit-to-page
+    // neither adds nor removes scaling; sending the resolved choice keeps the
+    // job attributes honest instead of silently forcing one value.
+    add(QStringLiteral("fit-to-page"),
+        ticket.scaleToFit ? QStringLiteral("true") : QStringLiteral("false"));
     add(QStringLiteral("job-name"), QStringLiteral("PhotoPrint"));
     add(QStringLiteral("document-format"), QStringLiteral("application/pdf"));
     if (ticket.lastPage >= ticket.firstPage)
@@ -75,7 +81,10 @@ SubmitOutcome RealCupsBackend::submit(const QString &queue, const ExportArtifact
         if (!ticket.resolutionOption.isEmpty() && !ticket.resolutionValue.isEmpty())
             add(ticket.resolutionOption, ticket.resolutionValue);
     }
-    add(QStringLiteral("Duplex"), QStringLiteral("None"));
+    // The adapter already resolved the single-sided option for this queue.
+    // An empty value means the queue exposes no Duplex group at all; then the
+    // driver default applies and sending a made-up keyword would be wrong.
+    add(QStringLiteral("Duplex"), ticket.duplexOption);
 
     const CupsCallResult call = m_call->printFile(queue, artifact.path, options);
     SubmitOutcome outcome;

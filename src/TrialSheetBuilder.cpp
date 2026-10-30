@@ -37,10 +37,22 @@ Result<TrialSheet> TrialSheetBuilder::build(const DocumentSnapshot &document,
     page.paper = originalPage.paper;
     page.landscape = originalPage.landscape;
     const QSizeF size = pageSizeMm(page);
-    const double margin = 10.0;
-    const double gutter = 8.0;
+    // Fixed millimetre margins do not exist on tiny paper: they would drive the
+    // cell size through zero. Scale them down with the short side, but keep the
+    // familiar 10/8 mm layout on the photo papers this sheet is meant for.
+    const double shortSide = std::min(size.width(), size.height());
+    if (!(shortSide > 0.0))
+        return error(QStringLiteral("trial-paper"),
+                     QCoreApplication::translate("PhotoPrint", "A papírméret érvénytelen."));
+    const double margin = std::min(10.0, shortSide * 0.1);
+    const double gutter = std::min(8.0, shortSide * 0.08);
     const double cellWidth = (size.width() - 2.0 * margin - gutter) / 2.0;
     const double cellHeight = (size.height() - 2.0 * margin - gutter) / 2.0;
+    if (!(cellWidth > 0.0) || !(cellHeight > 0.0))
+        return error(QStringLiteral("trial-paper"),
+                     QCoreApplication::translate("PhotoPrint",
+                                                  "Ez a papír túl kicsi a próbalaphoz."));
+    const double padding = std::min(4.0, std::min(cellWidth, cellHeight) * 0.15);
 
     for (int i = 0; i < unique.size(); ++i) {
         Frame frame = *source;
@@ -53,15 +65,19 @@ Result<TrialSheet> TrialSheetBuilder::build(const DocumentSnapshot &document,
         frame.paperEv = unique.at(i);
         frame.angleDeg = 0.0;
 
-        const double ratio = source->width > 0.0 ? source->height / source->width : 1.0;
-        double width = cellWidth - 4.0;
+        // A source with a zero dimension has no usable aspect ratio; 1:1 keeps
+        // the arithmetic finite instead of dividing by zero below.
+        const double ratio = source->width > 0.0 && source->height > 0.0
+            ? source->height / source->width
+            : 1.0;
+        double width = cellWidth - padding;
         double height = width * ratio;
-        if (height > cellHeight - 4.0) {
-            height = cellHeight - 4.0;
+        if (height > cellHeight - padding) {
+            height = cellHeight - padding;
             width = height / ratio;
         }
-        frame.width = width;
-        frame.height = height;
+        frame.width = std::max(1.0, width);
+        frame.height = std::max(1.0, height);
         const int column = i % 2;
         const int row = i / 2;
         frame.cx = margin + column * (cellWidth + gutter) + cellWidth / 2.0;
@@ -74,6 +90,9 @@ Result<TrialSheet> TrialSheetBuilder::build(const DocumentSnapshot &document,
     sheet.document.currentPage = 0;
     sheet.document.recipe = document.recipe;
     sheet.document.recipe.paperStrength = 0.0;
+    // The sheet is rendered and printed with the same quality choice as the
+    // document it was built from.
+    sheet.document.fineQuality = document.fineQuality;
     return sheet;
 }
 
