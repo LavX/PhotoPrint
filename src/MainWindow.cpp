@@ -1439,7 +1439,9 @@ void MainWindow::setLanguage(const QString &code)
         return;
     pp::i18n::saveLanguage(code);
     pp::i18n::installLanguage(pp::i18n::selectedLanguage());
-    rebuildUi();
+    // The menu is still running its own event loop while the action fires, so
+    // the rebuild waits until the click is fully delivered.
+    QTimer::singleShot(0, this, &MainWindow::rebuildUi);
 }
 
 void MainWindow::rebuildUi()
