@@ -60,19 +60,34 @@ Result<QList<PrinterCapabilities>> PrinterCatalog::refresh(std::stop_token token
 {
     cups_dest_t *dests = nullptr;
     const int count = cupsGetDests(&dests);
+    // libcups reports a failed lookup as 0, exactly like "no queues configured"
+    // (cupsGetDests2() in dest.c returns 0 when it cannot connect). The IPP
+    // status left behind is the only signal that separates the two, so read it
+    // before anything else can overwrite it.
+    const ipp_status_t lastError = cupsLastError();
     if (count <= 0) {
-        if (dests)
-            cupsFreeDests(count, dests);
-        return error(QStringLiteral("cups-unavailable"),
-                     QCoreApplication::translate("PhotoPrint",
-                                                  "A nyomtató most nem érhető el. Ellenőrizd, hogy be "
-                                                  "van-e kapcsolva."));
+        // No array was returned in this case, so there is nothing to free.
+        if (count < 0 || lastError != IPP_STATUS_OK) {
+            return error(QStringLiteral("cups-unavailable"),
+                         QCoreApplication::translate("PhotoPrint",
+                                                      "A nyomtató most nem érhető el. Ellenőrizd, hogy be "
+                                                      "van-e kapcsolva."));
+        }
+        // A reachable scheduler with no queues is a real answer, not a CUPS
+        // failure, and must not be reported as one.
+        return error(QStringLiteral("no-printers"),
+                     QCoreApplication::translate("PhotoPrint", "Nincs beállított nyomtató."));
     }
 
     QList<PrinterCapabilities> result;
     for (int i = 0; i < count; ++i) {
-        if (token.stop_requested())
-            break;
+        if (token.stop_requested()) {
+            // Never hand a half-read queue list to the caller as if it were the
+            // complete answer.
+            cupsFreeDests(count, dests);
+            return error(QStringLiteral("cups-cancelled"),
+                         QCoreApplication::translate("PhotoPrint", "A művelet megszakadt."));
+        }
         cups_dest_t *dest = &dests[i];
         const QString name = QString::fromLocal8Bit(dest->name);
         PrinterCapabilities capabilities;
@@ -89,7 +104,12 @@ Result<QList<PrinterCapabilities>> PrinterCatalog::refresh(std::stop_token token
         const char *ppdPath = cupsGetPPD(dest->name);
 #pragma GCC diagnostic pop
         if (ppdPath) {
-            const auto parsed = LegacyPpdReader::readFile(QString::fromLocal8Bit(ppdPath), name);
+            const QString tempPpd = QString::fromLocal8Bit(ppdPath);
+            const auto parsed = LegacyPpdReader::readFile(tempPpd, name);
+            // cupsGetPPD() hands out a temporary file that belongs to the
+            // caller; nothing else deletes it, so one refresh would leak one
+            // file per queue.
+            QFile::remove(tempPpd);
             if (parsed) {
                 capabilities = parsed.value();
                 capabilities.displayName = optionValue(dest, "printer-info");

@@ -104,6 +104,8 @@ private slots:
     void highResolutionQueueKeepsItsOption();
     void colourChoiceMapsToGrayAndMono();
     void copiesAndPageRangeAreChecked();
+    void duplexFollowsTheQueueDefault();
+    void printContextEqualityUsesMillimetreTolerance();
 };
 
 void TestPrinterOptions::initTestCase()
@@ -547,6 +549,50 @@ void TestPrinterOptions::copiesAndPageRangeAreChecked()
     QCOMPARE(ticket.value().copies, 2);
     QCOMPARE(ticket.value().firstPage, 3);
     QCOMPARE(ticket.value().lastPage, -1);
+}
+
+void TestPrinterOptions::duplexFollowsTheQueueDefault()
+{
+    // A queue that exposes a Duplex group but no "None" keyword makes the
+    // driver default the resolved value; the adapter must not invent "None".
+    PrinterCapabilities capabilities = nativeCaps();
+    capabilities.duplexOptions = {QStringLiteral("DuplexTumble"),
+                                  QStringLiteral("DuplexNoTumble")};
+    capabilities.defaultDuplex = QStringLiteral("DuplexTumble");
+
+    const auto ticket = PrinterAdapter::resolve(capabilities, photoSelection());
+    if (!ticket)
+        QFAIL(qPrintable(ticket.error().message));
+    QCOMPARE(ticket.value().duplexOption, QStringLiteral("DuplexTumble"));
+
+    // The ordinary queue keeps resolving to single-sided.
+    const auto everyday = PrinterAdapter::resolve(nativeCaps(), photoSelection());
+    if (!everyday)
+        QFAIL(qPrintable(everyday.error().message));
+    QCOMPARE(everyday.value().duplexOption, QStringLiteral("None"));
+}
+
+void TestPrinterOptions::printContextEqualityUsesMillimetreTolerance()
+{
+    PrintContext context;
+    context.queueName = QStringLiteral("DCPT730DW");
+    context.physicalWidthMm = 101.6;
+    context.physicalHeightMm = 152.4;
+    context.logicalWidthMm = 101.6;
+    context.logicalHeightMm = 152.4;
+
+    PrintContext same = context;
+    same.physicalWidthMm += 0.0041; // PPD round-trip noise, below 0.01 mm
+    same.logicalHeightMm -= 0.0041;
+    QVERIFY(same == context);
+
+    PrintContext different = context;
+    different.physicalWidthMm += 0.02;
+    QVERIFY(!(different == context));
+
+    PrintContext otherQueue = context;
+    otherQueue.queueName = QStringLiteral("DCP-T730DW");
+    QVERIFY(!(otherQueue == context));
 }
 
 QTEST_GUILESS_MAIN(TestPrinterOptions)

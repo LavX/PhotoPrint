@@ -9,6 +9,8 @@
 #include <QSizeF>
 #include <QString>
 
+#include <cmath>
+
 namespace pp {
 
 struct PageSizeCapability {
@@ -73,9 +75,12 @@ struct PrintSelection {
 };
 
 /// Fully resolved, explicit print intent. Nothing is left implicit.
+/// The only error channel is the Result returned by PrinterAdapter::resolve();
+/// `valid` exists so that a default-constructed or deserialised ticket is
+/// visibly unusable and is set to true exactly where resolve() succeeds. It is
+/// never a second, contradicting error report.
 struct PrintTicket {
     bool valid = false;
-    QString errorText;
     QString queueName;
     QString driverIdentity;
     QString ppdFingerprint;
@@ -113,7 +118,24 @@ struct PrintContext {
     bool landscape = false;
     bool borderless = false;
 
-    bool operator==(const PrintContext &) const = default;
+    /// Millimetre values come from PPD parsing and are compared with the same
+    /// 0.01 mm tolerance as PaperPresetStore::samePrintContext(), so two
+    /// contexts that describe the same queue are equal even when the driver
+    /// reports 101.59999 instead of 101.6.
+    bool operator==(const PrintContext &other) const
+    {
+        const auto sameMm = [](double a, double b) { return std::abs(a - b) < 0.01; };
+        return queueName == other.queueName && driverIdentity == other.driverIdentity
+            && ppdFingerprint == other.ppdFingerprint
+            && pageSizeOption == other.pageSizeOption
+            && mediaTypeOption == other.mediaTypeOption && qualityOption == other.qualityOption
+            && colorOption == other.colorOption && inkIdentity == other.inkIdentity
+            && sameMm(physicalWidthMm, other.physicalWidthMm)
+            && sameMm(physicalHeightMm, other.physicalHeightMm)
+            && sameMm(logicalWidthMm, other.logicalWidthMm)
+            && sameMm(logicalHeightMm, other.logicalHeightMm)
+            && landscape == other.landscape && borderless == other.borderless;
+    }
 };
 
 class PrinterAdapter

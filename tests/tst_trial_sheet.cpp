@@ -11,6 +11,8 @@
 #include <QTemporaryDir>
 #include <QtTest>
 
+#include <cmath>
+
 using namespace pp;
 
 namespace {
@@ -51,6 +53,8 @@ class TestTrialSheet : public QObject
 private slots:
     void initTestCase();
     void variantsKeepTheImageRecipeAndVaryOnlyPaper();
+    void smallPaperStillGetsPositiveCells();
+    void sourceWithoutHeightDoesNotDivideByZero();
     void renderedVariantsGetBrighterAndDarker();
 
 private:
@@ -98,6 +102,7 @@ void TestTrialSheet::initTestCase()
     page.frames.append(frame);
     m_document.pages.append(page);
     m_document.recipe.paperStrength = 0.05;
+    m_document.fineQuality = false;
 }
 
 void TestTrialSheet::variantsKeepTheImageRecipeAndVaryOnlyPaper()
@@ -110,6 +115,8 @@ void TestTrialSheet::variantsKeepTheImageRecipeAndVaryOnlyPaper()
     QCOMPARE(sheet.variants.size(), 4);
     QCOMPARE(sheet.document.pages.size(), 1);
     QCOMPARE(sheet.document.recipe.paperStrength, 0.0);
+    // The sheet is printed with the same quality choice as its document.
+    QCOMPARE(sheet.document.fineQuality, m_document.fineQuality);
 
     const Frame *original = findFrame(m_document, QStringLiteral("frame"));
     QVERIFY(original);
@@ -134,6 +141,54 @@ void TestTrialSheet::variantsKeepTheImageRecipeAndVaryOnlyPaper()
     }
     QCOMPARE(seen.size(), 4);
     QCOMPARE(sheet.variants.first().paperEv, 0.0);
+}
+
+void TestTrialSheet::smallPaperStillGetsPositiveCells()
+{
+    DocumentSnapshot document = m_document;
+    // 20 mm is narrower than the old fixed 10 mm margins plus 8 mm gutter, so
+    // the old cell width was negative.
+    PaperSpec small;
+    small.name = QStringLiteral("20 × 30 mm");
+    small.physicalWidthMm = 20.0;
+    small.physicalHeightMm = 30.0;
+    document.pages[0].paper = small;
+
+    const auto built = TrialSheetBuilder::build(document, QStringLiteral("frame"),
+                                                contextFor(small));
+    if (!built)
+        QFAIL(qPrintable(built.error().message));
+    const TrialSheet &sheet = built.value();
+    QCOMPARE(sheet.document.pages.size(), 1);
+    QCOMPARE(sheet.document.pages.at(0).frames.size(), sheet.variants.size());
+    for (const Frame &frame : sheet.document.pages.at(0).frames) {
+        QVERIFY2(frame.width > 0.0 && frame.height > 0.0, "a trial cell must not be empty");
+        QVERIFY2(frame.cx - frame.width / 2.0 >= 0.0 && frame.cy - frame.height / 2.0 >= 0.0,
+                 "a trial cell must stay on the paper");
+        QVERIFY2(frame.cx + frame.width / 2.0 <= 20.0 && frame.cy + frame.height / 2.0 <= 30.0,
+                 "a trial cell must stay on the paper");
+    }
+}
+
+void TestTrialSheet::sourceWithoutHeightDoesNotDivideByZero()
+{
+    DocumentSnapshot document = m_document;
+    Frame *frame = findFrame(document, QStringLiteral("frame"));
+    QVERIFY(frame);
+    // A zero-height frame used to make the aspect ratio zero and the width
+    // computation divide by it.
+    frame->height = 0.0;
+
+    const auto built = TrialSheetBuilder::build(document, QStringLiteral("frame"),
+                                                contextFor(m_paper));
+    if (!built)
+        QFAIL(qPrintable(built.error().message));
+    const QList<Frame> &cells = built.value().document.pages.at(0).frames;
+    QCOMPARE(cells.size(), 4);
+    for (const Frame &cell : cells) {
+        QVERIFY(std::isfinite(cell.width) && std::isfinite(cell.height));
+        QVERIFY(cell.width > 0.0 && cell.height > 0.0);
+    }
 }
 
 void TestTrialSheet::renderedVariantsGetBrighterAndDarker()

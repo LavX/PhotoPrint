@@ -13,13 +13,17 @@ public:
     int submits = 0;
     QStringList queues;
     ExportArtifact lastArtifact;
+    /// The resolved ticket actually handed to the backend, so tests can check
+    /// that the adapter's decisions survive the trip.
+    PrintTicket lastTicket;
 
     SubmitOutcome submit(const QString &queue, const ExportArtifact &artifact,
-                         const PrintTicket &) override
+                         const PrintTicket &ticket) override
     {
         ++submits;
         queues.append(queue);
         lastArtifact = artifact;
+        lastTicket = ticket;
         return outcome;
     }
 };
