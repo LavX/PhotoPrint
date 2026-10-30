@@ -142,14 +142,16 @@ Result<SourceImage> ImageStore::load(const QString &path, const ImportPolicy &po
     return source;
 }
 
-const SourceImage *ImageStore::cached(const QString &path) const
+std::optional<SourceImage> ImageStore::cached(const QString &path) const
 {
     const QFileInfo info(path);
     const QString canonical = info.canonicalFilePath().isEmpty() ? info.absoluteFilePath()
                                                                  : info.canonicalFilePath();
     QMutexLocker locker(&d->mutex);
     auto it = d->originals.constFind(canonical);
-    return it == d->originals.constEnd() ? nullptr : &it.value();
+    if (it == d->originals.constEnd())
+        return std::nullopt;
+    return *it;
 }
 
 Result<SourceImage> ImageStore::reloadVerified(const QString &path, const QByteArray &sha256,

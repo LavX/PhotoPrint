@@ -1,10 +1,12 @@
 #include "Document.h"
+#include "ImageSource.h"
 #include "MainWindow.h"
 #include "ProjectStore.h"
 
 #include <QCheckBox>
 #include <QComboBox>
 #include <QDir>
+#include <QDoubleSpinBox>
 #include <QFile>
 #include <QImage>
 #include <QImageWriter>
@@ -15,6 +17,8 @@
 #include <QStatusBar>
 #include <QTemporaryDir>
 #include <QtTest>
+
+#include <cmath>
 
 using namespace pp;
 
@@ -68,6 +72,8 @@ private slots:
     void smallWindowKeepsPrintVisible();
     void filterControlsUpdateTheFrame();
     void pageCountAppearsOnThePrintButton();
+    void selectionReadsStayValidAcrossSelections();
+    void cachedSourceStaysValidAfterLaterLoads();
 };
 
 void TestDailyFlow::threePhotosOnA4WithoutHelp()
@@ -294,22 +300,31 @@ void TestDailyFlow::filterControlsUpdateTheFrame()
     QTest::qWait(120);
     auto *view = window.findChild<PageView *>();
     QVERIFY(view);
-    const Frame *frame = findFrame(window.document(), view->selectedFrame());
-    QVERIFY(frame);
-    QCOMPARE(frame->filter, QStringLiteral("sepia"));
+    {
+        const DocumentSnapshot snapshot = window.document();
+        const Frame *frame = findFrame(snapshot, view->selectedFrame());
+        QVERIFY(frame);
+        QCOMPARE(frame->filter, QStringLiteral("sepia"));
+    }
 
     strength->setValue(40);
     strength->sliderReleased();
     QTest::qWait(120);
-    frame = findFrame(window.document(), view->selectedFrame());
-    QVERIFY(frame);
-    QCOMPARE(frame->filterStrength, 40);
+    {
+        const DocumentSnapshot snapshot = window.document();
+        const Frame *frame = findFrame(snapshot, view->selectedFrame());
+        QVERIFY(frame);
+        QCOMPARE(frame->filterStrength, 40);
+    }
 
     upscale->setChecked(true);
     QTest::qWait(120);
-    frame = findFrame(window.document(), view->selectedFrame());
-    QVERIFY(frame);
-    QVERIFY(frame->upscale);
+    {
+        const DocumentSnapshot snapshot = window.document();
+        const Frame *frame = findFrame(snapshot, view->selectedFrame());
+        QVERIFY(frame);
+        QVERIFY(frame->upscale);
+    }
 
     filterCombo->setCurrentIndex(0); // Original
     QTest::qWait(80);
@@ -358,6 +373,76 @@ void TestDailyFlow::pageCountAppearsOnThePrintButton()
     }
     QVERIFY(print);
     QCOMPARE(print->text(), QStringLiteral("2 oldal nyomtatása"));
+}
+
+void TestDailyFlow::selectionReadsStayValidAcrossSelections()
+{
+    QTemporaryDir dir;
+    QVERIFY(dir.isValid());
+    const QStringList photos = makePhotos(dir.path());
+    QCOMPARE(photos.size(), 3);
+    MainWindow window;
+    window.resize(1280, 800);
+    window.show();
+    QTest::qWait(100);
+    QVERIFY(QMetaObject::invokeMethod(&window, "addDroppedFiles", Qt::DirectConnection,
+                                      Q_ARG(QStringList, photos)));
+    QTest::qWait(250);
+
+    auto *list = window.findChild<QListWidget *>();
+    QVERIFY(list);
+    QCOMPARE(list->count(), 3);
+
+    QList<QDoubleSpinBox *> sizeSpins;
+    for (QDoubleSpinBox *spin : window.findChildren<QDoubleSpinBox *>()) {
+        if (spin->suffix() == QStringLiteral(" cm"))
+            sizeSpins.append(spin);
+    }
+    QCOMPARE(sizeSpins.size(), 2);
+
+    // Every selection reads the selected frame twice and the next selection
+    // reads it again after the earlier value was used and dropped.
+    for (int round = 0; round < 2; ++round) {
+        for (int row = 0; row < list->count(); ++row) {
+            list->setCurrentRow(row);
+            QTest::qWait(30);
+            const DocumentSnapshot snapshot = window.document();
+            const QString frameId = list->item(row)->data(Qt::UserRole).toString();
+            const Frame *frame = findFrame(snapshot, frameId);
+            QVERIFY(frame);
+            QVERIFY(std::abs(sizeSpins.at(0)->value() - frame->width / 10.0) < 0.01);
+            QVERIFY(std::abs(sizeSpins.at(1)->value() - frame->height / 10.0) < 0.01);
+        }
+    }
+}
+
+void TestDailyFlow::cachedSourceStaysValidAfterLaterLoads()
+{
+    QTemporaryDir dir;
+    QVERIFY(dir.isValid());
+    const QStringList photos = makePhotos(dir.path());
+    QCOMPARE(photos.size(), 3);
+
+    ImageStore store;
+    const auto loaded = store.load(photos.at(0), ImportPolicy{});
+    QVERIFY(loaded);
+    const QSize expectedSize = loaded.value().size();
+
+    const std::optional<SourceImage> first = store.cached(photos.at(0));
+    QVERIFY(first);
+    QCOMPARE(first->path, loaded.value().path);
+    QCOMPARE(first->sha256, loaded.value().sha256);
+
+    // Later loads and a clear must not disturb the value already handed out.
+    QVERIFY(store.load(photos.at(1), ImportPolicy{}));
+    QVERIFY(store.load(photos.at(2), ImportPolicy{}));
+    QCOMPARE(first->sha256, loaded.value().sha256);
+    QCOMPARE(first->size(), expectedSize);
+
+    store.clear();
+    QVERIFY(!store.cached(photos.at(0)));
+    QCOMPARE(first->sha256, loaded.value().sha256);
+    QCOMPARE(first->size(), expectedSize);
 }
 
 QTEST_MAIN(TestDailyFlow)

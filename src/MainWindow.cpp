@@ -1641,7 +1641,7 @@ void MainWindow::addPhoto(const QString &path)
 
     QHash<QString, QSize> pixelSizes;
     for (const Frame &existing : page.frames) {
-        if (const SourceImage *source = m_store.cached(existing.sourcePath))
+        if (const std::optional<SourceImage> source = m_store.cached(existing.sourcePath))
             pixelSizes.insert(existing.id, source->size());
     }
     pixelSizes.insert(frame.id, loaded.value().size());
@@ -1740,7 +1740,7 @@ void MainWindow::refreshPhotoList()
             item->setData(Qt::AccessibleTextRole,
                           QCoreApplication::translate("PhotoPrint", "%1. fotó").arg(page.frames.indexOf(frame) + 1));
             item->setData(Qt::UserRole, frame.id);
-            if (const SourceImage *source = m_store.cached(frame.sourcePath)) {
+            if (const std::optional<SourceImage> source = m_store.cached(frame.sourcePath)) {
                 const Result<QImage> thumb = m_store.srgb(*source, document.recipe, 96);
                 if (thumb)
                     item->setIcon(QIcon(libraryThumbnail(thumb.value(), 64)));
@@ -1798,16 +1798,22 @@ void MainWindow::selectFrame(const QString &frameId, bool fromList)
     syncFrameControls();
 }
 
-const Frame *MainWindow::selectedFrame()
+std::optional<Frame> MainWindow::selectedFrame()
 {
     if (m_selectedId.isEmpty())
-        return nullptr;
-    return findFrame(m_controller.document(), m_selectedId);
+        return std::nullopt;
+    // The snapshot is returned by value, so copy the frame out of it here
+    // instead of handing back a pointer into storage that is about to die.
+    const DocumentSnapshot document = m_controller.document();
+    const Frame *frame = findFrame(document, m_selectedId);
+    if (!frame)
+        return std::nullopt;
+    return *frame;
 }
 
 void MainWindow::syncFrameControls()
 {
-    const bool hasSelection = selectedFrame() != nullptr;
+    const bool hasSelection = selectedFrame().has_value();
     if (m_inspectorPanel)
         m_inspectorPanel->setVisible(hasSelection);
     m_fitButton->setEnabled(hasSelection);
@@ -1819,7 +1825,7 @@ void MainWindow::syncFrameControls()
     m_autoCheck->setEnabled(hasSelection);
     m_brightnessSlider->setEnabled(hasSelection);
     m_filterCombo->setEnabled(hasSelection);
-    const Frame *current = selectedFrame();
+    const std::optional<Frame> current = selectedFrame();
     m_filterStrength->setEnabled(hasSelection && current
                                  && current->filter != QLatin1String("original"));
     m_upscaleCheck->setEnabled(hasSelection);
@@ -1828,7 +1834,7 @@ void MainWindow::syncFrameControls()
 
     m_syncing = true;
     m_resolutionHint->clear();
-    if (const Frame *frame = selectedFrame()) {
+    if (const std::optional<Frame> frame = selectedFrame()) {
         m_widthSpin->setValue(frame->width / 10.0);
         m_heightSpin->setValue(frame->height / 10.0);
         m_angleSpin->setValue(frame->angleDeg);
@@ -1864,7 +1870,7 @@ void MainWindow::syncFrameControls()
 
 void MainWindow::applyFit(FitMode fit)
 {
-    const Frame *frame = selectedFrame();
+    const std::optional<Frame> frame = selectedFrame();
     if (!frame)
         return;
     Frame updated = *frame;
@@ -1934,7 +1940,7 @@ void MainWindow::applySizeFromControls()
 {
     if (m_syncing)
         return;
-    const Frame *frame = selectedFrame();
+    const std::optional<Frame> frame = selectedFrame();
     if (!frame)
         return;
     Frame updated = *frame;
@@ -2472,7 +2478,7 @@ void MainWindow::showDiagnostics()
                     .arg(page.landscape ? QStringLiteral("yes") : QStringLiteral("no"));
         text += QStringLiteral("Frames: %1\n\n").arg(page.frames.size());
     }
-    if (const Frame *frame = selectedFrame()) {
+    if (const std::optional<Frame> frame = selectedFrame()) {
         text += QStringLiteral("Frame %1\n").arg(frame->id);
         text += QStringLiteral("  centre  %1 / %2 mm\n")
                     .arg(frame->cx, 0, 'f', 3)
@@ -2496,7 +2502,7 @@ void MainWindow::showDiagnostics()
                         .arg(image->width())
                         .arg(image->height());
         }
-        if (const SourceImage *source = m_store.cached(frame->sourcePath)) {
+        if (const std::optional<SourceImage> source = m_store.cached(frame->sourcePath)) {
             text += QStringLiteral("  source  %1\n").arg(source->path);
             text += QStringLiteral("  sha256  %1\n").arg(QString::fromLatin1(source->sha256.toHex()));
             text += QStringLiteral("  embedded icc  %1  valid  %2  displayP3  %3\n")
@@ -2528,7 +2534,7 @@ void MainWindow::applyFilterSettings()
 {
     if (m_syncing)
         return;
-    const Frame *frame = selectedFrame();
+    const std::optional<Frame> frame = selectedFrame();
     if (!frame)
         return;
     Frame updated = *frame;
@@ -2545,13 +2551,13 @@ void MainWindow::toggleAutoTone(bool enabled)
 {
     if (m_syncing)
         return;
-    const Frame *frame = selectedFrame();
+    const std::optional<Frame> frame = selectedFrame();
     if (!frame)
         return;
     Frame updated = *frame;
     updated.autoTone = enabled;
     if (enabled) {
-        if (const SourceImage *source = m_store.cached(frame->sourcePath)) {
+        if (const std::optional<SourceImage> source = m_store.cached(frame->sourcePath)) {
             const QImage sample = ColorPipeline::toLinear(*source, ColorRecipe{}, 1000);
             updated.tone = ToneEngine::suggest(sample);
         }
@@ -2563,7 +2569,7 @@ void MainWindow::brightnessChanged(int value)
 {
     if (m_syncing)
         return;
-    const Frame *frame = selectedFrame();
+    const std::optional<Frame> frame = selectedFrame();
     if (!frame)
         return;
     Frame updated = *frame;
@@ -2669,7 +2675,7 @@ void MainWindow::showTrialSheet()
         showProblem(QCoreApplication::translate("PhotoPrint", "A lapok papírja vagy tájolása eltér. Állítsd egységesre."));
         return;
     }
-    const Frame *frame = selectedFrame();
+    const std::optional<Frame> frame = selectedFrame();
     if (!frame) {
         showProblem(QCoreApplication::translate("PhotoPrint", "Válassz egy fotót a próbalaphoz."));
         return;
@@ -2996,7 +3002,7 @@ void MainWindow::closeEvent(QCloseEvent *event)
     }
     const auto answer = QMessageBox::question(
         this, QStringLiteral("PhotoPrint"),
-        QCoreApplication::translate("PhotoPrint", "Mented a munkát kilépés előtt?"),
+        QCoreApplication::translate("PhotoPrint", "Mentetted a munkát kilépés előtt?"),
         QMessageBox::Save | QMessageBox::Discard | QMessageBox::Cancel, QMessageBox::Save);
     if (answer == QMessageBox::Cancel) {
         event->ignore();
