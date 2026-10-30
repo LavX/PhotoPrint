@@ -113,6 +113,12 @@ QString resolveOriginalSource(const QString &projectDir, const QString &original
 /// same base name get a short content hash, so two different photos can never
 /// overwrite each other. Identical content is copied once and keeps the plain
 /// name, which also keeps 1.0.0 portable copies stable.
+///
+/// Every plain base name is reserved before any generated name is handed out,
+/// and each generated name is checked against all names already taken. A
+/// generated `photo-1.png` therefore can never claim the file another source
+/// stores under its own plain `photo-1.png`. Comparison folds case because the
+/// bundle may be opened on a file system that does too.
 QHash<QString, QString> portableFileNames(const DocumentSnapshot &document)
 {
     QMap<QString, QString> baseBySource;
@@ -125,9 +131,9 @@ QHash<QString, QString> portableFileNames(const DocumentSnapshot &document)
             if (frame.sourcePath.isEmpty())
                 continue;
             const QString source = lexicalPath(frame.sourcePath);
-            const QString base = QFileInfo(source).fileName();
             if (baseBySource.contains(source))
                 continue;
+            const QString base = QFileInfo(source).fileName();
             const QString hash = QString::fromLatin1(frame.sourceSha256.toHex());
             baseBySource.insert(source, base);
             hashBySource.insert(source, hash);
@@ -136,30 +142,57 @@ QHash<QString, QString> portableFileNames(const DocumentSnapshot &document)
         }
     }
 
+    QSet<QString> used;
+    QSet<QString> pending;
     QHash<QString, QString> names;
-    int anonymous = 1;
-    for (auto it = baseBySource.cbegin(); it != baseBySource.cend(); ++it) {
-        const QString base = it.value();
+
+    // Plain base names first, in a stable order: they are what a bundle of
+    // unique photos has always looked like.
+    for (auto it = sourcesByBase.cbegin(); it != sourcesByBase.cend(); ++it) {
+        const QString base = it.key();
         const QSet<QString> hashes = hashesByBase.value(base);
         const bool sameContent =
-            sourcesByBase.value(base).size() > 1 && !hashes.contains(QString()) && hashes.size() == 1;
-        if (sourcesByBase.value(base).size() <= 1 || sameContent) {
-            names.insert(it.key(), base);
+            it.value().size() > 1 && !hashes.contains(QString()) && hashes.size() == 1;
+        const QString folded = base.toLower();
+        if ((it.value().size() <= 1 || sameContent) && !used.contains(folded)) {
+            used.insert(folded);
+            for (const QString &source : it.value())
+                names.insert(source, base);
             continue;
         }
+        for (const QString &source : it.value())
+            pending.insert(source);
+    }
 
+    QHash<QString, int> anonymousNext;
+    for (auto it = baseBySource.cbegin(); it != baseBySource.cend(); ++it) {
+        if (!pending.contains(it.key()))
+            continue;
+        const QString base = it.value();
         const QFileInfo info(it.key());
         QString stem = info.completeBaseName();
         if (stem.isEmpty())
             stem = base;
-        const QString hash = hashBySource.value(it.key());
         const QString suffix = info.suffix();
-        QString unique = hash.isEmpty()
-            ? QStringLiteral("%1-%2").arg(stem).arg(anonymous++)
-            : QStringLiteral("%1-%2").arg(stem, hash.left(8));
-        if (!suffix.isEmpty())
-            unique += QLatin1Char('.') + suffix;
-        names.insert(it.key(), unique);
+        const QString hash = hashBySource.value(it.key());
+        const auto withSuffix = [&suffix](const QString &core) {
+            return suffix.isEmpty() ? core : core + QLatin1Char('.') + suffix;
+        };
+
+        QString name;
+        if (hash.isEmpty()) {
+            int &next = anonymousNext[stem];
+            do {
+                name = withSuffix(QStringLiteral("%1-%2").arg(stem).arg(next++));
+            } while (!name.isEmpty() && used.contains(name.toLower()));
+        } else {
+            const QString hashed = QStringLiteral("%1-%2").arg(stem, hash.left(8));
+            name = withSuffix(hashed);
+            for (int bump = 2; !name.isEmpty() && used.contains(name.toLower()); ++bump)
+                name = withSuffix(QStringLiteral("%1-%2").arg(hashed).arg(bump));
+        }
+        used.insert(name.toLower());
+        names.insert(it.key(), name);
     }
     return names;
 }
@@ -309,9 +342,14 @@ Result<ParsedProject> parseDocument(const QJsonObject &root, const QString &proj
             QString refused; // untrusted, kept only as a relink hint
             if (!stored.isEmpty()) {
                 if (QDir::isAbsolutePath(stored)) {
-                    // 1.0.0 never wrote an absolute source, but a recorded one
-                    // is in the same trust class as `original`.
-                    contained = QDir::cleanPath(stored);
+                    // This application never writes an absolute `source`: a
+                    // normal project stores the relative path plus an absolute
+                    // `original`, a portable copy stores only a contained
+                    // relative path. A recorded absolute value is therefore in
+                    // the same trust class as an escape. It is not even
+                    // stat()ed; only `original` can lead back to the photo.
+                    refused = QDir::cleanPath(stored);
+                    blocked = true;
                 } else if (projectDir.isEmpty()) {
                     blocked = true;
                 } else {
@@ -426,6 +464,14 @@ Result<void> copyPortableSources(const DocumentSnapshot &document, const QString
                 return error(QStringLiteral("portable-path"),
                              QCoreApplication::translate("PhotoPrint", "A fotót nem sikerült a másolatba tenni."));
             }
+
+            // A frame loaded from a portable bundle already points at the
+            // carried file, so source and target are the same file. Nothing has
+            // to be copied, and moving the target aside would destroy the only
+            // copy this save could read. If its content no longer matches the
+            // recorded hash, the next load reports it as changed.
+            if (source == target)
+                continue;
 
             if (QFileInfo::exists(target)) {
                 if (fileSha256(target) == frame.sourceSha256)
