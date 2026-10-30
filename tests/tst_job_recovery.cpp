@@ -5,14 +5,78 @@
 
 #include <QDir>
 #include <QFile>
+#include <QFileInfo>
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QLockFile>
 #include <QTemporaryDir>
 #include <QtTest>
 
 #include <cmath>
 
+#if defined(Q_OS_UNIX)
+#include <sys/stat.h>
+#endif
+
 using namespace pp;
+
+namespace {
+
+/// Fails the durability step while the write itself succeeds, which is the one
+/// failure a real file cannot be made to produce on demand.
+class FailingSyncJournal : public JobJournal
+{
+public:
+    using JobJournal::JobJournal;
+    bool failSync = false;
+    int syncCalls = 0;
+
+protected:
+    Result<void> syncFile(QFile &file) override
+    {
+        ++syncCalls;
+        if (failSync)
+            return error(QStringLiteral("journal-write"), QStringLiteral("sync failed"));
+        return JobJournal::syncFile(file);
+    }
+};
+
+quint64 inodeOf(const QString &path)
+{
+#if defined(Q_OS_UNIX)
+    struct stat info {};
+    if (::stat(QFile::encodeName(path).constData(), &info) != 0)
+        return 0;
+    return static_cast<quint64>(info.st_ino);
+#else
+    Q_UNUSED(path);
+    return 0;
+#endif
+}
+
+void writeRawRecord(QFile &file, const QUuid &id, const QString &state, const QByteArray &padding)
+{
+    QJsonObject object;
+    object.insert(QStringLiteral("id"), id.toString(QUuid::WithoutBraces));
+    object.insert(QStringLiteral("state"), state);
+    object.insert(QStringLiteral("detail"), QString::fromLatin1(padding));
+    file.write(QJsonDocument(object).toJson(QJsonDocument::Compact));
+    file.write("\n");
+}
+
+/// A journal above the compaction threshold whose live jobs alone keep it
+/// there, so a rewrite cannot bring it back under the limit.
+void writeFatJournal(const QString &path, int jobs)
+{
+    QFile file(path);
+    if (!file.open(QIODevice::WriteOnly))
+        return;
+    const QByteArray padding(4096, 'x');
+    for (int i = 0; i < jobs; ++i)
+        writeRawRecord(file, QUuid::createUuid(), QStringLiteral("queued"), padding);
+}
+
+} // namespace
 
 class TestJobRecovery : public QObject
 {
@@ -24,6 +88,11 @@ private slots:
     void orphanedIntentCountsAsUncertain();
     void corruptLinesAreSkipped();
     void unreadableJournalIsNotAFirstRun();
+    void unreadableJournalReportsUnknownCount();
+    void nonUuidIdIsSkipped();
+    void failedSyncRollsTheRecordBack();
+    void appendWaitsForTheJournalLock();
+    void compactionIsNotRepeatedOnEveryAppend();
     void largeJournalIsCompacted();
 };
 
@@ -127,6 +196,139 @@ void TestJobRecovery::unreadableJournalIsNotAFirstRun()
     QVERIFY(!unreadable.ok());
     QCOMPARE(unreadable.error().code, QStringLiteral("journal-read"));
     QVERIFY(blocked.entries().isEmpty());
+}
+
+void TestJobRecovery::unreadableJournalReportsUnknownCount()
+{
+    QTemporaryDir dir;
+    QVERIFY(dir.isValid());
+
+    // A first run genuinely has nothing pending.
+    JobJournal missing(dir.filePath(QStringLiteral("nothing-here.jsonl")));
+    QCOMPARE(missing.uncertainCount(), 0);
+
+    // An unreadable journal must not answer zero: that is indistinguishable
+    // from a first run, so the startup warning would silently disappear.
+    const QString blockedPath = dir.filePath(QStringLiteral("is-a-directory"));
+    QVERIFY(QDir().mkpath(blockedPath));
+    JobJournal blocked(blockedPath);
+    QCOMPARE(blocked.uncertainCount(), -1);
+    // The lenient list wrapper still reads as empty; callers that care use
+    // readAll() or the count.
+    QVERIFY(blocked.entries().isEmpty());
+}
+
+void TestJobRecovery::nonUuidIdIsSkipped()
+{
+    QTemporaryDir dir;
+    QVERIFY(dir.isValid());
+    const QString path = dir.filePath(QStringLiteral("jobs.jsonl"));
+
+    // Well-formed JSON with a damaged id must not collapse onto the null uuid:
+    // every such record would otherwise merge into one imaginary job.
+    QFile file(path);
+    QVERIFY(file.open(QIODevice::WriteOnly));
+    writeRawRecord(file, QUuid(), QStringLiteral("uncertain"), QByteArray("x"));
+    file.write("{\"id\":\"not-a-uuid\",\"state\":\"uncertain\"}\n");
+    file.write("{\"id\":\"\",\"state\":\"intent\"}\n");
+    file.close();
+
+    JobJournal journal(path);
+    const auto read = journal.readAll();
+    QVERIFY(read.ok());
+    QVERIFY2(read.value().isEmpty(),
+             qPrintable(QStringLiteral("%1 records").arg(read.value().size())));
+    QCOMPARE(journal.uncertainCount(), 0);
+}
+
+void TestJobRecovery::failedSyncRollsTheRecordBack()
+{
+    QTemporaryDir dir;
+    QVERIFY(dir.isValid());
+    const QString path = dir.filePath(QStringLiteral("jobs.jsonl"));
+
+    FailingSyncJournal journal(path);
+    const QUuid recorded = QUuid::createUuid();
+    QVERIFY(journal.appendOutcome(recorded, QStringLiteral("queued"), 5).ok());
+    const qint64 before = QFileInfo(path).size();
+    QVERIFY(before > 0);
+    const int syncsSoFar = journal.syncCalls;
+
+    journal.failSync = true;
+    const QUuid lost = QUuid::createUuid();
+    const auto appended = journal.appendIntent(lost, QStringLiteral("Q1"), QStringLiteral("sha"));
+    QVERIFY(!appended.ok());
+    QCOMPARE(appended.error().code, QStringLiteral("journal-write"));
+    // The record was written and then the durability step failed.
+    QCOMPARE(journal.syncCalls, syncsSoFar + 1);
+
+    // The bytes reached the file, not the device. The caller treats this as a
+    // failed append and deletes the spool, so the record must not survive: a
+    // lingering intent would be read as a pending job on the next start.
+    QCOMPARE(QFileInfo(path).size(), before);
+    JobJournal reread(path);
+    const auto records = reread.readAll();
+    QVERIFY(records.ok());
+    QCOMPARE(records.value().size(), 1);
+    QCOMPARE(records.value().first().id, recorded);
+    QCOMPARE(reread.uncertainCount(), 0);
+}
+
+void TestJobRecovery::appendWaitsForTheJournalLock()
+{
+    QTemporaryDir dir;
+    QVERIFY(dir.isValid());
+    const QString path = dir.filePath(QStringLiteral("jobs.jsonl"));
+    writeFatJournal(path, 300);
+    const qint64 fat = QFileInfo(path).size();
+    QVERIFY(fat > 1024 * 1024);
+
+    // Another instance is in the middle of its own read-modify-write.
+    QLockFile other(QFileInfo(path).absoluteFilePath() + QStringLiteral(".lock"));
+    QVERIFY(other.tryLock(0));
+
+    JobJournal journal(path);
+    const auto blocked =
+        journal.appendIntent(QUuid::createUuid(), QStringLiteral("Q1"), QStringLiteral("sha"));
+    QVERIFY(!blocked.ok());
+    QCOMPARE(blocked.error().code, QStringLiteral("journal-lock"));
+    // Neither the append nor the pending compaction touched the file.
+    QCOMPARE(QFileInfo(path).size(), fat);
+
+    other.unlock();
+    QVERIFY(journal.appendIntent(QUuid::createUuid(), QStringLiteral("Q2"),
+                                 QStringLiteral("sha")).ok());
+}
+
+void TestJobRecovery::compactionIsNotRepeatedOnEveryAppend()
+{
+    QTemporaryDir dir;
+    QVERIFY(dir.isValid());
+    const QString path = dir.filePath(QStringLiteral("jobs.jsonl"));
+    writeFatJournal(path, 300);
+    const quint64 originalInode = inodeOf(path);
+    QVERIFY(QFileInfo(path).size() > 1024 * 1024);
+
+    JobJournal journal(path);
+    QVERIFY(journal.appendIntent(QUuid::createUuid(), QStringLiteral("Q1"),
+                                 QStringLiteral("sha")).ok());
+    const qint64 compacted = QFileInfo(path).size();
+    const quint64 compactedInode = inodeOf(path);
+    // The live records alone keep the file above the threshold: a rewrite did
+    // happen and did not bring it back under the limit.
+    QVERIFY(compacted > 1024 * 1024);
+#if defined(Q_OS_UNIX)
+    QVERIFY(originalInode != 0);
+    QVERIFY2(compactedInode != originalInode, "a rewrite should replace the file");
+#endif
+
+    // The next append must not pay for another full read-modify-write.
+    QVERIFY(journal.appendIntent(QUuid::createUuid(), QStringLiteral("Q2"),
+                                 QStringLiteral("sha")).ok());
+#if defined(Q_OS_UNIX)
+    QCOMPARE(inodeOf(path), compactedInode);
+#endif
+    QVERIFY(QFileInfo(path).size() < compacted + 1024);
 }
 
 void TestJobRecovery::largeJournalIsCompacted()
