@@ -74,8 +74,14 @@ Result<void> syncToDisk(QFile &file)
     // casting the descriptor straight to HANDLE hands FlushFileBuffers a small
     // integer that is not a handle, so every append failed here. _get_osfhandle
     // converts the descriptor, and -1 (errno EBADF) means there is no handle to
-    // flush. Not exercised by the test suite, which runs on Linux.
-    const intptr_t raw = ::_get_osfhandle(static_cast<int>(file.handle()));
+    // flush. A negative descriptor is refused before the conversion as well:
+    // _get_osfhandle on one calls the CRT invalid-parameter handler, which
+    // terminates the process instead of reporting a write error. Not exercised
+    // by the test suite, which runs on Linux.
+    const int descriptor = static_cast<int>(file.handle());
+    if (descriptor < 0)
+        return writeError();
+    const intptr_t raw = ::_get_osfhandle(descriptor);
     if (raw == -1 || !::FlushFileBuffers(reinterpret_cast<HANDLE>(raw)))
         return writeError();
 #endif

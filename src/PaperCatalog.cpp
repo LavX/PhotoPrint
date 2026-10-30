@@ -293,7 +293,13 @@ Result<QList<PaperSpec>> CustomPaperStore::readAll() const
     // next save rewrites it from the shorter list. Every key under the prefix is
     // therefore checked against the count. QSettings numbers array entries from
     // 1, so the only scalar key allowed there is `size`; an index below 1 or
-    // above the count, or a key without a field name, is damage.
+    // above the count, or a key that is not exactly "<index>/<field>", is
+    // damage.
+    //
+    // The index must be the canonical spelling as well. QSettings resolves the
+    // array entry `1/name` and nothing else, so a key such as `01/name` or
+    // `+1/name` is an entry this store would read, but never write or look up
+    // again: the paper would be silently dropped on the next save.
     const QString prefix = QStringLiteral("customPapers/");
     for (const QString &key : settings->allKeys()) {
         if (!key.startsWith(prefix))
@@ -302,9 +308,11 @@ Result<QList<PaperSpec>> CustomPaperStore::readAll() const
         if (rest == QLatin1String("size"))
             continue;
         const QStringList parts = rest.split(QLatin1Char('/'));
+        if (parts.size() != 2 || parts.at(1).isEmpty())
+            return corruptPaperFile();
         bool numeric = false;
-        const int index = parts.isEmpty() ? 0 : parts.first().toInt(&numeric);
-        if (!numeric || parts.size() != 2 || parts.at(1).isEmpty() || index < 1 || index > count)
+        const int index = parts.first().toInt(&numeric);
+        if (!numeric || parts.first() != QString::number(index) || index < 1 || index > count)
             return corruptPaperFile();
     }
     return papers;

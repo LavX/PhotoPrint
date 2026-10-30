@@ -367,6 +367,11 @@ Result<QImage> PageRenderer::renderPage(const DocumentSnapshot &snapshot, int pa
         return error(QStringLiteral("page-size"), QCoreApplication::translate("PhotoPrint", "A papírméret érvénytelen."));
 
     QHash<QString, QImage> images;
+    // The snapshot may come straight from a project file or from a caller that
+    // filled paperStrength from a preset. MainWindow clamps it for the preview,
+    // so the renderer clamps the same recipe here: otherwise a crafted value
+    // would print a page the preview never showed.
+    const ColorRecipe baseRecipe = sanitiseRecipe(snapshot.recipe);
     for (const Frame &frame : page.frames) {
         if (token.stop_requested())
             return error(QStringLiteral("cancelled"), QCoreApplication::translate("PhotoPrint", "A művelet megszakadt."));
@@ -377,10 +382,14 @@ Result<QImage> PageRenderer::renderPage(const DocumentSnapshot &snapshot, int pa
             : m_store.load(frame.sourcePath, ImportPolicy{}, token);
         if (!source)
             return source.error();
-        ColorRecipe recipe = snapshot.recipe;
+        ColorRecipe recipe = baseRecipe;
         recipe.tone = effectiveTone(frame);
         if (frame.paperOverride)
             recipe.paperStrength = frame.paperEv;
+        // The per-frame paper override comes from the same untrusted frame, so
+        // it goes through the recipe clamp as well instead of reaching std::pow
+        // unbounded.
+        recipe = sanitiseRecipe(recipe);
         Result<QImage> converted =
             m_store.preparedLinear(source.value(), recipe, frame.filter, frame.filterStrength,
                                    frame.upscale, options.sourceMaxDimension, token);

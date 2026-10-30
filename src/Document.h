@@ -70,6 +70,13 @@ inline double clampBrightnessEv(double ev)
     // NaN has no direction to saturate towards and would poison every pixel, so
     // it becomes the neutral offset. An infinity does have one: std::clamp
     // pulls it to the nearer bound instead of silently dropping the request.
+    //
+    // That is the opposite of sanitiseTone() below, and on purpose. Brightness
+    // is a manual slider: a hand-edited +inf reads as "as bright as the slider
+    // goes", a request somebody made, and it saturates to the top step. The
+    // automatic tone is a measurement of the photograph, so an infinite
+    // suggestion is not an extreme request but a broken number, and it becomes
+    // neutral instead.
     if (std::isnan(ev))
         return 0.0;
     return std::clamp(ev, kMinBrightnessEv, kMaxBrightnessEv);
@@ -88,7 +95,8 @@ constexpr double kMaxToneHighlightCompress = 0.35;
 /// The tone the renderer may see. Values loaded from a project file are
 /// untrusted: every finite field is clamped to its range, and a non-finite one
 /// is rejected in favour of the neutral value rather than saturating, because
-/// an infinity here is corruption, not a direction a person chose.
+/// an infinity here is corruption, not a direction a person chose. The manual
+/// brightness offset is the documented exception; see clampBrightnessEv().
 PhotoTone sanitiseTone(const PhotoTone &tone);
 
 /// Slider positions for the manual brightness control: whole steps, 0..100,
@@ -167,14 +175,28 @@ struct ColorRecipe {
 };
 
 /// Clamps the recipe values that can arrive from a project file. The renderer
-/// applies the exposure directly, so nothing outside these bounds may pass.
+/// applies the paper component as std::pow(2, paperStrength) to every pixel, so
+/// nothing outside these bounds may pass. The preview clamps in MainWindow; the
+/// renderer clamps again at its own boundary, because a crafted preset or a
+/// caller that filled the value in directly would otherwise print a page the
+/// preview never showed.
 constexpr double kMaxPaperEv = 0.5;
+
+/// Range of the trial sheet's paper steps. The builder offers these values and
+/// the project loader clamps loaded frames to them, so one constant decides
+/// both sides of that round trip.
+constexpr double kTrialPaperEv = 0.12;
+
 inline ColorRecipe sanitiseRecipe(ColorRecipe recipe)
 {
     recipe.tone = sanitiseTone(recipe.tone);
-    if (std::isnan(recipe.paperStrength))
-        recipe.paperStrength = 0.0;
-    recipe.paperStrength = std::clamp(recipe.paperStrength, -kMaxPaperEv, kMaxPaperEv);
+    // Same rule as the tone above: a non-finite paper component is corruption,
+    // not a direction to saturate towards, so it becomes neutral instead of the
+    // strongest cast. A finite value is clamped, because an extreme one is a
+    // request that has an obvious nearest allowed value.
+    recipe.paperStrength = std::isfinite(recipe.paperStrength)
+        ? std::clamp(recipe.paperStrength, -kMaxPaperEv, kMaxPaperEv)
+        : 0.0;
     return recipe;
 }
 

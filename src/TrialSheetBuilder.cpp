@@ -24,10 +24,10 @@ Result<TrialSheet> TrialSheetBuilder::build(const DocumentSnapshot &document,
     TrialSheet sheet;
     sheet.context = context;
 
-    const double corrections[] = {0.0, 0.06, -0.06, 0.12};
+    const double corrections[] = {0.0, 0.06, -0.06, kTrialPaperEv};
     QList<double> unique;
     for (double value : corrections) {
-        value = std::clamp(value, -0.12, 0.12);
+        value = std::clamp(value, -kTrialPaperEv, kTrialPaperEv);
         if (!unique.contains(value))
             unique.append(value);
     }

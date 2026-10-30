@@ -25,19 +25,15 @@ namespace pp {
 
 namespace {
 
-/// The trial sheet offers only these steps, and the value reaches
-/// ColorPipeline's std::pow as the paper exposure. A crafted project must not
-/// be able to drive a cell to black or blown out, so the load clamps to the
-/// same range the builder produces. TrialSheetBuilder owns the range; this
-/// copy is the guard on the untrusted side.
-constexpr double kMaxTrialPaperEv = 0.12;
-
+/// The trial sheet offers only steps up to kTrialPaperEv, and this loader clamps
+/// to the same range, so a crafted project cannot drive a cell to black or blown
+/// out through the paper exposure.
 double clampTrialPaperEv(double ev)
 {
     // std::clamp passes NaN through, and a NaN here poisons every pixel.
     if (!std::isfinite(ev))
         return 0.0;
-    return std::clamp(ev, -kMaxTrialPaperEv, kMaxTrialPaperEv);
+    return std::clamp(ev, -kTrialPaperEv, kTrialPaperEv);
 }
 
 QJsonObject paperToJson(const PaperSpec &paper)
@@ -415,15 +411,20 @@ Result<ParsedProject> parseDocument(const QJsonObject &root, const QString &proj
                 }
             }
 
-            const QString fallback = resolveOriginalSource(projectDir, original, frame.sourceSha256);
             if (!contained.isEmpty() && QFileInfo::exists(contained)) {
                 frame.sourcePath = contained;
-            } else if (!fallback.isEmpty()) {
-                // Absolute original: the normal way back to a photo that lives
-                // outside the project folder on this machine.
-                frame.sourcePath = fallback;
             } else {
-                frame.sourcePath = contained; // empty when the stored path was refused
+                // The absolute `original` is only worth the stat and the full
+                // content hash when the contained source cannot be used. A
+                // healthy project resolves every frame from inside its own
+                // folder, so hashing `original` eagerly read and hashed every
+                // photo a second time for nothing.
+                const QString fallback =
+                    resolveOriginalSource(projectDir, original, frame.sourceSha256);
+                // Absolute original: the normal way back to a photo that lives
+                // outside the project folder on this machine. Without one, the
+                // refused or missing contained path stays as the (empty) result.
+                frame.sourcePath = fallback.isEmpty() ? contained : fallback;
             }
 
             SourceIssue issue;

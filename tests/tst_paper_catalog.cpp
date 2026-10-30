@@ -43,6 +43,7 @@ private slots:
     void unparsablePaperFileKeepsItsReadablePaper();
     void corruptPaperEntryIsNotDropped();
     void truncatedArrayCountIsNotTrusted();
+    void nonCanonicalArrayIndexIsRejected();
     void nonFiniteOffsetsAreRejected();
     void nonFiniteSizesAreRejected();
     void settingsFailureIsNotSticky();
@@ -368,6 +369,17 @@ void TestPaperCatalog::unparsablePaperFileKeepsItsReadablePaper()
     QVERIFY(!read.ok());
     QCOMPARE(read.error().code, QStringLiteral("paper-corrupt"));
 
+    // The repair below is only reachable because QSettings keeps the values it
+    // did manage to parse in a process-wide cache. That is an implementation
+    // detail, not a promise: assert the precondition instead of assuming it, so
+    // a QSettings that forgets the partial parse skips this test rather than
+    // failing it for a behaviour the store does not control.
+    {
+        QSettings probe(path, QSettings::IniFormat);
+        if (probe.value(QStringLiteral("customPapers/1/name")).toString() != QStringLiteral("Regi"))
+            QSKIP("this QSettings does not retain a partial parse, so the repair path is unreachable");
+    }
+
     PaperSpec paper;
     paper.name = QStringLiteral("Új");
     paper.physicalWidthMm = 100.0;
@@ -466,6 +478,52 @@ void TestPaperCatalog::truncatedArrayCountIsNotTrusted()
     QFile file(path);
     QVERIFY(file.open(QIODevice::ReadOnly));
     QCOMPARE(file.readAll(), content);
+}
+
+void TestPaperCatalog::nonCanonicalArrayIndexIsRejected()
+{
+    // QSettings resolves the array entry `customPapers/1/...` and nothing else.
+    // `01/name` and `+1/name` parse as the index 1 for toInt(), so the old key
+    // check accepted a second paper stored beside the canonical entry: it was
+    // read past (never looked up) and silently dropped by the next save. The
+    // index has to be spelled exactly the way QString::number() writes it.
+    const QList<QByteArray> damaged = {
+        QByteArray("[customPapers]\nsize=1\n1\\name=Regi\n1\\widthMm=100\n1\\heightMm=150\n"
+                   "01\\name=Masik\n01\\widthMm=120\n01\\heightMm=180\n"),
+        QByteArray("[customPapers]\nsize=1\n1\\name=Regi\n1\\widthMm=100\n1\\heightMm=150\n"
+                   "+1\\name=Masik\n+1\\widthMm=120\n+1\\heightMm=180\n"),
+        QByteArray("[customPapers]\nsize=1\n1\\name=Regi\n1\\widthMm=100\n1\\heightMm=150\n"
+                   "1\\sub\\name=Masik\n"),
+    };
+
+    for (const QByteArray &content : damaged) {
+        QTemporaryDir dir;
+        QVERIFY(dir.isValid());
+        const QString path = QDir(dir.path()).filePath(QStringLiteral("papers.ini"));
+        {
+            QFile file(path);
+            QVERIFY(file.open(QIODevice::WriteOnly));
+            QCOMPARE(file.write(content), qint64(content.size()));
+        }
+
+        CustomPaperStore store(path);
+        const auto read = store.readAll();
+        QVERIFY2(!read.ok(), content.constData());
+        QCOMPARE(read.error().code, QStringLiteral("paper-corrupt"));
+        QVERIFY(store.all().isEmpty());
+
+        PaperSpec paper;
+        paper.name = QStringLiteral("Új");
+        paper.physicalWidthMm = 100.0;
+        paper.physicalHeightMm = 150.0;
+        const auto saved = store.save(paper);
+        QVERIFY2(!saved.ok(), "saving would drop the entry QSettings cannot see");
+        QCOMPARE(saved.error().code, QStringLiteral("paper-corrupt"));
+
+        QFile file(path);
+        QVERIFY(file.open(QIODevice::ReadOnly));
+        QCOMPARE(file.readAll(), content);
+    }
 }
 
 void TestPaperCatalog::nonFiniteOffsetsAreRejected()

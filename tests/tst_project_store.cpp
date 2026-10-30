@@ -164,6 +164,26 @@ bool patchFirstFrame(const QString &path, const QString &source, bool keepOrigin
     return writeJson(path, root);
 }
 
+/// Rewrites the recorded identity of the first frame, or removes it when the
+/// hash is empty: a project without an identity cannot be verified at all.
+bool patchFirstFrameSha(const QString &path, const QByteArray &sha256)
+{
+    QJsonObject root = readJson(path);
+    QJsonArray pages = root.value(QStringLiteral("pages")).toArray();
+    QJsonObject page = pages.at(0).toObject();
+    QJsonArray frames = page.value(QStringLiteral("frames")).toArray();
+    QJsonObject frame = frames.at(0).toObject();
+    if (sha256.isEmpty())
+        frame.remove(QStringLiteral("sha256"));
+    else
+        frame.insert(QStringLiteral("sha256"), QString::fromLatin1(sha256.toHex()));
+    frames.replace(0, frame);
+    page.insert(QStringLiteral("frames"), frames);
+    pages.replace(0, page);
+    root.insert(QStringLiteral("pages"), pages);
+    return writeJson(path, root);
+}
+
 /// Rewrites the recorded absolute `original` of the first frame, the other
 /// half of what a hand-edited project file can do.
 bool patchFirstFrameOriginal(const QString &path, const QString &original)
@@ -211,6 +231,7 @@ private slots:
     void portableBundleCanBeResaved();
     void craftedBrightnessCannotReachTheRenderer();
     void craftedPaperToneIsClamped();
+    void craftedRecipeCannotReachThePrintPath();
     void versionOneProjectWithoutNewKeysStillLoads();
     void missingAndChangedSourcesKeepTheLayout();
     void portableCopyWorksAfterMoving();
@@ -515,8 +536,25 @@ void TestProjectStore::absoluteOriginalMustMatchTheRecordedPhoto()
         QVERIFY(loaded.value().document.pages.at(0).frames.at(0).sourcePath.isEmpty());
     }
 
+    // A frame with no recorded identity cannot be verified at all, so not even
+    // the recorded photo at the recorded path is adopted: it is missing, and
+    // the relink path handles it. The file is never read or hashed.
+    QVERIFY(patchFirstFrameSha(path, QByteArray()));
+    QVERIFY(patchFirstFrameOriginal(path, QFileInfo(m_redPath).absoluteFilePath()));
+    {
+        const auto loaded = store.load(path);
+        if (!loaded)
+            QFAIL(qPrintable(loaded.error().message));
+        const Frame frame = loaded.value().document.pages.at(0).frames.at(0);
+        QVERIFY2(frame.sourcePath.isEmpty(), "an unverifiable original must not be adopted");
+        QCOMPARE(loaded.value().issues.size(), 1);
+        QVERIFY(loaded.value().issues.first().missing);
+        QVERIFY(!loaded.value().issues.first().changed);
+    }
+
     // The recorded photo at the recorded path still opens: that is the layout
     // 1.0.0 wrote and it must keep working.
+    QVERIFY(patchFirstFrameSha(path, m_redSha));
     QVERIFY(patchFirstFrameOriginal(path, QFileInfo(m_redPath).absoluteFilePath()));
     const auto loaded = store.load(path);
     if (!loaded)
@@ -569,7 +607,11 @@ void TestProjectStore::portableBundleSymlinkIsRefused()
     QVERIFY(QDir().mkpath(outside));
 
     const QString bundle = path + QStringLiteral(".files");
-    QVERIFY(QFile::link(outside, bundle));
+    // QFile::link() makes a symbolic link on Unix and a .lnk shortcut on
+    // Windows, and a file system may refuse the link altogether. The test is
+    // about the link, so there is nothing to check when it cannot be made.
+    if (!QFile::link(outside, bundle) || !QFileInfo(bundle).isSymLink())
+        QSKIP("symbolic links are not available here");
     QVERIFY(QFileInfo(bundle).isSymLink());
 
     ProjectStore store;
@@ -1040,9 +1082,12 @@ void TestProjectStore::craftedPaperToneIsClamped()
     // A hand-edited project can carry any number, and the value becomes the
     // paper exposure through std::pow: a huge positive value blows the cell
     // out, a huge negative one blacks it out. The trial sheet only ever offers
-    // -0.12 .. 0.12, so the load clamps to that range.
+    // -kTrialPaperEv .. kTrialPaperEv, so the load clamps to that range.
     QJsonObject root = readJson(path);
     QJsonArray pages = root.value(QStringLiteral("pages")).toArray();
+    // The fixture below is two pages, one per sign. Pinning the count keeps a
+    // grown fixture from indexing past `crafted` below.
+    QCOMPARE(pages.size(), 2);
     const double crafted[] = {20.0, -20.0};
     for (int p = 0; p < pages.size(); ++p) {
         QJsonObject page = pages.at(p).toObject();
@@ -1063,8 +1108,44 @@ void TestProjectStore::craftedPaperToneIsClamped()
     if (!loaded)
         QFAIL(qPrintable(loaded.error().message));
     const DocumentSnapshot &document = loaded.value().document;
-    QCOMPARE(document.pages.at(0).frames.at(0).paperEv, 0.12);
-    QCOMPARE(document.pages.at(1).frames.at(0).paperEv, -0.12);
+    QCOMPARE(document.pages.at(0).frames.at(0).paperEv, kTrialPaperEv);
+    QCOMPARE(document.pages.at(1).frames.at(0).paperEv, -kTrialPaperEv);
+}
+
+void TestProjectStore::craftedRecipeCannotReachThePrintPath()
+{
+    // MainWindow clamps the recipe it hands to the preview and the thumbnail
+    // paths. The renderer is the last boundary before the printed pixels, so a
+    // snapshot that still carries a huge paper strength, or a crafted per-frame
+    // trial override, has to produce exactly what the clamped recipe produces.
+    // Otherwise a crafted preset would print a page the preview never showed.
+    DocumentSnapshot crafted = singleFrameDocument(m_red, QStringLiteral("frame-crafted"));
+    crafted.pages[0].frames[0].paperOverride = true;
+    crafted.recipe.paperStrength = 100.0;
+    crafted.pages[0].frames[0].paperEv = 100.0;
+
+    DocumentSnapshot sanitised = crafted;
+    sanitised.recipe = sanitiseRecipe(sanitised.recipe);
+    sanitised.pages[0].frames[0].paperEv = kMaxPaperEv;
+
+    ImageStore images;
+    PageRenderer renderer(images);
+    const auto printed = renderer.renderPage(crafted, 0, 72.0);
+    const auto preview = renderer.renderPage(sanitised, 0, 72.0);
+    if (!printed)
+        QFAIL(qPrintable(printed.error().message));
+    if (!preview)
+        QFAIL(qPrintable(preview.error().message));
+    QCOMPARE(printed.value(), preview.value());
+
+    // The clamp really is the recipe bound, not a no-op: the same frame through
+    // a neutral recipe differs, so the equality above is not trivially true.
+    DocumentSnapshot neutral = sanitised;
+    neutral.recipe.paperStrength = 0.0;
+    neutral.pages[0].frames[0].paperOverride = false;
+    const auto withoutPaper = renderer.renderPage(neutral, 0, 72.0);
+    QVERIFY(withoutPaper.ok());
+    QVERIFY(withoutPaper.value() != preview.value());
 }
 
 void TestProjectStore::versionOneProjectWithoutNewKeysStillLoads()
