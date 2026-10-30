@@ -67,11 +67,29 @@ constexpr double kMaxBrightnessEv = 0.5;
 
 inline double clampBrightnessEv(double ev)
 {
-    // std::clamp passes NaN through, and a NaN here poisons every pixel.
-    if (!std::isfinite(ev))
+    // NaN has no direction to saturate towards and would poison every pixel, so
+    // it becomes the neutral offset. An infinity does have one: std::clamp
+    // pulls it to the nearer bound instead of silently dropping the request.
+    if (std::isnan(ev))
         return 0.0;
     return std::clamp(ev, kMinBrightnessEv, kMaxBrightnessEv);
 }
+
+/// Sane bounds for the image tone. The tone engine suggests at most +0.35 EV
+/// exposure, 0.12 shadow lift and 0.06 highlight compression; these bounds
+/// leave room for a hand-edited recipe or a future stronger suggestion while
+/// keeping the exposure two stops at most, far from the point where the
+/// pipeline clips every frame to black or white.
+constexpr double kMinToneExposureEv = -1.0;
+constexpr double kMaxToneExposureEv = 1.0;
+constexpr double kMaxToneShadowLift = 0.5;
+constexpr double kMaxToneHighlightCompress = 0.35;
+
+/// The tone the renderer may see. Values loaded from a project file are
+/// untrusted: every finite field is clamped to its range, and a non-finite one
+/// is rejected in favour of the neutral value rather than saturating, because
+/// an infinity here is corruption, not a direction a person chose.
+PhotoTone sanitiseTone(const PhotoTone &tone);
 
 /// Slider positions for the manual brightness control: whole steps, 0..100,
 /// with the neutral position in the middle.
@@ -172,8 +190,8 @@ const Page *findPage(const DocumentSnapshot &snapshot, const QString &pageId, in
 int pageIndexOf(const DocumentSnapshot &snapshot, const QString &pageId);
 QSizeF pageSizeMm(const Page &page);
 
-/// Image-side tone actually applied to a frame: the automatic suggestion when
-/// enabled, plus the manual brightness offset.
+/// Image-side tone actually applied to a frame: the sanitised automatic
+/// suggestion when enabled, plus the clamped manual brightness offset.
 PhotoTone effectiveTone(const Frame &frame);
 
 } // namespace pp

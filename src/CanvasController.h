@@ -96,7 +96,7 @@ public:
     explicit CanvasController(QObject *parent = nullptr);
 
     DocumentSnapshot document() const { return m_document; }
-    int pageCount() const { return m_document.pages.size(); }
+    int pageCount() const { return static_cast<int>(m_document.pages.size()); }
     void setDocument(const DocumentSnapshot &document);
     void setCurrentPage(int index);
     void apply(const DocumentEdit &edit);

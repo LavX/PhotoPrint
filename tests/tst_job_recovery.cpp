@@ -13,6 +13,8 @@
 #include <QtTest>
 
 #include <cmath>
+#include <optional>
+#include <variant>
 
 #if defined(Q_OS_UNIX)
 #include <sys/stat.h>
@@ -128,6 +130,7 @@ private slots:
     void appendWaitsForTheJournalLock();
     void compactionIsNotRepeatedOnEveryAppend();
     void largeJournalIsCompacted();
+    void resultVoidAccessorsMatchTheTypedResult();
 };
 
 void TestJobRecovery::uncertainIntentSurvivesRestartWithoutResubmit()
@@ -501,6 +504,36 @@ void TestJobRecovery::largeJournalIsCompacted()
         if (record.id == finished)
             QCOMPARE(record.state, QStringLiteral("queued"));
     }
+}
+
+void TestJobRecovery::resultVoidAccessorsMatchTheTypedResult()
+{
+    // Success is the absence of an error, not an empty error code: an Error
+    // without a code is still a failure and its message must not be swallowed.
+    Result<void> success;
+    QVERIFY(success.ok());
+    QVERIFY(bool(success));
+
+    const Result<void> failure = error(QStringLiteral("journal-write"), QStringLiteral("boom"));
+    QVERIFY(!failure.ok());
+    QVERIFY(!bool(failure));
+    QCOMPARE(failure.error().code, QStringLiteral("journal-write"));
+    QCOMPARE(failure.error().message, QStringLiteral("boom"));
+
+    const Result<void> bare = Error{};
+    QVERIFY(!bare.ok());
+    QCOMPARE(bare.error().code, QString());
+    QCOMPARE(bare.error().message, QString());
+
+    // Both error() accessors assert on misuse in a debug build. With assertions
+    // compiled out they throw instead of returning a made-up empty error, which
+    // is what the type without a value used to do.
+#if defined(QT_NO_DEBUG)
+    QVERIFY_EXCEPTION_THROWN(success.error(), std::bad_optional_access);
+    const Result<int> typed(1);
+    QVERIFY(typed.ok());
+    QVERIFY_EXCEPTION_THROWN(typed.error(), std::bad_variant_access);
+#endif
 }
 
 QTEST_GUILESS_MAIN(TestJobRecovery)

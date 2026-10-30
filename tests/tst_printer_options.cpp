@@ -7,13 +7,17 @@
 #include <QFile>
 #include <QtTest>
 
+// The same declaration PrinterCatalog.cpp uses, at global scope for the same
+// reason: an extern "C" declaration inside the unnamed namespace would claim
+// internal linkage for a function libcups defines in another translation unit.
+// Weak, so a libcups that stops exporting the setter leaves the reference null
+// and the test skips instead of failing to link.
+extern "C" __attribute__((weak)) void _cupsSetError(ipp_status_t status, const char *message,
+                                                    int localize);
+
 using namespace pp;
 
 namespace {
-
-// The exported libcups setter the code under test uses to clear a sticky error;
-// CUPS 2.x keeps it out of its public headers.
-extern "C" void _cupsSetError(ipp_status_t status, const char *message, int localize);
 
 QString fixtureDir()
 {
@@ -113,6 +117,8 @@ private slots:
     void duplexFollowsTheQueueDefault();
     void halfDeclaredLogicalSizeKeepsOneSheet();
     void adapterPageDescribesTheSameSheetAsTheMediaBox();
+    void landscapeCustomPageMatchesTheMediaBox();
+    void namedModeIsReconciledWithTheMediaBox();
     void destinationLookupNeedsTheStatus();
     void stickyCupsErrorIsClearedBeforeTheLookup();
     void printContextEqualityUsesMillimetreTolerance();
@@ -692,6 +698,92 @@ void TestPrinterOptions::adapterPageDescribesTheSameSheetAsTheMediaBox()
     QCOMPARE(customTicket.value().pageSizeOption, QStringLiteral("Custom.130x190mm"));
 }
 
+void TestPrinterOptions::landscapeCustomPageMatchesTheMediaBox()
+{
+    // The option and the media box are built from the same rotated sheet. The
+    // target used to be computed with a hard-coded portrait flag, so a custom
+    // landscape sheet asked the driver for Custom.130x190mm while the PDF
+    // described a 190 x 130 box.
+    PrintSelection selection = customSelection(130.0, 190.0);
+    selection.landscape = true;
+
+    const auto ticket = PrinterAdapter::resolve(nativeCaps(), selection);
+    if (!ticket)
+        QFAIL(qPrintable(ticket.error().message));
+    QVERIFY(ticket.value().geometry.landscape);
+    QCOMPARE(ticket.value().geometry.logicalSizeMm(), QSizeF(190.0, 130.0));
+    QCOMPARE(ticket.value().pageSizeOption, QStringLiteral("Custom.190x130mm"));
+    QCOMPARE(ticket.value().pageSizeOption,
+             PrinterAdapter::customPageSizeOption(190.0, 130.0));
+
+    // Portrait keeps the natural order, so the flag is what decides.
+    selection.landscape = false;
+    const auto portrait = PrinterAdapter::resolve(nativeCaps(), selection);
+    if (!portrait)
+        QFAIL(qPrintable(portrait.error().message));
+    QCOMPARE(portrait.value().geometry.logicalSizeMm(), QSizeF(130.0, 190.0));
+    QCOMPARE(portrait.value().pageSizeOption, QStringLiteral("Custom.130x190mm"));
+
+    // A landscape photo paper keeps the driver's named mode, and its box is the
+    // same sheet rotated: 4x6 is 101.6 x 152.4 mm either way round.
+    PrintSelection photo = photoSelection();
+    photo.landscape = true;
+    const auto landscapePhoto = PrinterAdapter::resolve(ippCaps(), photo);
+    if (!landscapePhoto)
+        QFAIL(qPrintable(landscapePhoto.error().message));
+    QCOMPARE(landscapePhoto.value().pageSizeOption, QStringLiteral("4x6"));
+    QCOMPARE(landscapePhoto.value().geometry.logicalSizeMm(), QSizeF(152.4, 101.6));
+    QVERIFY(landscapePhoto.value().geometry.landscape);
+}
+
+void TestPrinterOptions::namedModeIsReconciledWithTheMediaBox()
+{
+    // A 10 x 15 cm paper whose logical sheet is declared as 130 x 190: the named
+    // mode would put a 4x6 page behind a 130 x 190 box. The declared sheet and
+    // the driver page describe two different sheets, so nothing is printed.
+    PrintSelection contradictory = photoSelection();
+    contradictory.paper.logicalWidthMm = 130.0;
+    contradictory.paper.logicalHeightMm = 190.0;
+    const auto rejected = PrinterAdapter::resolve(ippCaps(), contradictory);
+    QVERIFY2(!rejected.ok(), "a 4x6 mode cannot carry a 130 x 190 media box");
+    QCOMPARE(rejected.error().code, QStringLiteral("paper-unsupported"));
+
+    // Half a logical size falls back to the physical box, 1.6 mm smaller than
+    // the 4x6 mode. That mismatch must not hide behind the named mode either.
+    PrintSelection half = photoSelection();
+    half.paper.logicalHeightMm = 0.0;
+    const auto halfRejected = PrinterAdapter::resolve(ippCaps(), half);
+    QVERIFY2(!halfRejected.ok(), "a 4x6 mode cannot carry a 100 x 150 media box");
+    QCOMPARE(halfRejected.error().code, QStringLiteral("paper-unsupported"));
+
+    // The shipped mapping is untouched: 10 x 15 cm paper with its declared
+    // logical sheet still gets the 4x6 mode, and the box is that same sheet.
+    const auto mapped = PrinterAdapter::resolve(ippCaps(), photoSelection());
+    if (!mapped)
+        QFAIL(qPrintable(mapped.error().message));
+    QCOMPARE(mapped.value().pageSizeOption, QStringLiteral("4x6"));
+    QCOMPARE(mapped.value().geometry.logicalSizeMm(), QSizeF(101.6, 152.4));
+
+    // A paper that declares nothing is the plain mapping case: the named mode is
+    // the driver's own page, so it decides the sheet and the box follows it.
+    PrintSelection undeclared = photoSelection();
+    undeclared.paper.logicalWidthMm = 0.0;
+    undeclared.paper.logicalHeightMm = 0.0;
+    const auto byMode = PrinterAdapter::resolve(ippCaps(), undeclared);
+    if (!byMode)
+        QFAIL(qPrintable(byMode.error().message));
+    QCOMPARE(byMode.value().pageSizeOption, QStringLiteral("4x6"));
+    QCOMPARE(byMode.value().geometry.logicalSizeMm(), QSizeF(101.6, 152.4));
+
+    // The native driver behaves the same way for its own page names.
+    PrintSelection nativeContradictory = photoSelection();
+    nativeContradictory.paper.logicalWidthMm = 130.0;
+    nativeContradictory.paper.logicalHeightMm = 190.0;
+    const auto nativeRejected = PrinterAdapter::resolve(nativeCaps(), nativeContradictory);
+    QVERIFY(!nativeRejected.ok());
+    QCOMPARE(nativeRejected.error().code, QStringLiteral("paper-unsupported"));
+}
+
 void TestPrinterOptions::destinationLookupNeedsTheStatus()
 {
     // libcups answers "cannot reach the scheduler" with the same zero count as
@@ -720,7 +812,10 @@ void TestPrinterOptions::stickyCupsErrorIsClearedBeforeTheLookup()
     //
     // This is also the probe for the weak libcups setter: if the declaration in
     // PrinterCatalog.cpp were folded to a null reference, clearCupsError() would
-    // be a no-op and the last QCOMPARE below would keep the stale error.
+    // be a no-op and the last QCOMPARE below would keep the stale error. Without
+    // the export there is nothing to probe, so the test skips.
+    if (!_cupsSetError)
+        QSKIP("this libcups does not export _cupsSetError");
     clearCupsError();
     QCOMPARE(int(cupsLastError()), int(IPP_STATUS_OK));
     QCOMPARE(int(classifyDestinationLookup(0, int(cupsLastError()))),

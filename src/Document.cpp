@@ -96,12 +96,33 @@ int pageIndexOf(const DocumentSnapshot &snapshot, const QString &pageId)
     return index;
 }
 
+PhotoTone sanitiseTone(const PhotoTone &tone)
+{
+    PhotoTone sane;
+    sane.exposureEv = std::isfinite(tone.exposureEv)
+        ? std::clamp(tone.exposureEv, kMinToneExposureEv, kMaxToneExposureEv)
+        : 0.0;
+    sane.shadowLift = std::isfinite(tone.shadowLift)
+        ? std::clamp(tone.shadowLift, 0.0, kMaxToneShadowLift)
+        : 0.0;
+    sane.highlightCompress = std::isfinite(tone.highlightCompress)
+        ? std::clamp(tone.highlightCompress, 0.0, kMaxToneHighlightCompress)
+        : 0.0;
+    return sane;
+}
+
 PhotoTone effectiveTone(const Frame &frame)
 {
     PhotoTone tone = frame.autoTone ? frame.tone : PhotoTone{};
-    // A project file can name any number; the renderer must still stay inside
-    // the documented brightness range.
+    // A project file can name any number, so the frame's own tone is sanitised
+    // here, at the boundary where it becomes a recipe: an unclamped exposure
+    // would drive the frame to solid black or white in the renderer.
+    tone = sanitiseTone(tone);
+    // The manual offset is clamped on its own, then added: a project file can
+    // name any brightness too, and the sum still has to stay in the range the
+    // renderer was promised.
     tone.exposureEv += clampBrightnessEv(frame.brightness);
+    tone.exposureEv = std::clamp(tone.exposureEv, kMinToneExposureEv, kMaxToneExposureEv);
     return tone;
 }
 

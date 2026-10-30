@@ -49,6 +49,8 @@ public:
     T *operator->() { return &value(); }
 
     /// Only valid on a failed result; a successful result carries no error.
+    /// Misuse asserts in a debug build and throws otherwise, exactly like
+    /// Result<void>::error().
     const Error &error() const
     {
         Q_ASSERT_X(!ok(), "Result::error", "called on a successful result");
@@ -72,12 +74,13 @@ public:
     bool ok() const { return !m_error.has_value(); }
     explicit operator bool() const { return ok(); }
 
-    /// Only valid on a failed result; returns an empty Error otherwise.
+    /// Only valid on a failed result. Misuse asserts in a debug build; with
+    /// assertions compiled out it throws std::bad_optional_access, the same
+    /// contract Result<T>::error() has through std::get.
     const Error &error() const
     {
         Q_ASSERT_X(!ok(), "Result::error", "called on a successful result");
-        static const Error noError;
-        return m_error.has_value() ? *m_error : noError;
+        return m_error.value();
     }
 
 private:
