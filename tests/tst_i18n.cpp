@@ -21,10 +21,55 @@ namespace {
 const QString kPrint = QStringLiteral("Nyomtatás");
 const QString kAbout = QStringLiteral("Névjegy");
 
+/// The two messages that carry a count and therefore have plural forms.
+const QString kPages = QStringLiteral("%n oldal nyomtatása");
+const QString kPhoto = QStringLiteral("%n. fotó");
+
 QString translated(const char *context, const QString &source)
 {
     return QCoreApplication::translate(context, source.toUtf8().constData());
 }
+
+QString translatedWithCount(const char *context, const QString &source, int count)
+{
+    return QCoreApplication::translate(context, source.toUtf8().constData(), nullptr, count);
+}
+
+QString cataloguePath(const QString &code)
+{
+    return QStringLiteral(":/i18n/photoprint_%1.qm").arg(code);
+}
+
+/// Installs one catalogue into the application for the lifetime of the object,
+/// which is the path the interface itself takes. QTranslator::translate picks
+/// the plural form but leaves %n in place; the substitution is
+/// QCoreApplication::translate's job, so a test that reads numbers has to go
+/// through it as well.
+class InstalledCatalogue
+{
+public:
+    explicit InstalledCatalogue(const QString &code)
+        : m_loaded(m_translator.load(cataloguePath(code)))
+    {
+        if (m_loaded)
+            QCoreApplication::installTranslator(&m_translator);
+    }
+
+    ~InstalledCatalogue()
+    {
+        if (m_loaded)
+            QCoreApplication::removeTranslator(&m_translator);
+    }
+
+    InstalledCatalogue(const InstalledCatalogue &) = delete;
+    InstalledCatalogue &operator=(const InstalledCatalogue &) = delete;
+
+    bool loaded() const { return m_loaded; }
+
+private:
+    QTranslator m_translator;
+    bool m_loaded = false;
+};
 
 } // namespace
 
@@ -43,6 +88,12 @@ private slots:
     void installedTranslatorChangesTheInterface();
     void languageMenuIsInTheMenuBar();
     void choosingALanguageAppliesImmediately();
+    void singularFormIsUsedForOne_data();
+    void singularFormIsUsedForOne();
+    void everyCatalogueTranslatesCountedMessages_data();
+    void everyCatalogueTranslatesCountedMessages();
+    void hungarianSourceSubstitutesTheCount();
+    void repeatedLanguageSwitchingKeepsOwnershipSane();
 
 private:
     QTemporaryDir m_settingsDir;
@@ -255,6 +306,96 @@ void TestI18n::choosingALanguageAppliesImmediately()
 
     QVERIFY(i18n::installLanguage(QString()));
     QSettings().remove(QStringLiteral("language"));
+}
+
+void TestI18n::singularFormIsUsedForOne_data()
+{
+    QTest::addColumn<QString>("code");
+    QTest::addColumn<QString>("singular");
+    QTest::addColumn<QString>("plural");
+
+    // A count of one has to select the singular form. The button used to be
+    // handed the plural noun unconditionally, which gave "1 Seiten drucken".
+    QTest::newRow("en") << QStringLiteral("en") << QStringLiteral("Print 1 page")
+                        << QStringLiteral("Print 2 pages");
+    QTest::newRow("de") << QStringLiteral("de") << QStringLiteral("1 Seite drucken")
+                        << QStringLiteral("2 Seiten drucken");
+}
+
+void TestI18n::singularFormIsUsedForOne()
+{
+    QFETCH(QString, code);
+    QFETCH(QString, singular);
+    QFETCH(QString, plural);
+
+    InstalledCatalogue catalogue(code);
+    QVERIFY2(catalogue.loaded(), qPrintable(code));
+
+    QCOMPARE(translatedWithCount("PhotoPrint", kPages, 1), singular);
+    QCOMPARE(translatedWithCount("PhotoPrint", kPages, 2), plural);
+    // Eleven is plural in both languages, so the singular must not come back.
+    QVERIFY(translatedWithCount("PhotoPrint", kPages, 11) != singular);
+}
+
+void TestI18n::everyCatalogueTranslatesCountedMessages_data()
+{
+    QTest::addColumn<QString>("code");
+    for (const QString &code : i18n::targetCodes())
+        QTest::newRow(qPrintable(code)) << code;
+}
+
+void TestI18n::everyCatalogueTranslatesCountedMessages()
+{
+    QFETCH(QString, code);
+
+    InstalledCatalogue catalogue(code);
+    QVERIFY2(catalogue.loaded(), qPrintable(code));
+
+    // Both counted messages carry a numerus entry in every catalogue. The
+    // number always comes from the argument: a leftover %n, or the %1 of the
+    // old placeholder, would mean the entry was never converted.
+    for (const QString &source : {kPages, kPhoto}) {
+        for (const int count : {1, 2, 5, 22}) {
+            const QString text = translatedWithCount("PhotoPrint", source, count);
+            const QString where = QStringLiteral("%1, count %2, %3").arg(code).arg(count).arg(source);
+            QVERIFY2(!text.isEmpty(), qPrintable(where + QStringLiteral(": empty")));
+            QVERIFY2(text != source, qPrintable(where + QStringLiteral(": still Hungarian")));
+            QVERIFY2(text.contains(QString::number(count)),
+                     qPrintable(where + QStringLiteral(": the count is missing")));
+            QVERIFY2(!text.contains(QStringLiteral("%n")),
+                     qPrintable(where + QStringLiteral(": %n left in the text")));
+            QVERIFY2(!text.contains(QStringLiteral("%1")),
+                     qPrintable(where + QStringLiteral(": old %1 placeholder left in the text")));
+        }
+    }
+}
+
+void TestI18n::hungarianSourceSubstitutesTheCount()
+{
+    // Hungarian is the source language and has no catalogue: the string in the
+    // code is already the right form for every count, because Hungarian does
+    // not pluralise the noun after a numeral ("1 oldal", "2 oldal"). Qt fills
+    // in %n itself when no translator is installed, and the print button
+    // depends on that.
+    QVERIFY(i18n::installLanguage(QString()));
+    QCOMPARE(translatedWithCount("PhotoPrint", kPages, 1), QStringLiteral("1 oldal nyomtatása"));
+    QCOMPARE(translatedWithCount("PhotoPrint", kPages, 2), QStringLiteral("2 oldal nyomtatása"));
+    QCOMPARE(translatedWithCount("PhotoPrint", kPhoto, 3), QStringLiteral("3. fotó"));
+}
+
+void TestI18n::repeatedLanguageSwitchingKeepsOwnershipSane()
+{
+    // Every switch installs a fresh pair of translators and drops the previous
+    // pair. Translation.cpp is their only owner; when QCoreApplication owned
+    // them as well, the process double deleted them at shutdown.
+    for (int round = 0; round < 3; ++round) {
+        QVERIFY(i18n::installLanguage(QStringLiteral("de")));
+        QCOMPARE(translated("PhotoPrint", kPrint), QStringLiteral("Drucken"));
+        QVERIFY(i18n::installLanguage(QStringLiteral("zh_CN")));
+        QVERIFY(translated("PhotoPrint", kPrint) != kPrint);
+        QVERIFY(i18n::installLanguage(QString()));
+        QCOMPARE(translated("PhotoPrint", kPrint), kPrint);
+    }
 }
 
 QTEST_MAIN(TestI18n)

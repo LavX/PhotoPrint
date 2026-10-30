@@ -9,7 +9,7 @@
     </message>
     <message>
         <source>Nyomtató:</source>
-        <translation>Imprimante :</translation>
+        <translation>Imprimante :</translation>
     </message>
     <message>
         <source>Nyomtató</source>
@@ -17,7 +17,7 @@
     </message>
     <message>
         <source>Papír:</source>
-        <translation>Papier :</translation>
+        <translation>Papier :</translation>
     </message>
     <message>
         <source>Papír</source>
@@ -29,7 +29,7 @@
     </message>
     <message>
         <source>Tájolás:</source>
-        <translation>Orientation :</translation>
+        <translation>Orientation :</translation>
     </message>
     <message>
         <source>Tájolás</source>
@@ -45,7 +45,7 @@
     </message>
     <message>
         <source>Nézet:</source>
-        <translation>Affichage :</translation>
+        <translation>Affichage :</translation>
     </message>
     <message>
         <source>Nézet nagyítása</source>
@@ -137,7 +137,7 @@
     </message>
     <message>
         <source>A nyomtatási felbontást növeli; az előnézet nem változik.</source>
-        <translation>Augmente la résolution d'impression ; l'aperçu ne change pas.</translation>
+        <translation>Augmente la résolution d'impression ; l'aperçu ne change pas.</translation>
     </message>
     <message>
         <source>A nyomtatási felbontást növeli.</source>
@@ -289,7 +289,7 @@
     </message>
     <message>
         <source>A PDF elkészült: %1</source>
-        <translation>Le PDF est prêt : %1</translation>
+        <translation>Le PDF est prêt : %1</translation>
     </message>
     <message>
         <source>Kilépés</source>
@@ -319,9 +319,12 @@
         <source>Húzd ide a fotókat, vagy válaszd a Fotók hozzáadása gombot.</source>
         <translation>Déposez des photos ici ou choisissez Ajouter des photos.</translation>
     </message>
-    <message>
-        <source>%1. fotó</source>
-        <translation>Photo %1</translation>
+    <message numerus="yes">
+        <source>%n. fotó</source>
+        <translation>
+            <numerusform>Photo %n</numerusform>
+            <numerusform>Photo %n</numerusform>
+        </translation>
     </message>
     <message>
         <source>A matt papírt a nyomtató tintasugaras papírként kezeli.</source>
@@ -349,11 +352,11 @@
     </message>
     <message>
         <source>Mentett egyedi papírok:</source>
-        <translation>Papiers personnalisés enregistrés :</translation>
+        <translation>Papiers personnalisés enregistrés :</translation>
     </message>
     <message>
         <source>Például: Négyzetes 12 × 12</source>
-        <translation>Par exemple : Carré 12 × 12</translation>
+        <translation>Par exemple : Carré 12 × 12</translation>
     </message>
     <message>
         <source>%1 (egyedi)</source>
@@ -421,7 +424,7 @@
     </message>
     <message>
         <source>%1. változat</source>
-        <translation>Version %1</translation>
+        <translation>Variante %1</translation>
     </message>
     <message>
         <source>Próbanyomat nyomtatása</source>
@@ -439,9 +442,12 @@
         <source>A papírbeállítás elmentve.</source>
         <translation>Le réglage du papier est enregistré.</translation>
     </message>
-    <message>
-        <source>%1 oldal nyomtatása</source>
-        <translation>Imprimer %1 pages</translation>
+    <message numerus="yes">
+        <source>%n oldal nyomtatása</source>
+        <translation>
+            <numerusform>Imprimer %n page</numerusform>
+            <numerusform>Imprimer %n pages</numerusform>
+        </translation>
     </message>
     <message>
         <source>A projekt elmentve.</source>
@@ -457,7 +463,7 @@
     </message>
     <message>
         <source>A jelenlegi munka nincs elmentve. Megnyitod a másikat?</source>
-        <translation>Le travail en cours n'est pas enregistré. Ouvrir l'autre ?</translation>
+        <translation>Le travail en cours n'est pas enregistré. Ouvrir l'autre ?</translation>
     </message>
     <message>
         <source>Fotó megkeresése</source>
@@ -472,8 +478,8 @@
         <translation>Photos (*.jpg *.jpeg *.png *.JPG *.JPEG *.PNG)</translation>
     </message>
     <message>
-        <source>Mented a munkát kilépés előtt?</source>
-        <translation>Enregistrer le travail avant de quitter ?</translation>
+        <source>Mentetted a munkát kilépés előtt?</source>
+        <translation>Enregistrer le travail avant de quitter ?</translation>
     </message>
     <message>
         <source>Korábbi nyomtatás eredménye bizonytalan. Nézd meg a nyomtatót.</source>
@@ -481,7 +487,7 @@
     </message>
     <message>
         <source>Korábbi, nem mentett munka található. Folytatod?</source>
-        <translation>Un travail précédent non enregistré est disponible. Le reprendre ?</translation>
+        <translation>Un travail précédent non enregistré est disponible. Le reprendre ?</translation>
     </message>
     <message>
         <source>Ez a papírméret nem nyomtatható. A nyomtató 8,9–21,6 × 12,7–35,6 cm közötti egyedi méretet fogad el.</source>

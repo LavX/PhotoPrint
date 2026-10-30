@@ -319,9 +319,12 @@
         <source>Húzd ide a fotókat, vagy válaszd a Fotók hozzáadása gombot.</source>
         <translation>Trascina qui le foto oppure scegli Aggiungi foto.</translation>
     </message>
-    <message>
-        <source>%1. fotó</source>
-        <translation>Foto %1</translation>
+    <message numerus="yes">
+        <source>%n. fotó</source>
+        <translation>
+            <numerusform>Foto %n</numerusform>
+            <numerusform>Foto %n</numerusform>
+        </translation>
     </message>
     <message>
         <source>A matt papírt a nyomtató tintasugaras papírként kezeli.</source>
@@ -421,7 +424,7 @@
     </message>
     <message>
         <source>%1. változat</source>
-        <translation>Versione %1</translation>
+        <translation>Variante %1</translation>
     </message>
     <message>
         <source>Próbanyomat nyomtatása</source>
@@ -439,9 +442,12 @@
         <source>A papírbeállítás elmentve.</source>
         <translation>L'impostazione della carta è stata salvata.</translation>
     </message>
-    <message>
-        <source>%1 oldal nyomtatása</source>
-        <translation>Stampa %1 pagine</translation>
+    <message numerus="yes">
+        <source>%n oldal nyomtatása</source>
+        <translation>
+            <numerusform>Stampa %n pagina</numerusform>
+            <numerusform>Stampa %n pagine</numerusform>
+        </translation>
     </message>
     <message>
         <source>A projekt elmentve.</source>
@@ -457,7 +463,7 @@
     </message>
     <message>
         <source>A jelenlegi munka nincs elmentve. Megnyitod a másikat?</source>
-        <translation>Il lavoro attuale non è salvato. Aprire l'altro?</translation>
+        <translation>Il lavoro attuale non è salvato. Vuoi aprire l'altro?</translation>
     </message>
     <message>
         <source>Fotó megkeresése</source>
@@ -472,8 +478,8 @@
         <translation>Foto (*.jpg *.jpeg *.png *.JPG *.JPEG *.PNG)</translation>
     </message>
     <message>
-        <source>Mented a munkát kilépés előtt?</source>
-        <translation>Salvare il lavoro prima di uscire?</translation>
+        <source>Mentetted a munkát kilépés előtt?</source>
+        <translation>Vuoi salvare il lavoro prima di uscire?</translation>
     </message>
     <message>
         <source>Korábbi nyomtatás eredménye bizonytalan. Nézd meg a nyomtatót.</source>
@@ -481,7 +487,7 @@
     </message>
     <message>
         <source>Korábbi, nem mentett munka található. Folytatod?</source>
-        <translation>C'è un lavoro precedente non salvato. Continuare?</translation>
+        <translation>C'è un lavoro precedente non salvato. Vuoi continuare?</translation>
     </message>
     <message>
         <source>Ez a papírméret nem nyomtatható. A nyomtató 8,9–21,6 × 12,7–35,6 cm közötti egyedi méretet fogad el.</source>
@@ -537,7 +543,7 @@
     </message>
     <message>
         <source>A nyomtatási napló nem írható.</source>
-        <translation>Non è possibile scrivere il registro di stampa.</translation>
+        <translation>Non è possibile scrivere il log di stampa.</translation>
     </message>
     <message>
         <source>Ez az oldal nem található.</source>

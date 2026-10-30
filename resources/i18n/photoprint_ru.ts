@@ -319,9 +319,13 @@
         <source>Húzd ide a fotókat, vagy válaszd a Fotók hozzáadása gombot.</source>
         <translation>Перетащите фотографии сюда или выберите «Добавить фотографии».</translation>
     </message>
-    <message>
-        <source>%1. fotó</source>
-        <translation>Фото %1</translation>
+    <message numerus="yes">
+        <source>%n. fotó</source>
+        <translation>
+            <numerusform>Фото %n</numerusform>
+            <numerusform>Фото %n</numerusform>
+            <numerusform>Фото %n</numerusform>
+        </translation>
     </message>
     <message>
         <source>A matt papírt a nyomtató tintasugaras papírként kezeli.</source>
@@ -439,9 +443,13 @@
         <source>A papírbeállítás elmentve.</source>
         <translation>Настройка бумаги сохранена.</translation>
     </message>
-    <message>
-        <source>%1 oldal nyomtatása</source>
-        <translation>Печать: %1 стр.</translation>
+    <message numerus="yes">
+        <source>%n oldal nyomtatása</source>
+        <translation>
+            <numerusform>Печать %n стр.</numerusform>
+            <numerusform>Печать %n стр.</numerusform>
+            <numerusform>Печать %n стр.</numerusform>
+        </translation>
     </message>
     <message>
         <source>A projekt elmentve.</source>
@@ -472,7 +480,7 @@
         <translation>Фотографии (*.jpg *.jpeg *.png *.JPG *.JPEG *.PNG)</translation>
     </message>
     <message>
-        <source>Mented a munkát kilépés előtt?</source>
+        <source>Mentetted a munkát kilépés előtt?</source>
         <translation>Сохранить работу перед выходом?</translation>
     </message>
     <message>
@@ -533,7 +541,7 @@
     </message>
     <message>
         <source>A nyomtatási jegyzék nem írható.</source>
-        <translation>Не удаётся записать журнал печати.</translation>
+        <translation>Не удаётся записать реестр печати.</translation>
     </message>
     <message>
         <source>A nyomtatási napló nem írható.</source>
@@ -661,11 +669,11 @@
     </message>
     <message>
         <source>Lap előrébb</source>
-        <translation>Переместить страницу назад</translation>
+        <translation>Переместить страницу раньше</translation>
     </message>
     <message>
         <source>Lap hátrébb</source>
-        <translation>Переместить страницу вперёд</translation>
+        <translation>Переместить страницу позже</translation>
     </message>
     <message>
         <source>%1 · %2 fotó</source>

@@ -6,14 +6,20 @@
 #include <QSettings>
 #include <QTranslator>
 
+#include <memory>
+
 namespace pp::i18n {
 
 namespace {
 
 constexpr auto kSettingsKey = "language";
 
-QTranslator *g_translator = nullptr;
-QTranslator *g_qtTranslator = nullptr;
+// The translators are owned here, not by the application. QCoreApplication
+// deletes every child it has at shutdown, so a translator parented to it must
+// not be deleted by hand as well; keeping ownership in one place avoids the
+// double delete.
+std::unique_ptr<QTranslator> g_translator;
+std::unique_ptr<QTranslator> g_qtTranslator;
 QString g_active;
 
 QString normalized(const QString &name)
@@ -125,14 +131,12 @@ bool installLanguage(const QString &code)
     QCoreApplication *application = QCoreApplication::instance();
     if (application) {
         if (g_translator)
-            application->removeTranslator(g_translator);
+            application->removeTranslator(g_translator.get());
         if (g_qtTranslator)
-            application->removeTranslator(g_qtTranslator);
+            application->removeTranslator(g_qtTranslator.get());
     }
-    delete g_translator;
-    delete g_qtTranslator;
-    g_translator = nullptr;
-    g_qtTranslator = nullptr;
+    g_translator.reset();
+    g_qtTranslator.reset();
     g_active.clear();
 
     const QString resolved = resolveLocale(code);
@@ -141,29 +145,25 @@ bool installLanguage(const QString &code)
     if (!application)
         return false;
 
-    auto *translator = new QTranslator(application);
+    auto translator = std::make_unique<QTranslator>();
     const QString path = QStringLiteral(":/i18n/photoprint_%1.qm").arg(resolved);
-    if (!translator->load(path)) {
-        delete translator;
+    if (!translator->load(path))
         return false;
-    }
 
     // Qt's own stock strings (standard dialog buttons, file dialogs) live in
     // the qtbase catalogue of the system. It is installed first, so the
     // application catalogue installed after it wins wherever both have an
     // entry.
-    auto *qtTranslator = new QTranslator(application);
+    auto qtTranslator = std::make_unique<QTranslator>();
     const QLocale locale(resolved);
     if (qtTranslator->load(locale, QStringLiteral("qtbase"), QStringLiteral("_"),
                            QLibraryInfo::path(QLibraryInfo::TranslationsPath))) {
-        application->installTranslator(qtTranslator);
-        g_qtTranslator = qtTranslator;
-    } else {
-        delete qtTranslator;
+        application->installTranslator(qtTranslator.get());
+        g_qtTranslator = std::move(qtTranslator);
     }
 
-    application->installTranslator(translator);
-    g_translator = translator;
+    application->installTranslator(translator.get());
+    g_translator = std::move(translator);
     g_active = resolved;
     return true;
 }
