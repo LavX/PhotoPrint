@@ -1,0 +1,5 @@
+<RCC>
+  <qresource prefix="/icons">
+    <file alias="photoprint.png">photoprint-256.png</file>
+  </qresource>
+</RCC>

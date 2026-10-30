@@ -46,12 +46,13 @@ rm -rf "$appdir"
     --icon-file "$root/resources/photoprint.svg" \
     --plugin qt
 
-# linuxdeploy only bundles the host's XCB platform plugin. Add the offscreen
-# and Wayland plugins so the AppImage also starts on Wayland desktops and in
-# headless checks.
+# linuxdeploy only bundles the host's XCB platform plugin. Add Wayland for
+# native Wayland desktops, and minimal for the headless --printers/--startup
+# checks. The offscreen plugin is only needed by the development tests, so it
+# is not shipped in the AppImage.
 qt_plugins="$("$QMAKE" -query QT_INSTALL_PLUGINS)"
 mkdir -p "$appdir/usr/plugins/platforms"
-for plugin in libqoffscreen.so libqwayland.so libqminimal.so; do
+for plugin in libqwayland.so libqminimal.so; do
     if [ -f "$qt_plugins/platforms/$plugin" ]; then
         cp -a "$qt_plugins/platforms/$plugin" "$appdir/usr/plugins/platforms/"
     fi

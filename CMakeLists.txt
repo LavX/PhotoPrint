@@ -5,6 +5,7 @@ set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_AUTOMOC ON)
+set(CMAKE_AUTORCC ON)
 
 find_package(Qt6 6.5 REQUIRED COMPONENTS Widgets Gui Concurrent Test)
 find_package(ZLIB REQUIRED)
@@ -48,6 +49,7 @@ add_library(photoprint_core STATIC
   src/PageRenderer.cpp
   src/PhotoFilters.cpp
   src/MainWindow.cpp
+  resources/resources.qrc
 )
 target_include_directories(photoprint_core PUBLIC src ${LCMS2_INCLUDE_DIR} ${CUPS_INCLUDE_DIR})
 target_link_libraries(photoprint_core PUBLIC Qt6::Widgets Qt6::Gui Qt6::Concurrent ${LCMS2_LIBRARY} ${CUPS_LIBRARY} ZLIB::ZLIB PkgConfig::MAGICKWAND)

@@ -7,6 +7,7 @@
 #include "PrinterCatalog.h"
 
 #include <QApplication>
+#include <QIcon>
 #include <QDir>
 #include <QElapsedTimer>
 #include <QFile>
@@ -22,6 +23,7 @@ int main(int argc, char *argv[])
     QApplication::setApplicationDisplayName(QStringLiteral("PhotoPrint"));
     QApplication::setOrganizationName(QStringLiteral("PhotoPrint"));
     QApplication::setDesktopFileName(QStringLiteral("photoprint"));
+    QApplication::setWindowIcon(QIcon(QStringLiteral(":/icons/photoprint.png")));
 
     const QStringList arguments = app.arguments();
 
