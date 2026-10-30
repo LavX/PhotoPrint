@@ -4,8 +4,6 @@
 #include <QImage>
 #include <QtTest>
 
-#include <cstring>
-
 using namespace pp;
 
 namespace {
@@ -38,11 +36,13 @@ bool samePixels(const QImage &a, const QImage &b)
 {
     if (a.size() != b.size() || a.format() != b.format())
         return false;
+    // Compare pixels, not raw rows: the byte width of a pixel depends on the
+    // format, and padding bytes past the last pixel are not pixel data.
     for (int y = 0; y < a.height(); ++y) {
-        if (std::memcmp(a.constScanLine(y), b.constScanLine(y),
-                        static_cast<size_t>(a.width()) * 4)
-            != 0)
-            return false;
+        for (int x = 0; x < a.width(); ++x) {
+            if (a.pixel(x, y) != b.pixel(x, y))
+                return false;
+        }
     }
     return true;
 }
@@ -148,10 +148,15 @@ void TestFilters::blackWhiteIsNeutral()
 
 void TestFilters::tinyFramesDoNotCrash()
 {
+    const FilterPreset presets[] = {
+        FilterPreset::Vivid,   FilterPreset::Warm,       FilterPreset::Cool,
+        FilterPreset::Sepia,   FilterPreset::BlackWhite, FilterPreset::Vintage,
+        FilterPreset::Crisp,
+    };
     for (const QSize &size : {QSize(1, 1), QSize(3, 2)}) {
         const QImage source = solid(QColor(90, 40, 170), size.width(), size.height(),
                                     QImage::Format_RGB32);
-        for (FilterPreset preset : {FilterPreset::Vivid, FilterPreset::Crisp}) {
+        for (FilterPreset preset : presets) {
             const QImage result = PhotoFilters::apply(source, preset, 100);
             QVERIFY2(!result.isNull(), qPrintable(QStringLiteral("size %1x%2")
                                                      .arg(size.width())
@@ -195,6 +200,13 @@ void TestFilters::upscalePreservesAlpha()
 
 void TestFilters::upscaleCapReturnsNull()
 {
+    // 1251 × 1000 is far below the ceiling on its own, but 8× lands just past
+    // it: 10008 × 8000 = 80,064,000 pixels, 64,000 over kMaxOutputPixels.
+    const QImage justOver(1251, 1000, QImage::Format_RGB32);
+    QCOMPARE(static_cast<qint64>(justOver.width()) * justOver.height() * 64,
+             PhotoFilters::kMaxOutputPixels + 64000);
+    QVERIFY(PhotoFilters::upscale(justOver, 8).isNull());
+
     const QImage huge(2000, 2000, QImage::Format_RGB32);
     QVERIFY(PhotoFilters::upscale(huge, 8).isNull());
     QVERIFY(PhotoFilters::upscale(huge, 0).isNull());
@@ -205,21 +217,49 @@ void TestFilters::upscaleCapReturnsNull()
 void TestFilters::flatGreyStaysFlatUnderWarmAndCool()
 {
     const QImage source = solid(QColor(128, 128, 128), 16, 16, QImage::Format_RGB32);
-    for (FilterPreset preset : {FilterPreset::Warm, FilterPreset::Cool}) {
-        const QImage result = PhotoFilters::apply(source, preset, 100);
+    struct Case {
+        FilterPreset preset;
+        bool warmer;
+    };
+    for (const Case &testCase : {Case{FilterPreset::Warm, true}, Case{FilterPreset::Cool, false}}) {
+        const QImage result = PhotoFilters::apply(source, testCase.preset, 100);
         QVERIFY(!result.isNull());
+
+        // A flat grey must stay flat: only the channel gains may move it, so
+        // every pixel has to carry exactly the same colour.
+        const QRgb reference = result.pixel(0, 0);
         for (int y = 0; y < result.height(); ++y) {
             for (int x = 0; x < result.width(); ++x) {
                 const QRgb pixel = result.pixel(x, y);
-                QVERIFY2(std::abs(qRed(pixel) - 128) <= 12
-                             && std::abs(qGreen(pixel) - 128) <= 12
-                             && std::abs(qBlue(pixel) - 128) <= 12,
-                         qPrintable(QStringLiteral("rgb(%1,%2,%3)")
+                QVERIFY2(pixel == reference,
+                         qPrintable(QStringLiteral("(%1,%2): rgb(%3,%4,%5) vs rgb(%6,%7,%8)")
+                                        .arg(x)
+                                        .arg(y)
                                         .arg(qRed(pixel))
                                         .arg(qGreen(pixel))
-                                        .arg(qBlue(pixel))));
+                                        .arg(qBlue(pixel))
+                                        .arg(qRed(reference))
+                                        .arg(qGreen(reference))
+                                        .arg(qBlue(reference))));
             }
         }
+
+        // Warm gains red and loses blue, cool does the opposite, and neither
+        // is allowed to drag the untouched green channel away from 128.
+        if (testCase.warmer) {
+            QVERIFY2(qRed(reference) > 128 && qBlue(reference) < 128,
+                     qPrintable(QStringLiteral("warm rgb(%1,%2,%3)")
+                                    .arg(qRed(reference))
+                                    .arg(qGreen(reference))
+                                    .arg(qBlue(reference))));
+        } else {
+            QVERIFY2(qRed(reference) < 128 && qBlue(reference) > 128,
+                     qPrintable(QStringLiteral("cool rgb(%1,%2,%3)")
+                                    .arg(qRed(reference))
+                                    .arg(qGreen(reference))
+                                    .arg(qBlue(reference))));
+        }
+        QVERIFY(std::abs(qGreen(reference) - 128) <= 2);
     }
 }
 

@@ -1,13 +1,27 @@
-build/
-*.user
+# Build output
+/build/
 *.o
-*.so
 *.rpm
+
+# Editor and tool state
+*.user
+
+# Local environment files
+.env*
+
+# Compiled shared libraries and their Windows/macOS equivalents
+*.so
+*.so.*
+*.dll
+*.dylib
+
+# Generated documents and images; bundled and fixture PNGs stay tracked
 *.pdf
 *.png
-!resources/**/*.png
-!tests/fixtures/**/*.png
-planning-initial/
+!/resources/**/*.png
+!/tests/fixtures/**/*.png
+
+# Local planning material
 /docs/
 /planning/
 /planning-initial/

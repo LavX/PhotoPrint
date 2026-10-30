@@ -1,7 +1,26 @@
 #!/usr/bin/env bash
 # Build a portable AppImage for PhotoPrint.
-# Tools are downloaded once into build/appimage-tools (not committed).
+#
+# The helper tools are downloaded once into build/appimage-tools (not
+# committed) and reused afterwards: a rebuild with the tools already present
+# never touches the network.
+#
+# Every tool is verified against a pinned SHA-256 before it is executed. The
+# pins name the current upstream "continuous" builds, which are mutable, so a
+# new upstream build needs a new pin here (sha256sum <file>). Each pin can be
+# overridden for a single run when a different build is trusted:
+#
+#   LINUXDEPLOY_SHA256=<hex>     linuxdeploy-x86_64.AppImage
+#   LINUXDEPLOY_QT_SHA256=<hex>  linuxdeploy-plugin-qt-x86_64.AppImage
+#   APPIMAGETOOL_SHA256=<hex>    appimagetool-x86_64.AppImage
+#
+# A cached tool that does not match its pin is refused; delete it to fetch the
+# pinned build again.
 set -euo pipefail
+
+LINUXDEPLOY_SHA256="${LINUXDEPLOY_SHA256:-8aea8da0f7f7039d2a2cecb14657d752a222a5e1d3825caeef186c82f751cdd1}"
+LINUXDEPLOY_QT_SHA256="${LINUXDEPLOY_QT_SHA256:-cfc1055b2b9dbc08412b579f20990b7b41a17b61beaa5847dc9477c96c9e9617}"
+APPIMAGETOOL_SHA256="${APPIMAGETOOL_SHA256:-793fca0ce4bcc309dc65d3f66669f58e3755643e4dadbe03932e7b436128494f}"
 
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 build_dir="${BUILD_DIR:-$root/build/release}"
@@ -16,21 +35,64 @@ if [ ! -x "$build_dir/photoprint" ]; then
     exit 1
 fi
 
-mkdir -p "$tools_dir" "$out_dir"
-download() {
-    local name="$1" url="$2"
-    if [ ! -x "$tools_dir/$name" ]; then
-        echo "Downloading $name"
-        curl -L --fail --max-time 180 -o "$tools_dir/$name" "$url"
-        chmod +x "$tools_dir/$name"
-    fi
+command -v sha256sum >/dev/null 2>&1 || {
+    echo "sha256sum is required to verify the AppImage tools" >&2
+    exit 1
 }
-download linuxdeploy-x86_64.AppImage \
-    https://github.com/linuxdeploy/linuxdeploy/releases/download/continuous/linuxdeploy-x86_64.AppImage
-download linuxdeploy-plugin-qt-x86_64.AppImage \
-    https://github.com/linuxdeploy/linuxdeploy-plugin-qt/releases/download/continuous/linuxdeploy-plugin-qt-x86_64.AppImage
-download appimagetool-x86_64.AppImage \
-    https://github.com/AppImage/appimagetool/releases/download/continuous/appimagetool-x86_64.AppImage
+
+mkdir -p "$tools_dir" "$out_dir"
+
+hash_of() {
+    sha256sum "$1" | awk '{print $1}'
+}
+
+# Compares a file against its pin and explains both ways out of a mismatch.
+check_hash() {
+    local path="$1" expected="$2" name="$3" override="$4"
+    local actual
+    actual="$(hash_of "$path")"
+    [ "$actual" = "$expected" ] && return 0
+    {
+        echo "$name failed its SHA-256 check"
+        echo "  expected: $expected"
+        echo "  actual:   $actual"
+        echo "Delete $path to download the pinned build again, or set $override"
+        echo "to the hash you trust."
+    } >&2
+    return 1
+}
+
+# Fetch once, verify, then move into place, so a partial or wrong download is
+# never executed. A tool that is already present is verified but not fetched.
+ensure_tool() {
+    local name="$1" expected="$2" url="$3" override="$4"
+    local path="$tools_dir/$name"
+    local partial="$path.part"
+    if [ -f "$path" ]; then
+        check_hash "$path" "$expected" "$name" "$override" || return 1
+        [ -x "$path" ] || chmod +x "$path"
+        return 0
+    fi
+    echo "Downloading $name"
+    rm -f "$partial"
+    curl -L --fail --max-time 300 -o "$partial" "$url"
+    if ! check_hash "$partial" "$expected" "$name" "$override"; then
+        rm -f "$partial"
+        return 1
+    fi
+    chmod +x "$partial"
+    mv -f "$partial" "$path"
+}
+
+ensure_tool linuxdeploy-x86_64.AppImage "$LINUXDEPLOY_SHA256" \
+    https://github.com/linuxdeploy/linuxdeploy/releases/download/continuous/linuxdeploy-x86_64.AppImage \
+    LINUXDEPLOY_SHA256
+ensure_tool linuxdeploy-plugin-qt-x86_64.AppImage "$LINUXDEPLOY_QT_SHA256" \
+    https://github.com/linuxdeploy/linuxdeploy-plugin-qt/releases/download/continuous/linuxdeploy-plugin-qt-x86_64.AppImage \
+    LINUXDEPLOY_QT_SHA256
+ensure_tool appimagetool-x86_64.AppImage "$APPIMAGETOOL_SHA256" \
+    https://github.com/AppImage/appimagetool/releases/download/continuous/appimagetool-x86_64.AppImage \
+    APPIMAGETOOL_SHA256
 
 export PATH="$tools_dir:$PATH"
 export APPIMAGE_EXTRACT_AND_RUN=1
@@ -105,6 +167,14 @@ cat > "$appdir/AppRun" <<'LAUNCHER'
 #!/bin/sh
 here="$(dirname "$(readlink -f "$0")")"
 
+# A desktop Exec argument is double quoted, so \ " ` and $ inside it need a
+# backslash of their own. Nothing else is special, and the line is written
+# directly instead of going through a sed replacement, so & and | in the path
+# stay literal too.
+desktop_exec_value() {
+    printf '%s' "$1" | sed -e 's/[\\"`$]/\\&/g'
+}
+
 # Wayland compositors take the window icon and the launcher entry from a
 # desktop file the session can see, not from the binary. Register one on the
 # first run and refresh the caches so the icon appears without a re-login.
@@ -115,9 +185,14 @@ configure_desktop() {
     cp -R "$here/usr/share/icons/hicolor/." "$data/icons/hicolor/" 2>/dev/null || true
     if [ ! -f "$data/applications/photoprint.desktop" ] \
         && [ ! -f /usr/share/applications/photoprint.desktop ]; then
-        sed "s|^Exec=.*|Exec=\"$APPIMAGE\" %F|" \
-            "$here/usr/share/applications/photoprint.desktop" \
-            > "$data/applications/photoprint.desktop" || return 0
+        {
+            while IFS= read -r line || [ -n "$line" ]; do
+                case "$line" in
+                Exec=*) printf 'Exec="%s" %%F\n' "$(desktop_exec_value "$APPIMAGE")" ;;
+                *) printf '%s\n' "$line" ;;
+                esac
+            done < "$here/usr/share/applications/photoprint.desktop"
+        } > "$data/applications/photoprint.desktop" || return 0
         command -v update-desktop-database >/dev/null 2>&1 \
             && update-desktop-database -q "$data/applications" 2>/dev/null
         command -v kbuildsycoca6 >/dev/null 2>&1 \
