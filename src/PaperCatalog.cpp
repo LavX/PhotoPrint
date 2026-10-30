@@ -1,5 +1,6 @@
 #include "PaperCatalog.h"
 
+#include <QCoreApplication>
 #include <QSettings>
 
 #include <cmath>
@@ -110,13 +111,13 @@ QString paperTypeLabel(PaperType type)
 {
     switch (type) {
     case PaperType::Glossy:
-        return QStringLiteral("Fényes");
+        return QCoreApplication::translate("PhotoPrint", "Fényes");
     case PaperType::Matte:
-        return QStringLiteral("Matt");
+        return QCoreApplication::translate("PhotoPrint", "Matt");
     case PaperType::Plain:
         break;
     }
-    return QStringLiteral("Normál");
+    return QCoreApplication::translate("PhotoPrint", "Normál");
 }
 
 QString paperTypeKey(PaperType type)
@@ -184,9 +185,9 @@ QList<PaperSpec> CustomPaperStore::all() const
 Result<void> CustomPaperStore::save(const PaperSpec &paper)
 {
     if (paper.name.trimmed().isEmpty())
-        return error(QStringLiteral("paper-name"), QStringLiteral("Adj nevet a papírnak."));
+        return error(QStringLiteral("paper-name"), QCoreApplication::translate("PhotoPrint", "Adj nevet a papírnak."));
     if (!(paper.physicalWidthMm > 0.0) || !(paper.physicalHeightMm > 0.0))
-        return error(QStringLiteral("paper-size"), QStringLiteral("A papírméret érvénytelen."));
+        return error(QStringLiteral("paper-size"), QCoreApplication::translate("PhotoPrint", "A papírméret érvénytelen."));
 
     QList<PaperSpec> papers = all();
     for (int i = papers.size() - 1; i >= 0; --i) {
@@ -198,7 +199,7 @@ Result<void> CustomPaperStore::save(const PaperSpec &paper)
     papers.append(stored);
     writeAll(*m_settings, papers);
     if (m_settings->status() != QSettings::NoError)
-        return error(QStringLiteral("paper-write"), QStringLiteral("A papírt nem sikerült elmenteni."));
+        return error(QStringLiteral("paper-write"), QCoreApplication::translate("PhotoPrint", "A papírt nem sikerült elmenteni."));
     return Result<void>();
 }
 
@@ -211,7 +212,7 @@ Result<void> CustomPaperStore::remove(const QString &name)
     }
     writeAll(*m_settings, papers);
     if (m_settings->status() != QSettings::NoError)
-        return error(QStringLiteral("paper-write"), QStringLiteral("A papírt nem sikerült törölni."));
+        return error(QStringLiteral("paper-write"), QCoreApplication::translate("PhotoPrint", "A papírt nem sikerült törölni."));
     return Result<void>();
 }
 

@@ -1,5 +1,6 @@
 #include "PaperPresetStore.h"
 
+#include <QCoreApplication>
 #include <QDir>
 #include <QFile>
 #include <QJsonArray>
@@ -139,10 +140,10 @@ Result<void> PaperPresetStore::save(const PaperPreset &preset)
     QDir().mkpath(QFileInfo(m_path).absolutePath());
     QSaveFile file(m_path);
     if (!file.open(QIODevice::WriteOnly))
-        return error(QStringLiteral("preset-write"), QStringLiteral("A papírbeállítás nem menthető."));
+        return error(QStringLiteral("preset-write"), QCoreApplication::translate("PhotoPrint", "A papírbeállítás nem menthető."));
     const QByteArray data = QJsonDocument(array).toJson(QJsonDocument::Indented);
     if (file.write(data) != data.size() || !file.commit())
-        return error(QStringLiteral("preset-write"), QStringLiteral("A papírbeállítás nem menthető."));
+        return error(QStringLiteral("preset-write"), QCoreApplication::translate("PhotoPrint", "A papírbeállítás nem menthető."));
     return Result<void>();
 }
 

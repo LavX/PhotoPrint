@@ -3,6 +3,7 @@
 #include <MagickWand/MagickWand.h>
 
 #include <QColorSpace>
+#include <QCoreApplication>
 
 #include <algorithm>
 #include <memory>
@@ -57,23 +58,23 @@ QString filterLabel(FilterPreset preset)
 {
     switch (preset) {
     case FilterPreset::Vivid:
-        return QStringLiteral("Élénk");
+        return QCoreApplication::translate("PhotoPrint", "Élénk");
     case FilterPreset::Warm:
-        return QStringLiteral("Meleg");
+        return QCoreApplication::translate("PhotoPrint", "Meleg");
     case FilterPreset::Cool:
-        return QStringLiteral("Hűvös");
+        return QCoreApplication::translate("PhotoPrint", "Hűvös");
     case FilterPreset::Sepia:
-        return QStringLiteral("Szépia");
+        return QCoreApplication::translate("PhotoPrint", "Szépia");
     case FilterPreset::BlackWhite:
-        return QStringLiteral("Fekete-fehér");
+        return QCoreApplication::translate("PhotoPrint", "Fekete-fehér");
     case FilterPreset::Vintage:
-        return QStringLiteral("Vintage");
+        return QCoreApplication::translate("PhotoPrint", "Vintage");
     case FilterPreset::Crisp:
-        return QStringLiteral("Éles");
+        return QCoreApplication::translate("PhotoPrint", "Éles");
     case FilterPreset::Original:
         break;
     }
-    return QStringLiteral("Eredeti");
+    return QCoreApplication::translate("PhotoPrint", "Eredeti");
 }
 
 namespace {

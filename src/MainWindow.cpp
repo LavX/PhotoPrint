@@ -1,17 +1,21 @@
 #include "MainWindow.h"
 
+#include "AboutDialog.h"
 #include "ColorPipeline.h"
 #include "LayoutEngine.h"
 #include "PhotoFilters.h"
 #include "PhotoItem.h"
 #include "JobJournal.h"
+#include "Translation.h"
 #include "TrialSheetBuilder.h"
 #include "ToneEngine.h"
 
 #include <QAction>
+#include <QActionGroup>
 #include <QCloseEvent>
 #include <QCheckBox>
 #include <QComboBox>
+#include <QCoreApplication>
 #include <QDialog>
 #include <QDialogButtonBox>
 #include <QPixmap>
@@ -890,7 +894,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), m_renderer(m_stor
     refreshPrinters();
     if (JobJournal(jobConfig.journalPath).uncertainCount() > 0) {
         statusBar()->showMessage(
-            QStringLiteral("Korábbi nyomtatás eredménye bizonytalan. Nézd meg a nyomtatót."),
+            QCoreApplication::translate("PhotoPrint", "Korábbi nyomtatás eredménye bizonytalan. Nézd meg a nyomtatót."),
             0);
     }
 
@@ -899,7 +903,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), m_renderer(m_stor
         if (latest && !latest.value().document.pages.isEmpty()) {
             const auto answer = QMessageBox::question(
                 this, QStringLiteral("PhotoPrint"),
-                QStringLiteral("Korábbi, nem mentett munka található. Folytatod?"),
+                QCoreApplication::translate("PhotoPrint", "Korábbi, nem mentett munka található. Folytatod?"),
                 QMessageBox::Yes | QMessageBox::No, QMessageBox::Yes);
             if (answer == QMessageBox::Yes)
                 applyLoadedProject(latest.value(), true);
@@ -931,42 +935,42 @@ void MainWindow::buildUi()
     setWindowTitle(QStringLiteral("PhotoPrint"));
     resize(1280, 800);
 
-    auto *toolbar = addToolBar(QStringLiteral("Fő"));
+    auto *toolbar = addToolBar(QCoreApplication::translate("PhotoPrint", "Fő"));
     toolbar->setMovable(false);
     toolbar->setToolButtonStyle(Qt::ToolButtonTextOnly);
 
-    toolbar->addWidget(new QLabel(QStringLiteral("Nyomtató:"), this));
+    toolbar->addWidget(new QLabel(QCoreApplication::translate("PhotoPrint", "Nyomtató:"), this));
     m_printerCombo = new QComboBox(this);
     m_printerCombo->setMinimumContentsLength(22);
-    m_printerCombo->setAccessibleName(QStringLiteral("Nyomtató"));
+    m_printerCombo->setAccessibleName(QCoreApplication::translate("PhotoPrint", "Nyomtató"));
     toolbar->addWidget(m_printerCombo);
     connect(m_printerCombo, &QComboBox::currentIndexChanged, this, &MainWindow::printerChanged);
 
-    toolbar->addWidget(new QLabel(QStringLiteral("Papír:"), this));
+    toolbar->addWidget(new QLabel(QCoreApplication::translate("PhotoPrint", "Papír:"), this));
     m_paperCombo = new QComboBox(this);
     toolbar->addWidget(m_paperCombo);
     m_customPaperButton = new QPushButton(QStringLiteral("+"), this);
     m_customPaperButton->setFixedWidth(28);
     m_customPaperButton->setToolTip(
-        QStringLiteral("Egyedi papírméret hozzáadása vagy törlése."));
+        QCoreApplication::translate("PhotoPrint", "Egyedi papírméret hozzáadása vagy törlése."));
     toolbar->addWidget(m_customPaperButton);
     connect(m_customPaperButton, &QPushButton::clicked, this, &MainWindow::manageCustomPapers);
     rebuildPaperCombo(m_paperName);
     connect(m_paperCombo, &QComboBox::currentIndexChanged, this, &MainWindow::paperChanged);
 
-    toolbar->addWidget(new QLabel(QStringLiteral("Tájolás:"), this));
+    toolbar->addWidget(new QLabel(QCoreApplication::translate("PhotoPrint", "Tájolás:"), this));
     m_orientationCombo = new QComboBox(this);
-    m_orientationCombo->setAccessibleName(QStringLiteral("Tájolás"));
-    m_orientationCombo->addItem(QStringLiteral("Álló"));
-    m_orientationCombo->addItem(QStringLiteral("Fekvő"));
+    m_orientationCombo->setAccessibleName(QCoreApplication::translate("PhotoPrint", "Tájolás"));
+    m_orientationCombo->addItem(QCoreApplication::translate("PhotoPrint", "Álló"));
+    m_orientationCombo->addItem(QCoreApplication::translate("PhotoPrint", "Fekvő"));
     toolbar->addWidget(m_orientationCombo);
     connect(m_orientationCombo, &QComboBox::currentIndexChanged, this,
             &MainWindow::orientationChanged);
 
     toolbar->addSeparator();
-    toolbar->addWidget(new QLabel(QStringLiteral("Nézet:"), this));
+    toolbar->addWidget(new QLabel(QCoreApplication::translate("PhotoPrint", "Nézet:"), this));
     m_zoomCombo = new QComboBox(this);
-    m_zoomCombo->setAccessibleName(QStringLiteral("Nézet nagyítása"));
+    m_zoomCombo->setAccessibleName(QCoreApplication::translate("PhotoPrint", "Nézet nagyítása"));
     m_zoomCombo->addItem(QStringLiteral("50%"), 0.5);
     m_zoomCombo->addItem(QStringLiteral("100%"), 1.0);
     m_zoomCombo->addItem(QStringLiteral("200%"), 2.0);
@@ -1006,14 +1010,14 @@ void MainWindow::buildUi()
     auto *libraryLayout = new QVBoxLayout(library);
     libraryLayout->setContentsMargins(12, 12, 12, 12);
 
-    auto *libraryTitle = new QLabel(QStringLiteral("Fotók"), library);
+    auto *libraryTitle = new QLabel(QCoreApplication::translate("PhotoPrint", "Fotók"), library);
     libraryTitle->setObjectName(QStringLiteral("sectionHeader"));
     libraryLayout->addWidget(libraryTitle);
 
-    m_addButton = new QPushButton(QStringLiteral("Fotók hozzáadása"), library);
+    m_addButton = new QPushButton(QCoreApplication::translate("PhotoPrint", "Fotók hozzáadása"), library);
     m_addButton->setObjectName(QStringLiteral("addButton"));
     m_addButton->setMinimumHeight(36);
-    m_addButton->setAccessibleName(QStringLiteral("Fotók hozzáadása"));
+    m_addButton->setAccessibleName(QCoreApplication::translate("PhotoPrint", "Fotók hozzáadása"));
     libraryLayout->addWidget(m_addButton);
     connect(m_addButton, &QPushButton::clicked, this, &MainWindow::addPhotos);
 
@@ -1027,7 +1031,7 @@ void MainWindow::buildUi()
     m_photoList->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
     m_photoList->setWordWrap(false);
     m_photoList->setUniformItemSizes(true);
-    m_photoList->setAccessibleName(QStringLiteral("Fotók"));
+    m_photoList->setAccessibleName(QCoreApplication::translate("PhotoPrint", "Fotók"));
     libraryLayout->addWidget(m_photoList, 1);
     connect(m_photoList, &QListWidget::currentItemChanged, this,
             [this](QListWidgetItem *current, QListWidgetItem *) {
@@ -1036,10 +1040,10 @@ void MainWindow::buildUi()
                 selectFrame(current->data(Qt::UserRole).toString(), true);
             });
 
-    addSection(QStringLiteral("Kiválasztott fotó"));
+    addSection(QCoreApplication::translate("PhotoPrint", "Kiválasztott fotó"));
     auto *fitRow = new QHBoxLayout;
-    m_fitButton = new QPushButton(QStringLiteral("Teljes kép"), side);
-    m_fillButton = new QPushButton(QStringLiteral("Kép kitöltése"), side);
+    m_fitButton = new QPushButton(QCoreApplication::translate("PhotoPrint", "Teljes kép"), side);
+    m_fillButton = new QPushButton(QCoreApplication::translate("PhotoPrint", "Kép kitöltése"), side);
     fitRow->addWidget(m_fitButton);
     fitRow->addWidget(m_fillButton);
     sideLayout->addLayout(fitRow);
@@ -1047,9 +1051,9 @@ void MainWindow::buildUi()
     connect(m_fillButton, &QPushButton::clicked, this, [this] { applyFit(FitMode::Fill); });
 
     auto *actionRow = new QHBoxLayout;
-    m_cropButton = new QPushButton(QStringLiteral("Kivágás"), side);
+    m_cropButton = new QPushButton(QCoreApplication::translate("PhotoPrint", "Kivágás"), side);
     m_cropButton->setCheckable(true);
-    m_deleteButton = new QPushButton(QStringLiteral("Eltávolítás"), side);
+    m_deleteButton = new QPushButton(QCoreApplication::translate("PhotoPrint", "Eltávolítás"), side);
     actionRow->addWidget(m_cropButton);
     actionRow->addWidget(m_deleteButton);
     sideLayout->addLayout(actionRow);
@@ -1057,8 +1061,8 @@ void MainWindow::buildUi()
     connect(m_deleteButton, &QPushButton::clicked, this, &MainWindow::deleteSelected);
 
     auto *layerRow = new QHBoxLayout;
-    m_forwardButton = new QPushButton(QStringLiteral("Előtérbe"), side);
-    m_backwardButton = new QPushButton(QStringLiteral("Háttérbe"), side);
+    m_forwardButton = new QPushButton(QCoreApplication::translate("PhotoPrint", "Előtérbe"), side);
+    m_backwardButton = new QPushButton(QCoreApplication::translate("PhotoPrint", "Háttérbe"), side);
     layerRow->addWidget(m_forwardButton);
     layerRow->addWidget(m_backwardButton);
     sideLayout->addLayout(layerRow);
@@ -1067,21 +1071,21 @@ void MainWindow::buildUi()
 
     auto *toneRow = new QHBoxLayout;
     m_autoCheck = new ToggleSwitch(side);
-    m_autoCheck->setAccessibleName(QStringLiteral("Automatikus javítás"));
+    m_autoCheck->setAccessibleName(QCoreApplication::translate("PhotoPrint", "Automatikus javítás"));
     m_autoCheck->setToolTip(
-        QStringLiteral("Finoman igazítja a fényt és a színt a nyomtatáshoz."));
+        QCoreApplication::translate("PhotoPrint", "Finoman igazítja a fényt és a színt a nyomtatáshoz."));
     auto *toneText = new QVBoxLayout;
-    auto *toneTitle = new QLabel(QStringLiteral("Automatikus javítás"), side);
+    auto *toneTitle = new QLabel(QCoreApplication::translate("PhotoPrint", "Automatikus javítás"), side);
     QFont toneFont = toneTitle->font();
     toneFont.setWeight(QFont::DemiBold);
     toneTitle->setFont(toneFont);
-    m_autoHint = new QLabel(QStringLiteral("Finom fény- és színjavítás"), side);
+    m_autoHint = new QLabel(QCoreApplication::translate("PhotoPrint", "Finom fény- és színjavítás"), side);
     m_autoHint->setStyleSheet(QStringLiteral("color: #6e6e73; font-size: 11px;"));
     m_autoHint->setWordWrap(true);
     toneText->addWidget(toneTitle);
     toneText->addWidget(m_autoHint);
-    m_originalButton = new QPushButton(QStringLiteral("Eredeti"), side);
-    m_originalButton->setToolTip(QStringLiteral("Tartsd nyomva az eredeti képhez."));
+    m_originalButton = new QPushButton(QCoreApplication::translate("PhotoPrint", "Eredeti"), side);
+    m_originalButton->setToolTip(QCoreApplication::translate("PhotoPrint", "Tartsd nyomva az eredeti képhez."));
     toneRow->addWidget(m_autoCheck);
     toneRow->addLayout(toneText);
     toneRow->addStretch(1);
@@ -1092,15 +1096,15 @@ void MainWindow::buildUi()
     connect(m_originalButton, &QPushButton::released, this, [this] { showOriginalPressed(false); });
 
     m_brightnessSlider = new QSlider(Qt::Horizontal, side);
-    m_brightnessSlider->setAccessibleName(QStringLiteral("Világosítás"));
+    m_brightnessSlider->setAccessibleName(QCoreApplication::translate("PhotoPrint", "Világosítás"));
     m_brightnessSlider->setRange(0, 100);
     m_brightnessSlider->setValue(50);
     m_brightnessSlider->setTracking(false);
-    sideLayout->addWidget(new QLabel(QStringLiteral("Világosítás"), side));
+    sideLayout->addWidget(new QLabel(QCoreApplication::translate("PhotoPrint", "Világosítás"), side));
     sideLayout->addWidget(m_brightnessSlider);
     connect(m_brightnessSlider, &QSlider::valueChanged, this, &MainWindow::brightnessChanged);
 
-    addSection(QStringLiteral("Képhangulat"));
+    addSection(QCoreApplication::translate("PhotoPrint", "Képhangulat"));
     m_filterCombo = new QComboBox(side);
     for (FilterPreset preset : {FilterPreset::Original, FilterPreset::Vivid, FilterPreset::Warm,
                                 FilterPreset::Cool, FilterPreset::Sepia,
@@ -1108,35 +1112,35 @@ void MainWindow::buildUi()
                                 FilterPreset::Crisp}) {
         m_filterCombo->addItem(filterLabel(preset), filterKey(preset));
     }
-    m_filterCombo->setAccessibleName(QStringLiteral("Szűrő"));
+    m_filterCombo->setAccessibleName(QCoreApplication::translate("PhotoPrint", "Szűrő"));
     sideLayout->addWidget(m_filterCombo);
     connect(m_filterCombo, &QComboBox::currentIndexChanged, this,
             &MainWindow::applyFilterSettings);
 
-    sideLayout->addWidget(new QLabel(QStringLiteral("Hatás"), side));
+    sideLayout->addWidget(new QLabel(QCoreApplication::translate("PhotoPrint", "Hatás"), side));
     m_filterStrength = new QSlider(Qt::Horizontal, side);
-    m_filterStrength->setAccessibleName(QStringLiteral("Hatás erőssége"));
+    m_filterStrength->setAccessibleName(QCoreApplication::translate("PhotoPrint", "Hatás erőssége"));
     m_filterStrength->setRange(0, 100);
     m_filterStrength->setValue(100);
     m_filterStrength->setTracking(false);
     sideLayout->addWidget(m_filterStrength);
     connect(m_filterStrength, &QSlider::valueChanged, this, &MainWindow::applyFilterSettings);
 
-    m_upscaleCheck = new QCheckBox(QStringLiteral("Kép nagyítása 2×"), side);
+    m_upscaleCheck = new QCheckBox(QCoreApplication::translate("PhotoPrint", "Kép nagyítása 2×"), side);
     m_upscaleCheck->setToolTip(
-        QStringLiteral("A nyomtatási felbontást növeli; az előnézet nem változik."));
+        QCoreApplication::translate("PhotoPrint", "A nyomtatási felbontást növeli; az előnézet nem változik."));
     sideLayout->addWidget(m_upscaleCheck);
-    auto *upscaleHint = new QLabel(QStringLiteral("A nyomtatási felbontást növeli."), side);
+    auto *upscaleHint = new QLabel(QCoreApplication::translate("PhotoPrint", "A nyomtatási felbontást növeli."), side);
     upscaleHint->setStyleSheet(QStringLiteral("color: #6e6e73; font-size: 11px;"));
     upscaleHint->setWordWrap(true);
     sideLayout->addWidget(upscaleHint);
     connect(m_upscaleCheck, &QCheckBox::toggled, this, &MainWindow::applyFilterSettings);
 
-    m_trialButton = new QPushButton(QStringLiteral("Próbanyomat"), side);
+    m_trialButton = new QPushButton(QCoreApplication::translate("PhotoPrint", "Próbanyomat"), side);
     sideLayout->addWidget(m_trialButton);
     connect(m_trialButton, &QPushButton::clicked, this, &MainWindow::showTrialSheet);
 
-    m_advancedToggle = new QPushButton(QStringLiteral("További beállítások"), side);
+    m_advancedToggle = new QPushButton(QCoreApplication::translate("PhotoPrint", "További beállítások"), side);
     m_advancedToggle->setCheckable(true);
     sideLayout->addWidget(m_advancedToggle);
     auto *advancedContent = new QWidget(side);
@@ -1154,11 +1158,11 @@ void MainWindow::buildUi()
     m_angleSpin->setRange(-180.0, 180.0);
     m_angleSpin->setDecimals(1);
     m_angleSpin->setSuffix(QStringLiteral("°"));
-    grid->addWidget(new QLabel(QStringLiteral("Szélesség")), 0, 0);
+    grid->addWidget(new QLabel(QCoreApplication::translate("PhotoPrint", "Szélesség")), 0, 0);
     grid->addWidget(m_widthSpin, 0, 1);
-    grid->addWidget(new QLabel(QStringLiteral("Magasság")), 1, 0);
+    grid->addWidget(new QLabel(QCoreApplication::translate("PhotoPrint", "Magasság")), 1, 0);
     grid->addWidget(m_heightSpin, 1, 1);
-    grid->addWidget(new QLabel(QStringLiteral("Szög")), 2, 0);
+    grid->addWidget(new QLabel(QCoreApplication::translate("PhotoPrint", "Szög")), 2, 0);
     grid->addWidget(m_angleSpin, 2, 1);
     advancedContent->setVisible(false);
     connect(m_advancedToggle, &QPushButton::toggled, advancedContent, &QWidget::setVisible);
@@ -1181,18 +1185,18 @@ void MainWindow::buildUi()
     m_printerStatus = new QLabel(m_noticeBar);
     m_printerStatus->setWordWrap(true);
     noticeLayout->addWidget(m_printerStatus);
-    m_recheckButton = new QPushButton(QStringLiteral("Újraellenőrzés"), m_noticeBar);
+    m_recheckButton = new QPushButton(QCoreApplication::translate("PhotoPrint", "Újraellenőrzés"), m_noticeBar);
     m_recheckButton->setVisible(false);
     noticeLayout->addWidget(m_recheckButton);
     connect(m_recheckButton, &QPushButton::clicked, this, &MainWindow::refreshPrinters);
     m_paperHint = new QLabel(m_noticeBar);
     m_paperHint->setWordWrap(true);
     noticeLayout->addWidget(m_paperHint);
-    m_overflowLabel = new QLabel(QStringLiteral("A kép egy része lemarad."), m_noticeBar);
+    m_overflowLabel = new QLabel(QCoreApplication::translate("PhotoPrint", "A kép egy része lemarad."), m_noticeBar);
     m_overflowLabel->setWordWrap(true);
     m_overflowLabel->setVisible(false);
     noticeLayout->addWidget(m_overflowLabel);
-    m_fitPageButton = new QPushButton(QStringLiteral("Igazítás a laphoz"), m_noticeBar);
+    m_fitPageButton = new QPushButton(QCoreApplication::translate("PhotoPrint", "Igazítás a laphoz"), m_noticeBar);
     m_fitPageButton->setVisible(false);
     noticeLayout->addWidget(m_fitPageButton);
     noticeLayout->addStretch(1);
@@ -1200,9 +1204,9 @@ void MainWindow::buildUi()
     m_noticeBar->setVisible(false);
 
     m_pageView = new PageView(central);
-    m_pageView->setAccessibleName(QStringLiteral("Papírlap"));
+    m_pageView->setAccessibleName(QCoreApplication::translate("PhotoPrint", "Papírlap"));
     m_pageView->setAccessibleDescription(
-        QStringLiteral("Nagyításnál a középső egérgombbal mozgatható a lap."));
+        QCoreApplication::translate("PhotoPrint", "Nagyításnál a középső egérgombbal mozgatható a lap."));
     m_pageView->onFilesDropped = [this](const QStringList &paths) { addDroppedFiles(paths); };
     m_pageView->onSelectionChanged = [this](const QString &frameId) {
         selectFrame(frameId, false);
@@ -1221,7 +1225,7 @@ void MainWindow::buildUi()
             m_cropButton->blockSignals(false);
         }
         m_pageView->setCropMode(false);
-        m_cropButton->setText(QStringLiteral("Kivágás"));
+        m_cropButton->setText(QCoreApplication::translate("PhotoPrint", "Kivágás"));
     };
     m_pageView->onCropModeChanged = [this](bool enabled) {
         if (m_cropButton->isChecked() != enabled) {
@@ -1230,7 +1234,7 @@ void MainWindow::buildUi()
             m_cropButton->blockSignals(false);
         }
         m_pageView->setCropMode(enabled);
-        m_cropButton->setText(enabled ? QStringLiteral("Kész") : QStringLiteral("Kivágás"));
+        m_cropButton->setText(enabled ? QCoreApplication::translate("PhotoPrint", "Kész") : QCoreApplication::translate("PhotoPrint", "Kivágás"));
         if (enabled)
             m_pageView->setFocus();
     };
@@ -1270,32 +1274,32 @@ void MainWindow::buildUi()
     auto *printLayout = new QHBoxLayout(printBar);
     printLayout->setContentsMargins(12, 4, 12, 4);
     printLayout->addStretch(1);
-    printLayout->addWidget(new QLabel(QStringLiteral("Minőség"), printBar));
+    printLayout->addWidget(new QLabel(QCoreApplication::translate("PhotoPrint", "Minőség"), printBar));
     m_qualityCombo = new QComboBox(printBar);
-    m_qualityCombo->addItem(QStringLiteral("Kiváló"), true);
-    m_qualityCombo->addItem(QStringLiteral("Normál"), false);
-    m_qualityCombo->setAccessibleName(QStringLiteral("Nyomtatási minőség"));
+    m_qualityCombo->addItem(QCoreApplication::translate("PhotoPrint", "Kiváló"), true);
+    m_qualityCombo->addItem(QCoreApplication::translate("PhotoPrint", "Normál"), false);
+    m_qualityCombo->setAccessibleName(QCoreApplication::translate("PhotoPrint", "Nyomtatási minőség"));
     printLayout->addWidget(m_qualityCombo);
     connect(m_qualityCombo, &QComboBox::currentIndexChanged, this, &MainWindow::qualityChanged);
 
-    printLayout->addWidget(new QLabel(QStringLiteral("Szín"), printBar));
+    printLayout->addWidget(new QLabel(QCoreApplication::translate("PhotoPrint", "Szín"), printBar));
     m_colorCombo = new QComboBox(printBar);
-    m_colorCombo->addItem(QStringLiteral("Színes"), false);
-    m_colorCombo->addItem(QStringLiteral("Szürkeárnyalatos"), true);
-    m_colorCombo->setAccessibleName(QStringLiteral("Színek"));
+    m_colorCombo->addItem(QCoreApplication::translate("PhotoPrint", "Színes"), false);
+    m_colorCombo->addItem(QCoreApplication::translate("PhotoPrint", "Szürkeárnyalatos"), true);
+    m_colorCombo->setAccessibleName(QCoreApplication::translate("PhotoPrint", "Színek"));
     printLayout->addWidget(m_colorCombo);
     connect(m_colorCombo, &QComboBox::currentIndexChanged, this, &MainWindow::colorChanged);
 
-    printLayout->addWidget(new QLabel(QStringLiteral("Példány"), printBar));
+    printLayout->addWidget(new QLabel(QCoreApplication::translate("PhotoPrint", "Példány"), printBar));
     m_copiesSpin = new QSpinBox(printBar);
     m_copiesSpin->setRange(1, 99);
     m_copiesSpin->setValue(1);
-    m_copiesSpin->setAccessibleName(QStringLiteral("Példányszám"));
+    m_copiesSpin->setAccessibleName(QCoreApplication::translate("PhotoPrint", "Példányszám"));
     printLayout->addWidget(m_copiesSpin);
-    m_printButton = new QPushButton(QStringLiteral("Nyomtatás"), printBar);
+    m_printButton = new QPushButton(QCoreApplication::translate("PhotoPrint", "Nyomtatás"), printBar);
     m_printButton->setMinimumHeight(36);
     m_printButton->setMinimumWidth(180);
-    m_printButton->setAccessibleName(QStringLiteral("Nyomtatás"));
+    m_printButton->setAccessibleName(QCoreApplication::translate("PhotoPrint", "Nyomtatás"));
     m_printButton->setObjectName(QStringLiteral("printButton"));
     printLayout->addWidget(m_printButton);
     connect(m_printButton, &QPushButton::clicked, this, &MainWindow::printNow);
@@ -1327,59 +1331,103 @@ void MainWindow::buildUi()
 
 void MainWindow::buildMenus()
 {
-    QMenu *fileMenu = menuBar()->addMenu(QStringLiteral("Fájl"));
+    QMenu *fileMenu = menuBar()->addMenu(QCoreApplication::translate("PhotoPrint", "Fájl"));
 
-    QAction *open = fileMenu->addAction(QStringLiteral("Projekt megnyitása…"));
+    QAction *open = fileMenu->addAction(QCoreApplication::translate("PhotoPrint", "Projekt megnyitása…"));
     open->setShortcut(QKeySequence::Open);
     connect(open, &QAction::triggered, this, &MainWindow::openProject);
 
-    QAction *saveProjectAction = fileMenu->addAction(QStringLiteral("Mentés"));
+    QAction *saveProjectAction = fileMenu->addAction(QCoreApplication::translate("PhotoPrint", "Mentés"));
     saveProjectAction->setShortcut(QKeySequence::Save);
     connect(saveProjectAction, &QAction::triggered, this, &MainWindow::saveProject);
 
-    QAction *saveAs = fileMenu->addAction(QStringLiteral("Mentés másként…"));
+    QAction *saveAs = fileMenu->addAction(QCoreApplication::translate("PhotoPrint", "Mentés másként…"));
     saveAs->setShortcut(QKeySequence(QStringLiteral("Ctrl+Shift+S")));
     connect(saveAs, &QAction::triggered, this, &MainWindow::saveProjectAs);
 
-    QAction *portable = fileMenu->addAction(QStringLiteral("Hordozható másolat…"));
+    QAction *portable = fileMenu->addAction(QCoreApplication::translate("PhotoPrint", "Hordozható másolat…"));
     connect(portable, &QAction::triggered, this, &MainWindow::savePortableCopy);
 
     fileMenu->addSeparator();
-    QAction *add = fileMenu->addAction(QStringLiteral("Fotók hozzáadása…"));
+    QAction *add = fileMenu->addAction(QCoreApplication::translate("PhotoPrint", "Fotók hozzáadása…"));
     add->setShortcut(QKeySequence(QStringLiteral("Ctrl+Shift+A")));
     connect(add, &QAction::triggered, this, &MainWindow::addPhotos);
 
-    QAction *save = fileMenu->addAction(QStringLiteral("Mentés PDF-ként…"));
+    QAction *save = fileMenu->addAction(QCoreApplication::translate("PhotoPrint", "Mentés PDF-ként…"));
     connect(save, &QAction::triggered, this, &MainWindow::savePdfAll);
 
-    QAction *saveCurrent = fileMenu->addAction(QStringLiteral("Aktuális lap mentése PDF-ként…"));
+    QAction *saveCurrent = fileMenu->addAction(QCoreApplication::translate("PhotoPrint", "Aktuális lap mentése PDF-ként…"));
     connect(saveCurrent, &QAction::triggered, this, &MainWindow::savePdfCurrent);
 
     fileMenu->addSeparator();
-    QAction *quit = fileMenu->addAction(QStringLiteral("Kilépés"));
+    QAction *quit = fileMenu->addAction(QCoreApplication::translate("PhotoPrint", "Kilépés"));
     quit->setShortcut(QKeySequence::Quit);
     connect(quit, &QAction::triggered, this, &QWidget::close);
 
-    QMenu *editMenu = menuBar()->addMenu(QStringLiteral("Szerkesztés"));
-    m_undoAction = m_controller.undoStack()->createUndoAction(this, QStringLiteral("Vissza"));
+    QMenu *editMenu = menuBar()->addMenu(QCoreApplication::translate("PhotoPrint", "Szerkesztés"));
+    m_undoAction = m_controller.undoStack()->createUndoAction(this, QCoreApplication::translate("PhotoPrint", "Vissza"));
     m_undoAction->setShortcut(QKeySequence::Undo);
-    m_redoAction = m_controller.undoStack()->createRedoAction(this, QStringLiteral("Újra"));
+    m_redoAction = m_controller.undoStack()->createRedoAction(this, QCoreApplication::translate("PhotoPrint", "Újra"));
     m_redoAction->setShortcut(QKeySequence::Redo);
     editMenu->addAction(m_undoAction);
     editMenu->addAction(m_redoAction);
     editMenu->addSeparator();
-    QAction *remove = editMenu->addAction(QStringLiteral("Kiválasztott fotó eltávolítása"));
+    QAction *remove = editMenu->addAction(QCoreApplication::translate("PhotoPrint", "Kiválasztott fotó eltávolítása"));
     remove->setShortcut(QKeySequence::Delete);
     connect(remove, &QAction::triggered, this, &MainWindow::deleteSelected);
 
-    QMenu *helpMenu = menuBar()->addMenu(QStringLiteral("Súgó"));
-    QAction *diagnostics = helpMenu->addAction(QStringLiteral("Hibakeresési adatok"));
+    QMenu *helpMenu = menuBar()->addMenu(QCoreApplication::translate("PhotoPrint", "Súgó"));
+    QAction *diagnostics = helpMenu->addAction(QCoreApplication::translate("PhotoPrint", "Hibakeresési adatok"));
     connect(diagnostics, &QAction::triggered, this, &MainWindow::showDiagnostics);
-    QAction *about = helpMenu->addAction(QStringLiteral("Névjegy"));
-    connect(about, &QAction::triggered, this, [this] {
-        QMessageBox::information(this, QStringLiteral("PhotoPrint"),
-                                 QStringLiteral("PhotoPrint\nFotók rendezése és nyomtatása."));
-    });
+
+    helpMenu->addSeparator();
+    buildLanguageMenu(helpMenu);
+    helpMenu->addSeparator();
+
+    QAction *about = helpMenu->addAction(QCoreApplication::translate("PhotoPrint", "Névjegy"));
+    connect(about, &QAction::triggered, this, &MainWindow::showAbout);
+}
+
+void MainWindow::buildLanguageMenu(QMenu *helpMenu)
+{
+    QMenu *languageMenu =
+        helpMenu->addMenu(QCoreApplication::translate("PhotoPrint", "Nyelv"));
+    languageMenu->setObjectName(QStringLiteral("languageMenu"));
+
+    // The choice is stored for the next start; the current interface keeps its
+    // language so it is never left half translated.
+    const QString selected = pp::i18n::selectedLanguage();
+    auto *group = new QActionGroup(this);
+    group->setExclusive(true);
+
+    auto addLanguage = [languageMenu, group, selected](const QString &code) {
+        QAction *action = languageMenu->addAction(pp::i18n::nativeName(code));
+        action->setCheckable(true);
+        action->setChecked(pp::i18n::resolveLocale(code) == selected);
+        action->setData(code);
+        group->addAction(action);
+        return action;
+    };
+
+    for (const pp::i18n::Language &language : pp::i18n::targetLanguages())
+        connect(addLanguage(language.code), &QAction::triggered, this,
+                [this, code = language.code] { setLanguage(code); });
+    connect(addLanguage(QString()), &QAction::triggered, this, [this] { setLanguage(QString()); });
+}
+
+void MainWindow::setLanguage(const QString &code)
+{
+    pp::i18n::saveLanguage(code);
+    statusBar()->showMessage(
+        QCoreApplication::translate("PhotoPrint",
+                                    "A nyelv a következő indításnál lép életbe."),
+        8000);
+}
+
+void MainWindow::showAbout()
+{
+    AboutDialog dialog(this);
+    dialog.exec();
 }
 
 PaperSpec MainWindow::currentPaper() const
@@ -1464,8 +1512,8 @@ Frame MainWindow::makeInitialFrame(const SourceImage &source, const Page &page) 
 void MainWindow::addPhotos()
 {
     const QStringList paths = QFileDialog::getOpenFileNames(
-        this, QStringLiteral("Fotók hozzáadása"), QString(),
-        QStringLiteral("Fotók (*.jpg *.jpeg *.png *.JPG *.JPEG *.PNG)"));
+        this, QCoreApplication::translate("PhotoPrint", "Fotók hozzáadása"), QString(),
+        QCoreApplication::translate("PhotoPrint", "Fotók (*.jpg *.jpeg *.png *.JPG *.JPEG *.PNG)"));
     if (!paths.isEmpty())
         addDroppedFiles(paths);
 }
@@ -1546,7 +1594,7 @@ void MainWindow::onDocumentChanged()
     }
     m_pageView->setEmptyHint(
         document.pages.isEmpty() || document.pages.at(document.currentPage).frames.isEmpty()
-            ? QStringLiteral("Húzd ide a fotókat, vagy válaszd a Fotók hozzáadása gombot.")
+            ? QCoreApplication::translate("PhotoPrint", "Húzd ide a fotókat, vagy válaszd a Fotók hozzáadása gombot.")
             : QString());
     const bool overflows = pageOverflows();
     m_overflowLabel->setVisible(overflows);
@@ -1596,7 +1644,7 @@ void MainWindow::refreshPhotoList()
             auto *item = new QListWidgetItem(QString());
             item->setToolTip(QFileInfo(frame.sourcePath).fileName());
             item->setData(Qt::AccessibleTextRole,
-                          QStringLiteral("%1. fotó").arg(page.frames.indexOf(frame) + 1));
+                          QCoreApplication::translate("PhotoPrint", "%1. fotó").arg(page.frames.indexOf(frame) + 1));
             item->setData(Qt::UserRole, frame.id);
             if (const SourceImage *source = m_store.cached(frame.sourcePath)) {
                 const Result<QImage> thumb = m_store.srgb(*source, document.recipe, 96);
@@ -1619,7 +1667,7 @@ void MainWindow::refreshPhotoList()
         if (page.paper.isPhotoPaper() && !wantBorderless(page.paper)) {
             if (!hint.isEmpty())
                 hint += QLatin1Char(' ');
-            hint += QStringLiteral("Ennél a papírnál keskeny fehér szél maradhat.");
+            hint += QCoreApplication::translate("PhotoPrint", "Ennél a papírnál keskeny fehér szél maradhat.");
         }
         m_paperHint->setText(hint);
     }
@@ -1695,11 +1743,11 @@ void MainWindow::syncFrameControls()
         m_autoCheck->setChecked(frame->autoTone);
         if (m_autoHint) {
             if (!frame->autoTone)
-                m_autoHint->setText(QStringLiteral("Kikapcsolva"));
+                m_autoHint->setText(QCoreApplication::translate("PhotoPrint", "Kikapcsolva"));
             else if (frame->tone == PhotoTone{})
-                m_autoHint->setText(QStringLiteral("Erre a képre most nincs szükség."));
+                m_autoHint->setText(QCoreApplication::translate("PhotoPrint", "Erre a képre most nincs szükség."));
             else
-                m_autoHint->setText(QStringLiteral("Finom fény- és színjavítás"));
+                m_autoHint->setText(QCoreApplication::translate("PhotoPrint", "Finom fény- és színjavítás"));
         }
         m_brightnessSlider->setValue(
             std::clamp(qRound(50.0 + frame->brightness * 100.0), 0, 100));
@@ -1716,7 +1764,7 @@ void MainWindow::syncFrameControls()
             && LayoutEngine::resolutionHint(*frame, image->size())
                 == LayoutEngine::ResolutionHint::Low) {
             m_resolutionHint->setText(
-                QStringLiteral("Ekkora méretben a kép életlen lehet."));
+                QCoreApplication::translate("PhotoPrint", "Ekkora méretben a kép életlen lehet."));
         }
     }
     m_syncing = false;
@@ -1744,8 +1792,8 @@ void MainWindow::toggleCrop(bool enabled)
         return;
     }
     m_pageView->setCropMode(enabled);
-    m_cropButton->setText(m_pageView->cropMode() ? QStringLiteral("Kész")
-                                                 : QStringLiteral("Kivágás"));
+    m_cropButton->setText(m_pageView->cropMode() ? QCoreApplication::translate("PhotoPrint", "Kész")
+                                                 : QCoreApplication::translate("PhotoPrint", "Kivágás"));
     if (m_pageView->cropMode())
         m_pageView->setFocus();
 }
@@ -1863,17 +1911,17 @@ void MainWindow::manageCustomPapers()
 {
     const bool persisted = !qEnvironmentVariableIsSet("PHOTOPRINT_NO_SETTINGS");
     QDialog dialog(this);
-    dialog.setWindowTitle(QStringLiteral("Egyedi papír"));
+    dialog.setWindowTitle(QCoreApplication::translate("PhotoPrint", "Egyedi papír"));
     auto *layout = new QVBoxLayout(&dialog);
 
     auto *list = new QListWidget(&dialog);
     list->setMinimumHeight(110);
-    layout->addWidget(new QLabel(QStringLiteral("Mentett egyedi papírok:"), &dialog));
+    layout->addWidget(new QLabel(QCoreApplication::translate("PhotoPrint", "Mentett egyedi papírok:"), &dialog));
     layout->addWidget(list);
 
     auto *form = new QGridLayout;
     auto *nameEdit = new QLineEdit(&dialog);
-    nameEdit->setPlaceholderText(QStringLiteral("Például: Négyzetes 12 × 12"));
+    nameEdit->setPlaceholderText(QCoreApplication::translate("PhotoPrint", "Például: Négyzetes 12 × 12"));
     auto *widthSpin = new QDoubleSpinBox(&dialog);
     auto *heightSpin = new QDoubleSpinBox(&dialog);
     for (QDoubleSpinBox *spin : {widthSpin, heightSpin}) {
@@ -1884,24 +1932,25 @@ void MainWindow::manageCustomPapers()
     }
     widthSpin->setValue(12.0);
     heightSpin->setValue(18.0);
-    nameEdit->setText(sizeLabelCm(120.0, 180.0) + QStringLiteral(" (egyedi)"));
+    nameEdit->setText(QCoreApplication::translate("PhotoPrint", "%1 (egyedi)")
+                          .arg(sizeLabelCm(120.0, 180.0)));
     auto *typeCombo = new QComboBox(&dialog);
     typeCombo->addItem(paperTypeLabel(PaperType::Glossy), int(PaperType::Glossy));
     typeCombo->addItem(paperTypeLabel(PaperType::Matte), int(PaperType::Matte));
     typeCombo->addItem(paperTypeLabel(PaperType::Plain), int(PaperType::Plain));
-    auto *borderlessCheck = new QCheckBox(QStringLiteral("Szegély nélkül"), &dialog);
+    auto *borderlessCheck = new QCheckBox(QCoreApplication::translate("PhotoPrint", "Szegély nélkül"), &dialog);
     auto *matteNote = new QLabel(
-        QStringLiteral("A matt papírt a nyomtató tintasugaras papírként kezeli."), &dialog);
+        QCoreApplication::translate("PhotoPrint", "A matt papírt a nyomtató tintasugaras papírként kezeli."), &dialog);
     matteNote->setWordWrap(true);
     matteNote->setVisible(false);
 
-    form->addWidget(new QLabel(QStringLiteral("Név")), 0, 0);
+    form->addWidget(new QLabel(QCoreApplication::translate("PhotoPrint", "Név")), 0, 0);
     form->addWidget(nameEdit, 0, 1);
-    form->addWidget(new QLabel(QStringLiteral("Szélesség")), 1, 0);
+    form->addWidget(new QLabel(QCoreApplication::translate("PhotoPrint", "Szélesség")), 1, 0);
     form->addWidget(widthSpin, 1, 1);
-    form->addWidget(new QLabel(QStringLiteral("Magasság")), 2, 0);
+    form->addWidget(new QLabel(QCoreApplication::translate("PhotoPrint", "Magasság")), 2, 0);
     form->addWidget(heightSpin, 2, 1);
-    form->addWidget(new QLabel(QStringLiteral("Papír")), 3, 0);
+    form->addWidget(new QLabel(QCoreApplication::translate("PhotoPrint", "Papír")), 3, 0);
     form->addWidget(typeCombo, 3, 1);
     layout->addLayout(form);
     layout->addWidget(matteNote);
@@ -1909,9 +1958,9 @@ void MainWindow::manageCustomPapers()
 
     auto *buttons = new QDialogButtonBox(QDialogButtonBox::Close, &dialog);
     QPushButton *addButton =
-        buttons->addButton(QStringLiteral("Hozzáadás"), QDialogButtonBox::ActionRole);
+        buttons->addButton(QCoreApplication::translate("PhotoPrint", "Hozzáadás"), QDialogButtonBox::ActionRole);
     QPushButton *removeButton =
-        buttons->addButton(QStringLiteral("Törlés"), QDialogButtonBox::ActionRole);
+        buttons->addButton(QCoreApplication::translate("PhotoPrint", "Törlés"), QDialogButtonBox::ActionRole);
     layout->addWidget(buttons);
 
     QList<PaperSpec> savedPapers =
@@ -1978,15 +2027,16 @@ void MainWindow::manageCustomPapers()
             if (paper.name.compare(builtin.name, Qt::CaseInsensitive) == 0) {
                 QMessageBox::warning(
                     &dialog, QStringLiteral("PhotoPrint"),
-                    QStringLiteral("Ez a név már egy beépített papíré. Adj másik nevet."));
+                    QCoreApplication::translate("PhotoPrint", "Ez a név már egy beépített papíré. Adj másik nevet."));
                 return;
             }
         }
         if (!PrinterAdapter::customSizeInRange(paper.physicalWidthMm, paper.physicalHeightMm)) {
             QMessageBox::warning(
                 &dialog, QStringLiteral("PhotoPrint"),
-                QStringLiteral("Ez a papírméret nem nyomtatható. A nyomtató 8,9–21,6 × "
-                               "12,7–35,6 cm közötti egyedi méretet fogad el."));
+                QCoreApplication::translate(
+                    "PhotoPrint", "Ez a papírméret nem nyomtatható. A nyomtató 8,9–21,6 × "
+                                  "12,7–35,6 cm közötti egyedi méretet fogad el."));
             return;
         }
         if (persisted) {
@@ -2073,14 +2123,14 @@ void MainWindow::printerChanged(int index)
     const PrinterCapabilities *capabilities = printerByQueue(m_queue);
     if (!capabilities) {
         m_printerStatus->setText(
-            QStringLiteral("A nyomtató most nem érhető el. Ellenőrizd, hogy be van-e kapcsolva."));
+            QCoreApplication::translate("PhotoPrint", "A nyomtató most nem érhető el. Ellenőrizd, hogy be van-e kapcsolva."));
         m_recheckButton->setVisible(true);
         updateNoticeBar();
         return;
     }
     if (!capabilities->online) {
         m_printerStatus->setText(
-            QStringLiteral("A nyomtató most nem érhető el. Ellenőrizd, hogy be van-e kapcsolva."));
+            QCoreApplication::translate("PhotoPrint", "A nyomtató most nem érhető el. Ellenőrizd, hogy be van-e kapcsolva."));
         m_recheckButton->setVisible(true);
     } else {
         m_printerStatus->clear();
@@ -2097,7 +2147,7 @@ void MainWindow::refreshPrinters()
     if (qEnvironmentVariableIsSet("PHOTOPRINT_NO_CUPS")) {
         m_printerCombo->blockSignals(true);
         m_printerCombo->clear();
-        m_printerCombo->addItem(QStringLiteral("Nincs nyomtató"));
+        m_printerCombo->addItem(QCoreApplication::translate("PhotoPrint", "Nincs nyomtató"));
         m_printerCombo->setEnabled(false);
         m_printerCombo->blockSignals(false);
         return;
@@ -2107,7 +2157,7 @@ void MainWindow::refreshPrinters()
         m_printers.clear();
         m_printerCombo->blockSignals(true);
         m_printerCombo->clear();
-        m_printerCombo->addItem(QStringLiteral("Nincs nyomtató"));
+        m_printerCombo->addItem(QCoreApplication::translate("PhotoPrint", "Nincs nyomtató"));
         m_printerCombo->setEnabled(false);
         m_printerCombo->blockSignals(false);
         m_printerStatus->setText(discovered.error().message);
@@ -2163,7 +2213,7 @@ void MainWindow::refreshPrinters()
     if (!m_queue.isEmpty() && !printerByQueue(m_queue)) {
         // A remembered printer that disappeared is never swapped silently.
         m_printerStatus->setText(
-            QStringLiteral("A nyomtató most nem érhető el. Ellenőrizd, hogy be van-e kapcsolva."));
+            QCoreApplication::translate("PhotoPrint", "A nyomtató most nem érhető el. Ellenőrizd, hogy be van-e kapcsolva."));
         m_recheckButton->setVisible(true);
         updateNoticeBar();
     } else if (selected >= 0) {
@@ -2260,7 +2310,7 @@ void MainWindow::exportPdf(bool allPages)
     if (document.pages.isEmpty())
         return;
     if (!projectPrintGeometryConsistent(document)) {
-        showProblem(QStringLiteral("A lapok papírja vagy tájolása eltér. Állítsd egységesre."));
+        showProblem(QCoreApplication::translate("PhotoPrint", "A lapok papírja vagy tájolása eltér. Állítsd egységesre."));
         return;
     }
     if (!allPages) {
@@ -2272,7 +2322,7 @@ void MainWindow::exportPdf(bool allPages)
         single.currentPage = 0;
         document = single;
     }
-    const QString path = QFileDialog::getSaveFileName(this, QStringLiteral("Mentés PDF-ként"),
+    const QString path = QFileDialog::getSaveFileName(this, QCoreApplication::translate("PhotoPrint", "Mentés PDF-ként"),
                                                      QStringLiteral("photoprint.pdf"),
                                                      QStringLiteral("PDF (*.pdf)"));
     if (path.isEmpty())
@@ -2311,7 +2361,7 @@ void MainWindow::exportPdf(bool allPages)
         showProblem(artifact.error().message);
         return;
     }
-    statusBar()->showMessage(QStringLiteral("A PDF elkészült: %1").arg(QFileInfo(path).fileName()),
+    statusBar()->showMessage(QCoreApplication::translate("PhotoPrint", "A PDF elkészült: %1").arg(QFileInfo(path).fileName()),
                              6000);
 }
 
@@ -2371,7 +2421,7 @@ void MainWindow::showDiagnostics()
     }
 
     QDialog dialog(this);
-    dialog.setWindowTitle(QStringLiteral("Hibakeresési adatok"));
+    dialog.setWindowTitle(QCoreApplication::translate("PhotoPrint", "Hibakeresési adatok"));
     dialog.resize(640, 420);
     auto *layout = new QVBoxLayout(&dialog);
     auto *edit = new QPlainTextEdit(&dialog);
@@ -2453,11 +2503,11 @@ void MainWindow::printNow()
     if (m_printInProgress)
         return;
     if (!projectPrintGeometryConsistent(m_controller.document())) {
-        showProblem(QStringLiteral("A lapok papírja vagy tájolása eltér. Állítsd egységesre."));
+        showProblem(QCoreApplication::translate("PhotoPrint", "A lapok papírja vagy tájolása eltér. Állítsd egységesre."));
         return;
     }
     if (m_queue.isEmpty()) {
-        showProblem(QStringLiteral("Válassz nyomtatót."));
+        showProblem(QCoreApplication::translate("PhotoPrint", "Válassz nyomtatót."));
         return;
     }
     DocumentSnapshot document = m_controller.document();
@@ -2494,12 +2544,12 @@ void MainWindow::printNow()
 void MainWindow::submitPrint(const DocumentSnapshot &document, const PrintTicket &ticket)
 {
     if (m_printInProgress) {
-        showProblem(QStringLiteral("A nyomtatás már folyamatban van."));
+        showProblem(QCoreApplication::translate("PhotoPrint", "A nyomtatás már folyamatban van."));
         return;
     }
     m_printInProgress = true;
     m_printButton->setEnabled(false);
-    statusBar()->showMessage(QStringLiteral("Nyomtatásra vár."));
+    statusBar()->showMessage(QCoreApplication::translate("PhotoPrint", "Nyomtatásra vár."));
 
     m_printWatcher = new QFutureWatcher<Result<JobResult>>(this);
     auto *watcher = m_printWatcher;
@@ -2524,16 +2574,16 @@ void MainWindow::submitPrint(const DocumentSnapshot &document, const PrintTicket
 void MainWindow::showTrialSheet()
 {
     if (!projectPrintGeometryConsistent(m_controller.document())) {
-        showProblem(QStringLiteral("A lapok papírja vagy tájolása eltér. Állítsd egységesre."));
+        showProblem(QCoreApplication::translate("PhotoPrint", "A lapok papírja vagy tájolása eltér. Állítsd egységesre."));
         return;
     }
     const Frame *frame = selectedFrame();
     if (!frame) {
-        showProblem(QStringLiteral("Válassz egy fotót a próbalaphoz."));
+        showProblem(QCoreApplication::translate("PhotoPrint", "Válassz egy fotót a próbalaphoz."));
         return;
     }
     if (m_queue.isEmpty()) {
-        showProblem(QStringLiteral("Válassz nyomtatót."));
+        showProblem(QCoreApplication::translate("PhotoPrint", "Válassz nyomtatót."));
         return;
     }
     const PrinterCapabilities *capabilities = printerByQueue(m_queue);
@@ -2576,16 +2626,16 @@ void MainWindow::showTrialSheet()
     }
 
     QDialog dialog(this);
-    dialog.setWindowTitle(QStringLiteral("Próbanyomat"));
+    dialog.setWindowTitle(QCoreApplication::translate("PhotoPrint", "Próbanyomat"));
     auto *layout = new QVBoxLayout(&dialog);
-    layout->addWidget(new QLabel(QStringLiteral("Válaszd ki, melyik tetszik legjobban."), &dialog));
+    layout->addWidget(new QLabel(QCoreApplication::translate("PhotoPrint", "Válaszd ki, melyik tetszik legjobban."), &dialog));
     auto *image = new QLabel(&dialog);
     image->setPixmap(QPixmap::fromImage(rendered.value().scaledToWidth(
         640, Qt::SmoothTransformation)));
     layout->addWidget(image);
     auto *choice = new QComboBox(&dialog);
     for (const TrialVariant &variant : sheet.variants)
-        choice->addItem(QStringLiteral("%1. változat").arg(variant.number), variant.paperEv);
+        choice->addItem(QCoreApplication::translate("PhotoPrint", "%1. változat").arg(variant.number), variant.paperEv);
     layout->addWidget(choice);
 
     auto *feedback = new QLabel(&dialog);
@@ -2593,9 +2643,9 @@ void MainWindow::showTrialSheet()
     layout->addWidget(feedback);
 
     auto *buttons = new QDialogButtonBox(QDialogButtonBox::Save | QDialogButtonBox::Cancel, &dialog);
-    QPushButton *printTrial = buttons->addButton(QStringLiteral("Próbanyomat nyomtatása"),
+    QPushButton *printTrial = buttons->addButton(QCoreApplication::translate("PhotoPrint", "Próbanyomat nyomtatása"),
                                                  QDialogButtonBox::ActionRole);
-    QPushButton *otherInk = buttons->addButton(QStringLiteral("Más tintát használok"),
+    QPushButton *otherInk = buttons->addButton(QCoreApplication::translate("PhotoPrint", "Más tintát használok"),
                                                QDialogButtonBox::ActionRole);
     connect(printTrial, &QPushButton::clicked, &dialog, [this, &dialog, &feedback, &sheet, &ticket] {
         PrintTicket trialTicket = ticket.value();
@@ -2603,7 +2653,8 @@ void MainWindow::showTrialSheet()
         trialTicket.firstPage = 1;
         trialTicket.lastPage = 1;
         submitPrint(sheet.document, trialTicket);
-        feedback->setText(QStringLiteral(
+        feedback->setText(QCoreApplication::translate(
+            "PhotoPrint",
             "A próbalap elküldve. Nézd meg a nyomatot, majd válaszd ki, amelyik tetszik."));
     });
     connect(otherInk, &QPushButton::clicked, &dialog, [this, &context] {
@@ -2632,7 +2683,7 @@ void MainWindow::showTrialSheet()
     ColorRecipe recipe = m_controller.document().recipe;
     recipe.paperStrength = chosenEv;
     m_controller.apply(SetRecipeEdit{recipe});
-    statusBar()->showMessage(QStringLiteral("A papírbeállítás elmentve."), 5000);
+    statusBar()->showMessage(QCoreApplication::translate("PhotoPrint", "A papírbeállítás elmentve."), 5000);
 }
 
 void MainWindow::updatePrintButton()
@@ -2640,8 +2691,8 @@ void MainWindow::updatePrintButton()
     if (!m_printButton)
         return;
     const int pages = m_controller.document().pages.size();
-    m_printButton->setText(pages > 1 ? QStringLiteral("%1 oldal nyomtatása").arg(pages)
-                                     : QStringLiteral("Nyomtatás"));
+    m_printButton->setText(pages > 1 ? QCoreApplication::translate("PhotoPrint", "%1 oldal nyomtatása").arg(pages)
+                                     : QCoreApplication::translate("PhotoPrint", "Nyomtatás"));
 }
 
 void MainWindow::updateNoticeBar()
@@ -2693,14 +2744,14 @@ void MainWindow::saveProject()
     m_dirty = false;
     m_recovery.clear();
     updateTitle();
-    statusBar()->showMessage(QStringLiteral("A projekt elmentve."), 4000);
+    statusBar()->showMessage(QCoreApplication::translate("PhotoPrint", "A projekt elmentve."), 4000);
 }
 
 void MainWindow::saveProjectAs()
 {
-    QString path = QFileDialog::getSaveFileName(this, QStringLiteral("Projekt mentése"),
+    QString path = QFileDialog::getSaveFileName(this, QCoreApplication::translate("PhotoPrint", "Projekt mentése"),
                                                 QStringLiteral("photoprint.ppj"),
-                                                QStringLiteral("PhotoPrint projekt (*.ppj)"));
+                                                QCoreApplication::translate("PhotoPrint", "PhotoPrint projekt (*.ppj)"));
     if (path.isEmpty())
         return;
     if (!path.endsWith(QStringLiteral(".ppj"), Qt::CaseInsensitive))
@@ -2711,9 +2762,9 @@ void MainWindow::saveProjectAs()
 
 void MainWindow::savePortableCopy()
 {
-    QString path = QFileDialog::getSaveFileName(this, QStringLiteral("Hordozható másolat"),
+    QString path = QFileDialog::getSaveFileName(this, QCoreApplication::translate("PhotoPrint", "Hordozható másolat"),
                                                 QStringLiteral("photoprint.ppj"),
-                                                QStringLiteral("PhotoPrint projekt (*.ppj)"));
+                                                QCoreApplication::translate("PhotoPrint", "PhotoPrint projekt (*.ppj)"));
     if (path.isEmpty())
         return;
     if (!path.endsWith(QStringLiteral(".ppj"), Qt::CaseInsensitive))
@@ -2724,7 +2775,7 @@ void MainWindow::savePortableCopy()
         showProblem(saved.error().message);
         return;
     }
-    statusBar()->showMessage(QStringLiteral("A hordozható másolat elkészült."), 5000);
+    statusBar()->showMessage(QCoreApplication::translate("PhotoPrint", "A hordozható másolat elkészült."), 5000);
 }
 
 void MainWindow::openProject()
@@ -2732,7 +2783,7 @@ void MainWindow::openProject()
     if (m_dirty) {
         const auto answer = QMessageBox::question(
             this, QStringLiteral("PhotoPrint"),
-            QStringLiteral("A jelenlegi munka nincs elmentve. Megnyitod a másikat?"),
+            QCoreApplication::translate("PhotoPrint", "A jelenlegi munka nincs elmentve. Megnyitod a másikat?"),
             QMessageBox::Save | QMessageBox::Discard | QMessageBox::Cancel,
             QMessageBox::Cancel);
         if (answer == QMessageBox::Cancel)
@@ -2743,9 +2794,9 @@ void MainWindow::openProject()
                 return;
         }
     }
-    const QString path = QFileDialog::getOpenFileName(this, QStringLiteral("Projekt megnyitása"),
+    const QString path = QFileDialog::getOpenFileName(this, QCoreApplication::translate("PhotoPrint", "Projekt megnyitása"),
                                                       QString(),
-                                                      QStringLiteral("PhotoPrint projekt (*.ppj)"));
+                                                      QCoreApplication::translate("PhotoPrint", "PhotoPrint projekt (*.ppj)"));
     if (path.isEmpty())
         return;
     ProjectStore store;
@@ -2806,19 +2857,21 @@ void MainWindow::promptMissingSources()
 
             QMessageBox box(this);
             box.setWindowTitle(QStringLiteral("PhotoPrint"));
-            box.setText(exists ? QStringLiteral("Ez a fotó megváltozott. Add meg újra, ha ezt "
-                                                "szeretnéd nyomtatni.")
-                               : QStringLiteral("Ezt a fotót nem találjuk."));
-            QPushButton *find = box.addButton(QStringLiteral("Fotó megkeresése"),
+            box.setText(exists
+                            ? QCoreApplication::translate("PhotoPrint",
+                                                          "Ez a fotó megváltozott. Add meg újra, "
+                                                          "ha ezt szeretnéd nyomtatni.")
+                            : QCoreApplication::translate("PhotoPrint", "Ezt a fotót nem találjuk."));
+            QPushButton *find = box.addButton(QCoreApplication::translate("PhotoPrint", "Fotó megkeresése"),
                                               QMessageBox::ActionRole);
-            box.addButton(QStringLiteral("Kihagyás"), QMessageBox::RejectRole);
+            box.addButton(QCoreApplication::translate("PhotoPrint", "Kihagyás"), QMessageBox::RejectRole);
             box.exec();
             if (box.clickedButton() != find)
                 continue;
 
             const QString replacement = QFileDialog::getOpenFileName(
-                this, QStringLiteral("Fotó megkeresése"), QFileInfo(frame.sourcePath).absolutePath(),
-                QStringLiteral("Fotók (*.jpg *.jpeg *.png *.JPG *.JPEG *.PNG)"));
+                this, QCoreApplication::translate("PhotoPrint", "Fotó megkeresése"), QFileInfo(frame.sourcePath).absolutePath(),
+                QCoreApplication::translate("PhotoPrint", "Fotók (*.jpg *.jpeg *.png *.JPG *.JPEG *.PNG)"));
             if (replacement.isEmpty())
                 continue;
             const auto loaded = m_store.load(replacement, ImportPolicy{});
@@ -2851,7 +2904,7 @@ void MainWindow::closeEvent(QCloseEvent *event)
     }
     const auto answer = QMessageBox::question(
         this, QStringLiteral("PhotoPrint"),
-        QStringLiteral("Mented a munkát kilépés előtt?"),
+        QCoreApplication::translate("PhotoPrint", "Mented a munkát kilépés előtt?"),
         QMessageBox::Save | QMessageBox::Discard | QMessageBox::Cancel, QMessageBox::Save);
     if (answer == QMessageBox::Cancel) {
         event->ignore();

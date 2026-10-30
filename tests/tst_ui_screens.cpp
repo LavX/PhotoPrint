@@ -1,3 +1,4 @@
+#include "AboutDialog.h"
 #include "MainWindow.h"
 
 #include <QComboBox>
@@ -5,7 +6,6 @@
 #include <QImage>
 #include <QImageWriter>
 #include <QAbstractItemView>
-#include <QMessageBox>
 #include <QPushButton>
 #include <QScrollArea>
 #include <QScrollBar>
@@ -104,14 +104,11 @@ void TestUiScreens::captureStates()
         paper->hidePopup();
     }
 
-    QMessageBox box(&window);
-    box.setWindowTitle(QStringLiteral("PhotoPrint"));
-    box.setText(QStringLiteral("PhotoPrint\nFotók rendezése és nyomtatása."));
-    box.addButton(QMessageBox::Ok);
-    box.show();
+    AboutDialog about(&window);
+    about.show();
     QTest::qWait(120);
-    box.grab().save(evidenceDir() + QStringLiteral("/ui-dialog.png"));
-    box.close();
+    QVERIFY(about.grab().save(evidenceDir() + QStringLiteral("/ui-dialog.png")));
+    about.close();
 
     for (QPushButton *button : window.findChildren<QPushButton *>()) {
         if (button->text() == QStringLiteral("Új lap")) {

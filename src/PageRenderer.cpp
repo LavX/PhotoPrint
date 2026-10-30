@@ -3,6 +3,7 @@
 #include "ColorPipeline.h"
 #include "LayoutEngine.h"
 
+#include <QCoreApplication>
 #include <QBuffer>
 #include <QCryptographicHash>
 #include <QFile>
@@ -356,19 +357,19 @@ Result<QImage> PageRenderer::renderPage(const DocumentSnapshot &snapshot, int pa
                                         std::stop_token token, const RenderOptions &options) const
 {
     if (pageIndex < 0 || pageIndex >= snapshot.pages.size())
-        return error(QStringLiteral("page-index"), QStringLiteral("Ez az oldal nem található."));
+        return error(QStringLiteral("page-index"), QCoreApplication::translate("PhotoPrint", "Ez az oldal nem található."));
     if (!(ppi > 0.0) || !std::isfinite(ppi))
-        return error(QStringLiteral("ppi"), QStringLiteral("A felbontás érvénytelen."));
+        return error(QStringLiteral("ppi"), QCoreApplication::translate("PhotoPrint", "A felbontás érvénytelen."));
 
     const Page &page = snapshot.pages.at(pageIndex);
     const QSizeF pageSize = pageSizeMm(page);
     if (!(pageSize.width() > 0.0) || !(pageSize.height() > 0.0))
-        return error(QStringLiteral("page-size"), QStringLiteral("A papírméret érvénytelen."));
+        return error(QStringLiteral("page-size"), QCoreApplication::translate("PhotoPrint", "A papírméret érvénytelen."));
 
     QHash<QString, QImage> images;
     for (const Frame &frame : page.frames) {
         if (token.stop_requested())
-            return error(QStringLiteral("cancelled"), QStringLiteral("A művelet megszakadt."));
+            return error(QStringLiteral("cancelled"), QCoreApplication::translate("PhotoPrint", "A művelet megszakadt."));
         if (!LayoutEngine::validFrame(frame))
             continue;
         Result<SourceImage> source = options.verifySources
@@ -392,7 +393,7 @@ Result<QImage> PageRenderer::renderPage(const DocumentSnapshot &snapshot, int pa
     const int pixelHeight = std::max(1, qRound(pageSize.height() / 25.4 * ppi));
     QImage canvas(pixelWidth, pixelHeight, QImage::Format_RGBA64_Premultiplied);
     if (canvas.isNull())
-        return error(QStringLiteral("render-size"), QStringLiteral("A lap nem rajzolható meg."));
+        return error(QStringLiteral("render-size"), QCoreApplication::translate("PhotoPrint", "A lap nem rajzolható meg."));
     canvas.fill(Qt::white);
 
     QPainter painter(&canvas);
@@ -407,7 +408,7 @@ Result<QImage> PageRenderer::renderPage(const DocumentSnapshot &snapshot, int pa
     const QImage srgb = ColorPipeline::linearToSrgb(canvas, snapshot.recipe.grayscale, token);
     if (srgb.isNull())
         return error(QStringLiteral("colour-conversion"),
-                     QStringLiteral("A lapot most nem tudjuk elkészíteni. Próbáld újra."));
+                     QCoreApplication::translate("PhotoPrint", "A lapot most nem tudjuk elkészíteni. Próbáld újra."));
     return srgb;
 }
 
@@ -416,7 +417,7 @@ Result<ExportArtifact> PageRenderer::writePdf(const DocumentSnapshot &snapshot, 
                                               const RenderOptions &options) const
 {
     if (snapshot.pages.isEmpty())
-        return error(QStringLiteral("empty-document"), QStringLiteral("Nincs mit nyomtatni."));
+        return error(QStringLiteral("empty-document"), QCoreApplication::translate("PhotoPrint", "Nincs mit nyomtatni."));
 
     QList<QImage> pageImages;
     QList<QSizeF> sizes;
@@ -446,7 +447,7 @@ Result<ExportArtifact> PageRenderer::writePdf(const DocumentSnapshot &snapshot, 
     PdfWriter writer;
     if (!writer.write(path, pageImages, sizes, mediaSizes, offsets, marks,
                       options.contentScale, true, &errorText))
-        return error(QStringLiteral("pdf-write"), QStringLiteral("A PDF mentése nem sikerült."));
+        return error(QStringLiteral("pdf-write"), QCoreApplication::translate("PhotoPrint", "A PDF mentése nem sikerült."));
 
     ExportArtifact artifact;
     artifact.path = path;
@@ -454,7 +455,7 @@ Result<ExportArtifact> PageRenderer::writePdf(const DocumentSnapshot &snapshot, 
     artifact.pageCount = pageImages.size();
     artifact.firstPageSizeMm = mediaSizes.first();
     if (artifact.sha256.isEmpty())
-        return error(QStringLiteral("pdf-read-back"), QStringLiteral("A PDF mentése nem sikerült."));
+        return error(QStringLiteral("pdf-read-back"), QCoreApplication::translate("PhotoPrint", "A PDF mentése nem sikerült."));
     return artifact;
 }
 

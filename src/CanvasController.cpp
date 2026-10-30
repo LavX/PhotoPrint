@@ -2,6 +2,7 @@
 
 #include "LayoutEngine.h"
 
+#include <QCoreApplication>
 #include <QUndoCommand>
 
 #include <QtMath>
@@ -288,7 +289,7 @@ void CanvasController::apply(const DocumentEdit &edit)
                 after.pages.insert(index, page);
                 after.currentPage = index;
                 m_undo->push(new SnapshotCommand(this, m_document, after,
-                                                 QStringLiteral("Lap hozzáadása")));
+                                                 QCoreApplication::translate("PhotoPrint", "Lap hozzáadása")));
             } else if constexpr (std::is_same_v<T, DuplicatePageEdit>) {
                 if (value.pageIndex < 0 || value.pageIndex >= m_document.pages.size())
                     return;
@@ -300,7 +301,7 @@ void CanvasController::apply(const DocumentEdit &edit)
                 after.pages.insert(value.pageIndex + 1, copy);
                 after.currentPage = value.pageIndex + 1;
                 m_undo->push(new SnapshotCommand(this, m_document, after,
-                                                 QStringLiteral("Lap másolása")));
+                                                 QCoreApplication::translate("PhotoPrint", "Lap másolása")));
             } else if constexpr (std::is_same_v<T, RemovePageEdit>) {
                 if (m_document.pages.size() <= 1 || value.pageIndex < 0
                     || value.pageIndex >= m_document.pages.size())
@@ -309,7 +310,7 @@ void CanvasController::apply(const DocumentEdit &edit)
                 after.pages.removeAt(value.pageIndex);
                 after.currentPage = std::clamp(value.pageIndex, 0, int(after.pages.size()) - 1);
                 m_undo->push(new SnapshotCommand(this, m_document, after,
-                                                 QStringLiteral("Lap törlése")));
+                                                 QCoreApplication::translate("PhotoPrint", "Lap törlése")));
             } else if constexpr (std::is_same_v<T, MovePageEdit>) {
                 if (value.from < 0 || value.from >= m_document.pages.size() || value.to < 0
                     || value.to >= m_document.pages.size() || value.from == value.to)
@@ -318,7 +319,7 @@ void CanvasController::apply(const DocumentEdit &edit)
                 after.pages.move(value.from, value.to);
                 after.currentPage = value.to;
                 m_undo->push(new SnapshotCommand(this, m_document, after,
-                                                 QStringLiteral("Lap átrendezése")));
+                                                 QCoreApplication::translate("PhotoPrint", "Lap átrendezése")));
             } else if constexpr (std::is_same_v<T, ReorderFrameEdit>) {
                 const LocatedFrame located = locate(m_document, value.frameId);
                 if (located.pageIndex < 0)
@@ -331,7 +332,7 @@ void CanvasController::apply(const DocumentEdit &edit)
                 DocumentSnapshot after = m_document;
                 after.pages[located.pageIndex].frames.move(located.frameIndex, target);
                 m_undo->push(new SnapshotCommand(this, m_document, after,
-                                                 QStringLiteral("Rétegsorrend")));
+                                                 QCoreApplication::translate("PhotoPrint", "Rétegsorrend")));
             } else if constexpr (std::is_same_v<T, SetProjectPaperEdit>) {
                 bool differs = false;
                 for (const Page &page : m_document.pages)
@@ -343,7 +344,7 @@ void CanvasController::apply(const DocumentEdit &edit)
                 for (Page &page : after.pages)
                     page.paper = value.paper;
                 m_undo->push(new SnapshotCommand(this, m_document, after,
-                                                 QStringLiteral("Papír minden lapon")));
+                                                 QCoreApplication::translate("PhotoPrint", "Papír minden lapon")));
             } else if constexpr (std::is_same_v<T, SetProjectLandscapeEdit>) {
                 DocumentSnapshot after = m_document;
                 for (Page &page : after.pages)
@@ -351,28 +352,28 @@ void CanvasController::apply(const DocumentEdit &edit)
                 if (after == m_document)
                     return;
                 m_undo->push(new SnapshotCommand(this, m_document, after,
-                                                 QStringLiteral("Tájolás minden lapon")));
+                                                 QCoreApplication::translate("PhotoPrint", "Tájolás minden lapon")));
             } else if constexpr (std::is_same_v<T, SetPrintQualityEdit>) {
                 if (m_document.fineQuality == value.fineQuality)
                     return;
                 DocumentSnapshot after = m_document;
                 after.fineQuality = value.fineQuality;
                 m_undo->push(new SnapshotCommand(this, m_document, after,
-                                                 QStringLiteral("Nyomtatási minőség")));
+                                                 QCoreApplication::translate("PhotoPrint", "Nyomtatási minőség")));
             } else if constexpr (std::is_same_v<T, SetRecipeEdit>) {
                 if (m_document.recipe == value.recipe)
                     return;
                 DocumentSnapshot after = m_document;
                 after.recipe = value.recipe;
                 m_undo->push(new SnapshotCommand(this, m_document, after,
-                                                 QStringLiteral("Színbeállítás")));
+                                                 QCoreApplication::translate("PhotoPrint", "Színbeállítás")));
             } else if constexpr (std::is_same_v<T, SetFramesEdit>) {
                 if (value.pageIndex < 0 || value.pageIndex >= m_document.pages.size())
                     return;
                 DocumentSnapshot after = m_document;
                 after.pages[value.pageIndex].frames = value.frames;
                 m_undo->push(new SnapshotCommand(this, m_document, after,
-                                                 QStringLiteral("Elrendezés")));
+                                                 QCoreApplication::translate("PhotoPrint", "Elrendezés")));
             } else if constexpr (std::is_same_v<T, SetPaperEdit>) {
                 if (value.pageIndex >= 0 && value.pageIndex < m_document.pages.size()
                     && m_document.pages.at(value.pageIndex).paper != value.paper)

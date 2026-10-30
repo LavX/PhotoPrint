@@ -1,5 +1,6 @@
 #include "LegacyPpdReader.h"
 
+#include <QCoreApplication>
 #include <QCryptographicHash>
 #include <QFile>
 #include <QHash>
@@ -88,7 +89,7 @@ Result<PrinterCapabilities> LegacyPpdReader::parse(const QByteArray &ppdText,
                                                    const QString &queueName)
 {
     if (ppdText.isEmpty())
-        return error(QStringLiteral("empty-ppd"), QStringLiteral("A nyomtató leírása üres."));
+        return error(QStringLiteral("empty-ppd"), QCoreApplication::translate("PhotoPrint", "A nyomtató leírása üres."));
 
     PrinterCapabilities capabilities;
     capabilities.queueName = queueName;
@@ -281,7 +282,7 @@ Result<PrinterCapabilities> LegacyPpdReader::readFile(const QString &path, const
     QFile file(path);
     if (!file.open(QIODevice::ReadOnly))
         return error(QStringLiteral("ppd-unreadable"),
-                     QStringLiteral("A nyomtató beállításait nem tudjuk elolvasni."));
+                     QCoreApplication::translate("PhotoPrint", "A nyomtató beállításait nem tudjuk elolvasni."));
     return parse(file.readAll(), queueName);
 }
 

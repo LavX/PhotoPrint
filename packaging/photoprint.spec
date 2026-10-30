@@ -9,6 +9,7 @@ BuildRequires:  cmake
 BuildRequires:  ninja-build
 BuildRequires:  gcc-c++
 BuildRequires:  qt6-qtbase-devel
+BuildRequires:  qt6-linguist
 BuildRequires:  lcms2-devel
 BuildRequires:  cups-devel
 BuildRequires:  zlib-devel

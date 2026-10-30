@@ -1,5 +1,6 @@
 #include "PrintTicket.h"
 
+#include <QCoreApplication>
 #include <QStringList>
 
 #include <algorithm>
@@ -240,22 +241,24 @@ Result<PrintTicket> PrinterAdapter::resolve(const PrinterCapabilities &capabilit
                                             const PrintSelection &selection)
 {
     if (capabilities.queueName.isEmpty())
-        return error(QStringLiteral("no-queue"), QStringLiteral("Válassz nyomtatót."));
+        return error(QStringLiteral("no-queue"), QCoreApplication::translate("PhotoPrint", "Válassz nyomtatót."));
     if (selection.copies < 1 || selection.copies > 99)
-        return error(QStringLiteral("copies"), QStringLiteral("A példányszám 1 és 99 között lehet."));
+        return error(QStringLiteral("copies"), QCoreApplication::translate("PhotoPrint", "A példányszám 1 és 99 között lehet."));
 
     const PaperSpec &paper = selection.paper;
     // Borderless is only mapped for the fixed photo sheets the driver knows.
     const bool borderlessPaper = paper.isPhotoPaper() && photoMapping(paper) != nullptr;
     if (selection.borderless && !borderlessPaper) {
         return error(QStringLiteral("borderless-unsupported"),
-                     QStringLiteral("Ehhez a papírhoz nincs szélig nyomtatás."));
+                     QCoreApplication::translate("PhotoPrint", "Ehhez a papírhoz nincs szélig nyomtatás."));
     }
     if (paper.custom && !photoMapping(paper)
         && !customSizeInRange(paper.physicalWidthMm, paper.physicalHeightMm)) {
         return error(QStringLiteral("custom-size-range"),
-                     QStringLiteral("Ez a papírméret nem nyomtatható. A nyomtató 8,9–21,6 × "
-                                    "12,7–35,6 cm közötti egyedi méretet fogad el."));
+                     QCoreApplication::translate("PhotoPrint",
+                                                    "Ez a papírméret nem nyomtatható. A nyomtató "
+                                                    "8,9–21,6 × 12,7–35,6 cm közötti egyedi méretet "
+                                                    "fogad el."));
     }
 
     ChosenPage chosen = choosePage(capabilities, selection);
@@ -266,14 +269,14 @@ Result<PrintTicket> PrinterAdapter::resolve(const PrinterCapabilities &capabilit
     }
     if (!chosen.found) {
         return error(QStringLiteral("paper-unsupported"),
-                     QStringLiteral("Ezzel a papírral nem tudunk nyomtatni. Válassz másik papírt."));
+                     QCoreApplication::translate("PhotoPrint", "Ezzel a papírral nem tudunk nyomtatni. Válassz másik papírt."));
     }
     if (selection.borderless && !chosen.page.borderless) {
         const PageSizeCapability *borderlessPage =
             findBorderedVariant(capabilities, chosen.page, true);
         if (!borderlessPage) {
             return error(QStringLiteral("borderless-unsupported"),
-                         QStringLiteral("Ehhez a papírhoz nincs szélig nyomtatás."));
+                         QCoreApplication::translate("PhotoPrint", "Ehhez a papírhoz nincs szélig nyomtatás."));
         }
         chosen.page = *borderlessPage;
     }

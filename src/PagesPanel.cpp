@@ -1,5 +1,6 @@
 #include "PagesPanel.h"
 
+#include <QCoreApplication>
 #include <QHBoxLayout>
 #include <QListWidget>
 #include <QPushButton>
@@ -31,15 +32,15 @@ PagesPanel::PagesPanel(QWidget *parent) : QWidget(parent)
         layout->addWidget(button);
         return button;
     };
-    m_add = makeButton(QStringLiteral("Új lap"));
-    m_add->setToolTip(QStringLiteral("Új lap"));
-    m_duplicate = makeButton(QStringLiteral("Másol"));
-    m_duplicate->setToolTip(QStringLiteral("Lap másolása"));
-    m_remove = makeButton(QStringLiteral("Törlés"));
+    m_add = makeButton(QCoreApplication::translate("PhotoPrint", "Új lap"));
+    m_add->setToolTip(QCoreApplication::translate("PhotoPrint", "Új lap"));
+    m_duplicate = makeButton(QCoreApplication::translate("PhotoPrint", "Másol"));
+    m_duplicate->setToolTip(QCoreApplication::translate("PhotoPrint", "Lap másolása"));
+    m_remove = makeButton(QCoreApplication::translate("PhotoPrint", "Törlés"));
     m_left = makeButton(QStringLiteral("‹"));
-    m_left->setToolTip(QStringLiteral("Lap előrébb"));
+    m_left->setToolTip(QCoreApplication::translate("PhotoPrint", "Lap előrébb"));
     m_right = makeButton(QStringLiteral("›"));
-    m_right->setToolTip(QStringLiteral("Lap hátrébb"));
+    m_right->setToolTip(QCoreApplication::translate("PhotoPrint", "Lap hátrébb"));
 
     connect(m_add, &QPushButton::clicked, this, [this] {
         if (onAdd)
@@ -72,7 +73,7 @@ void PagesPanel::setPages(const QList<Page> &pages, int current)
         auto *item = new QListWidgetItem(QStringLiteral("%1").arg(i + 1));
         item->setTextAlignment(Qt::AlignCenter);
         item->setSizeHint(QSize(34, 30));
-        item->setToolTip(QStringLiteral("%1 · %2 fotó")
+        item->setToolTip(QCoreApplication::translate("PhotoPrint", "%1 · %2 fotó")
                              .arg(page.paper.name)
                              .arg(page.frames.size()));
         m_list->addItem(item);

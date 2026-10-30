@@ -3,6 +3,7 @@
 #include "ColorPipeline.h"
 #include "PhotoFilters.h"
 
+#include <QCoreApplication>
 #include <QCryptographicHash>
 #include <QCache>
 #include <QFile>
@@ -80,15 +81,15 @@ Result<SourceImage> ImageStore::load(const QString &path, const ImportPolicy &po
         }
     }
     if (token.stop_requested())
-        return error(QStringLiteral("cancelled"), QStringLiteral("A művelet megszakadt."));
+        return error(QStringLiteral("cancelled"), QCoreApplication::translate("PhotoPrint", "A művelet megszakadt."));
 
     QFile file(canonical);
     if (!file.exists())
-        return error(QStringLiteral("source-missing"), QStringLiteral("Ezt a fotót nem találjuk."));
+        return error(QStringLiteral("source-missing"), QCoreApplication::translate("PhotoPrint", "Ezt a fotót nem találjuk."));
 
     const QByteArray sha = fileSha256(canonical);
     if (sha.isEmpty())
-        return error(QStringLiteral("source-unreadable"), QStringLiteral("Ezt a fotót nem találjuk."));
+        return error(QStringLiteral("source-unreadable"), QCoreApplication::translate("PhotoPrint", "Ezt a fotót nem találjuk."));
 
     const QByteArray head = markerScan(canonical);
     const bool claimsProfile = head.contains("ICC_PROFILE") || head.contains("iCCP");
@@ -98,8 +99,9 @@ Result<SourceImage> ImageStore::load(const QString &path, const ImportPolicy &po
     QImage pixels = reader.read();
     if (pixels.isNull()) {
         return error(QStringLiteral("unsupported-image"),
-                     QStringLiteral("Ezt a képet most nem tudjuk megnyitni. Próbálj JPG- vagy "
-                                    "PNG-másolatot."));
+                     QCoreApplication::translate("PhotoPrint",
+                                               "Ezt a képet most nem tudjuk megnyitni. Próbálj JPG- "
+                                               "vagy PNG-másolatot."));
     }
 
     SourceImage source;
@@ -116,8 +118,9 @@ Result<SourceImage> ImageStore::load(const QString &path, const ImportPolicy &po
         source.sourceSpace = QColorSpace(QColorSpace::SRgb);
         if (!policy.allowSrgbFallback && claimsProfile) {
             return error(QStringLiteral("profile-unreadable"),
-                         QStringLiteral("Ezt a képet most nem tudjuk megnyitni. Próbálj JPG- vagy "
-                                        "PNG-másolatot."));
+                         QCoreApplication::translate("PhotoPrint",
+                                                   "Ezt a képet most nem tudjuk megnyitni. Próbálj JPG- "
+                                                   "vagy PNG-másolatot."));
         }
     }
     if (!policy.allowEmbeddedProfile && source.hasEmbeddedProfile) {
@@ -156,14 +159,15 @@ Result<SourceImage> ImageStore::reloadVerified(const QString &path, const QByteA
     const QString canonical = info.canonicalFilePath().isEmpty() ? info.absoluteFilePath()
                                                                  : info.canonicalFilePath();
     if (!QFileInfo::exists(canonical))
-        return error(QStringLiteral("source-missing"), QStringLiteral("Ezt a fotót nem találjuk."));
+        return error(QStringLiteral("source-missing"), QCoreApplication::translate("PhotoPrint", "Ezt a fotót nem találjuk."));
     const QByteArray current = fileSha256(canonical);
     if (current.isEmpty())
-        return error(QStringLiteral("source-unreadable"), QStringLiteral("Ezt a fotót nem találjuk."));
+        return error(QStringLiteral("source-unreadable"), QCoreApplication::translate("PhotoPrint", "Ezt a fotót nem találjuk."));
     if (current != sha256) {
         return error(QStringLiteral("source-changed"),
-                     QStringLiteral("Ez a fotó megváltozott. Add meg újra, ha ezt szeretnéd "
-                                    "nyomtatni."));
+                     QCoreApplication::translate("PhotoPrint",
+                                                   "Ez a fotó megváltozott. Add meg újra, ha ezt "
+                                                   "szeretnéd nyomtatni."));
     }
     ImportPolicy policy;
     return load(canonical, policy, token);
@@ -183,7 +187,7 @@ Result<QImage> ImageStore::srgb(const SourceImage &source, const ColorRecipe &re
     QImage converted = ColorPipeline::toSrgb(source, recipe, maxDimension, token);
     if (converted.isNull())
         return error(QStringLiteral("colour-conversion"),
-                     QStringLiteral("Ezt a képet most nem tudjuk feldolgozni. Próbáld újra."));
+                     QCoreApplication::translate("PhotoPrint", "Ezt a képet most nem tudjuk feldolgozni. Próbáld újra."));
     {
         QMutexLocker locker(&d->mutex);
         d->previews.insert(key, new QImage(converted),
@@ -219,7 +223,7 @@ Result<QImage> ImageStore::preparedLinear(const SourceImage &source, const Color
     QImage srgb = ColorPipeline::linearToSrgbWithAlpha(base.value(), token);
     if (srgb.isNull())
         return error(QStringLiteral("colour-conversion"),
-                     QStringLiteral("Ezt a képet most nem tudjuk feldolgozni. Próbáld újra."));
+                     QCoreApplication::translate("PhotoPrint", "Ezt a képet most nem tudjuk feldolgozni. Próbáld újra."));
     if (upscale && maxDimension == 0) {
         const QImage enlarged = PhotoFilters::upscale(srgb, 2);
         if (!enlarged.isNull())
@@ -233,7 +237,7 @@ Result<QImage> ImageStore::preparedLinear(const SourceImage &source, const Color
     const QImage linearResult = ColorPipeline::srgbToLinear(srgb, token);
     if (linearResult.isNull())
         return error(QStringLiteral("colour-conversion"),
-                     QStringLiteral("Ezt a képet most nem tudjuk feldolgozni. Próbáld újra."));
+                     QCoreApplication::translate("PhotoPrint", "Ezt a képet most nem tudjuk feldolgozni. Próbáld újra."));
     {
         QMutexLocker locker(&d->mutex);
         d->previews.insert(key, new QImage(linearResult),
@@ -256,7 +260,7 @@ Result<QImage> ImageStore::linear(const SourceImage &source, const ColorRecipe &
     QImage converted = ColorPipeline::toLinear(source, recipe, maxDimension, token);
     if (converted.isNull())
         return error(QStringLiteral("colour-conversion"),
-                     QStringLiteral("Ezt a képet most nem tudjuk feldolgozni. Próbáld újra."));
+                     QCoreApplication::translate("PhotoPrint", "Ezt a képet most nem tudjuk feldolgozni. Próbáld újra."));
     {
         QMutexLocker locker(&d->mutex);
         d->previews.insert(key, new QImage(converted),

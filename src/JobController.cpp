@@ -2,6 +2,7 @@
 
 #include "JobJournal.h"
 
+#include <QCoreApplication>
 #include <QDir>
 #include <QFile>
 #include <QJsonArray>
@@ -33,14 +34,15 @@ QString messageFor(SubmitStatus status)
 {
     switch (status) {
     case SubmitStatus::KnownJob:
-        return QStringLiteral("Elküldve a nyomtatónak.");
+        return QCoreApplication::translate("PhotoPrint", "Elküldve a nyomtatónak.");
     case SubmitStatus::Rejected:
-        return QStringLiteral("A nyomtató nem fogadta el a feladatot.");
+        return QCoreApplication::translate("PhotoPrint", "A nyomtató nem fogadta el a feladatot.");
     case SubmitStatus::Uncertain:
-        return QStringLiteral("Nem tudjuk, elindult-e a nyomtatás. Nézd meg a nyomtatót, "
-                              "mielőtt újraindítod.");
+        return QCoreApplication::translate("PhotoPrint",
+                                        "Nem tudjuk, elindult-e a nyomtatás. Nézd meg a nyomtatót, "
+                                        "mielőtt újraindítod.");
     }
-    return QStringLiteral("Nem tudjuk, elindult-e a nyomtatás.");
+    return QCoreApplication::translate("PhotoPrint", "Nem tudjuk, elindult-e a nyomtatás.");
 }
 
 } // namespace
@@ -54,15 +56,15 @@ Result<JobResult> JobController::start(const DocumentSnapshot &document,
                                        const PrintTicket &ticket, std::stop_token token)
 {
     if (m_busy)
-        return error(QStringLiteral("job-busy"), QStringLiteral("A nyomtatás már folyamatban van."));
+        return error(QStringLiteral("job-busy"), QCoreApplication::translate("PhotoPrint", "A nyomtatás már folyamatban van."));
     if (m_lastStart.isValid() && m_lastStart.msecsTo(QDateTime::currentDateTime()) < 1200) {
         return error(QStringLiteral("job-double"),
-                     QStringLiteral("A nyomtatás már elindult. Várd meg az eredményét."));
+                     QCoreApplication::translate("PhotoPrint", "A nyomtatás már elindult. Várd meg az eredményét."));
     }
     if (!ticket.valid || ticket.queueName.isEmpty())
-        return error(QStringLiteral("job-ticket"), QStringLiteral("Válassz nyomtatót és papírt."));
+        return error(QStringLiteral("job-ticket"), QCoreApplication::translate("PhotoPrint", "Válassz nyomtatót és papírt."));
     if (document.pages.isEmpty())
-        return error(QStringLiteral("job-empty"), QStringLiteral("Nincs mit nyomtatni."));
+        return error(QStringLiteral("job-empty"), QCoreApplication::translate("PhotoPrint", "Nincs mit nyomtatni."));
 
     m_busy = true;
     auto release = [this] { m_busy = false; };
@@ -70,7 +72,7 @@ Result<JobResult> JobController::start(const DocumentSnapshot &document,
     const QUuid id = QUuid::createUuid();
     if (!QDir().mkpath(m_config.workDir)) {
         release();
-        return error(QStringLiteral("job-dir"), QStringLiteral("A nyomtatás előkészítése nem sikerült."));
+        return error(QStringLiteral("job-dir"), QCoreApplication::translate("PhotoPrint", "A nyomtatás előkészítése nem sikerült."));
     }
     const QString pdfPath = QDir(m_config.workDir).filePath(id.toString(QUuid::WithoutBraces)
                                                            + QStringLiteral(".pdf"));
@@ -175,10 +177,10 @@ Result<void> JobController::writeManifest(const QUuid &id, const QByteArray &pdf
                                                          + QStringLiteral(".json"));
     QSaveFile file(path);
     if (!file.open(QIODevice::WriteOnly))
-        return error(QStringLiteral("manifest-write"), QStringLiteral("A nyomtatási jegyzék nem írható."));
+        return error(QStringLiteral("manifest-write"), QCoreApplication::translate("PhotoPrint", "A nyomtatási jegyzék nem írható."));
     const QByteArray data = QJsonDocument(manifest).toJson(QJsonDocument::Indented);
     if (file.write(data) != data.size() || !file.commit())
-        return error(QStringLiteral("manifest-write"), QStringLiteral("A nyomtatási jegyzék nem írható."));
+        return error(QStringLiteral("manifest-write"), QCoreApplication::translate("PhotoPrint", "A nyomtatási jegyzék nem írható."));
     m_lastManifest = path;
     return Result<void>();
 }

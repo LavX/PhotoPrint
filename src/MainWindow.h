@@ -28,6 +28,7 @@ class QComboBox;
 class QDoubleSpinBox;
 class QLabel;
 class QListWidget;
+class QMenu;
 class QPushButton;
 class QSlider;
 class QSpinBox;
@@ -176,6 +177,9 @@ private slots:
 private:
     void buildUi();
     void buildMenus();
+    void buildLanguageMenu(QMenu *helpMenu);
+    void setLanguage(const QString &code);
+    void showAbout();
     void addPhoto(const QString &path);
     void refreshPhotoList();
     void rebuildPreviewImages();

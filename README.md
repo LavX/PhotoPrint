@@ -111,8 +111,30 @@ result themselves.
   application itself provides both light and dark palettes.
 - macOS and Windows are not tested. The CUPS printer discovery and the RPM
   packaging are Linux-specific.
-- The current interface is Hungarian; a translation layer is being added for
-  ten languages.
+
+## Languages
+
+The interface is available in ten languages beside Hungarian: English,
+Simplified Chinese, Hindi, Spanish, French, Portuguese, Russian, Japanese,
+German and Italian. Hungarian is the source language, so it is always complete,
+and it is used when the system language is not supported.
+
+Pick a language in `Help -> Language`; each entry is shown in its own script and
+the choice takes effect on the next start. At startup the saved choice wins,
+then the supported system language, then Hungarian. The setting is stored in
+QSettings under `language`.
+
+Translations are Qt TS/QM files: the source is
+`resources/i18n/photoprint_<locale>.ts`, the build compiles them with
+`lrelease-qt6` and embeds the result as `:/i18n`, so the installed package needs
+no extra files. Strings live in the `PhotoPrint` translation context; add new
+ones with `QCoreApplication::translate` and refresh the TS files with
+`lupdate-qt6`. Qt's own standard button labels come from the system `qtbase`
+catalogue when it is installed.
+
+Licence text and product names (paper size names, PPD option names) are not
+translated. The ten catalogues are hand-authored and waiting for a native
+speaker review, especially Hindi and Russian.
 
 ## Usage
 
@@ -125,21 +147,12 @@ A project file (`.ppj`) stores the pages, paper, geometry, crop, tone, filters
 and source identities. Saving is atomic; the recovery snapshots are separate
 from the print path.
 
-## Documentation
-
-- `docs/development/progress.md` – per-slice status, commands and evidence.
-- `docs/development/acceptance-results.md` – offline, filter, measurement,
-  package and physical-print status, kept separate.
-- `docs/development/filters.md` – filter and upscaling design.
-- `planning/` – the original planning documents, preserved.
-
 ## Limitations
 
 Physical print acceptance on the Brother DCP-T730DW with SWAN 100 × 150 mm
 paper is still open, as are the Wayland performance measurement and the
 20-source memory target. Matte paper has no distinct driver media type and is
 sent as inkjet paper. Multi-select and cross-page dragging are not implemented.
-See `docs/development/acceptance-results.md` for the exact status.
 
 ## License
 

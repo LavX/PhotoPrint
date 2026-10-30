@@ -3,6 +3,7 @@
 #include "ImageSource.h"
 #include "PaperCatalog.h"
 
+#include <QCoreApplication>
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
@@ -192,16 +193,16 @@ Result<DocumentSnapshot> ProjectStore::deserialize(const QByteArray &json)
     const QJsonDocument parsed = QJsonDocument::fromJson(json, &parseError);
     if (parseError.error != QJsonParseError::NoError || !parsed.isObject())
         return error(QStringLiteral("project-corrupt"),
-                     QStringLiteral("Ezt a projektet most nem tudjuk megnyitni."));
+                     QCoreApplication::translate("PhotoPrint", "Ezt a projektet most nem tudjuk megnyitni."));
 
     const QJsonObject root = parsed.object();
     if (root.value(QStringLiteral("format")).toString() != QLatin1String("photoprint-project"))
         return error(QStringLiteral("project-format"),
-                     QStringLiteral("Ezt a projektet most nem tudjuk megnyitni."));
+                     QCoreApplication::translate("PhotoPrint", "Ezt a projektet most nem tudjuk megnyitni."));
     const int version = root.value(QStringLiteral("version")).toInt(-1);
     if (version != kFormatVersion) {
         return error(QStringLiteral("project-version"),
-                     QStringLiteral("Ezt a projektet az alkalmazás egy újabb változata készítette."));
+                     QCoreApplication::translate("PhotoPrint", "Ezt a projektet az alkalmazás egy újabb változata készítette."));
     }
 
     DocumentSnapshot document;
@@ -220,7 +221,7 @@ Result<DocumentSnapshot> ProjectStore::deserialize(const QByteArray &json)
     }
     if (document.pages.isEmpty())
         return error(QStringLiteral("project-empty"),
-                     QStringLiteral("Ezt a projektet most nem tudjuk megnyitni."));
+                     QCoreApplication::translate("PhotoPrint", "Ezt a projektet most nem tudjuk megnyitni."));
     document.currentPage = std::clamp(document.currentPage, 0, int(document.pages.size()) - 1);
     return document;
 }
@@ -231,35 +232,35 @@ Result<void> ProjectStore::save(const QString &path, const DocumentSnapshot &doc
     const QFileInfo info(path);
     const QDir projectDir(info.absolutePath());
     if (!projectDir.exists() && !QDir().mkpath(projectDir.absolutePath()))
-        return error(QStringLiteral("project-dir"), QStringLiteral("A mappa nem hozható létre."));
+        return error(QStringLiteral("project-dir"), QCoreApplication::translate("PhotoPrint", "A mappa nem hozható létre."));
 
     QString portableDir;
     if (mode == SaveMode::Portable) {
         portableDir = info.absoluteFilePath() + QStringLiteral(".files");
         if (!QDir().mkpath(portableDir)) {
             return error(QStringLiteral("portable-dir"),
-                         QStringLiteral("A hordozható másolat mappája nem hozható létre."));
+                         QCoreApplication::translate("PhotoPrint", "A hordozható másolat mappája nem hozható létre."));
         }
         for (const Page &page : document.pages) {
             for (const Frame &frame : page.frames) {
                 const QFileInfo sourceInfo(frame.sourcePath);
                 if (!sourceInfo.exists())
                     return error(QStringLiteral("source-missing"),
-                                 QStringLiteral("Ezt a fotót nem találjuk."));
+                                 QCoreApplication::translate("PhotoPrint", "Ezt a fotót nem találjuk."));
                 const QString target = QDir(portableDir).filePath(sourceInfo.fileName());
                 if (QFileInfo::exists(target)) {
                     if (fileSha256(target) != frame.sourceSha256)
                         return error(QStringLiteral("portable-conflict"),
-                                     QStringLiteral("Ugyanilyen nevű fotó már van a másolatban."));
+                                     QCoreApplication::translate("PhotoPrint", "Ugyanilyen nevű fotó már van a másolatban."));
                     continue;
                 }
                 if (!QFile::copy(frame.sourcePath, target))
                     return error(QStringLiteral("portable-copy"),
-                                 QStringLiteral("A fotót nem sikerült a másolatba tenni."));
+                                 QCoreApplication::translate("PhotoPrint", "A fotót nem sikerült a másolatba tenni."));
                 if (fileSha256(target) != frame.sourceSha256) {
                     QFile::remove(target);
                     return error(QStringLiteral("portable-hash"),
-                                 QStringLiteral("A fotó másolata nem egyezik az eredetivel."));
+                                 QCoreApplication::translate("PhotoPrint", "A fotó másolata nem egyezik az eredetivel."));
                 }
             }
         }
@@ -268,11 +269,11 @@ Result<void> ProjectStore::save(const QString &path, const DocumentSnapshot &doc
     const QByteArray json = serialize(document, projectDir.absolutePath(), portableDir);
     QSaveFile file(path);
     if (!file.open(QIODevice::WriteOnly))
-        return error(QStringLiteral("project-write"), QStringLiteral("A projektet nem sikerült menteni."));
+        return error(QStringLiteral("project-write"), QCoreApplication::translate("PhotoPrint", "A projektet nem sikerült menteni."));
     if (file.write(json) != json.size())
-        return error(QStringLiteral("project-write"), QStringLiteral("A projektet nem sikerült menteni."));
+        return error(QStringLiteral("project-write"), QCoreApplication::translate("PhotoPrint", "A projektet nem sikerült menteni."));
     if (!file.commit())
-        return error(QStringLiteral("project-write"), QStringLiteral("A projektet nem sikerült menteni."));
+        return error(QStringLiteral("project-write"), QCoreApplication::translate("PhotoPrint", "A projektet nem sikerült menteni."));
     return Result<void>();
 }
 
@@ -281,7 +282,7 @@ Result<LoadedProject> ProjectStore::load(const QString &path)
     QFile file(path);
     if (!file.open(QIODevice::ReadOnly))
         return error(QStringLiteral("project-open"),
-                     QStringLiteral("Ezt a projektet most nem tudjuk megnyitni."));
+                     QCoreApplication::translate("PhotoPrint", "Ezt a projektet most nem tudjuk megnyitni."));
     const QByteArray json = file.readAll();
     file.close();
 
@@ -290,15 +291,15 @@ Result<LoadedProject> ProjectStore::load(const QString &path)
     const QJsonDocument parsed = QJsonDocument::fromJson(json, &parseError);
     if (parseError.error != QJsonParseError::NoError || !parsed.isObject())
         return error(QStringLiteral("project-corrupt"),
-                     QStringLiteral("Ezt a projektet most nem tudjuk megnyitni."));
+                     QCoreApplication::translate("PhotoPrint", "Ezt a projektet most nem tudjuk megnyitni."));
     const QJsonObject root = parsed.object();
     if (root.value(QStringLiteral("format")).toString() != QLatin1String("photoprint-project"))
         return error(QStringLiteral("project-format"),
-                     QStringLiteral("Ezt a projektet most nem tudjuk megnyitni."));
+                     QCoreApplication::translate("PhotoPrint", "Ezt a projektet most nem tudjuk megnyitni."));
     const int version = root.value(QStringLiteral("version")).toInt(-1);
     if (version != kFormatVersion)
         return error(QStringLiteral("project-version"),
-                     QStringLiteral("Ezt a projektet az alkalmazás egy újabb változata készítette."));
+                     QCoreApplication::translate("PhotoPrint", "Ezt a projektet az alkalmazás egy újabb változata készítette."));
 
     LoadedProject loaded;
     loaded.path = QFileInfo(path).absoluteFilePath();
@@ -341,7 +342,7 @@ Result<LoadedProject> ProjectStore::load(const QString &path)
     }
     if (loaded.document.pages.isEmpty())
         return error(QStringLiteral("project-empty"),
-                     QStringLiteral("Ezt a projektet most nem tudjuk megnyitni."));
+                     QCoreApplication::translate("PhotoPrint", "Ezt a projektet most nem tudjuk megnyitni."));
     loaded.document.currentPage =
         std::clamp(loaded.document.currentPage, 0, int(loaded.document.pages.size()) - 1);
     return loaded;

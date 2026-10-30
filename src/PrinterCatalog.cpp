@@ -2,6 +2,7 @@
 
 #include "LegacyPpdReader.h"
 
+#include <QCoreApplication>
 #include <QFile>
 #include <QJsonArray>
 
@@ -63,8 +64,9 @@ Result<QList<PrinterCapabilities>> PrinterCatalog::refresh(std::stop_token token
         if (dests)
             cupsFreeDests(count, dests);
         return error(QStringLiteral("cups-unavailable"),
-                     QStringLiteral("A nyomtató most nem érhető el. Ellenőrizd, hogy be van-e "
-                                    "kapcsolva."));
+                     QCoreApplication::translate("PhotoPrint",
+                                                  "A nyomtató most nem érhető el. Ellenőrizd, hogy be "
+                                                  "van-e kapcsolva."));
     }
 
     QList<PrinterCapabilities> result;

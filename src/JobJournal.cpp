@@ -1,5 +1,6 @@
 #include "JobJournal.h"
 
+#include <QCoreApplication>
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
@@ -35,12 +36,12 @@ Result<void> JobJournal::appendLine(const JobRecord &record)
     QFile file(m_path);
     if (!file.open(QIODevice::WriteOnly | QIODevice::Append))
         return error(QStringLiteral("journal-write"),
-                     QStringLiteral("A nyomtatási napló nem írható."));
+                     QCoreApplication::translate("PhotoPrint", "A nyomtatási napló nem írható."));
     file.write(QJsonDocument(object).toJson(QJsonDocument::Compact));
     file.write("\n");
     if (!file.flush())
         return error(QStringLiteral("journal-write"),
-                     QStringLiteral("A nyomtatási napló nem írható."));
+                     QCoreApplication::translate("PhotoPrint", "A nyomtatási napló nem írható."));
     return Result<void>();
 }
 

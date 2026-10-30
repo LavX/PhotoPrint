@@ -2,6 +2,7 @@
 
 #include "LayoutEngine.h"
 
+#include <QCoreApplication>
 #include <QSet>
 
 #include <algorithm>
@@ -15,9 +16,9 @@ Result<TrialSheet> TrialSheetBuilder::build(const DocumentSnapshot &document,
 {
     const Frame *source = findFrame(document, frameId);
     if (!source)
-        return error(QStringLiteral("trial-frame"), QStringLiteral("Válassz egy fotót a próbalaphoz."));
+        return error(QStringLiteral("trial-frame"), QCoreApplication::translate("PhotoPrint", "Válassz egy fotót a próbalaphoz."));
     if (document.pages.isEmpty())
-        return error(QStringLiteral("trial-page"), QStringLiteral("Nincs mit kipróbálni."));
+        return error(QStringLiteral("trial-page"), QCoreApplication::translate("PhotoPrint", "Nincs mit kipróbálni."));
 
     const Page &originalPage = document.pages.at(document.currentPage);
     TrialSheet sheet;

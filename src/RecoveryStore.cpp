@@ -1,5 +1,6 @@
 #include "RecoveryStore.h"
 
+#include <QCoreApplication>
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
@@ -23,7 +24,7 @@ Result<void> RecoveryStore::checkpoint(const DocumentSnapshot &document)
 {
     if (!QDir().mkpath(m_directory))
         return error(QStringLiteral("recovery-dir"),
-                     QStringLiteral("A munkamenet mentése nem sikerült."));
+                     QCoreApplication::translate("PhotoPrint", "A munkamenet mentése nem sikerült."));
     const QString slot = (m_nextSlot++ % 2 == 0) ? QStringLiteral("recovery-a.json")
                                                  : QStringLiteral("recovery-b.json");
     ProjectStore store;
@@ -36,11 +37,11 @@ Result<void> RecoveryStore::checkpoint(const DocumentSnapshot &document)
     QSaveFile manifest(QDir(m_directory).filePath(QStringLiteral("latest.txt")));
     if (!manifest.open(QIODevice::WriteOnly))
         return error(QStringLiteral("recovery-manifest"),
-                     QStringLiteral("A munkamenet mentése nem sikerült."));
+                     QCoreApplication::translate("PhotoPrint", "A munkamenet mentése nem sikerült."));
     manifest.write(slot.toLatin1());
     if (!manifest.commit())
         return error(QStringLiteral("recovery-manifest"),
-                     QStringLiteral("A munkamenet mentése nem sikerült."));
+                     QCoreApplication::translate("PhotoPrint", "A munkamenet mentése nem sikerült."));
     return Result<void>();
 }
 
@@ -63,7 +64,7 @@ Result<LoadedProject> RecoveryStore::loadLatest()
             candidates.append(info);
     }
     if (candidates.isEmpty())
-        return error(QStringLiteral("recovery-empty"), QStringLiteral("Nincs folytatható munka."));
+        return error(QStringLiteral("recovery-empty"), QCoreApplication::translate("PhotoPrint", "Nincs folytatható munka."));
 
     ProjectStore store;
     for (const QFileInfo &candidate : candidates) {
@@ -72,7 +73,7 @@ Result<LoadedProject> RecoveryStore::loadLatest()
             return loaded;
     }
     return error(QStringLiteral("recovery-corrupt"),
-                 QStringLiteral("A korábbi munka nem nyitható meg."));
+                 QCoreApplication::translate("PhotoPrint", "A korábbi munka nem nyitható meg."));
 }
 
 void RecoveryStore::clear()

@@ -3,14 +3,17 @@
 #include "ImageSource.h"
 #include "LayoutEngine.h"
 #include "MainWindow.h"
+#include "AboutDialog.h"
 #include "PageRenderer.h"
 #include "PrinterCatalog.h"
+#include "Translation.h"
 
 #include <QApplication>
 #include <QIcon>
 #include <QDir>
 #include <QElapsedTimer>
 #include <QFile>
+#include <QIcon>
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QStandardPaths>
@@ -23,7 +26,12 @@ int main(int argc, char *argv[])
     QApplication::setApplicationDisplayName(QStringLiteral("PhotoPrint"));
     QApplication::setOrganizationName(QStringLiteral("PhotoPrint"));
     QApplication::setDesktopFileName(QStringLiteral("photoprint"));
+    QApplication::setApplicationVersion(pp::AboutDialog::versionString());
     QApplication::setWindowIcon(QIcon(QStringLiteral(":/icons/photoprint.png")));
+
+    // The saved choice wins, then the system locale when we ship it, otherwise
+    // Hungarian, which is the source language.
+    pp::i18n::installLanguage(pp::i18n::selectedLanguage());
 
     const QStringList arguments = app.arguments();
 
