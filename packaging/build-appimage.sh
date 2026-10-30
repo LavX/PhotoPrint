@@ -14,8 +14,9 @@
 #   LINUXDEPLOY_QT_SHA256=<hex>  linuxdeploy-plugin-qt-x86_64.AppImage
 #   APPIMAGETOOL_SHA256=<hex>    appimagetool-x86_64.AppImage
 #
-# A cached tool that does not match its pin is refused; delete it to fetch the
-# pinned build again.
+# A cached tool that does not match its pin is discarded and fetched again
+# automatically. If a freshly downloaded tool mismatches, the pin itself has
+# to be updated; the override variables above take a hash you trust instead.
 set -euo pipefail
 
 LINUXDEPLOY_SHA256="${LINUXDEPLOY_SHA256:-8aea8da0f7f7039d2a2cecb14657d752a222a5e1d3825caeef186c82f751cdd1}"
@@ -81,6 +82,8 @@ ensure_tool() {
         rm -f "$path"
     fi
     echo "Downloading $name"
+    # Abandoned partials from a killed build are never reused; sweep old ones.
+    find "$tools_dir" -maxdepth 1 -name "$name.part.*" -mmin +60 -delete 2>/dev/null || true
     rm -f "$partial"
     if ! curl -L --fail --max-time 300 -o "$partial" "$url"; then
         rm -f "$partial"
