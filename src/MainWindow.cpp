@@ -2869,8 +2869,15 @@ void MainWindow::saveProject()
         return;
     }
     m_dirty = false;
-    if (const auto cleared = m_recovery.clear(); !cleared)
+    if (const auto cleared = m_recovery.clear(); !cleared) {
+        // The project is saved, but the recovery copy could not be removed, so
+        // it may be offered again on the next start. That failure is the one
+        // the user has to see: the success message would overwrite it on the
+        // status bar before it could be read.
         showProblem(cleared.error().message);
+        updateTitle();
+        return;
+    }
     updateTitle();
     statusBar()->showMessage(QCoreApplication::translate("PhotoPrint", "A projekt elmentve."), 4000);
 }

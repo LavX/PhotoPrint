@@ -62,10 +62,14 @@ PrintContext contextFromJson(const QJsonObject &object)
 /// environment: an entry read as an empty context is a valid preset that would
 /// match any caller whose context was never filled in, which is exactly the
 /// correction a sheet with no measurements must not receive.
+///
+/// The paper tone must be a number too. match() hands it to MainWindow and into
+/// ColorRecipe::paperStrength, which becomes an exposure through std::pow; a
+/// non-finite value there would black out or blow out the cell.
 bool isUsablePreset(const PaperPreset &preset)
 {
     const PrintContext &context = preset.context;
-    return !preset.id.isEmpty() && !context.queueName.isEmpty()
+    return !preset.id.isEmpty() && !context.queueName.isEmpty() && std::isfinite(preset.paperEv)
         && std::isfinite(context.physicalWidthMm) && context.physicalWidthMm > 0.0
         && std::isfinite(context.physicalHeightMm) && context.physicalHeightMm > 0.0
         && std::isfinite(context.logicalWidthMm) && context.logicalWidthMm >= 0.0

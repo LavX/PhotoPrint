@@ -19,10 +19,26 @@
 #include <QTemporaryFile>
 
 #include <algorithm>
+#include <cmath>
 
 namespace pp {
 
 namespace {
+
+/// The trial sheet offers only these steps, and the value reaches
+/// ColorPipeline's std::pow as the paper exposure. A crafted project must not
+/// be able to drive a cell to black or blown out, so the load clamps to the
+/// same range the builder produces. TrialSheetBuilder owns the range; this
+/// copy is the guard on the untrusted side.
+constexpr double kMaxTrialPaperEv = 0.12;
+
+double clampTrialPaperEv(double ev)
+{
+    // std::clamp passes NaN through, and a NaN here poisons every pixel.
+    if (!std::isfinite(ev))
+        return 0.0;
+    return std::clamp(ev, -kMaxTrialPaperEv, kMaxTrialPaperEv);
+}
 
 QJsonObject paperToJson(const PaperSpec &paper)
 {
@@ -98,15 +114,52 @@ QString resolveProjectSource(const QString &projectDir, const QString &stored)
     return joined;
 }
 
+/// A portable bundle must be a real directory of its own. The containment rule
+/// is lexical, so a `.files` entry that is a symlink would send every copy into
+/// a directory the project does not own. The canonical path is compared with
+/// the canonical parent plus the entry name: a project inside a symlinked
+/// folder still saves, while the `.files` entry itself may not be a link. An
+/// empty result means the folder cannot be trusted.
+QString canonicalBundleRoot(const QString &portableDir)
+{
+    const QFileInfo info(portableDir);
+    if (!info.exists() || !info.isDir())
+        return QString();
+    const QString canonical = info.canonicalFilePath();
+    const QString parent = QFileInfo(info.absolutePath()).canonicalFilePath();
+    if (canonical.isEmpty() || parent.isEmpty())
+        return QString();
+    const QString expected = QDir::cleanPath(QDir(parent).filePath(info.fileName()));
+    return QDir::cleanPath(canonical) == expected ? canonical : QString();
+}
+
 /// `original` is the legacy absolute path recorded for relinking. A relative
 /// value is only honoured through the same containment rule as `source`.
-QString resolveOriginalSource(const QString &projectDir, const QString &original)
+///
+/// An absolute value is the only way a 1.0.0 project reaches a photo that lives
+/// outside the project folder, so it cannot simply be dropped. It arrives from
+/// whoever wrote the file, though: adopted verbatim, it would let an untrusted
+/// project name any local file for this app to stat, hash and render, and a
+/// FIFO or device there would block the read. It is therefore followed only
+/// when it still holds the recorded photo: a regular file whose content hash
+/// equals the stored identity. A frame without a recorded identity cannot be
+/// verified at all, so it is treated as missing too; the relink path handles
+/// both cases.
+QString resolveOriginalSource(const QString &projectDir, const QString &original,
+                              const QByteArray &expectedSha256)
 {
     if (original.isEmpty())
         return QString();
-    if (QDir::isAbsolutePath(original))
-        return QDir::cleanPath(original);
-    return resolveProjectSource(projectDir, original);
+    if (!QDir::isAbsolutePath(original))
+        return resolveProjectSource(projectDir, original);
+
+    const QString candidate = QDir::cleanPath(original);
+    const QFileInfo info(candidate);
+    if (!info.exists() || !info.isFile() || expectedSha256.isEmpty())
+        return QString();
+    if (fileSha256(candidate) != expectedSha256)
+        return QString();
+    return candidate;
 }
 
 /// Deterministic file names for a portable copy. Unrelated sources with the
@@ -276,7 +329,7 @@ Frame frameFromJson(const QJsonObject &object)
     // Absent keys are 1.0.0 projects: plain frames without a trial label.
     frame.label = object.value(QStringLiteral("label")).toString();
     frame.paperOverride = object.value(QStringLiteral("paperOverride")).toBool(false);
-    frame.paperEv = object.value(QStringLiteral("paperEv")).toDouble();
+    frame.paperEv = clampTrialPaperEv(object.value(QStringLiteral("paperEv")).toDouble());
     const QJsonObject tone = object.value(QStringLiteral("tone")).toObject();
     frame.tone.exposureEv = tone.value(QStringLiteral("exposureEv")).toDouble();
     frame.tone.shadowLift = tone.value(QStringLiteral("shadowLift")).toDouble();
@@ -362,7 +415,7 @@ Result<ParsedProject> parseDocument(const QJsonObject &root, const QString &proj
                 }
             }
 
-            const QString fallback = resolveOriginalSource(projectDir, original);
+            const QString fallback = resolveOriginalSource(projectDir, original, frame.sourceSha256);
             if (!contained.isEmpty() && QFileInfo::exists(contained)) {
                 frame.sourcePath = contained;
             } else if (!fallback.isEmpty()) {
@@ -428,8 +481,10 @@ QString unusedBackupPath(const QString &directory)
     return path;
 }
 
-/// Copies every unique source into the portable folder. The caller rolls the
-/// listed changes back when any later step fails.
+/// Copies every unique source into the portable folder, which the caller has
+/// already checked to be a real directory and not a link (see
+/// canonicalBundleRoot()). The caller rolls the listed changes back when any
+/// later step fails.
 Result<void> copyPortableSources(const DocumentSnapshot &document, const QString &portableDir,
                                  const QString &projectFile, PortableChanges *changes)
 {
@@ -605,8 +660,16 @@ Result<void> ProjectStore::save(const QString &path, const DocumentSnapshot &doc
             return error(QStringLiteral("portable-dir"),
                          QCoreApplication::translate("PhotoPrint", "A hordozható másolat mappája nem hozható létre."));
         }
+        // The copies are only allowed inside the bundle. A `.files` entry that
+        // is a symlink would pass the lexical containment check and still write
+        // somewhere else, so the save stops before anything is copied.
+        const QString bundleRoot = canonicalBundleRoot(portableDir);
+        if (bundleRoot.isEmpty()) {
+            return error(QStringLiteral("portable-dir"),
+                         QCoreApplication::translate("PhotoPrint", "A hordozható másolat mappája nem hozható létre."));
+        }
         const auto copied =
-            copyPortableSources(document, portableDir, info.absoluteFilePath(), &changes);
+            copyPortableSources(document, bundleRoot, info.absoluteFilePath(), &changes);
         if (!copied) {
             rollback();
             return copied.error();

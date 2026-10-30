@@ -5,6 +5,8 @@
 #include <QTemporaryDir>
 #include <QtTest>
 
+#include <limits>
+
 using namespace pp;
 
 namespace {
@@ -49,6 +51,7 @@ private slots:
     void newFavouriteReplacesTheOldOne();
     void differentInkInvalidatesTheMatch();
     void presetsSurviveARestart();
+    void nonFinitePaperToneIsRefused();
 };
 
 void TestPaperPresets::matchRequiresTheWholeEnvironment()
@@ -136,6 +139,46 @@ void TestPaperPresets::presetsSurviveARestart()
         QVERIFY(match.has_value());
         QCOMPARE(match->paperEv, 0.05);
     }
+}
+
+void TestPaperPresets::nonFinitePaperToneIsRefused()
+{
+    // A matched preset is handed to MainWindow and becomes
+    // ColorRecipe::paperStrength, an exposure through std::pow. A NaN or an
+    // infinity there would black out or blow out the printed cell, so the
+    // predicate that gates both the read and the write refuses it.
+    QTemporaryDir dir;
+    QVERIFY(dir.isValid());
+    const QString path = dir.filePath(QStringLiteral("presets.json"));
+    PaperPresetStore store(path);
+    const PrintContext context = baseContext();
+
+    PaperPreset notANumber = presetFor(context, std::numeric_limits<double>::quiet_NaN(),
+                                       QStringLiteral("nan"));
+    const auto nanSaved = store.save(notANumber);
+    QVERIFY(!nanSaved.ok());
+    QCOMPARE(nanSaved.error().code, QStringLiteral("preset-context"));
+
+    PaperPreset infinite = presetFor(context, std::numeric_limits<double>::infinity(),
+                                     QStringLiteral("inf"));
+    QVERIFY(!store.save(infinite).ok());
+
+    PaperPreset negativeInfinite = presetFor(context, -std::numeric_limits<double>::infinity(),
+                                             QStringLiteral("-inf"));
+    QVERIFY(!store.save(negativeInfinite).ok());
+
+    // Nothing was written, so the store stays readable and a later match is
+    // not served a broken tone.
+    const auto read = store.readAll();
+    QVERIFY(read.ok());
+    QVERIFY(read.value().isEmpty());
+    QVERIFY(!store.match(context).has_value());
+
+    // A real correction is still stored and matched.
+    QVERIFY(store.save(presetFor(context, -0.06, QStringLiteral("ok"))).ok());
+    const auto match = store.match(context);
+    QVERIFY(match.has_value());
+    QCOMPARE(match->paperEv, -0.06);
 }
 
 QTEST_GUILESS_MAIN(TestPaperPresets)

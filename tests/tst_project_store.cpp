@@ -164,6 +164,26 @@ bool patchFirstFrame(const QString &path, const QString &source, bool keepOrigin
     return writeJson(path, root);
 }
 
+/// Rewrites the recorded absolute `original` of the first frame, the other
+/// half of what a hand-edited project file can do.
+bool patchFirstFrameOriginal(const QString &path, const QString &original)
+{
+    QJsonObject root = readJson(path);
+    QJsonArray pages = root.value(QStringLiteral("pages")).toArray();
+    QJsonObject page = pages.at(0).toObject();
+    QJsonArray frames = page.value(QStringLiteral("frames")).toArray();
+    QJsonObject frame = frames.at(0).toObject();
+    if (original.isEmpty())
+        frame.remove(QStringLiteral("original"));
+    else
+        frame.insert(QStringLiteral("original"), original);
+    frames.replace(0, frame);
+    page.insert(QStringLiteral("frames"), frames);
+    pages.replace(0, page);
+    root.insert(QStringLiteral("pages"), pages);
+    return writeJson(path, root);
+}
+
 } // namespace
 
 class TestProjectStore : public QObject
@@ -179,7 +199,9 @@ private slots:
     void blockedRelativeSourceKeepsRelinkInformation();
     void absoluteSourceIsRefused();
     void absoluteOriginalKeepsNormalProjectsWorking();
+    void absoluteOriginalMustMatchTheRecordedPhoto();
     void portableCopyDoesNotStoreAbsolutePaths();
+    void portableBundleSymlinkIsRefused();
     void portableCopyKeepsSameNamedSourcesApart();
     void portableCopyRollsBackOnFailure();
     void portableCopyReplacementRollsBack();
@@ -188,6 +210,7 @@ private slots:
     void portableAnonymousNamesAvoidPlainNames();
     void portableBundleCanBeResaved();
     void craftedBrightnessCannotReachTheRenderer();
+    void craftedPaperToneIsClamped();
     void versionOneProjectWithoutNewKeysStillLoads();
     void missingAndChangedSourcesKeepTheLayout();
     void portableCopyWorksAfterMoving();
@@ -436,6 +459,73 @@ void TestProjectStore::absoluteOriginalKeepsNormalProjectsWorking()
     QVERIFY(loaded.value().issues.isEmpty());
 }
 
+void TestProjectStore::absoluteOriginalMustMatchTheRecordedPhoto()
+{
+    // `original` is the legacy way back to a photo outside the project folder,
+    // but it arrives from whoever wrote the file. Adopted verbatim, an
+    // untrusted project could name any local file for this app to stat, hash
+    // and render. It is followed only while the file is still the recorded
+    // photo: a regular file whose hash equals the frame's stored identity.
+    const QString projectDir = m_dir.filePath(QStringLiteral("original-guard"));
+    QVERIFY(QDir().mkpath(projectDir));
+    const QString path = QDir(projectDir).filePath(QStringLiteral("g.ppj"));
+    ProjectStore store;
+    QVERIFY(store.save(path, sampleDocument(m_red, m_blue), SaveMode::Normal).ok());
+
+    // A 1.0.0 shape: the relative source does not resolve, so the absolute
+    // original decides. The frame's recorded identity is the red photo.
+    const QString secret = m_dir.filePath(QStringLiteral("secret4.txt"));
+    QFile secretFile(secret);
+    QVERIFY(secretFile.open(QIODevice::WriteOnly));
+    secretFile.write("still not a photo");
+    secretFile.close();
+    const QString escaping = QDir(projectDir).relativeFilePath(secret);
+    QVERIFY(escaping.startsWith(QStringLiteral("..")));
+    QVERIFY(patchFirstFrame(path, escaping, false));
+
+    // Another real photo at the recorded path is not the recorded photo.
+    QVERIFY(patchFirstFrameOriginal(path, QFileInfo(m_bluePath).absoluteFilePath()));
+    {
+        const auto loaded = store.load(path);
+        if (!loaded)
+            QFAIL(qPrintable(loaded.error().message));
+        const Frame frame = loaded.value().document.pages.at(0).frames.at(0);
+        QVERIFY2(frame.sourcePath.isEmpty(), "an unverified local file must not be rendered");
+        QCOMPARE(loaded.value().issues.size(), 1);
+        QVERIFY(loaded.value().issues.first().missing);
+    }
+
+    // Neither is a path that no longer exists.
+    QVERIFY(patchFirstFrameOriginal(path, m_dir.filePath(QStringLiteral("gone.png"))));
+    {
+        const auto loaded = store.load(path);
+        if (!loaded)
+            QFAIL(qPrintable(loaded.error().message));
+        QVERIFY(loaded.value().document.pages.at(0).frames.at(0).sourcePath.isEmpty());
+        QCOMPARE(loaded.value().issues.size(), 1);
+        QVERIFY(loaded.value().issues.first().missing);
+    }
+
+    // Nor a device: not a regular file, and reading it could block the load.
+    if (QFileInfo::exists(QStringLiteral("/dev/null"))) {
+        QVERIFY(patchFirstFrameOriginal(path, QStringLiteral("/dev/null")));
+        const auto loaded = store.load(path);
+        if (!loaded)
+            QFAIL(qPrintable(loaded.error().message));
+        QVERIFY(loaded.value().document.pages.at(0).frames.at(0).sourcePath.isEmpty());
+    }
+
+    // The recorded photo at the recorded path still opens: that is the layout
+    // 1.0.0 wrote and it must keep working.
+    QVERIFY(patchFirstFrameOriginal(path, QFileInfo(m_redPath).absoluteFilePath()));
+    const auto loaded = store.load(path);
+    if (!loaded)
+        QFAIL(qPrintable(loaded.error().message));
+    const Frame frame = loaded.value().document.pages.at(0).frames.at(0);
+    QCOMPARE(frame.sourcePath, QFileInfo(m_redPath).absoluteFilePath());
+    QVERIFY(loaded.value().issues.isEmpty());
+}
+
 void TestProjectStore::portableCopyDoesNotStoreAbsolutePaths()
 {
     const QString projectDir = m_dir.filePath(QStringLiteral("privacy"));
@@ -464,6 +554,48 @@ void TestProjectStore::portableCopyDoesNotStoreAbsolutePaths()
             QVERIFY(!QDir::isAbsolutePath(stored));
         }
     }
+}
+
+void TestProjectStore::portableBundleSymlinkIsRefused()
+{
+    // The containment rule for the copies is lexical, so a `.files` entry that
+    // is a symlink passes it and still writes into a directory the project
+    // does not own. The bundle root is resolved canonically before anything is
+    // copied, and a link is refused.
+    const QString projectDir = m_dir.filePath(QStringLiteral("symlink-bundle"));
+    QVERIFY(QDir().mkpath(projectDir));
+    const QString path = QDir(projectDir).filePath(QStringLiteral("s.ppj"));
+    const QString outside = m_dir.filePath(QStringLiteral("outside-target"));
+    QVERIFY(QDir().mkpath(outside));
+
+    const QString bundle = path + QStringLiteral(".files");
+    QVERIFY(QFile::link(outside, bundle));
+    QVERIFY(QFileInfo(bundle).isSymLink());
+
+    ProjectStore store;
+    const auto saved = store.save(path, sampleDocument(m_red, m_blue), SaveMode::Portable);
+    QVERIFY2(!saved.ok(), "a symlinked bundle folder would receive the photo copies");
+    QCOMPARE(saved.error().code, QStringLiteral("portable-dir"));
+
+    // Nothing was copied through the link, the link is untouched and no
+    // half-written project was left behind.
+    const QStringList leaked =
+        QDir(outside).entryList(QDir::AllEntries | QDir::Hidden | QDir::System
+                                | QDir::NoDotAndDotDot);
+    QVERIFY2(leaked.isEmpty(), qPrintable(leaked.join(QLatin1Char(','))));
+    QVERIFY(QFileInfo(bundle).isSymLink());
+    QVERIFY(!QFileInfo::exists(path));
+
+    // A real bundle folder in the same place still works.
+    QVERIFY(QFile::remove(bundle));
+    QVERIFY(QDir().mkpath(bundle));
+    const auto again = store.save(path, sampleDocument(m_red, m_blue), SaveMode::Portable);
+    if (!again)
+        QFAIL(qPrintable(again.error().message));
+    QVERIFY(QFileInfo::exists(path));
+    QVERIFY(!QDir(bundle)
+                 .entryList(QDir::AllEntries | QDir::Hidden | QDir::System | QDir::NoDotAndDotDot)
+                 .isEmpty());
 }
 
 void TestProjectStore::portableCopyKeepsSameNamedSourcesApart()
@@ -895,6 +1027,44 @@ void TestProjectStore::craftedBrightnessCannotReachTheRenderer()
     QCOMPARE(effectiveTone(inMemory).exposureEv, kMaxBrightnessEv);
     inMemory.brightness = -20.0;
     QCOMPARE(effectiveTone(inMemory).exposureEv, kMinBrightnessEv);
+}
+
+void TestProjectStore::craftedPaperToneIsClamped()
+{
+    const QString projectDir = m_dir.filePath(QStringLiteral("paper-tone"));
+    QVERIFY(QDir().mkpath(projectDir));
+    const QString path = QDir(projectDir).filePath(QStringLiteral("t.ppj"));
+    ProjectStore store;
+    QVERIFY(store.save(path, sampleDocument(m_red, m_blue), SaveMode::Normal).ok());
+
+    // A hand-edited project can carry any number, and the value becomes the
+    // paper exposure through std::pow: a huge positive value blows the cell
+    // out, a huge negative one blacks it out. The trial sheet only ever offers
+    // -0.12 .. 0.12, so the load clamps to that range.
+    QJsonObject root = readJson(path);
+    QJsonArray pages = root.value(QStringLiteral("pages")).toArray();
+    const double crafted[] = {20.0, -20.0};
+    for (int p = 0; p < pages.size(); ++p) {
+        QJsonObject page = pages.at(p).toObject();
+        QJsonArray frames = page.value(QStringLiteral("frames")).toArray();
+        for (int f = 0; f < frames.size(); ++f) {
+            QJsonObject frame = frames.at(f).toObject();
+            frame.insert(QStringLiteral("paperEv"), crafted[p]);
+            frame.insert(QStringLiteral("paperOverride"), true);
+            frames.replace(f, frame);
+        }
+        page.insert(QStringLiteral("frames"), frames);
+        pages.replace(p, page);
+    }
+    root.insert(QStringLiteral("pages"), pages);
+    QVERIFY(writeJson(path, root));
+
+    const auto loaded = store.load(path);
+    if (!loaded)
+        QFAIL(qPrintable(loaded.error().message));
+    const DocumentSnapshot &document = loaded.value().document;
+    QCOMPARE(document.pages.at(0).frames.at(0).paperEv, 0.12);
+    QCOMPARE(document.pages.at(1).frames.at(0).paperEv, -0.12);
 }
 
 void TestProjectStore::versionOneProjectWithoutNewKeysStillLoads()

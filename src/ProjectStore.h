@@ -50,9 +50,22 @@ struct LoadedProject {
 ///    store a relative `source` next to it, so they keep working on the
 ///    author's machine. It is never written into a portable copy: those carry
 ///    only contained relative paths.
+///    It is not trusted blindly. The path is followed only when it is a
+///    regular file and its SHA-256 still equals the frame's recorded identity.
+///    A project from somebody else therefore cannot name an arbitrary local
+///    file to be hashed and rendered, and a FIFO or device there cannot block
+///    the read. A frame without a recorded identity cannot be verified, so its
+///    absolute `original` is treated as missing; the user relinks it. The
+///    accepted cost is that a 1.0.0 photo whose content changed in place at the
+///    same absolute path also reports as missing instead of being shown
+///    unverified. The healthy 1.0.0 layout (same photo, same path) is
+///    unaffected.
 ///  * A portable copy only writes inside its own `.files` folder and only
-///    copies regular, readable files. A failed copy removes what it added and
-///    puts back any file it replaced, so the previous bundle stays usable.
+///    copies regular, readable files. The bundle folder itself must be a real
+///    directory: a `.files` symlink is refused before anything is copied, so
+///    the lexical containment rule cannot be redirected. A failed copy removes
+///    what it added and puts back any file it replaced, so the previous bundle
+///    stays usable.
 class ProjectStore
 {
 public:
