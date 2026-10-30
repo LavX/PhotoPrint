@@ -12,6 +12,7 @@
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QSet>
 #include <QTemporaryDir>
 #include <QtTest>
 
@@ -27,6 +28,12 @@ QImage solid(const QColor &colour)
     image.setColorSpace(QColorSpace(QColorSpace::SRgb));
     image.fill(colour);
     return image;
+}
+
+bool writeImage(const QString &path, const QColor &colour)
+{
+    QImageWriter writer(path, "png");
+    return writer.write(solid(colour));
 }
 
 Frame sampleFrame(const SourceImage &source, const QString &id)
@@ -170,12 +177,16 @@ private slots:
     void zeroPageProjectIsRejected();
     void escapingSourceIsNotRead();
     void blockedRelativeSourceKeepsRelinkInformation();
+    void absoluteSourceIsRefused();
     void absoluteOriginalKeepsNormalProjectsWorking();
     void portableCopyDoesNotStoreAbsolutePaths();
     void portableCopyKeepsSameNamedSourcesApart();
     void portableCopyRollsBackOnFailure();
     void portableCopyReplacementRollsBack();
     void portableCopyReplacementLeavesNoBackup();
+    void portableGeneratedNamesNeverShadowPlainNames();
+    void portableAnonymousNamesAvoidPlainNames();
+    void portableBundleCanBeResaved();
     void craftedBrightnessCannotReachTheRenderer();
     void versionOneProjectWithoutNewKeysStillLoads();
     void missingAndChangedSourcesKeepTheLayout();
@@ -349,6 +360,53 @@ void TestProjectStore::blockedRelativeSourceKeepsRelinkInformation()
     QVERIFY(issue.path.isEmpty());
     // The hint is the cleaned stored path, not a resolved or verified file.
     QCOMPARE(issue.refusedPath, QDir::cleanPath(m_dir.filePath(QStringLiteral("relink-elsewhere.png"))));
+}
+
+void TestProjectStore::absoluteSourceIsRefused()
+{
+    // An absolute `source` is never written by this application, so a project
+    // carrying one is hand-edited or hostile. It may name any file on the
+    // machine, so it must not be opened, hashed or rendered.
+    const QString projectDir = m_dir.filePath(QStringLiteral("absolute-source"));
+    QVERIFY(QDir().mkpath(projectDir));
+    const QString path = QDir(projectDir).filePath(QStringLiteral("a.ppj"));
+    ProjectStore store;
+    QVERIFY(store.save(path, sampleDocument(m_red, m_blue), SaveMode::Normal).ok());
+
+    const QString absolute = QFileInfo(m_redPath).absoluteFilePath();
+    QVERIFY(QDir::isAbsolutePath(absolute));
+    QVERIFY(patchFirstFrame(path, absolute, false));
+
+    {
+        const auto loaded = store.load(path);
+        if (!loaded)
+            QFAIL(qPrintable(loaded.error().message));
+        QCOMPARE(loaded.value().document.pages.at(0).frames.at(0).sourcePath, QString());
+        QCOMPARE(loaded.value().issues.size(), 1);
+        const SourceIssue issue = loaded.value().issues.first();
+        QCOMPARE(issue.frameId, QStringLiteral("frame-red"));
+        QVERIFY(issue.missing);
+        QVERIFY(issue.blocked);
+        QVERIFY(issue.path.isEmpty());
+        // The refusal is still usable as a relink hint, but it is only text.
+        QCOMPARE(issue.refusedPath, QDir::cleanPath(absolute));
+    }
+
+    // The legitimate way to reach a photo outside the folder is `original`,
+    // and only that: the absolute `source` must not win even when it names an
+    // existing, valid photo of its own.
+    QVERIFY(store.save(path, sampleDocument(m_red, m_blue), SaveMode::Normal).ok());
+    QVERIFY(patchFirstFrame(path, QFileInfo(m_bluePath).absoluteFilePath(), true));
+
+    const auto loaded = store.load(path);
+    if (!loaded)
+        QFAIL(qPrintable(loaded.error().message));
+    const Frame frame = loaded.value().document.pages.at(0).frames.at(0);
+    QCOMPARE(frame.sourcePath, QFileInfo(m_redPath).absoluteFilePath());
+    QCOMPARE(frame.sourceSha256, m_redSha);
+    QVERIFY(frame.sourcePath != QFileInfo(m_bluePath).absoluteFilePath());
+    // Resolved through `original`: this is the 1.0.0 layout and it is healthy.
+    QVERIFY(loaded.value().issues.isEmpty());
 }
 
 void TestProjectStore::absoluteOriginalKeepsNormalProjectsWorking()
@@ -559,6 +617,239 @@ void TestProjectStore::portableCopyReplacementLeavesNoBackup()
     QVERIFY(loaded.value().issues.isEmpty());
     const Frame frame = loaded.value().document.pages.at(0).frames.at(0);
     QCOMPARE(fileSha256(frame.sourcePath), other.value().sha256);
+}
+
+void TestProjectStore::portableGeneratedNamesNeverShadowPlainNames()
+{
+    // Two different photos share the base name `photo.png`, so both need a
+    // generated name. The third source already stores its photo under exactly
+    // the hashed name the first one would get. A generated name must never take
+    // a name another source already owns, or the second copy would silently
+    // replace the first.
+    const QString oneDir = m_dir.filePath(QStringLiteral("shadow-a"));
+    const QString twoDir = m_dir.filePath(QStringLiteral("shadow-b"));
+    const QString shadowDir = m_dir.filePath(QStringLiteral("shadow-c"));
+    QVERIFY(QDir().mkpath(oneDir));
+    QVERIFY(QDir().mkpath(twoDir));
+    QVERIFY(QDir().mkpath(shadowDir));
+
+    const QString onePath = QDir(oneDir).filePath(QStringLiteral("photo.png"));
+    const QString twoPath = QDir(twoDir).filePath(QStringLiteral("photo.png"));
+    QVERIFY(QFile::copy(m_redPath, onePath));
+    QVERIFY(QFile::copy(m_bluePath, twoPath));
+
+    ImageStore images;
+    const auto one = images.load(onePath, ImportPolicy{});
+    const auto two = images.load(twoPath, ImportPolicy{});
+    QVERIFY(one.ok());
+    QVERIFY(two.ok());
+    QVERIFY(one.value().sha256 != two.value().sha256);
+
+    const QString green = m_dir.filePath(QStringLiteral("shadow-green.png"));
+    QVERIFY(writeImage(green, QColor(40, 160, 70)));
+    const QString shadowPath =
+        QDir(shadowDir).filePath(QStringLiteral("photo-%1.png")
+                                     .arg(QString::fromLatin1(one.value().sha256.toHex()).left(8)));
+    QVERIFY(QFile::copy(green, shadowPath));
+    const auto shadow = images.load(shadowPath, ImportPolicy{});
+    QVERIFY(shadow.ok());
+
+    DocumentSnapshot document;
+    Page page;
+    page.id = QStringLiteral("page");
+    page.frames.append(sampleFrame(one.value(), QStringLiteral("frame-one")));
+    page.frames.append(sampleFrame(two.value(), QStringLiteral("frame-two")));
+    page.frames.append(sampleFrame(shadow.value(), QStringLiteral("frame-shadow")));
+    document.pages.append(page);
+
+    const QString originDir = m_dir.filePath(QStringLiteral("shadow-bundle"));
+    QVERIFY(QDir().mkpath(originDir));
+    const QString path = QDir(originDir).filePath(QStringLiteral("bundle.ppj"));
+    ProjectStore store;
+    const auto saved = store.save(path, document, SaveMode::Portable);
+    if (!saved)
+        QFAIL(qPrintable(saved.error().message));
+
+    // Three different photos, three different carried files.
+    QStringList stored;
+    for (const QJsonValue &pageValue : readJson(path).value(QStringLiteral("pages")).toArray()) {
+        for (const QJsonValue &frameValue :
+             pageValue.toObject().value(QStringLiteral("frames")).toArray()) {
+            stored.append(frameValue.toObject().value(QStringLiteral("source")).toString());
+        }
+    }
+    QCOMPARE(stored.size(), 3);
+    QSet<QString> unique;
+    for (const QString &name : stored)
+        unique.insert(name);
+    QCOMPARE(unique.size(), 3);
+    QCOMPARE(QDir(path + QStringLiteral(".files")).entryList(QDir::Files).size(), 3);
+
+    const QString movedDir = m_dir.filePath(QStringLiteral("shadow-bundle-moved"));
+    QVERIFY(QDir().rename(originDir, movedDir));
+    const auto loaded = store.load(QDir(movedDir).filePath(QStringLiteral("bundle.ppj")));
+    if (!loaded)
+        QFAIL(qPrintable(loaded.error().message));
+    QVERIFY(loaded.value().issues.isEmpty());
+
+    const auto &frames = loaded.value().document.pages.at(0).frames;
+    QCOMPARE(frames.size(), 3);
+    QCOMPARE(fileSha256(frames.at(0).sourcePath), one.value().sha256);
+    QCOMPARE(fileSha256(frames.at(1).sourcePath), two.value().sha256);
+    QCOMPARE(fileSha256(frames.at(2).sourcePath), shadow.value().sha256);
+    QVERIFY(frames.at(0).sourcePath != frames.at(1).sourcePath);
+    QVERIFY(frames.at(0).sourcePath != frames.at(2).sourcePath);
+    QVERIFY(frames.at(1).sourcePath != frames.at(2).sourcePath);
+}
+
+void TestProjectStore::portableAnonymousNamesAvoidPlainNames()
+{
+    // Frames without a recorded hash get a numbered name. Two of those plus one
+    // source whose plain base name is already `photo-1.png` must still end up
+    // on three files.
+    const QString oneDir = m_dir.filePath(QStringLiteral("anonymous-a"));
+    const QString twoDir = m_dir.filePath(QStringLiteral("anonymous-b"));
+    const QString plainDir = m_dir.filePath(QStringLiteral("anonymous-plain"));
+    QVERIFY(QDir().mkpath(oneDir));
+    QVERIFY(QDir().mkpath(twoDir));
+    QVERIFY(QDir().mkpath(plainDir));
+
+    const QString onePath = QDir(oneDir).filePath(QStringLiteral("photo.png"));
+    const QString twoPath = QDir(twoDir).filePath(QStringLiteral("photo.png"));
+    const QString plainPath = QDir(plainDir).filePath(QStringLiteral("photo-1.png"));
+    QVERIFY(QFile::copy(m_redPath, onePath));
+    QVERIFY(writeImage(twoPath, QColor(40, 160, 70)));
+    QVERIFY(QFile::copy(m_bluePath, plainPath));
+
+    ImageStore images;
+    const auto one = images.load(onePath, ImportPolicy{});
+    const auto two = images.load(twoPath, ImportPolicy{});
+    const auto plain = images.load(plainPath, ImportPolicy{});
+    QVERIFY(one.ok());
+    QVERIFY(two.ok());
+    QVERIFY(plain.ok());
+    QVERIFY(one.value().sha256 != two.value().sha256);
+
+    DocumentSnapshot document;
+    Page page;
+    page.id = QStringLiteral("page");
+    Frame hashlessOne = sampleFrame(one.value(), QStringLiteral("frame-hashless-one"));
+    hashlessOne.sourceSha256.clear(); // a project may carry no identity at all
+    Frame hashlessTwo = sampleFrame(two.value(), QStringLiteral("frame-hashless-two"));
+    hashlessTwo.sourceSha256.clear();
+    page.frames.append(hashlessOne);
+    page.frames.append(hashlessTwo);
+    page.frames.append(sampleFrame(plain.value(), QStringLiteral("frame-plain")));
+    document.pages.append(page);
+
+    const QString originDir = m_dir.filePath(QStringLiteral("anonymous-bundle"));
+    QVERIFY(QDir().mkpath(originDir));
+    const QString path = QDir(originDir).filePath(QStringLiteral("bundle.ppj"));
+    ProjectStore store;
+    const auto saved = store.save(path, document, SaveMode::Portable);
+    if (!saved)
+        QFAIL(qPrintable(saved.error().message));
+
+    QStringList stored;
+    for (const QJsonValue &pageValue : readJson(path).value(QStringLiteral("pages")).toArray()) {
+        for (const QJsonValue &frameValue :
+             pageValue.toObject().value(QStringLiteral("frames")).toArray()) {
+            stored.append(frameValue.toObject().value(QStringLiteral("source")).toString());
+        }
+    }
+    QCOMPARE(stored.size(), 3);
+    QSet<QString> unique;
+    for (const QString &name : stored)
+        unique.insert(name);
+    QCOMPARE(unique.size(), 3);
+    // The plain name stays with the source that owns it.
+    QVERIFY2(QFileInfo(stored.at(2)).fileName() == QStringLiteral("photo-1.png"),
+             qPrintable(stored.at(2)));
+    QCOMPARE(QDir(path + QStringLiteral(".files")).entryList(QDir::Files).size(), 3);
+
+    const QString movedDir = m_dir.filePath(QStringLiteral("anonymous-bundle-moved"));
+    QVERIFY(QDir().rename(originDir, movedDir));
+    const auto loaded = store.load(QDir(movedDir).filePath(QStringLiteral("bundle.ppj")));
+    if (!loaded)
+        QFAIL(qPrintable(loaded.error().message));
+
+    const auto &frames = loaded.value().document.pages.at(0).frames;
+    QCOMPARE(frames.size(), 3);
+    QCOMPARE(fileSha256(frames.at(0).sourcePath), one.value().sha256);
+    QCOMPARE(fileSha256(frames.at(1).sourcePath), two.value().sha256);
+    QCOMPARE(fileSha256(frames.at(2).sourcePath), plain.value().sha256);
+}
+
+void TestProjectStore::portableBundleCanBeResaved()
+{
+    const QString projectDir = m_dir.filePath(QStringLiteral("resave"));
+    QVERIFY(QDir().mkpath(projectDir));
+    const QString path = QDir(projectDir).filePath(QStringLiteral("r.ppj"));
+    const QString filesDir = path + QStringLiteral(".files");
+    ProjectStore store;
+    QVERIFY(store.save(path, sampleDocument(m_red, m_blue), SaveMode::Portable).ok());
+
+    // Loading a bundle points every frame at the carried file, so a plain
+    // re-save copies each file onto itself and must stay a no-op.
+    const auto first = store.load(path);
+    if (!first)
+        QFAIL(qPrintable(first.error().message));
+    QVERIFY(first.value().issues.isEmpty());
+    DocumentSnapshot document = first.value().document;
+    for (const Page &page : document.pages) {
+        for (const Frame &frame : page.frames)
+            QVERIFY2(frame.sourcePath.contains(QStringLiteral(".files")), qPrintable(frame.sourcePath));
+    }
+    QVERIFY(store.save(path, document, SaveMode::Portable).ok());
+    QCOMPARE(QDir(filesDir).entryList(QDir::Files | QDir::Hidden | QDir::System).size(), 2);
+
+    // The carried copy no longer matches the hash the project recorded. The
+    // save used to move that file aside and then copy the very file it had just
+    // moved, which could never succeed and made the bundle unsavable.
+    const QString carried = QDir(filesDir).filePath(QStringLiteral("red.png"));
+    QCOMPARE(fileSha256(carried), m_redSha);
+    {
+        const QByteArray extra = QByteArrayLiteral("edited after the last save");
+        QFile file(carried);
+        QVERIFY(file.open(QIODevice::Append));
+        QCOMPARE(file.write(extra), qint64(extra.size()));
+    }
+    const auto second = store.load(path);
+    if (!second)
+        QFAIL(qPrintable(second.error().message));
+    QCOMPARE(second.value().issues.size(), 1);
+    QVERIFY(second.value().issues.first().changed);
+
+    QVERIFY(store.save(path, second.value().document, SaveMode::Portable).ok());
+    QVERIFY(QFileInfo::exists(carried));
+    QVERIFY(QFileInfo(carried).size() > QFileInfo(m_redPath).size());
+    QCOMPARE(QDir(filesDir).entryList(QDir::Files | QDir::Hidden | QDir::System).size(), 2);
+
+    // A relinked source is the real repair: it replaces the stale carried file.
+    const QString replacementDir = m_dir.filePath(QStringLiteral("resave-replacement"));
+    QVERIFY(QDir().mkpath(replacementDir));
+    const QString replacementPath = QDir(replacementDir).filePath(QStringLiteral("red.png"));
+    QVERIFY(writeImage(replacementPath, QColor(40, 160, 70)));
+    ImageStore images;
+    const auto replacement = images.load(replacementPath, ImportPolicy{});
+    QVERIFY(replacement.ok());
+    QVERIFY(replacement.value().sha256 != m_redSha);
+
+    DocumentSnapshot relinked = second.value().document;
+    relinked.pages[0].frames[0].sourcePath = replacement.value().path;
+    relinked.pages[0].frames[0].sourceSha256 = replacement.value().sha256;
+    const auto resaved = store.save(path, relinked, SaveMode::Portable);
+    if (!resaved)
+        QFAIL(qPrintable(resaved.error().message));
+    QCOMPARE(fileSha256(carried), replacement.value().sha256);
+    QCOMPARE(QDir(filesDir).entryList(QDir::Files | QDir::Hidden | QDir::System).size(), 2);
+
+    const auto third = store.load(path);
+    if (!third)
+        QFAIL(qPrintable(third.error().message));
+    QVERIFY(third.value().issues.isEmpty());
+    QCOMPARE(fileSha256(third.value().document.pages.at(0).frames.at(0).sourcePath),
+             replacement.value().sha256);
 }
 
 void TestProjectStore::craftedBrightnessCannotReachTheRenderer()

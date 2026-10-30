@@ -13,7 +13,8 @@ enum class SaveMode { Normal, Portable };
 struct SourceIssue {
     QString frameId;
     QString path;
-    /// Cleaned form of the project-relative `source` this load refused. Purely
+    /// Cleaned form of the `source` this load refused, whether it was a
+    /// project-relative path escaping the folder or an absolute one. Purely
     /// informational: a relink dialog can start next to it. It is never
     /// resolved, opened or written back, so it must not be treated as trusted.
     /// Empty when nothing was refused or there was no project directory.
@@ -21,7 +22,8 @@ struct SourceIssue {
     QByteArray expectedSha256;
     bool missing = false;
     bool changed = false;
-    /// The stored path pointed outside the project directory and was not used.
+    /// The stored `source` was not a path inside the project directory: a `..`
+    /// escape, a symlink leading out, or an absolute value. It was not used.
     bool blocked = false;
 };
 
@@ -38,13 +40,16 @@ struct LoadedProject {
 /// else:
 ///  * `source` is project-relative by contract. It is resolved only when it
 ///    stays inside the project directory (the portable `.files` folder is
-///    inside it). `..` escapes and symlinks leading out are rejected, never
-///    opened, and reported as a blocked issue. The layout is still restored so
-///    the user can relink the photo.
-///  * `original` is the absolute path recorded for relinking. 1.0.0 projects
-///    rely on it because their photos normally live outside the project
-///    folder, so it keeps working on the author's machine. It is never written
-///    into a portable copy: those carry only contained relative paths.
+///    inside it). `..` escapes, symlinks leading out and absolute values are
+///    rejected, never opened, and reported as a blocked issue; an absolute
+///    value is kept only as a relink hint. The layout is still restored so the
+///    user can relink the photo.
+///  * `original` is the absolute path recorded for relinking, and the only
+///    thing a refused `source` may resolve through. 1.0.0 projects rely on it
+///    because their photos normally live outside the project folder, and they
+///    store a relative `source` next to it, so they keep working on the
+///    author's machine. It is never written into a portable copy: those carry
+///    only contained relative paths.
 ///  * A portable copy only writes inside its own `.files` folder and only
 ///    copies regular, readable files. A failed copy removes what it added and
 ///    puts back any file it replaced, so the previous bundle stays usable.
@@ -61,8 +66,9 @@ public:
     /// it and no absolute `original` is written.
     static QByteArray serialize(const DocumentSnapshot &document, const QString &projectDir,
                                 const QString &portableDir = QString());
-    /// Parses without a project directory, so only absolute recorded paths can
-    /// be resolved. Use load() when relative sources should be followed.
+    /// Parses without a project directory, so no relative `source` can be
+    /// followed; only an absolute `original` is resolved. Use load() when
+    /// relative sources should be followed.
     static Result<DocumentSnapshot> deserialize(const QByteArray &json);
 };
 
