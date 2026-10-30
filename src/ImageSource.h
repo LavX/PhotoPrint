@@ -9,6 +9,7 @@
 #include <QString>
 
 #include <memory>
+#include <optional>
 #include <stop_token>
 
 namespace pp {
@@ -51,7 +52,10 @@ public:
 
     Result<SourceImage> load(const QString &path, const ImportPolicy &policy,
                              std::stop_token token = {});
-    const SourceImage *cached(const QString &path) const;
+    /// A copy of the cached entry, or nothing when the path was never loaded.
+    /// The copy is taken under the lock, so it stays valid when another thread
+    /// loads or clears the store; the pixels are shared copy-on-write.
+    std::optional<SourceImage> cached(const QString &path) const;
 
     /// Re-reads the file and checks that the content still has the recorded
     /// identity. A changed or missing file never silently reuses a cache entry.

@@ -21,6 +21,7 @@
 
 #include <functional>
 #include <memory>
+#include <optional>
 
 class QAbstractButton;
 class QCheckBox;
@@ -203,7 +204,7 @@ private:
     Frame makeInitialFrame(const SourceImage &source, const Page &page) const;
     bool pageOverflows() const;
     bool projectPrintGeometryConsistent(const DocumentSnapshot &document) const;
-    const Frame *selectedFrame();
+    std::optional<Frame> selectedFrame();
     PaperSpec currentPaper() const;
     const PrinterCapabilities *printerByQueue(const QString &queue) const;
 
