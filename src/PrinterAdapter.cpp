@@ -1,6 +1,7 @@
 #include "PrintTicket.h"
 
 #include <QCoreApplication>
+#include <QRegularExpression>
 #include <QStringList>
 
 #include <algorithm>
@@ -18,6 +19,20 @@ constexpr double kCustomMinWidthMm = 88.9;
 constexpr double kCustomMaxWidthMm = 215.9;
 constexpr double kCustomMinHeightMm = 127.0;
 constexpr double kCustomMaxHeightMm = 355.6;
+
+/// The limiting resolution of a CUPS keyword such as "600dpi" or "1200x600dpi".
+int resolutionDpi(const QString &keyword)
+{
+    static const QRegularExpression re(QStringLiteral("([0-9]+)"));
+    int best = 0;
+    auto it = re.globalMatch(keyword);
+    while (it.hasNext()) {
+        const int value = it.next().captured(1).toInt();
+        if (value > 0 && (best == 0 || value < best))
+            best = value;
+    }
+    return best;
+}
 
 bool approx(double a, double b, double tolerance = kTolerance)
 {
@@ -294,6 +309,39 @@ Result<PrintTicket> PrinterAdapter::resolve(const PrinterCapabilities &capabilit
                      capabilities.defaultQuality)
         : pickOption(capabilities.qualityOptions, {QStringLiteral("Normal")},
                      capabilities.defaultQuality);
+    // The raster resolution follows what the queue advertises: a 300 dpi
+    // printer gets 300 ppi, a 1200 dpi printer still gets at most what the
+    // quality level needs. Queues without a Resolution group keep the default.
+    const int wantedDpi = selection.fineQuality ? 1200 : 300;
+    if (!capabilities.resolutionOptions.isEmpty()) {
+        int chosenDpi = 0;
+        QString chosenKeyword;
+        int largestDpi = 0;
+        QString largestKeyword;
+        for (const QString &keyword : capabilities.resolutionOptions) {
+            const int dpi = resolutionDpi(keyword);
+            if (dpi <= 0)
+                continue;
+            if (dpi >= wantedDpi && (chosenDpi == 0 || dpi < chosenDpi)) {
+                chosenDpi = dpi;
+                chosenKeyword = keyword;
+            }
+            if (dpi > largestDpi) {
+                largestDpi = dpi;
+                largestKeyword = keyword;
+            }
+        }
+        if (chosenDpi == 0 && largestDpi > 0) {
+            chosenDpi = largestDpi;
+            chosenKeyword = largestKeyword;
+        }
+        if (chosenDpi > 0) {
+            ticket.resolutionOption = capabilities.resolutionOptionName;
+            ticket.resolutionValue = chosenKeyword;
+            ticket.printResolutionDpi = chosenDpi;
+        }
+    }
+
     ticket.colorOption = selection.color
         ? pickOption(capabilities.colorOptions,
                      {QStringLiteral("FullColor"), QStringLiteral("RGB"),

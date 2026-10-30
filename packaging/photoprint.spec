@@ -49,4 +49,5 @@ install -D -m 0644 resources/photoprint.svg %{buildroot}%{_datadir}/icons/hicolo
 
 %changelog
 * Fri Oct 30 2026 Laszlo Toth <lavx@lavx.hu> - 1.0.0-1
-- First local build
+- First public build
+- Print resolution follows the CUPS queue

@@ -44,6 +44,9 @@ struct PrinterCapabilities {
     QList<QString> qualityOptions;
     QList<QString> colorOptions;
     QList<QString> duplexOptions;
+    QList<QString> resolutionOptions;  ///< PPD keywords, e.g. 300dpi, 600dpi
+    QString resolutionOptionName;      ///< the PPD option, normally "Resolution"
+    QString defaultResolution;
 
     QString defaultPageSize;
     QString defaultMediaType;
@@ -83,6 +86,9 @@ struct PrintTicket {
     QString qualityOption;
     QString colorOption;
     QString duplexOption;
+    QString resolutionOption;  ///< empty when the queue has no resolution option
+    QString resolutionValue;
+    int printResolutionDpi = 0;
 
     int copies = 1;
     int firstPage = 1;

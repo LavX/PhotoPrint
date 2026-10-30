@@ -25,6 +25,8 @@ MagickWand.
 - Paper sizes in centimetres: A4, A5, A6, 9 × 13, 10 × 15 and 13 × 18 cm, plus
   saved custom paper profiles and glossy/matte/plain types.
 - Print quality (highest/normal), colour or grayscale, copies and page count.
+  The raster follows the resolution the queue advertises: up to 1200 ppi in the
+  highest mode, 300 ppi in normal, and lower if the printer cannot use more.
 - The chosen printer, paper, orientation and print settings are remembered.
 - Versioned `.ppj` projects, portable copies that carry the originals, atomic
   saves and two-slot crash recovery.

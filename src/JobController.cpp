@@ -78,10 +78,18 @@ Result<JobResult> JobController::start(const DocumentSnapshot &document,
                                                            + QStringLiteral(".pdf"));
     RenderOptions options;
     options.verifySources = true;
-    options.printPpi = (ticket.qualityOption.compare(QLatin1String("Fine"), Qt::CaseInsensitive) == 0
-                        || ticket.qualityOption.compare(QLatin1String("High"), Qt::CaseInsensitive) == 0)
-        ? 600.0
-        : 300.0;
+    const bool fine =
+        ticket.qualityOption.compare(QLatin1String("Fine"), Qt::CaseInsensitive) == 0
+        || ticket.qualityOption.compare(QLatin1String("High"), Qt::CaseInsensitive) == 0;
+    // The queue's resolution decides. Highest follows it up to 1200 ppi
+    // (a 1200 dpi queue really gets 1200 ppi), normal stays at 300 ppi even
+    // when the queue only offers something larger.
+    double ppi = fine ? 1200.0 : 300.0;
+    if (ticket.printResolutionDpi > 0)
+        ppi = std::min(ppi, static_cast<double>(ticket.printResolutionDpi));
+    else if (fine)
+        ppi = 600.0;  // no resolution advertised: the safe default
+    options.printPpi = std::clamp(ppi, 150.0, 1200.0);
     options.mediaSizeMm = ticket.geometry.logicalSizeMm();
     options.contentOffsetMm = ticket.geometry.physicalOriginInLogicalMm;
     const QSizeF physical = ticket.geometry.physicalSizeMm();
@@ -150,6 +158,7 @@ Result<void> JobController::writeManifest(const QUuid &id, const QByteArray &pdf
     manifest.insert(QStringLiteral("pageSizeOption"), ticket.pageSizeOption);
     manifest.insert(QStringLiteral("mediaTypeOption"), ticket.mediaTypeOption);
     manifest.insert(QStringLiteral("qualityOption"), ticket.qualityOption);
+    manifest.insert(QStringLiteral("printResolutionDpi"), ticket.printResolutionDpi);
     manifest.insert(QStringLiteral("colorOption"), ticket.colorOption);
     manifest.insert(QStringLiteral("duplexOption"), ticket.duplexOption);
     manifest.insert(QStringLiteral("copies"), ticket.copies);

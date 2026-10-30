@@ -72,6 +72,8 @@ SubmitOutcome RealCupsBackend::submit(const QString &queue, const ExportArtifact
         add(QStringLiteral("media-type"), ticket.mediaTypeOption);
         add(QStringLiteral("cupsPrintQuality"), ticket.qualityOption);
         add(QStringLiteral("ColorModel"), ticket.colorOption);
+        if (!ticket.resolutionOption.isEmpty() && !ticket.resolutionValue.isEmpty())
+            add(ticket.resolutionOption, ticket.resolutionValue);
     }
     add(QStringLiteral("Duplex"), QStringLiteral("None"));
 

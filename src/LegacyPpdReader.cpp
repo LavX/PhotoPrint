@@ -103,6 +103,8 @@ Result<PrinterCapabilities> LegacyPpdReader::parse(const QByteArray &ppdText,
     QStringList qualityOptions;
     QStringList colorOptions;
     QStringList duplexOptions;
+    QStringList resolutionOptions;
+    QString resolutionOptionName;
     QHash<QString, QString> defaults;
 
     bool nativeBrother = false;
@@ -193,8 +195,15 @@ Result<PrinterCapabilities> LegacyPpdReader::parse(const QByteArray &ppdText,
                 QString option;
                 QString display;
                 splitOption(optionRaw, &option, &display);
-                if (!qualityOptions.contains(option))
+                if (key == QLatin1String("Resolution")) {
+                    // CUPS presets such as Draft/Normal/High come from
+                    // cupsPrintQuality; a Resolution group holds dpi keywords.
+                    resolutionOptionName = key;
+                    if (!resolutionOptions.contains(option))
+                        resolutionOptions.append(option);
+                } else if (!qualityOptions.contains(option)) {
                     qualityOptions.append(option);
+                }
             }
         } else if (key == QLatin1String("ColorModel") || key == QLatin1String("BRMonoColor")) {
             if (key == QLatin1String("BRMonoColor"))
@@ -257,6 +266,8 @@ Result<PrinterCapabilities> LegacyPpdReader::parse(const QByteArray &ppdText,
     capabilities.qualityOptions = qualityOptions;
     capabilities.colorOptions = colorOptions;
     capabilities.duplexOptions = duplexOptions;
+    capabilities.resolutionOptions = resolutionOptions;
+    capabilities.resolutionOptionName = resolutionOptionName;
 
     capabilities.defaultPageSize = defaults.value(QStringLiteral("PageSize"));
     capabilities.defaultMediaType = defaults.value(QStringLiteral("MediaType"),
@@ -266,6 +277,7 @@ Result<PrinterCapabilities> LegacyPpdReader::parse(const QByteArray &ppdText,
     capabilities.defaultColor = defaults.value(QStringLiteral("ColorModel"),
                                                defaults.value(QStringLiteral("BRMonoColor")));
     capabilities.defaultDuplex = defaults.value(QStringLiteral("Duplex"));
+    capabilities.defaultResolution = defaults.value(QStringLiteral("Resolution"));
 
     if (!capabilities.modelName.isEmpty()) {
         capabilities.displayName =

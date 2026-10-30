@@ -32,6 +32,13 @@ PrinterCapabilities ippCaps()
     return parsed.ok() ? parsed.value() : PrinterCapabilities{};
 }
 
+PrinterCapabilities genericCaps()
+{
+    const auto parsed = PrinterCatalog::fromPpdFile(
+        QStringLiteral("Generic"), fixtureDir() + QStringLiteral("/generic-resolution.ppd"));
+    return parsed.ok() ? parsed.value() : PrinterCapabilities{};
+}
+
 PrintSelection photoSelection()
 {
     PrintSelection selection;
@@ -90,6 +97,11 @@ private slots:
     void customSizeOutsideTheRangeIsRejected();
     void customBorderlessIsRejected();
     void qualityChoiceMapsToTheHighAndNormalOptions();
+    void resolutionGroupIsRead();
+    void resolutionFollowsTheQualityLevel();
+    void midResolutionQueueStaysAtSixHundred();
+    void lowResolutionQueueIsRespected();
+    void highResolutionQueueKeepsItsOption();
     void colourChoiceMapsToGrayAndMono();
     void copiesAndPageRangeAreChecked();
 };
@@ -432,6 +444,71 @@ void TestPrinterOptions::qualityChoiceMapsToTheHighAndNormalOptions()
     if (!normalIpp)
         QFAIL(qPrintable(normalIpp.error().message));
     QCOMPARE(normalIpp.value().qualityOption, QStringLiteral("Normal"));
+}
+
+void TestPrinterOptions::resolutionGroupIsRead()
+{
+    const PrinterCapabilities capabilities = genericCaps();
+    QCOMPARE(capabilities.resolutionOptionName, QStringLiteral("Resolution"));
+    const QStringList expected = {QStringLiteral("300dpi"), QStringLiteral("600dpi"),
+                                  QStringLiteral("1200dpi")};
+    QCOMPARE(capabilities.resolutionOptions, expected);
+    QCOMPARE(capabilities.defaultResolution, QStringLiteral("600dpi"));
+    // Resolution keywords must not leak into the quality list: those are
+    // cupsPrintQuality values, and sending 600dpi as one would be invalid.
+    QVERIFY(!capabilities.qualityOptions.contains(QStringLiteral("600dpi")));
+}
+
+void TestPrinterOptions::resolutionFollowsTheQualityLevel()
+{
+    const PrinterCapabilities capabilities = genericCaps();
+
+    const auto fine = PrinterAdapter::resolve(capabilities, photoSelection());
+    QVERIFY(fine.ok());
+    QCOMPARE(fine.value().printResolutionDpi, 1200);
+    QCOMPARE(fine.value().resolutionOption, QStringLiteral("Resolution"));
+    QCOMPARE(fine.value().resolutionValue, QStringLiteral("1200dpi"));
+
+    PrintSelection normal = photoSelection();
+    normal.fineQuality = false;
+    const auto everyday = PrinterAdapter::resolve(capabilities, normal);
+    QVERIFY(everyday.ok());
+    QCOMPARE(everyday.value().printResolutionDpi, 300);
+    QCOMPARE(everyday.value().resolutionValue, QStringLiteral("300dpi"));
+}
+
+void TestPrinterOptions::midResolutionQueueStaysAtSixHundred()
+{
+    PrinterCapabilities capabilities = genericCaps();
+    capabilities.resolutionOptions = {QStringLiteral("300dpi"), QStringLiteral("600dpi")};
+    const auto ticket = PrinterAdapter::resolve(capabilities, photoSelection());
+    QVERIFY(ticket.ok());
+    QCOMPARE(ticket.value().printResolutionDpi, 600);
+    QCOMPARE(ticket.value().resolutionValue, QStringLiteral("600dpi"));
+}
+
+void TestPrinterOptions::lowResolutionQueueIsRespected()
+{
+    PrinterCapabilities capabilities = genericCaps();
+    capabilities.resolutionOptions = {QStringLiteral("300dpi")};
+    const auto ticket = PrinterAdapter::resolve(capabilities, photoSelection());
+    QVERIFY(ticket.ok());
+    QCOMPARE(ticket.value().printResolutionDpi, 300);
+    QCOMPARE(ticket.value().resolutionValue, QStringLiteral("300dpi"));
+}
+
+void TestPrinterOptions::highResolutionQueueKeepsItsOption()
+{
+    PrinterCapabilities capabilities = genericCaps();
+    capabilities.resolutionOptions = {QStringLiteral("1200dpi")};
+    PrintSelection normal = photoSelection();
+    normal.fineQuality = false;
+    const auto ticket = PrinterAdapter::resolve(capabilities, normal);
+    QVERIFY(ticket.ok());
+    // The queue has no lower option, so the keyword stays 1200dpi; the raster
+    // itself is still capped at 600 ppi by JobController.
+    QCOMPARE(ticket.value().printResolutionDpi, 1200);
+    QCOMPARE(ticket.value().resolutionValue, QStringLiteral("1200dpi"));
 }
 
 void TestPrinterOptions::colourChoiceMapsToGrayAndMono()
