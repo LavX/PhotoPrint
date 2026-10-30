@@ -2,6 +2,7 @@
 #include "PrintTicket.h"
 
 #include <QDir>
+#include <QFile>
 #include <QTemporaryDir>
 #include <QtTest>
 
@@ -52,6 +53,7 @@ private slots:
     void differentInkInvalidatesTheMatch();
     void presetsSurviveARestart();
     void nonFinitePaperToneIsRefused();
+    void outOfRangePaperToneIsRefusedOnBothSides();
 };
 
 void TestPaperPresets::matchRequiresTheWholeEnvironment()
@@ -179,6 +181,74 @@ void TestPaperPresets::nonFinitePaperToneIsRefused()
     const auto match = store.match(context);
     QVERIFY(match.has_value());
     QCOMPARE(match->paperEv, -0.06);
+}
+
+void TestPaperPresets::outOfRangePaperToneIsRefusedOnBothSides()
+{
+    // The read side sees a file somebody else may have written. A finite but
+    // huge exposure is reachable: the JSON parser accepts 1000, and the store
+    // used to accept every finite number, so a hand-edited preset reached
+    // std::pow with a value the recipe could never honour. |paperEv| <=
+    // kMaxPaperEv is the same bound the recipe is sanitised to.
+    //
+    // A NaN or an infinity is not even reachable through JSON: the parser
+    // rejects the overflowing literal and the whole file is refused, exactly as
+    // a non-finite field would be. That case is covered here too, so a future
+    // parser change cannot smuggle one in.
+    const QByteArray context =
+        QByteArrayLiteral(R"("context":{"queue":"DCPT730DW","physicalWidthMm":100,)"
+                          R"("physicalHeightMm":150,"logicalWidthMm":101.6,)"
+                          R"("logicalHeightMm":152.4})");
+    const QList<QByteArray> damaged = {
+        QByteArrayLiteral(R"([{"id":"a","paperEv":1000,)") + context + QByteArrayLiteral("}]"),
+        QByteArrayLiteral(R"([{"id":"a","paperEv":-1000,)") + context + QByteArrayLiteral("}]"),
+        QByteArrayLiteral(R"([{"id":"a","paperEv":1e400,)") + context + QByteArrayLiteral("}]"),
+        QByteArrayLiteral(R"([{"id":"a","paperEv":-1e400,)") + context + QByteArrayLiteral("}]"),
+    };
+
+    for (const QByteArray &content : damaged) {
+        QTemporaryDir dir;
+        QVERIFY(dir.isValid());
+        const QString path = dir.filePath(QStringLiteral("presets.json"));
+        {
+            QFile file(path);
+            QVERIFY(file.open(QIODevice::WriteOnly));
+            QCOMPARE(file.write(content), qint64(content.size()));
+        }
+
+        PaperPresetStore presets(path);
+        const auto read = presets.readAll();
+        QVERIFY2(!read.ok(), content.constData());
+        QCOMPARE(read.error().code, QStringLiteral("preset-corrupt"));
+        // Nothing in that file may be matched, so the cell is never driven by a
+        // value the recipe would clamp away anyway.
+        QVERIFY(!presets.match(baseContext()).has_value());
+        QVERIFY(presets.all().isEmpty());
+
+        // And the file is left alone: a failed read must not be repaired into a
+        // loss of the entry the person can still fix by hand.
+        QFile file(path);
+        QVERIFY(file.open(QIODevice::ReadOnly));
+        QCOMPARE(file.readAll(), content);
+    }
+
+    // The write side refuses the same magnitude before it can reach a file.
+    QTemporaryDir dir;
+    QVERIFY(dir.isValid());
+    PaperPresetStore presets(dir.filePath(QStringLiteral("presets.json")));
+    const PrintContext contextValue = baseContext();
+    const double tooStrong = kMaxPaperEv + 0.01;
+    for (const double ev : {tooStrong, -tooStrong}) {
+        const auto saved = presets.save(presetFor(contextValue, ev, QStringLiteral("strong")));
+        QVERIFY2(!saved.ok(), qPrintable(QString::number(ev)));
+        QCOMPARE(saved.error().code, QStringLiteral("preset-context"));
+    }
+
+    // The bound itself is still a usable correction.
+    QVERIFY(presets.save(presetFor(contextValue, kMaxPaperEv, QStringLiteral("edge"))).ok());
+    const auto match = presets.match(contextValue);
+    QVERIFY(match.has_value());
+    QCOMPARE(match->paperEv, kMaxPaperEv);
 }
 
 QTEST_GUILESS_MAIN(TestPaperPresets)

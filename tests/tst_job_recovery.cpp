@@ -528,11 +528,21 @@ void TestJobRecovery::resultVoidAccessorsMatchTheTypedResult()
     // Both error() accessors assert on misuse in a debug build. With assertions
     // compiled out they throw instead of returning a made-up empty error, which
     // is what the type without a value used to do.
+    //
+    // The development preset builds Debug, so Q_ASSERT is live and calling
+    // error() on a success would abort the test process: this branch cannot run
+    // there. The release configuration is what covers it:
+    //   cmake --preset release && cmake --build --preset release
+    //   QT_QPA_PLATFORM=offscreen ctest --test-dir build/release
+    // The debug run skips instead of passing silently, so the gap is visible.
 #if defined(QT_NO_DEBUG)
     QVERIFY_EXCEPTION_THROWN(success.error(), std::bad_optional_access);
     const Result<int> typed(1);
     QVERIFY(typed.ok());
     QVERIFY_EXCEPTION_THROWN(typed.error(), std::bad_variant_access);
+#else
+    QSKIP("QT_NO_DEBUG is not defined in a debug build; the release suite covers "
+          "the throwing contract");
 #endif
 }
 

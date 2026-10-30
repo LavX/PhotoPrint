@@ -1,4 +1,5 @@
 #include "LegacyPpdReader.h"
+#include "PaperPresetStore.h"
 #include "PrintTicket.h"
 #include "PrinterCatalog.h"
 
@@ -119,6 +120,8 @@ private slots:
     void adapterPageDescribesTheSameSheetAsTheMediaBox();
     void landscapeCustomPageMatchesTheMediaBox();
     void namedModeIsReconciledWithTheMediaBox();
+    void landscapeOrderedDriverPageIsNormalised();
+    void toleranceMatchedNamedPageKeepsTheDeclaredSheet();
     void destinationLookupNeedsTheStatus();
     void stickyCupsErrorIsClearedBeforeTheLookup();
     void printContextEqualityUsesMillimetreTolerance();
@@ -782,6 +785,96 @@ void TestPrinterOptions::namedModeIsReconciledWithTheMediaBox()
     const auto nativeRejected = PrinterAdapter::resolve(nativeCaps(), nativeContradictory);
     QVERIFY(!nativeRejected.ok());
     QCOMPARE(nativeRejected.error().code, QStringLiteral("paper-unsupported"));
+}
+
+void TestPrinterOptions::landscapeOrderedDriverPageIsNormalised()
+{
+    // PageSizeCapability documents a portrait-ordered page only by convention:
+    // a driver may report the 4x6 sheet as 152.4 x 101.6. PaperGeometry rotates
+    // the stored logical sheet by the landscape flag, so copying the driver
+    // numbers through as-is rotated the page a second time and asked for a
+    // portrait media box on a landscape sheet. The sheet is stored portrait
+    // ordered, shortest side first, exactly like the physical sheet.
+    PrinterCapabilities capabilities;
+    capabilities.queueName = QStringLiteral("Test");
+    PageSizeCapability wide;
+    wide.option = QStringLiteral("4x6");
+    wide.displayName = wide.option;
+    wide.widthMm = 152.4;
+    wide.heightMm = 101.6;
+    capabilities.pageSizes.append(wide);
+
+    PrintSelection selection = photoSelection();
+    selection.paper.logicalWidthMm = 0.0;
+    selection.paper.logicalHeightMm = 0.0;
+
+    const auto portrait = PrinterAdapter::resolve(capabilities, selection);
+    if (!portrait)
+        QFAIL(qPrintable(portrait.error().message));
+    QCOMPARE(portrait.value().pageSizeOption, QStringLiteral("4x6"));
+    QCOMPARE(portrait.value().geometry.logicalSizeMm(), QSizeF(101.6, 152.4));
+    QCOMPARE(PrinterAdapter::contextFor(portrait.value()).logicalWidthMm, 101.6);
+    QCOMPARE(PrinterAdapter::contextFor(portrait.value()).logicalHeightMm, 152.4);
+
+    // The landscape flag is the only thing that rotates it, once.
+    selection.landscape = true;
+    const auto landscape = PrinterAdapter::resolve(capabilities, selection);
+    if (!landscape)
+        QFAIL(qPrintable(landscape.error().message));
+    QVERIFY(landscape.value().geometry.landscape);
+    QCOMPARE(landscape.value().geometry.logicalSizeMm(), QSizeF(152.4, 101.6));
+}
+
+void TestPrinterOptions::toleranceMatchedNamedPageKeepsTheDeclaredSheet()
+{
+    // 13 x 18 cm photo paper declares 127 x 177.8 mm. The native 5x7 mode is
+    // 126.65 x 178.18 mm: sameSize() accepts it, so it may name the option, but
+    // it must not rewrite the declared sheet. The two differ below the 0.45 mm
+    // page tolerance and above the 0.01 mm print-context tolerance, so copying
+    // the mode's millimetres into the geometry changed the media box and every
+    // saved paper preset for this paper stopped matching.
+    const PrinterCapabilities capabilities = nativeCaps();
+    const PageSizeCapability *mode = capabilities.findPageSize(QStringLiteral("BrPhoto2L_S"));
+    QVERIFY(mode);
+    QVERIFY(std::abs(mode->widthMm - 127.0) < 0.45);   // accepted by sameSize()
+    QVERIFY(std::abs(mode->widthMm - 127.0) > 0.01);   // but not the same context
+
+    PrintSelection thirteen = photoSelection();
+    thirteen.paper.name = QStringLiteral("13 × 18 cm");
+    thirteen.paper.physicalWidthMm = 127.0;
+    thirteen.paper.physicalHeightMm = 177.8;
+    thirteen.paper.logicalWidthMm = 127.0;
+    thirteen.paper.logicalHeightMm = 177.8;
+
+    const auto ticket = PrinterAdapter::resolve(capabilities, thirteen);
+    if (!ticket)
+        QFAIL(qPrintable(ticket.error().message));
+    QCOMPARE(ticket.value().pageSizeOption, QStringLiteral("BrPhoto2L_S"));
+    QCOMPARE(ticket.value().geometry.logicalSizeMm(), QSizeF(127.0, 177.8));
+
+    // The context still carries the declared sheet, so a favourite saved for
+    // that paper keeps matching. The values the old override produced do not.
+    const PrintContext context = PrinterAdapter::contextFor(ticket.value());
+    PrintContext saved = context;
+    saved.logicalWidthMm = 127.0;
+    saved.logicalHeightMm = 177.8;
+    QVERIFY(samePrintContext(context, saved));
+
+    PrintContext overridden = context;
+    overridden.logicalWidthMm = 126.65;
+    overridden.logicalHeightMm = 178.18;
+    QVERIFY(!samePrintContext(context, overridden));
+
+    // A paper that declares no logical size is still decided by the mode, so
+    // the 10 x 15 cm mapping keeps working: 100 x 150 physical, 4x6 driver page.
+    PrintSelection undeclared = photoSelection();
+    undeclared.paper.logicalWidthMm = 0.0;
+    undeclared.paper.logicalHeightMm = 0.0;
+    const auto byMode = PrinterAdapter::resolve(capabilities, undeclared);
+    if (!byMode)
+        QFAIL(qPrintable(byMode.error().message));
+    QCOMPARE(byMode.value().pageSizeOption, QStringLiteral("BrPostC4x6_S"));
+    QCOMPARE(byMode.value().geometry.logicalSizeMm(), QSizeF(101.6, 152.4));
 }
 
 void TestPrinterOptions::destinationLookupNeedsTheStatus()

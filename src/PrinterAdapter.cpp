@@ -119,8 +119,10 @@ const PageSizeCapability *findBySize(const PrinterCapabilities &capabilities, do
 struct ChosenPage {
     PageSizeCapability page;
     bool found = false;
-    /// The page came from the driver's own name for the paper, so the sheet it
-    /// describes may be taken as the logical sheet.
+    /// The page came from the driver's own name for a paper that declares no
+    /// logical size, so the sheet it describes may be taken as the logical
+    /// sheet. A named page that merely agrees with a declared logical size is
+    /// not marked, because there the declared size stays authoritative.
     bool named = false;
 };
 
@@ -182,19 +184,24 @@ ChosenPage choosePage(const PrinterCapabilities &capabilities,
 
     if (const PageSizeCapability *page = findNamed(capabilities, names, selection.borderless)) {
         // A named mode is the driver's own page for this paper, so it has
-        // authority over the exact sheet: the photo papers are sold by their
-        // centimetre name and made in inches, and a 4x6 mode is 1.6 mm larger
-        // than the 10 x 15 cm paper it prints. That authority stops where the
-        // paper declares a logical size: the mode then has to agree with it,
-        // otherwise the project contradicts itself and the option would name
-        // one sheet while the media box describes another. A paper that
-        // declares nothing is the plain "this is what the driver calls it"
-        // case, which is what the mapping exists for.
-        if (!declaresAnyLogicalAxis(paper)
-            || sameSize(page->widthMm, page->heightMm, targetWidth, targetHeight)) {
+        // authority over the exact sheet only when the paper declares no
+        // logical size at all: the photo papers are sold by their centimetre
+        // name and made in inches, and a 4x6 mode is 1.6 mm larger than the
+        // 10 x 15 cm paper it prints. That authority stops where the paper
+        // declares a logical size. The mode then has to agree with it within
+        // sameSize(), otherwise the project contradicts itself and nothing is
+        // printed below; when it agrees, the declared sheet stands, because
+        // rewriting it with the mode's slightly different millimetres would
+        // silently invalidate every paper preset saved against that context.
+        if (!declaresAnyLogicalAxis(paper)) {
             chosen.page = *page;
             chosen.found = true;
             chosen.named = true;
+            return chosen;
+        }
+        if (sameSize(page->widthMm, page->heightMm, targetWidth, targetHeight)) {
+            chosen.page = *page;
+            chosen.found = true;
             return chosen;
         }
     }
@@ -395,13 +402,21 @@ Result<PrintTicket> PrinterAdapter::resolve(const PrinterCapabilities &capabilit
 
     ticket.geometry = PaperGeometry::forPaper(paper, selection.landscape);
     if (chosen.named) {
-        // The named mode is the driver's own page for this paper, so it decides
-        // the logical sheet. The media box is built from the same rectangle,
-        // which keeps the option and the box on one sheet even when the paper's
-        // own logical declaration is only within tolerance of the mode, and when
-        // a 4x6 mode is 1.6 mm larger than the 10 x 15 cm paper.
-        ticket.geometry.paper.logicalWidthMm = chosen.page.widthMm;
-        ticket.geometry.paper.logicalHeightMm = chosen.page.heightMm;
+        // The named mode is the driver's own page for a paper that declares no
+        // logical sheet, so it decides the sheet. The media box is built from
+        // the same rectangle, which keeps the option and the box on one sheet
+        // even when a 4x6 mode is 1.6 mm larger than the 10 x 15 cm paper.
+        //
+        // PageSizeCapability documents a portrait-ordered page only by
+        // convention, and PaperGeometry rotates the logical sheet by the
+        // landscape flag. Store the page the way the rest of the model stores a
+        // sheet, shortest side as width, so a driver that reports a landscape
+        // page as 152.4 x 101.6 still yields a portrait media box that the
+        // landscape flag rotates, not the double rotation an as-is copy caused.
+        ticket.geometry.paper.logicalWidthMm =
+            std::min(chosen.page.widthMm, chosen.page.heightMm);
+        ticket.geometry.paper.logicalHeightMm =
+            std::max(chosen.page.widthMm, chosen.page.heightMm);
     }
     ticket.geometry.pageSizeOption = chosen.page.option;
     ticket.geometry.borderless = chosen.page.borderless;

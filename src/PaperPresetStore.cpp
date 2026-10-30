@@ -63,13 +63,17 @@ PrintContext contextFromJson(const QJsonObject &object)
 /// match any caller whose context was never filled in, which is exactly the
 /// correction a sheet with no measurements must not receive.
 ///
-/// The paper tone must be a number too. match() hands it to MainWindow and into
-/// ColorRecipe::paperStrength, which becomes an exposure through std::pow; a
-/// non-finite value there would black out or blow out the cell.
+/// The paper tone must be a number too, and a bounded one. match() hands it to
+/// MainWindow and into ColorRecipe::paperStrength, which becomes an exposure
+/// through std::pow; a non-finite value, or a hand-edited finite one such as
+/// 1000, would black out or blow out the cell. kMaxPaperEv is the bound the
+/// recipe itself is sanitised to, so a preset outside it could never be honoured
+/// as written and is treated as damage instead.
 bool isUsablePreset(const PaperPreset &preset)
 {
     const PrintContext &context = preset.context;
-    return !preset.id.isEmpty() && !context.queueName.isEmpty() && std::isfinite(preset.paperEv)
+    return !preset.id.isEmpty() && !context.queueName.isEmpty()
+        && std::isfinite(preset.paperEv) && std::abs(preset.paperEv) <= kMaxPaperEv
         && std::isfinite(context.physicalWidthMm) && context.physicalWidthMm > 0.0
         && std::isfinite(context.physicalHeightMm) && context.physicalHeightMm > 0.0
         && std::isfinite(context.logicalWidthMm) && context.logicalWidthMm >= 0.0
