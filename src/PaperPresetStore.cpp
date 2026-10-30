@@ -12,6 +12,8 @@
 #include <QStandardPaths>
 #include <QUuid>
 
+#include <cmath>
+
 namespace pp {
 
 namespace {
@@ -54,6 +56,26 @@ PrintContext contextFromJson(const QJsonObject &object)
     context.landscape = object.value(QStringLiteral("landscape")).toBool();
     context.borderless = object.value(QStringLiteral("borderless")).toBool();
     return context;
+}
+
+/// A preset that may take part in matching. It needs an identity and a real
+/// environment: an entry read as an empty context is a valid preset that would
+/// match any caller whose context was never filled in, which is exactly the
+/// correction a sheet with no measurements must not receive.
+bool isUsablePreset(const PaperPreset &preset)
+{
+    const PrintContext &context = preset.context;
+    return !preset.id.isEmpty() && !context.queueName.isEmpty()
+        && std::isfinite(context.physicalWidthMm) && context.physicalWidthMm > 0.0
+        && std::isfinite(context.physicalHeightMm) && context.physicalHeightMm > 0.0
+        && std::isfinite(context.logicalWidthMm) && context.logicalWidthMm >= 0.0
+        && std::isfinite(context.logicalHeightMm) && context.logicalHeightMm >= 0.0;
+}
+
+Result<QList<PaperPreset>> corruptPresetFile()
+{
+    return error(QStringLiteral("preset-corrupt"),
+                 QCoreApplication::translate("PhotoPrint", "A papírbeállítások fájlja sérült."));
 }
 
 } // namespace
@@ -102,21 +124,26 @@ Result<QList<PaperPreset>> PaperPresetStore::readAll() const
 
     QJsonParseError parseError;
     const QJsonDocument document = QJsonDocument::fromJson(data, &parseError);
-    if (parseError.error != QJsonParseError::NoError || !document.isArray()) {
-        return error(QStringLiteral("preset-corrupt"),
-                     QCoreApplication::translate("PhotoPrint", "A papírbeállítások fájlja sérült."));
-    }
+    if (parseError.error != QJsonParseError::NoError || !document.isArray())
+        return corruptPresetFile();
     for (const QJsonValue &value : document.array()) {
         if (!value.isObject())
-            continue;
+            return corruptPresetFile();
         const QJsonObject object = value.toObject();
+        const QJsonValue contextValue = object.value(QStringLiteral("context"));
+        if (!contextValue.isObject())
+            return corruptPresetFile();
         PaperPreset preset;
         preset.id = object.value(QStringLiteral("id")).toString();
-        preset.context = contextFromJson(object.value(QStringLiteral("context")).toObject());
+        preset.context = contextFromJson(contextValue.toObject());
         preset.paperEv = object.value(QStringLiteral("paperEv")).toDouble();
         preset.label = object.value(QStringLiteral("label")).toString();
         preset.savedAt = QDateTime::fromString(object.value(QStringLiteral("savedAt")).toString(),
                                                Qt::ISODateWithMs);
+        // Half-written entries are refused instead of being repaired into a
+        // preset that matches things it was never measured against.
+        if (!isUsablePreset(preset))
+            return corruptPresetFile();
         presets.append(preset);
     }
     return presets;
@@ -133,6 +160,13 @@ std::optional<PaperPreset> PaperPresetStore::match(const PrintContext &context) 
 
 Result<void> PaperPresetStore::save(const PaperPreset &preset)
 {
+    // What readAll() would refuse must not be written either: one empty context
+    // on disk would make the whole file unreadable on the next start, so the
+    // store would poison itself.
+    if (!isUsablePreset(preset))
+        return error(QStringLiteral("preset-context"),
+                     QCoreApplication::translate("PhotoPrint", "A papírbeállítás nem menthető."));
+
     const QString directory = QFileInfo(m_path).absolutePath();
     if (!QDir().mkpath(directory))
         return error(QStringLiteral("preset-write"), QCoreApplication::translate("PhotoPrint", "A papírbeállítás nem menthető."));

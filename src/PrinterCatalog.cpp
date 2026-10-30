@@ -3,22 +3,31 @@
 #include "LegacyPpdReader.h"
 
 #include <QCoreApplication>
+#include <QDebug>
 #include <QFile>
 #include <QJsonArray>
 
 #include <cups/cups.h>
 #include <cups/ppd.h>
 
-namespace pp {
-
-namespace {
-
 // CUPS 2.x dropped cupsSetError() from its public headers, but libcups still
 // exports the setter its own client code uses. Declared weak: if a future CUPS
 // stops exporting it, the reference stays null and an empty enumeration simply
 // keeps the old, sticky behaviour instead of the program failing to link.
+//
+// This declaration belongs at global scope. Inside the unnamed namespace it
+// would have internal linkage, which contradicts what it declares: a function
+// that libcups defines in another translation unit. GCC happens to emit a weak
+// undefined reference for it anyway, but that is compiler behaviour, not a
+// promise, and the linkage in the source would be wrong. At global scope the
+// reference is a weak undefined symbol: resolved against libcups when it
+// exports one, left null when it does not.
 extern "C" __attribute__((weak)) void _cupsSetError(ipp_status_t status, const char *message,
                                                     int localize);
+
+namespace pp {
+
+namespace {
 
 QString optionValue(cups_dest_t *dest, const char *name)
 {
@@ -93,7 +102,10 @@ Result<QList<PrinterCapabilities>> PrinterCatalog::refresh(std::stop_token token
     const int lastError = int(cupsLastError());
     switch (classifyDestinationLookup(count, lastError)) {
     case LookupAnswer::Unavailable:
-        // No array was returned in this case, so there is nothing to free.
+        // libcups normally returns no array on a failed lookup, but nothing in
+        // its contract promises that, and a leaked one would outlive the call.
+        if (dests)
+            cupsFreeDests(count, dests);
         return error(QStringLiteral("cups-unavailable"),
                      QCoreApplication::translate("PhotoPrint",
                                                  "A nyomtató most nem érhető el. Ellenőrizd, hogy be "
@@ -101,6 +113,8 @@ Result<QList<PrinterCapabilities>> PrinterCatalog::refresh(std::stop_token token
     case LookupAnswer::NoPrinters:
         // A reachable scheduler with no queues is a real answer, not a CUPS
         // failure, and must not be reported as one.
+        if (dests)
+            cupsFreeDests(count, dests);
         return error(QStringLiteral("no-printers"),
                      QCoreApplication::translate("PhotoPrint", "Nincs nyomtató"));
     case LookupAnswer::Printers:
@@ -137,7 +151,8 @@ Result<QList<PrinterCapabilities>> PrinterCatalog::refresh(std::stop_token token
             // cupsGetPPD() hands out a temporary file that belongs to the
             // caller; nothing else deletes it, so one refresh would leak one
             // file per queue.
-            QFile::remove(tempPpd);
+            if (!QFile::remove(tempPpd))
+                qWarning("Could not remove the temporary PPD %s", qUtf8Printable(tempPpd));
             if (parsed) {
                 capabilities = parsed.value();
                 capabilities.displayName = optionValue(dest, "printer-info");

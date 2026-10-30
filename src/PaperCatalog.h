@@ -59,7 +59,17 @@ public:
     Result<void> remove(const QString &name);
 
 private:
-    std::unique_ptr<QSettings> m_settings;
+    /// A settings object for one operation. It must not be cached: QSettings'
+    /// status() sticks to the object for its whole lifetime, so a single
+    /// transient failure would poison every later read and write. A fresh
+    /// object starts with NoError again, which is what makes recovery possible.
+    std::unique_ptr<QSettings> openSettings() const;
+
+    /// Path of the cross-process write lock. Not "<settings>.lock": QSettings
+    /// uses that name itself while syncing.
+    QString writeLockPath() const;
+
+    QString m_settingsFile; ///< empty means the application settings
 };
 
 } // namespace pp

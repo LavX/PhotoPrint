@@ -145,8 +145,10 @@ ChosenPage choosePage(const PrinterCapabilities &capabilities,
     const double targetHeight = target.height();
 
     if (paper.custom && !photoMapping(paper)) {
-        chosen.page.option = PrinterAdapter::customPageSizeOption(paper.physicalWidthMm,
-                                                                  paper.physicalHeightMm);
+        // The custom option names the sheet the driver will be asked for, and
+        // that sheet is the logical one: the media box is built from the same
+        // size, so the option and the PDF cannot describe two different sheets.
+        chosen.page.option = PrinterAdapter::customPageSizeOption(targetWidth, targetHeight);
         chosen.page.displayName = chosen.page.option;
         chosen.page.widthMm = targetWidth;
         chosen.page.heightMm = targetHeight;
@@ -165,6 +167,11 @@ ChosenPage choosePage(const PrinterCapabilities &capabilities,
     }
 
     if (const PageSizeCapability *page = findNamed(capabilities, names, selection.borderless)) {
+        // A named mode is the driver's own page for this paper, so it decides
+        // the sheet: the photo papers are sold by their centimetre name and made
+        // in inches, and a mode that is 1.6 mm larger than the physical sheet is
+        // still the right page for it. The size-based searches below have no
+        // such authority and therefore have to match the media box exactly.
         chosen.page = *page;
         chosen.found = true;
         return chosen;
@@ -175,12 +182,10 @@ ChosenPage choosePage(const PrinterCapabilities &capabilities,
         chosen.found = true;
         return chosen;
     }
-    if (const PageSizeCapability *page = findBySize(capabilities, paper.physicalWidthMm,
-                                                    paper.physicalHeightMm, selection.borderless)) {
-        chosen.page = *page;
-        chosen.found = true;
-        return chosen;
-    }
+    // No fallback to the physical size: the media box is the logical sheet, so a
+    // driver page of the physical size would print the logical page onto a
+    // smaller sheet. When the logical size is not declared the target above is
+    // already the physical sheet, so nothing is lost here.
     return chosen;
 }
 
@@ -270,8 +275,11 @@ Result<PrintTicket> PrinterAdapter::resolve(const PrinterCapabilities &capabilit
         return error(QStringLiteral("borderless-unsupported"),
                      QCoreApplication::translate("PhotoPrint", "Ehhez a papírhoz nincs szélig nyomtatás."));
     }
+    // The sheet the driver is asked for is the logical one, so the custom range
+    // is checked against the same size the page option and the media box use.
+    const QSizeF driverSheet = PaperGeometry::forPaper(paper, false).logicalSizeMm();
     if (paper.custom && !photoMapping(paper)
-        && !customSizeInRange(paper.physicalWidthMm, paper.physicalHeightMm)) {
+        && !customSizeInRange(driverSheet.width(), driverSheet.height())) {
         return error(QStringLiteral("custom-size-range"),
                      QCoreApplication::translate("PhotoPrint",
                                                     "Ez a papírméret nem nyomtatható. A nyomtató "

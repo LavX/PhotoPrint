@@ -1,9 +1,13 @@
 #include "PaperCatalog.h"
 
 #include <QCoreApplication>
+#include <QDir>
+#include <QFileInfo>
+#include <QLockFile>
 #include <QSettings>
 
 #include <cmath>
+#include <memory>
 
 namespace pp {
 
@@ -64,6 +68,54 @@ void writeAll(QSettings &settings, const QList<PaperSpec> &papers)
     }
     settings.endArray();
     settings.sync();
+}
+
+/// A millimetre value that can describe a real sheet. Infinite is excluded:
+/// +inf passes a bare `> 0` test, then produces an empty or infinite rectangle
+/// everywhere downstream.
+bool usablePhysicalMm(double value)
+{
+    return std::isfinite(value) && value > 0.0;
+}
+
+/// A declared logical axis. Zero means "not declared" and is valid; anything
+/// negative or non-finite is not a measurement.
+bool usableLogicalMm(double value)
+{
+    return std::isfinite(value) && value >= 0.0;
+}
+
+bool isUsableStoredPaper(const PaperSpec &paper)
+{
+    return !paper.name.isEmpty() && usablePhysicalMm(paper.physicalWidthMm)
+        && usablePhysicalMm(paper.physicalHeightMm) && usableLogicalMm(paper.logicalWidthMm)
+        && usableLogicalMm(paper.logicalHeightMm);
+}
+
+Result<QList<PaperSpec>> corruptPaperFile()
+{
+    return error(QStringLiteral("paper-corrupt"),
+                 QCoreApplication::translate("PhotoPrint",
+                                             "A papírbeállítások fájlja sérült."));
+}
+
+/// Write lock for one store file, shared by every instance (and every copy of
+/// the app) that rewrites it. save() and remove() are read-modify-write cycles,
+/// so without it two writers silently drop each other's papers.
+///
+/// The name is deliberately not "<file>.lock": QSettings takes that lock itself
+/// while it syncs a file, so a lock of our own on the same name would wait for
+/// the QSettings lock inside writeAll() and freeze the caller.
+std::unique_ptr<QLockFile> acquireWriteLock(const QString &lockPath)
+{
+    if (!QDir().mkpath(QFileInfo(lockPath).absolutePath()))
+        return nullptr;
+    auto lock = std::make_unique<QLockFile>(lockPath);
+    // Called on the GUI thread: fail fast with the real reason instead of
+    // freezing the window behind another instance's lock.
+    if (!lock->tryLock(250))
+        return nullptr;
+    return lock;
 }
 
 } // namespace
@@ -157,52 +209,71 @@ bool isFixedPhotoSize(const PaperSpec &paper)
 }
 
 CustomPaperStore::CustomPaperStore(const QString &settingsFile)
-    : m_settings(settingsFile.isEmpty()
-                     ? std::make_unique<QSettings>()
-                     : std::make_unique<QSettings>(settingsFile, QSettings::IniFormat))
+    : m_settingsFile(settingsFile)
 {
 }
 
 CustomPaperStore::~CustomPaperStore() = default;
 
+std::unique_ptr<QSettings> CustomPaperStore::openSettings() const
+{
+    // A new object per operation, on purpose: see the header. Constructing it is
+    // cheap and does not read the file until the first value access.
+    if (m_settingsFile.isEmpty())
+        return std::make_unique<QSettings>();
+    return std::make_unique<QSettings>(m_settingsFile, QSettings::IniFormat);
+}
+
+QString CustomPaperStore::writeLockPath() const
+{
+    const QString fileName = m_settingsFile.isEmpty() ? QSettings().fileName() : m_settingsFile;
+    return fileName + QStringLiteral(".papers.lock");
+}
+
 Result<QList<PaperSpec>> CustomPaperStore::readAll() const
 {
+    const std::unique_ptr<QSettings> settings = openSettings();
     QList<PaperSpec> papers;
-    const int count = m_settings->beginReadArray(QStringLiteral("customPapers"));
+    bool damaged = false;
+    const int count = settings->beginReadArray(QStringLiteral("customPapers"));
     for (int i = 0; i < count; ++i) {
-        m_settings->setArrayIndex(i);
+        settings->setArrayIndex(i);
         PaperSpec paper;
-        paper.name = m_settings->value(QStringLiteral("name")).toString().trimmed();
-        paper.physicalWidthMm = m_settings->value(QStringLiteral("widthMm")).toDouble();
-        paper.physicalHeightMm = m_settings->value(QStringLiteral("heightMm")).toDouble();
+        paper.name = settings->value(QStringLiteral("name")).toString().trimmed();
+        paper.physicalWidthMm = settings->value(QStringLiteral("widthMm")).toDouble();
+        paper.physicalHeightMm = settings->value(QStringLiteral("heightMm")).toDouble();
         // A missing logical size means "same as the physical size".
-        paper.logicalWidthMm = m_settings->value(QStringLiteral("logicalWidthMm")).toDouble();
-        paper.logicalHeightMm = m_settings->value(QStringLiteral("logicalHeightMm")).toDouble();
-        paper.type = paperTypeFromKey(m_settings->value(QStringLiteral("type")).toString());
-        paper.borderlessSupported = m_settings->value(QStringLiteral("borderless")).toBool();
-        paper.hasCheckedOffset = m_settings->value(QStringLiteral("hasCheckedOffset")).toBool();
-        paper.offsetXMm = m_settings->value(QStringLiteral("offsetXMm")).toDouble();
-        paper.offsetYMm = m_settings->value(QStringLiteral("offsetYMm")).toDouble();
+        paper.logicalWidthMm = settings->value(QStringLiteral("logicalWidthMm")).toDouble();
+        paper.logicalHeightMm = settings->value(QStringLiteral("logicalHeightMm")).toDouble();
+        paper.type = paperTypeFromKey(settings->value(QStringLiteral("type")).toString());
+        paper.borderlessSupported = settings->value(QStringLiteral("borderless")).toBool();
+        paper.hasCheckedOffset = settings->value(QStringLiteral("hasCheckedOffset")).toBool();
+        paper.offsetXMm = settings->value(QStringLiteral("offsetXMm")).toDouble();
+        paper.offsetYMm = settings->value(QStringLiteral("offsetYMm")).toDouble();
         // Everything in this store was defined by the user: the flag follows
         // from the store, it is not a second piece of information to keep.
         paper.custom = true;
-        if (paper.name.isEmpty() || !(paper.physicalWidthMm > 0.0)
-            || !(paper.physicalHeightMm > 0.0))
-            continue;
+        // An entry the app would never write (no name, no usable size) is
+        // damage, not a paper to drop quietly: the array still claims it exists.
+        if (!isUsableStoredPaper(paper)) {
+            damaged = true;
+            break;
+        }
         papers.append(paper);
     }
-    m_settings->endArray();
+    settings->endArray();
+
+    if (damaged)
+        return corruptPaperFile();
 
     // A list rebuilt from a half-read file would be written straight back by the
     // next save(), and every paper the file still held would be gone. Report the
     // damage instead of pretending the user has no papers.
-    switch (m_settings->status()) {
+    switch (settings->status()) {
     case QSettings::NoError:
         break;
     case QSettings::FormatError:
-        return error(QStringLiteral("paper-corrupt"),
-                     QCoreApplication::translate("PhotoPrint",
-                                                 "A papírbeállítások fájlja sérült."));
+        return corruptPaperFile();
     case QSettings::AccessError:
         return error(QStringLiteral("paper-read"),
                      QCoreApplication::translate("PhotoPrint",
@@ -214,12 +285,9 @@ Result<QList<PaperSpec>> CustomPaperStore::readAll() const
     // by every save, so entries without it can only come from a damaged file.
     if (count == 0) {
         const QString prefix = QStringLiteral("customPapers/");
-        for (const QString &key : m_settings->allKeys()) {
-            if (key.startsWith(prefix) && key != prefix + QStringLiteral("size")) {
-                return error(QStringLiteral("paper-corrupt"),
-                             QCoreApplication::translate("PhotoPrint",
-                                                         "A papírbeállítások fájlja sérült."));
-            }
+        for (const QString &key : settings->allKeys()) {
+            if (key.startsWith(prefix) && key != prefix + QStringLiteral("size"))
+                return corruptPaperFile();
         }
     }
     return papers;
@@ -237,8 +305,19 @@ Result<void> CustomPaperStore::save(const PaperSpec &paper)
     stored.name = stored.name.trimmed();
     if (stored.name.isEmpty())
         return error(QStringLiteral("paper-name"), QCoreApplication::translate("PhotoPrint", "Adj nevet a papírnak."));
-    if (!(stored.physicalWidthMm > 0.0) || !(stored.physicalHeightMm > 0.0))
+    // A size that cannot describe a sheet (zero, negative, infinite, NaN) is
+    // rejected here, so the file never holds a paper no geometry can draw.
+    if (!isUsableStoredPaper(stored))
         return error(QStringLiteral("paper-size"), QCoreApplication::translate("PhotoPrint", "A papírméret érvénytelen."));
+
+    // The lock comes first: the settings object below is created after it, so
+    // the read-modify-write cannot be based on a snapshot taken before another
+    // writer finished.
+    const std::unique_ptr<QLockFile> lock = acquireWriteLock(writeLockPath());
+    if (!lock)
+        return error(QStringLiteral("paper-lock"),
+                     QCoreApplication::translate("PhotoPrint", "A papírt nem sikerült elmenteni."));
+    const std::unique_ptr<QSettings> settings = openSettings();
 
     const auto existing = readAll();
     if (!existing)
@@ -250,8 +329,8 @@ Result<void> CustomPaperStore::save(const PaperSpec &paper)
     }
     stored.custom = true;
     papers.append(stored);
-    writeAll(*m_settings, papers);
-    if (m_settings->status() != QSettings::NoError)
+    writeAll(*settings, papers);
+    if (settings->status() != QSettings::NoError)
         return error(QStringLiteral("paper-write"), QCoreApplication::translate("PhotoPrint", "A papírt nem sikerült elmenteni."));
     return Result<void>();
 }
@@ -259,6 +338,12 @@ Result<void> CustomPaperStore::save(const PaperSpec &paper)
 Result<void> CustomPaperStore::remove(const QString &name)
 {
     const QString trimmed = name.trimmed();
+    const std::unique_ptr<QLockFile> lock = acquireWriteLock(writeLockPath());
+    if (!lock)
+        return error(QStringLiteral("paper-lock"),
+                     QCoreApplication::translate("PhotoPrint", "A papírt nem sikerült törölni."));
+    const std::unique_ptr<QSettings> settings = openSettings();
+
     const auto existing = readAll();
     if (!existing)
         return existing.error();
@@ -274,8 +359,8 @@ Result<void> CustomPaperStore::remove(const QString &name)
         return error(QStringLiteral("paper-missing"),
                      QCoreApplication::translate("PhotoPrint", "Ezt a papírt nem találjuk."));
     }
-    writeAll(*m_settings, papers);
-    if (m_settings->status() != QSettings::NoError)
+    writeAll(*settings, papers);
+    if (settings->status() != QSettings::NoError)
         return error(QStringLiteral("paper-write"), QCoreApplication::translate("PhotoPrint", "A papírt nem sikerült törölni."));
     return Result<void>();
 }

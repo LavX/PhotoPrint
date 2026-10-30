@@ -41,13 +41,19 @@ Result<TrialSheet> TrialSheetBuilder::build(const DocumentSnapshot &document,
     // cell size through zero. Scale them down with the short side, but keep the
     // familiar 10/8 mm layout on the photo papers this sheet is meant for.
     const double shortSide = std::min(size.width(), size.height());
-    if (!(shortSide > 0.0))
+    // Finite as well as positive: an infinite sheet would pass "greater than
+    // zero" and turn every cell size below into infinity.
+    if (!(shortSide > 0.0) || !std::isfinite(size.width()) || !std::isfinite(size.height()))
         return error(QStringLiteral("trial-paper"),
                      QCoreApplication::translate("PhotoPrint", "A papírméret érvénytelen."));
     const double margin = std::min(10.0, shortSide * 0.1);
     const double gutter = std::min(8.0, shortSide * 0.08);
     const double cellWidth = (size.width() - 2.0 * margin - gutter) / 2.0;
     const double cellHeight = (size.height() - 2.0 * margin - gutter) / 2.0;
+    // Unreachable by construction: the margins are fractions of the short side,
+    // so both expressions stay above 0.72 * side for any positive finite sheet.
+    // The guard stays anyway, as defence against a future margin change, and it
+    // is what keeps the translated message in the catalogue.
     if (!(cellWidth > 0.0) || !(cellHeight > 0.0))
         return error(QStringLiteral("trial-paper"),
                      QCoreApplication::translate("PhotoPrint",
@@ -78,10 +84,12 @@ Result<TrialSheet> TrialSheetBuilder::build(const DocumentSnapshot &document,
             height = availableHeight;
             width = std::isfinite(ratio) && ratio > 0.0 ? height / ratio : availableWidth;
         }
-        // The cell may shrink below a millimetre on very small paper; it must
-        // never grow past the slot it sits in.
-        frame.width = std::clamp(width, std::min(1.0, availableWidth), availableWidth);
-        frame.height = std::clamp(height, std::min(1.0, availableHeight), availableHeight);
+        // The cell may shrink far below a millimetre on very small paper; it
+        // must never grow past the slot it sits in. The floor is tiny on
+        // purpose: a 1 mm floor used to stretch a 0.46 mm high cell up to 1 mm,
+        // which broke the image's aspect ratio on the smallest sheets.
+        frame.width = std::clamp(width, std::min(1e-3, availableWidth), availableWidth);
+        frame.height = std::clamp(height, std::min(1e-3, availableHeight), availableHeight);
         const int column = i % 2;
         const int row = i / 2;
         frame.cx = margin + column * (cellWidth + gutter) + cellWidth / 2.0;
