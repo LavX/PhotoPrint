@@ -799,5 +799,13 @@
         <source>Az eredményt nem sikerült a naplóba írni.</source>
         <translation>結果を印刷ログに書き込めませんでした。</translation>
     </message>
+    <message>
+        <source>A napló írása nem sikerült, a félbehagyott bejegyzést pedig nem sikerült eltávolítani.</source>
+        <translation>印刷ログを書き込めず、書きかけの記録も削除できませんでした。</translation>
+    </message>
+    <message>
+        <source>A naplóbejegyzést nem sikerült eltávolítani. A nyomtatás nem indult el, de a napló bizonytalan feladatot jelezhet, ezért a nyomtatási fájl megmarad.</source>
+        <translation>印刷ログの記録を削除できませんでした。印刷は開始されていませんが、ログが不確定なジョブを示す可能性があるため、印刷ファイルは残されます。</translation>
+    </message>
 </context>
 </TS>

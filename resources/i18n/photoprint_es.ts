@@ -801,5 +801,13 @@
         <source>Az eredményt nem sikerült a naplóba írni.</source>
         <translation>No se pudo escribir el resultado en el historial de impresión.</translation>
     </message>
+    <message>
+        <source>A napló írása nem sikerült, a félbehagyott bejegyzést pedig nem sikerült eltávolítani.</source>
+        <translation>No se pudo escribir el historial de impresión y no se pudo eliminar la entrada a medio escribir.</translation>
+    </message>
+    <message>
+        <source>A naplóbejegyzést nem sikerült eltávolítani. A nyomtatás nem indult el, de a napló bizonytalan feladatot jelezhet, ezért a nyomtatási fájl megmarad.</source>
+        <translation>No se pudo eliminar la entrada del historial. La impresión no comenzó, pero el historial puede indicar un trabajo incierto, así que el archivo de impresión se conserva.</translation>
+    </message>
 </context>
 </TS>

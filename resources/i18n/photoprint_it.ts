@@ -801,5 +801,13 @@
         <source>Az eredményt nem sikerült a naplóba írni.</source>
         <translation>Non è stato possibile scrivere il risultato nel log di stampa.</translation>
     </message>
+    <message>
+        <source>A napló írása nem sikerült, a félbehagyott bejegyzést pedig nem sikerült eltávolítani.</source>
+        <translation>Non è stato possibile scrivere il log di stampa e non è stato possibile rimuovere la voce scritta a metà.</translation>
+    </message>
+    <message>
+        <source>A naplóbejegyzést nem sikerült eltávolítani. A nyomtatás nem indult el, de a napló bizonytalan feladatot jelezhet, ezért a nyomtatási fájl megmarad.</source>
+        <translation>Non è stato possibile rimuovere la voce del log. La stampa non è iniziata, ma il log potrebbe indicare un lavoro incerto, quindi il file di stampa viene conservato.</translation>
+    </message>
 </context>
 </TS>

@@ -803,5 +803,13 @@
         <source>Az eredményt nem sikerült a naplóba írni.</source>
         <translation>Не удалось записать результат в журнал печати.</translation>
     </message>
+    <message>
+        <source>A napló írása nem sikerült, a félbehagyott bejegyzést pedig nem sikerült eltávolítani.</source>
+        <translation>Не удалось записать журнал печати, а также удалить недописанную запись.</translation>
+    </message>
+    <message>
+        <source>A naplóbejegyzést nem sikerült eltávolítani. A nyomtatás nem indult el, de a napló bizonytalan feladatot jelezhet, ezért a nyomtatási fájl megmarad.</source>
+        <translation>Не удалось удалить запись журнала. Печать не началась, но журнал может сообщать о неопределённом задании, поэтому файл печати сохранён.</translation>
+    </message>
 </context>
 </TS>

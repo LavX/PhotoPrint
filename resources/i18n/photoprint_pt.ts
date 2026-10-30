@@ -801,5 +801,13 @@
         <source>Az eredményt nem sikerült a naplóba írni.</source>
         <translation>Não foi possível escrever o resultado no histórico de impressão.</translation>
     </message>
+    <message>
+        <source>A napló írása nem sikerült, a félbehagyott bejegyzést pedig nem sikerült eltávolítani.</source>
+        <translation>Não foi possível escrever o histórico de impressão e não foi possível remover a entrada escrita pela metade.</translation>
+    </message>
+    <message>
+        <source>A naplóbejegyzést nem sikerült eltávolítani. A nyomtatás nem indult el, de a napló bizonytalan feladatot jelezhet, ezért a nyomtatási fájl megmarad.</source>
+        <translation>Não foi possível remover a entrada do histórico. A impressão não começou, mas o histórico pode indicar um trabalho incerto, por isso o ficheiro de impressão é mantido.</translation>
+    </message>
 </context>
 </TS>

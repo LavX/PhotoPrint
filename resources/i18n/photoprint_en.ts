@@ -801,5 +801,13 @@
         <source>Az eredményt nem sikerült a naplóba írni.</source>
         <translation>The result could not be written to the print log.</translation>
     </message>
+    <message>
+        <source>A napló írása nem sikerült, a félbehagyott bejegyzést pedig nem sikerült eltávolítani.</source>
+        <translation>The journal could not be written, and the half-written entry could not be removed.</translation>
+    </message>
+    <message>
+        <source>A naplóbejegyzést nem sikerült eltávolítani. A nyomtatás nem indult el, de a napló bizonytalan feladatot jelezhet, ezért a nyomtatási fájl megmarad.</source>
+        <translation>The journal entry could not be removed. Printing did not start, but the journal may report an uncertain job, so the print file is kept.</translation>
+    </message>
 </context>
 </TS>

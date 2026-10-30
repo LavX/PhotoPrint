@@ -799,5 +799,13 @@
         <source>Az eredményt nem sikerült a naplóba írni.</source>
         <translation>无法将结果写入打印日志。</translation>
     </message>
+    <message>
+        <source>A napló írása nem sikerült, a félbehagyott bejegyzést pedig nem sikerült eltávolítani.</source>
+        <translation>无法写入打印日志，也无法删除写了一半的记录。</translation>
+    </message>
+    <message>
+        <source>A naplóbejegyzést nem sikerült eltávolítani. A nyomtatás nem indult el, de a napló bizonytalan feladatot jelezhet, ezért a nyomtatási fájl megmarad.</source>
+        <translation>无法删除打印日志记录。打印未开始，但日志可能显示为不确定的任务，因此保留打印文件。</translation>
+    </message>
 </context>
 </TS>

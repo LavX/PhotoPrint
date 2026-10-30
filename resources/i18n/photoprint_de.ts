@@ -801,5 +801,13 @@
         <source>Az eredményt nem sikerült a naplóba írni.</source>
         <translation>Das Ergebnis konnte nicht ins Druckprotokoll geschrieben werden.</translation>
     </message>
+    <message>
+        <source>A napló írása nem sikerült, a félbehagyott bejegyzést pedig nem sikerült eltávolítani.</source>
+        <translation>Das Druckprotokoll konnte nicht geschrieben werden, und der halb geschriebene Eintrag konnte nicht entfernt werden.</translation>
+    </message>
+    <message>
+        <source>A naplóbejegyzést nem sikerült eltávolítani. A nyomtatás nem indult el, de a napló bizonytalan feladatot jelezhet, ezért a nyomtatási fájl megmarad.</source>
+        <translation>Der Protokolleintrag konnte nicht entfernt werden. Der Druck wurde nicht gestartet, aber das Protokoll kann einen unklaren Auftrag melden, daher bleibt die Druckdatei erhalten.</translation>
+    </message>
 </context>
 </TS>

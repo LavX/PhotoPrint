@@ -801,5 +801,13 @@
         <source>Az eredményt nem sikerült a naplóba írni.</source>
         <translation>Le résultat n'a pas pu être écrit dans le journal d'impression.</translation>
     </message>
+    <message>
+        <source>A napló írása nem sikerült, a félbehagyott bejegyzést pedig nem sikerült eltávolítani.</source>
+        <translation>Le journal d'impression n'a pas pu être écrit et l'entrée à moitié écrite n'a pas pu être supprimée.</translation>
+    </message>
+    <message>
+        <source>A naplóbejegyzést nem sikerült eltávolítani. A nyomtatás nem indult el, de a napló bizonytalan feladatot jelezhet, ezért a nyomtatási fájl megmarad.</source>
+        <translation>L'entrée du journal n'a pas pu être supprimée. L'impression n'a pas démarré, mais le journal peut signaler un travail incertain, donc le fichier d'impression est conservé.</translation>
+    </message>
 </context>
 </TS>

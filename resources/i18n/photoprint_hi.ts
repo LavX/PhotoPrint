@@ -801,5 +801,13 @@
         <source>Az eredményt nem sikerült a naplóba írni.</source>
         <translation>परिणाम प्रिंट लॉग में नहीं लिखा जा सका।</translation>
     </message>
+    <message>
+        <source>A napló írása nem sikerült, a félbehagyott bejegyzést pedig nem sikerült eltávolítani.</source>
+        <translation>प्रिंट लॉग लिखा नहीं जा सका और आधी लिखी प्रविष्टि भी हटाई नहीं जा सकी।</translation>
+    </message>
+    <message>
+        <source>A naplóbejegyzést nem sikerült eltávolítani. A nyomtatás nem indult el, de a napló bizonytalan feladatot jelezhet, ezért a nyomtatási fájl megmarad.</source>
+        <translation>प्रिंट लॉग की प्रविष्टि हटाई नहीं जा सकी। प्रिंट शुरू नहीं हुआ, लेकिन लॉग अनिश्चित कार्य दिखा सकता है, इसलिए प्रिंट फ़ाइल रखी गई है।</translation>
+    </message>
 </context>
 </TS>
