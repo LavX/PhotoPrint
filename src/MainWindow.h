@@ -177,7 +177,8 @@ private slots:
 private:
     void buildUi();
     void buildMenus();
-    void buildLanguageMenu(QMenu *helpMenu);
+    void buildLanguageMenu();
+    void rebuildUi();
     void setLanguage(const QString &code);
     void showAbout();
     void addPhoto(const QString &path);

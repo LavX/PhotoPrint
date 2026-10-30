@@ -221,6 +221,26 @@ QLabel { color: @text; }
     return qss;
 }
 
+/// Every library entry gets the same square tile, so the grid stays even even
+/// when the photos have different shapes.
+QPixmap libraryThumbnail(const QImage &image, int size)
+{
+    QPixmap tile(size, size);
+    tile.fill(Qt::transparent);
+    QPainter painter(&tile);
+    painter.setRenderHint(QPainter::Antialiasing);
+    painter.setRenderHint(QPainter::SmoothPixmapTransform);
+    painter.setPen(QPen(QColor(128, 128, 128, 70), 1));
+    painter.setBrush(QColor(128, 128, 128, 22));
+    painter.drawRoundedRect(QRectF(0.5, 0.5, size - 1.0, size - 1.0), 6, 6);
+    const int inset = 5;
+    const QImage scaled =
+        image.scaled(size - inset * 2, size - inset * 2, Qt::KeepAspectRatio,
+                     Qt::SmoothTransformation);
+    painter.drawImage(QPoint((size - scaled.width()) / 2, (size - scaled.height()) / 2), scaled);
+    return tile;
+}
+
 } // namespace
 
 class ToggleSwitch : public QAbstractButton
@@ -1025,9 +1045,9 @@ void MainWindow::buildUi()
     m_photoList->setViewMode(QListView::IconMode);
     m_photoList->setResizeMode(QListView::Adjust);
     m_photoList->setMovement(QListView::Static);
-    m_photoList->setGridSize(QSize(80, 80));
-    m_photoList->setIconSize(QSize(72, 72));
-    m_photoList->setSpacing(6);
+    m_photoList->setGridSize(QSize(72, 72));
+    m_photoList->setIconSize(QSize(64, 64));
+    m_photoList->setSpacing(4);
     m_photoList->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
     m_photoList->setWordWrap(false);
     m_photoList->setUniformItemSizes(true);
@@ -1376,28 +1396,26 @@ void MainWindow::buildMenus()
     remove->setShortcut(QKeySequence::Delete);
     connect(remove, &QAction::triggered, this, &MainWindow::deleteSelected);
 
+    buildLanguageMenu();
+
     QMenu *helpMenu = menuBar()->addMenu(QCoreApplication::translate("PhotoPrint", "Súgó"));
     QAction *diagnostics = helpMenu->addAction(QCoreApplication::translate("PhotoPrint", "Hibakeresési adatok"));
     connect(diagnostics, &QAction::triggered, this, &MainWindow::showDiagnostics);
 
-    helpMenu->addSeparator();
-    buildLanguageMenu(helpMenu);
     helpMenu->addSeparator();
 
     QAction *about = helpMenu->addAction(QCoreApplication::translate("PhotoPrint", "Névjegy"));
     connect(about, &QAction::triggered, this, &MainWindow::showAbout);
 }
 
-void MainWindow::buildLanguageMenu(QMenu *helpMenu)
+void MainWindow::buildLanguageMenu()
 {
-    QMenu *languageMenu =
-        helpMenu->addMenu(QCoreApplication::translate("PhotoPrint", "Nyelv"));
+    QMenu *languageMenu = menuBar()->addMenu(QCoreApplication::translate("PhotoPrint", "Nyelv"));
     languageMenu->setObjectName(QStringLiteral("languageMenu"));
 
-    // The choice is stored for the next start; the current interface keeps its
-    // language so it is never left half translated.
+    // The language names stay in their own script; the current one is checked.
     const QString selected = pp::i18n::selectedLanguage();
-    auto *group = new QActionGroup(this);
+    auto *group = new QActionGroup(languageMenu);
     group->setExclusive(true);
 
     auto addLanguage = [languageMenu, group, selected](const QString &code) {
@@ -1417,11 +1435,85 @@ void MainWindow::buildLanguageMenu(QMenu *helpMenu)
 
 void MainWindow::setLanguage(const QString &code)
 {
+    if (pp::i18n::resolveLocale(code) == pp::i18n::selectedLanguage())
+        return;
     pp::i18n::saveLanguage(code);
-    statusBar()->showMessage(
-        QCoreApplication::translate("PhotoPrint",
-                                    "A nyelv a következő indításnál lép életbe."),
-        8000);
+    pp::i18n::installLanguage(pp::i18n::selectedLanguage());
+    rebuildUi();
+}
+
+void MainWindow::rebuildUi()
+{
+    // Everything the user was looking at survives the language change.
+    const QString selected = m_selectedId;
+    const bool dirty = m_dirty;
+    const int copies = m_copiesSpin ? m_copiesSpin->value() : 1;
+    const double zoom = m_pageView ? m_pageView->viewZoom() : 1.0;
+    const bool landscape = m_landscape;
+    if (!currentPaper().name.isEmpty())
+        m_paperName = currentPaper().name;
+
+    if (m_resizeTimer) {
+        m_resizeTimer->stop();
+        delete m_resizeTimer;
+        m_resizeTimer = nullptr;
+    }
+    if (m_undoAction) {
+        delete m_undoAction;
+        m_undoAction = nullptr;
+    }
+    if (m_redoAction) {
+        delete m_redoAction;
+        m_redoAction = nullptr;
+    }
+    const QList<QAction *> menuActions = menuBar()->actions();
+    for (QAction *action : menuActions) {
+        menuBar()->removeAction(action);
+        delete action->menu();
+    }
+    const QList<QToolBar *> toolbars = findChildren<QToolBar *>();
+    for (QToolBar *bar : toolbars) {
+        removeToolBar(bar);
+        delete bar;
+    }
+    if (m_checkpointTimer)
+        m_checkpointTimer->stop();
+    if (QWidget *central = takeCentralWidget())
+        delete central;
+
+    m_pageView = nullptr;
+    m_photoList = nullptr;
+    m_pagesPanel = nullptr;
+    m_noticeBar = nullptr;
+    m_inspectorPanel = nullptr;
+    m_printButton = nullptr;
+    m_printerCombo = nullptr;
+
+    m_selectedId = selected;
+    buildUi();
+    buildMenus();
+
+    refreshPrinters();
+
+    const bool wasRestoring = m_restoringProject;
+    m_restoringProject = true;
+    onDocumentChanged();
+    m_restoringProject = wasRestoring;
+    m_dirty = dirty;
+
+    m_orientationCombo->blockSignals(true);
+    m_orientationCombo->setCurrentIndex(landscape ? 1 : 0);
+    m_orientationCombo->blockSignals(false);
+    m_copiesSpin->setValue(copies);
+    if (m_pageView) {
+        m_pageView->setViewZoom(zoom);
+        if (m_pageView->onViewZoomChanged)
+            m_pageView->onViewZoomChanged(zoom);
+    }
+    m_printButton->setEnabled(!m_printInProgress);
+    updateTitle();
+    if (m_checkpointTimer && dirty)
+        m_checkpointTimer->start();
 }
 
 void MainWindow::showAbout()
@@ -1648,10 +1740,8 @@ void MainWindow::refreshPhotoList()
             item->setData(Qt::UserRole, frame.id);
             if (const SourceImage *source = m_store.cached(frame.sourcePath)) {
                 const Result<QImage> thumb = m_store.srgb(*source, document.recipe, 96);
-                if (thumb) {
-                    item->setIcon(QIcon(QPixmap::fromImage(thumb.value().scaled(
-                        56, 56, Qt::KeepAspectRatio, Qt::SmoothTransformation))));
-                }
+                if (thumb)
+                    item->setIcon(QIcon(libraryThumbnail(thumb.value(), 64)));
             }
             m_photoList->addItem(item);
         }
@@ -1661,8 +1751,8 @@ void MainWindow::refreshPhotoList()
                                 .arg(sizeLabelCm(size.width(), size.height())));
         QString hint;
         if (page.paper.type == PaperType::Matte) {
-            hint = QStringLiteral(
-                "A matt papírt a nyomtató tintasugaras papírként kezeli.");
+            hint = QCoreApplication::translate(
+                "PhotoPrint", "A matt papírt a nyomtató tintasugaras papírként kezeli.");
         }
         if (page.paper.isPhotoPaper() && !wantBorderless(page.paper)) {
             if (!hint.isEmpty())

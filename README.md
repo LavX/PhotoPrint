@@ -119,9 +119,10 @@ Simplified Chinese, Hindi, Spanish, French, Portuguese, Russian, Japanese,
 German and Italian. Hungarian is the source language, so it is always complete,
 and it is used when the system language is not supported.
 
-Pick a language in `Help -> Language`; each entry is shown in its own script and
-the choice takes effect on the next start. At startup the saved choice wins,
-then the supported system language, then Hungarian. The setting is stored in
+Pick a language in the `Language` menu; each entry is shown in its own script
+and the whole window switches immediately, without a restart. The choice is
+remembered for the next start, which then uses the saved language, then the
+supported system language, then Hungarian. The setting is stored in
 QSettings under `language`.
 
 Translations are Qt TS/QM files: the source is

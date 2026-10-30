@@ -6,6 +6,7 @@
 #include <QLocale>
 #include <QMenu>
 #include <QMenuBar>
+#include <QPushButton>
 #include <QSettings>
 #include <QStatusBar>
 #include <QTemporaryDir>
@@ -40,8 +41,8 @@ private slots:
     void unsupportedLocaleFallsBackToHungarian_data();
     void unsupportedLocaleFallsBackToHungarian();
     void installedTranslatorChangesTheInterface();
-    void helpMenuOffersEveryLanguage();
-    void choosingALanguageIsRemembered();
+    void languageMenuIsInTheMenuBar();
+    void choosingALanguageAppliesImmediately();
 
 private:
     QTemporaryDir m_settingsDir;
@@ -168,12 +169,17 @@ void TestI18n::installedTranslatorChangesTheInterface()
     QCOMPARE(translated("PhotoPrint", kPrint), kPrint);
 }
 
-void TestI18n::helpMenuOffersEveryLanguage()
+void TestI18n::languageMenuIsInTheMenuBar()
 {
     QSettings().remove(QStringLiteral("language"));
     MainWindow window;
     window.show();
     QTest::qWait(50);
+
+    QMenu *languageMenu = window.findChild<QMenu *>(QStringLiteral("languageMenu"));
+    QVERIFY2(languageMenu, "the Nyelv menu is missing");
+    QVERIFY2(window.menuBar()->actions().contains(languageMenu->menuAction()),
+             "the language menu must be a top-level menu, not hidden under Help");
 
     QMenu *helpMenu = nullptr;
     for (QAction *action : window.menuBar()->actions()) {
@@ -181,17 +187,13 @@ void TestI18n::helpMenuOffersEveryLanguage()
             helpMenu = action->menu();
     }
     QVERIFY2(helpMenu, "the Help menu is missing");
-
-    QMenu *languageMenu = window.findChild<QMenu *>(QStringLiteral("languageMenu"));
-    QVERIFY2(languageMenu, "the Nyelv submenu is missing");
-    QVERIFY(helpMenu->actions().contains(languageMenu->menuAction()));
+    QVERIFY(!helpMenu->actions().contains(languageMenu->menuAction()));
 
     const QList<QAction *> languages = languageMenu->actions();
     QCOMPARE(languages.size(), i18n::targetCodes().size() + 1);
     QCOMPARE(languages.first()->text(), QStringLiteral("English"));
     QCOMPARE(languages.last()->text(), QStringLiteral("Magyar"));
 
-    // Exactly the language that will be active after the next start is checked.
     int checked = 0;
     QString checkedCode;
     for (QAction *action : languages) {
@@ -204,27 +206,54 @@ void TestI18n::helpMenuOffersEveryLanguage()
     QCOMPARE(i18n::resolveLocale(checkedCode), i18n::selectedLanguage());
 }
 
-void TestI18n::choosingALanguageIsRemembered()
+void TestI18n::choosingALanguageAppliesImmediately()
 {
     QSettings().remove(QStringLiteral("language"));
-    {
-        MainWindow window;
-        window.show();
-        QTest::qWait(50);
-        QMenu *languageMenu = window.findChild<QMenu *>(QStringLiteral("languageMenu"));
-        QVERIFY(languageMenu);
-        for (QAction *action : languageMenu->actions()) {
-            if (action->text() == QStringLiteral("Deutsch")) {
-                action->trigger();
-                break;
-            }
+    MainWindow window;
+    window.show();
+    QTest::qWait(50);
+
+    QMenu *languageMenu = window.findChild<QMenu *>(QStringLiteral("languageMenu"));
+    QVERIFY(languageMenu);
+    QAction *german = nullptr;
+    for (QAction *action : languageMenu->actions()) {
+        if (action->text() == QStringLiteral("Deutsch")) {
+            german = action;
+            break;
         }
-        QTest::qWait(20);
-        QVERIFY2(window.statusBar()->currentMessage().contains(QStringLiteral("következő")),
-                 qPrintable(window.statusBar()->currentMessage()));
     }
+    QVERIFY2(german, "Deutsch is missing from the language menu");
+    german->trigger();
+    QTest::qWait(50);
+
     QCOMPARE(i18n::selectedLanguage(), QStringLiteral("de"));
     QCOMPARE(QSettings().value(QStringLiteral("language")).toString(), QStringLiteral("de"));
+
+    // The window itself has already switched; no restart is needed.
+    auto *printButton = window.findChild<QPushButton *>(QStringLiteral("printButton"));
+    QVERIFY(printButton);
+    QCOMPARE(printButton->text(), QStringLiteral("Drucken"));
+    bool helpTranslated = false;
+    bool languageTranslated = false;
+    for (QAction *action : window.menuBar()->actions()) {
+        if (action->text() == QStringLiteral("Hilfe"))
+            helpTranslated = true;
+        if (action->text() == QStringLiteral("Sprache"))
+            languageTranslated = true;
+    }
+    QVERIFY2(helpTranslated, "the Help menu kept its old language");
+    QVERIFY2(languageTranslated, "the language menu kept its old title");
+
+    // The rebuilt menu still marks the active language.
+    QMenu *rebuilt = window.findChild<QMenu *>(QStringLiteral("languageMenu"));
+    QVERIFY(rebuilt);
+    int checked = 0;
+    for (QAction *action : rebuilt->actions())
+        checked += action->isChecked() ? 1 : 0;
+    QCOMPARE(checked, 1);
+    QVERIFY2(window.document().pages.size() >= 1, "the document was lost with the rebuild");
+
+    QVERIFY(i18n::installLanguage(QString()));
     QSettings().remove(QStringLiteral("language"));
 }
 

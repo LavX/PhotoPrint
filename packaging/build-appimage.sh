@@ -71,6 +71,12 @@ rm -rf "$appdir/usr/qml" "$appdir/usr/plugins/qmltooling" \
     "$appdir/usr/plugins/platforminputcontexts" "$appdir/usr/plugins/platformthemes" \
     "$appdir/usr/plugins/styles" "$appdir/usr/plugins/iconengines"
 find "$appdir/usr/plugins/imageformats" -type f ! -name 'libqjpeg.so' -delete
+# Re-copy the JPEG plugin from the host Qt installation: the copy linuxdeploy
+# leaves behind is not byte-identical and crashed at startup on Fedora 44.
+if [ -f "$qt_plugins/imageformats/libqjpeg.so" ]; then
+    cp -a "$qt_plugins/imageformats/libqjpeg.so" \
+        "$appdir/usr/plugins/imageformats/libqjpeg.so"
+fi
 for lib in libQt6Pdf libQt6Quick libQt6Qml libQt6QmlModels libQt6QmlMeta \
            libQt6QmlWorkerScript libQt6Network libQt6PrintSupport \
            libQt6OpenGLWidgets libQt6Svg libKF6Archive libaom librav1e \
