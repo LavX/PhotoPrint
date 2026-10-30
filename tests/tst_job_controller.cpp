@@ -21,6 +21,7 @@
 
 #include <atomic>
 #include <cmath>
+#include <memory>
 #include <thread>
 
 #if defined(Q_OS_UNIX)
@@ -62,6 +63,23 @@ void writeFatJournal(const QString &path)
         file.write("\n");
     }
 }
+
+/// Fails the durability step and then refuses the rollback: the one combination
+/// that can leave a journal record on disk while the append reports failure. A
+/// healthy filesystem cannot be made to do either on demand.
+class UnwithdrawableJournal : public JobJournal
+{
+public:
+    using JobJournal::JobJournal;
+
+protected:
+    Result<void> syncFile(QFile &) override
+    {
+        return error(QStringLiteral("journal-write"), QStringLiteral("sync failed"));
+    }
+
+    bool truncateTo(QFile &, qint64) override { return false; }
+};
 
 QImage solid(const QColor &colour)
 {
@@ -133,6 +151,7 @@ private slots:
     void missingOrChangedSourceStopsBeforeSubmit();
     void cancelledStartNeverSubmits();
     void failedJournalIntentLeavesNoSpoolOrManifest();
+    void unwithdrawableIntentKeepsTheSpoolAsEvidence();
     void failedIntentDoesNotBlockTheRetry();
     void artifactsAreClearedTogether();
     void unrecordedOutcomeIsReported();
@@ -140,6 +159,7 @@ private slots:
     void realAdapterClassifiesUncertainWithoutRetry();
     void realAdapterSendsTheResolvedOptions();
     void borderlessPlacementCoversThePage();
+    void borderlessCentersTheOvershoot();
     void borderlessTicketProducesFullBleedPdf();
 
 private:
@@ -371,6 +391,37 @@ void TestJobController::failedJournalIntentLeavesNoSpoolOrManifest()
     QVERIFY2(workDir.entryList(QDir::Files).isEmpty(),
              qPrintable(workDir.entryList(QDir::Files).join(QLatin1Char(' '))));
     QVERIFY(!controller.busy());
+}
+
+void TestJobController::unwithdrawableIntentKeepsTheSpoolAsEvidence()
+{
+    JobConfig config;
+    config.workDir = m_dir.filePath(QStringLiteral("ghost-jobs"));
+    config.journalPath = m_dir.filePath(QStringLiteral("ghost-jobs.jsonl"));
+    FakeCupsBackend backend;
+    backend.outcome.status = SubmitStatus::KnownJob;
+    backend.outcome.jobId = 31;
+    ImageStore store;
+
+    auto journal = std::make_unique<UnwithdrawableJournal>(config.journalPath);
+    JobController controller(store, config, &backend, std::move(journal));
+
+    const auto result = controller.start(documentWith(m_source), ticketFor(a4()));
+    QVERIFY(!result.ok());
+    QCOMPARE(result.error().code, QStringLiteral("journal-uncertain"));
+    QCOMPARE(backend.submits, 0);
+    QVERIFY(!controller.busy());
+
+    // The record is on disk after all. Deleting the spool would leave an intent
+    // that nothing can settle, so the spool and the manifest stay and the
+    // reported paths keep pointing at them.
+    QCOMPARE(JobJournal(config.journalPath).uncertainCount(), 1);
+    QVERIFY(QFileInfo::exists(controller.lastPdfPath()));
+    QVERIFY(QFileInfo::exists(controller.lastManifestPath()));
+    QCOMPARE(QDir(config.workDir).entryList(QDir::Files).size(), 2);
+
+    QDir(config.workDir).removeRecursively();
+    QFile::remove(config.journalPath);
 }
 
 void TestJobController::failedIntentDoesNotBlockTheRetry()
@@ -658,6 +709,44 @@ void TestJobController::borderlessPlacementCoversThePage()
     const BorderlessPlacement square =
         borderlessPlacement(QSizeF(0.0, 0.0), QSizeF(101.6, 152.4), QPointF(0.0, 0.0));
     QCOMPARE(square.scale, 1.0);
+}
+
+void TestJobController::borderlessCentersTheOvershoot()
+{
+    // Mismatched aspect ratios: the sheet is wider than the page, so the cover
+    // ratio comes from the width and the height overshoots. The declared (0,0)
+    // origin is the default, not a corner anchor: anchoring it there cropped
+    // the photograph on one edge only.
+    const QSizeF physical(100.0, 150.0);
+    const QSizeF logical(152.4, 101.6);
+    const BorderlessPlacement placement =
+        borderlessPlacement(physical, logical, QPointF(0.0, 0.0));
+    const double cover = logical.width() / physical.width();
+    QVERIFY(std::abs(placement.scale - cover) < 1e-9);
+
+    const double wantX = (logical.width() - physical.width() * cover) / 2.0;
+    const double wantY = (logical.height() - physical.height() * cover) / 2.0;
+    QVERIFY(std::abs(placement.offsetMm.x() - wantX) < 1e-9);
+    QVERIFY(std::abs(placement.offsetMm.y() - wantY) < 1e-9);
+    // About 63.5 mm has to be cut, not zero.
+    QVERIFY2(wantY < -60.0, qPrintable(QString::number(wantY)));
+
+    // The enlarged content still reaches every edge, and the same amount is cut
+    // above as below instead of all of it at the bottom.
+    const double top = placement.offsetMm.y();
+    const double bottom = placement.offsetMm.y() + physical.height() * placement.scale;
+    QVERIFY(top <= 0.0);
+    QVERIFY(bottom >= logical.height() - 1e-9);
+    QVERIFY(std::abs(-top - (bottom - logical.height())) < 1e-9);
+    QVERIFY(placement.offsetMm.x() <= 0.0);
+    QVERIFY(placement.offsetMm.x() + physical.width() * placement.scale
+            >= logical.width() - 1e-9);
+
+    // A genuinely declared, nonzero origin is kept when it can still cover: the
+    // centering applies to the default only.
+    const BorderlessPlacement kept =
+        borderlessPlacement(physical, logical, QPointF(0.0, -70.0));
+    QCOMPARE(kept.offsetMm, QPointF(0.0, -70.0));
 }
 
 void TestJobController::borderlessTicketProducesFullBleedPdf()

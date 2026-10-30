@@ -32,7 +32,13 @@ public:
     /// Appends one record and does not return success until it is on the
     /// device. A failed write or sync is rolled back to the length it had
     /// before, so the caller may delete the spool knowing no record survived.
+    ///
+    /// The rollback can itself fail. The result then carries the distinct code
+    /// 'journal-uncertain' instead of 'journal-write': whether a record
+    /// survived is unknown, so the caller must keep the spool as evidence and
+    /// report an uncertain job rather than assume nothing is there.
     Result<void> appendIntent(const QUuid &id, const QString &queue, const QString &pdfSha256);
+    /// Same error contract as appendIntent.
     Result<void> appendOutcome(const QUuid &id, const QString &state, qint64 jobId = -1,
                                const QString &detail = QString());
 
@@ -62,6 +68,13 @@ protected:
     /// appendLine would otherwise stay untested. Nothing overrides it in the
     /// application.
     virtual Result<void> syncFile(QFile &file);
+
+    /// Rewinds the journal to the length it had before a failed append, so an
+    /// incomplete or undurable record does not outlive the error. Returns
+    /// false when the file cannot be truncated. A seam for the same reason as
+    /// syncFile: a healthy filesystem never refuses this, yet the refusal
+    /// changes what the caller is allowed to delete.
+    virtual bool truncateTo(QFile &file, qint64 size);
 
 private:
     Result<void> appendLine(const JobRecord &record);

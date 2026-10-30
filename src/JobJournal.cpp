@@ -15,7 +15,15 @@
 #if defined(Q_OS_UNIX)
 #include <unistd.h>
 #elif defined(Q_OS_WIN)
-#include <io.h>
+// windows.h defines min/max as macros, which breaks the std:: algorithms used
+// below. Ask for the clean headers before pulling it in.
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
+#include <windows.h>
 #endif
 
 #include <algorithm>
@@ -33,39 +41,53 @@ constexpr qint64 kCompactBytes = 1024 * 1024;
 /// fail, but not forever.
 constexpr int kLockWaitMsecs = 2000;
 
+Error writeError()
+{
+    return error(QStringLiteral("journal-write"),
+                 QCoreApplication::translate("PhotoPrint", "A nyomtatási napló nem írható."));
+}
+
+/// The append failed and what it wrote could not be withdrawn. A distinct code,
+/// because the caller's decision differs: 'journal-write' means no record
+/// survived, this one means nobody can tell without reading the file.
+Error uncertainError()
+{
+    return error(QStringLiteral("journal-uncertain"),
+                 QCoreApplication::translate("PhotoPrint",
+                                             "A napló írása nem sikerült, a félbehagyott "
+                                             "bejegyzést pedig nem sikerült eltávolítani."));
+}
+
 Result<void> syncToDisk(QFile &file)
 {
     if (!file.flush())
-        return error(QStringLiteral("journal-write"),
-                     QCoreApplication::translate("PhotoPrint", "A nyomtatási napló nem írható."));
+        return writeError();
 #if defined(Q_OS_UNIX)
     // flush() only drains Qt's buffer; the intent must survive a power cut
     // before the CUPS call, so the data has to reach the device.
-    if (::fdatasync(file.handle()) != 0) {
-        return error(QStringLiteral("journal-write"),
-                     QCoreApplication::translate("PhotoPrint", "A nyomtatási napló nem írható."));
-    }
+    if (::fdatasync(file.handle()) != 0)
+        return writeError();
 #elif defined(Q_OS_WIN)
-    // Windows has no fdatasync; _commit is the equivalent flush-to-device for
-    // a file handle. Not exercised by the test suite, which runs on Linux.
-    if (::_commit(file.handle()) != 0) {
-        return error(QStringLiteral("journal-write"),
-                     QCoreApplication::translate("PhotoPrint", "A nyomtatási napló nem írható."));
-    }
+    // QFile::handle() is a Win32 HANDLE, not a CRT file descriptor, so the
+    // _commit()/fsync() family does not apply to it. FlushFileBuffers is the
+    // Win32 flush-to-device call for a handle. Not exercised by the test suite,
+    // which runs on Linux.
+    if (!::FlushFileBuffers(reinterpret_cast<HANDLE>(file.handle())))
+        return writeError();
 #endif
     return Result<void>();
 }
 
-/// Undoes a failed append. Without this the bytes may outlive the error: the
-/// caller deletes the spool because the intent never became durable, yet a
-/// record left on disk is read as a pending job on the next start.
-void rollBack(QFile &file, qint64 size)
+/// Whether the journal still ends in a complete line. A read failure counts as
+/// "no newline": the extra terminator only adds an empty line that readAll()
+/// skips, while skipping it would fuse the next record onto the tail.
+bool endsWithNewline(QFile &file, qint64 size)
 {
-    file.flush();
-    if (!file.resize(size)) {
-        qWarning("JobJournal: a napló visszavágása %lld bájtra nem sikerült: %s",
-                 static_cast<long long>(size), qPrintable(file.errorString()));
-    }
+    if (size <= 0)
+        return true;
+    if (!file.seek(size - 1))
+        return false;
+    return file.read(1) == QByteArrayLiteral("\n");
 }
 
 QString lockPathFor(const QString &path)
@@ -106,14 +128,24 @@ Result<void> JobJournal::syncFile(QFile &file)
     return syncToDisk(file);
 }
 
+bool JobJournal::truncateTo(QFile &file, qint64 size)
+{
+    // Qt does not buffer writes, but flushing first keeps the truncation from
+    // being reordered against what the failed append left behind.
+    file.flush();
+    if (file.resize(size))
+        return true;
+    qWarning("JobJournal: a napló visszavágása %lld bájtra nem sikerült: %s",
+             static_cast<long long>(size), qPrintable(file.errorString()));
+    return false;
+}
+
 Result<void> JobJournal::appendLine(const JobRecord &record)
 {
     // The directory is created here rather than in the constructor so a
     // failure can be reported to the caller instead of being dropped.
-    if (!QDir().mkpath(QFileInfo(m_path).absolutePath())) {
-        return error(QStringLiteral("journal-write"),
-                     QCoreApplication::translate("PhotoPrint", "A nyomtatási napló nem írható."));
-    }
+    if (!QDir().mkpath(QFileInfo(m_path).absolutePath()))
+        return writeError();
 
     // Append and compaction are a read-modify-write pair across processes: two
     // instances could otherwise both rewrite the file and one intent would be
@@ -130,21 +162,35 @@ Result<void> JobJournal::appendLine(const JobRecord &record)
 
     const qint64 before = QFileInfo(m_path).size();
     QFile file(m_path);
-    if (!file.open(QIODevice::WriteOnly | QIODevice::Append)) {
-        return error(QStringLiteral("journal-write"),
-                     QCoreApplication::translate("PhotoPrint", "A nyomtatási napló nem írható."));
-    }
-    const QByteArray line = lineFor(record);
-    if (file.write(line) != line.size()) {
-        rollBack(file, before);
-        return error(QStringLiteral("journal-write"),
-                     QCoreApplication::translate("PhotoPrint", "A nyomtatási napló nem írható."));
+    // Read is needed to inspect the last byte; append keeps every write at the
+    // end of the file, past the offset the check leaves behind.
+    if (!file.open(QIODevice::ReadWrite | QIODevice::Append))
+        return writeError();
+
+    // A crash can leave the last record without its terminating newline.
+    // Writing at that offset glues the new record onto the fragment, and
+    // readAll() then drops the merged line: the newer record, the one whose
+    // durability this call is about, disappears with it. Terminate the dangling
+    // line first so every record owns a line of its own.
+    QByteArray payload;
+    if (!endsWithNewline(file, before))
+        payload.append('\n');
+    payload.append(lineFor(record));
+
+    if (file.write(payload) != payload.size()) {
+        // The trailing newline was written last, so a short write leaves a
+        // fragment readAll() skips. Only a rollback that itself fails can leave
+        // the file in a state the caller has to be warned about.
+        if (!truncateTo(file, before))
+            return uncertainError();
+        return writeError();
     }
     const auto synced = syncFile(file);
     if (!synced) {
         // The bytes reached the file but not the device. Dropping them keeps
         // the file in step with the caller's decision to keep no evidence.
-        rollBack(file, before);
+        if (!truncateTo(file, before))
+            return uncertainError();
         return synced.error();
     }
     return Result<void>();
@@ -178,19 +224,16 @@ Result<void> JobJournal::compactIfNeeded()
 
     QSaveFile file(m_path);
     if (!file.open(QIODevice::WriteOnly))
-        return error(QStringLiteral("journal-write"),
-                     QCoreApplication::translate("PhotoPrint", "A nyomtatási napló nem írható."));
+        return writeError();
     for (const JobRecord &record : kept) {
         const QByteArray line = lineFor(record);
         if (file.write(line) != line.size()) {
             file.cancelWriting();
-            return error(QStringLiteral("journal-write"),
-                         QCoreApplication::translate("PhotoPrint", "A nyomtatási napló nem írható."));
+            return writeError();
         }
     }
     if (!file.commit())
-        return error(QStringLiteral("journal-write"),
-                     QCoreApplication::translate("PhotoPrint", "A nyomtatási napló nem írható."));
+        return writeError();
     m_compactAfter = std::max(kCompactBytes, QFileInfo(m_path).size() + kCompactBytes);
     return Result<void>();
 }
