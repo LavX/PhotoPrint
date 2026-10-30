@@ -2,12 +2,18 @@
 #include "PrintTicket.h"
 #include "PrinterCatalog.h"
 
+#include <cups/cups.h>
+
 #include <QFile>
 #include <QtTest>
 
 using namespace pp;
 
 namespace {
+
+// The exported libcups setter the code under test uses to clear a sticky error;
+// CUPS 2.x keeps it out of its public headers.
+extern "C" void _cupsSetError(ipp_status_t status, const char *message, int localize);
 
 QString fixtureDir()
 {
@@ -105,6 +111,9 @@ private slots:
     void colourChoiceMapsToGrayAndMono();
     void copiesAndPageRangeAreChecked();
     void duplexFollowsTheQueueDefault();
+    void halfDeclaredLogicalSizeKeepsOneSheet();
+    void destinationLookupNeedsTheStatus();
+    void stickyCupsErrorIsClearedBeforeTheLookup();
     void printContextEqualityUsesMillimetreTolerance();
 };
 
@@ -570,6 +579,100 @@ void TestPrinterOptions::duplexFollowsTheQueueDefault()
     if (!everyday)
         QFAIL(qPrintable(everyday.error().message));
     QCOMPARE(everyday.value().duplexOption, QStringLiteral("None"));
+}
+
+void TestPrinterOptions::halfDeclaredLogicalSizeKeepsOneSheet()
+{
+    // One logical axis declared, one not: the driver page must fall back to the
+    // physical sheet as a whole, exactly like the PDF media box does. Falling
+    // back per axis asked for a 101.6 x 145 mm page (a sheet that exists
+    // nowhere) while the media box described 95 x 145 mm.
+    PrinterCapabilities capabilities;
+    capabilities.queueName = QStringLiteral("Test");
+
+    PageSizeCapability hybrid;
+    hybrid.option = QStringLiteral("Hybrid");
+    hybrid.displayName = hybrid.option;
+    hybrid.widthMm = 101.6;
+    hybrid.heightMm = 145.0;
+    capabilities.pageSizes.append(hybrid);
+
+    PageSizeCapability physical;
+    physical.option = QStringLiteral("Physical");
+    physical.displayName = physical.option;
+    physical.widthMm = 95.0;
+    physical.heightMm = 145.0;
+    capabilities.pageSizes.append(physical);
+
+    PrintSelection selection;
+    selection.queueName = capabilities.queueName;
+    selection.paper.name = QStringLiteral("Félig megadott");
+    selection.paper.physicalWidthMm = 95.0;
+    selection.paper.physicalHeightMm = 145.0;
+    selection.paper.logicalWidthMm = 101.6;
+    selection.paper.logicalHeightMm = 0.0;
+
+    const auto ticket = PrinterAdapter::resolve(capabilities, selection);
+    if (!ticket)
+        QFAIL(qPrintable(ticket.error().message));
+    QCOMPARE(ticket.value().pageSizeOption, QStringLiteral("Physical"));
+    QCOMPARE(ticket.value().geometry.logicalSizeMm(), QSizeF(95.0, 145.0));
+
+    // The driver option and the media box must name the same sheet.
+    const PageSizeCapability *chosen =
+        capabilities.findPageSize(ticket.value().pageSizeOption);
+    QVERIFY(chosen);
+    QCOMPARE(QSizeF(chosen->widthMm, chosen->heightMm),
+             ticket.value().geometry.logicalSizeMm());
+
+    // A fully declared logical sheet is still what the driver gets.
+    selection.paper.logicalHeightMm = 145.0;
+    const auto declared = PrinterAdapter::resolve(capabilities, selection);
+    if (!declared)
+        QFAIL(qPrintable(declared.error().message));
+    QCOMPARE(declared.value().pageSizeOption, QStringLiteral("Hybrid"));
+    QCOMPARE(declared.value().geometry.logicalSizeMm(), QSizeF(101.6, 145.0));
+}
+
+void TestPrinterOptions::destinationLookupNeedsTheStatus()
+{
+    // libcups answers "cannot reach the scheduler" with the same zero count as
+    // "no queues configured"; only the status separates the two answers.
+    QCOMPARE(int(classifyDestinationLookup(2, int(IPP_STATUS_OK))),
+             int(LookupAnswer::Printers));
+    QCOMPARE(int(classifyDestinationLookup(2, int(IPP_STATUS_ERROR_INTERNAL))),
+             int(LookupAnswer::Printers));
+    QCOMPARE(int(classifyDestinationLookup(0, int(IPP_STATUS_OK))),
+             int(LookupAnswer::NoPrinters));
+    QCOMPARE(int(classifyDestinationLookup(0, int(IPP_STATUS_ERROR_INTERNAL))),
+             int(LookupAnswer::Unavailable));
+    QCOMPARE(int(classifyDestinationLookup(0, int(IPP_STATUS_ERROR_SERVICE_UNAVAILABLE))),
+             int(LookupAnswer::Unavailable));
+    QCOMPARE(int(classifyDestinationLookup(-1, int(IPP_STATUS_OK))),
+             int(LookupAnswer::Unavailable));
+    QCOMPARE(int(classifyDestinationLookup(-1, int(IPP_STATUS_ERROR_INTERNAL))),
+             int(LookupAnswer::Unavailable));
+}
+
+void TestPrinterOptions::stickyCupsErrorIsClearedBeforeTheLookup()
+{
+    // libcups keeps the last error for the life of the process, and it survives
+    // a successful call, so an empty enumeration must not be classified against
+    // a failure left behind earlier. No scheduler is needed to see this.
+    clearCupsError();
+    QCOMPARE(int(cupsLastError()), int(IPP_STATUS_OK));
+    QCOMPARE(int(classifyDestinationLookup(0, int(cupsLastError()))),
+             int(LookupAnswer::NoPrinters));
+
+    _cupsSetError(IPP_STATUS_ERROR_INTERNAL, "stale failure", 0);
+    QVERIFY2(int(cupsLastError()) != int(IPP_STATUS_OK), "the error is meant to be sticky");
+    QCOMPARE(int(classifyDestinationLookup(0, int(cupsLastError()))),
+             int(LookupAnswer::Unavailable));
+
+    clearCupsError();
+    QCOMPARE(int(cupsLastError()), int(IPP_STATUS_OK));
+    QCOMPARE(int(classifyDestinationLookup(0, int(cupsLastError()))),
+             int(LookupAnswer::NoPrinters));
 }
 
 void TestPrinterOptions::printContextEqualityUsesMillimetreTolerance()

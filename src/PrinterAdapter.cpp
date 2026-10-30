@@ -136,10 +136,13 @@ ChosenPage choosePage(const PrinterCapabilities &capabilities,
 {
     ChosenPage chosen;
     const PaperSpec &paper = selection.paper;
-    const double targetWidth = paper.logicalWidthMm > 0.0 ? paper.logicalWidthMm
-                                                          : paper.physicalWidthMm;
-    const double targetHeight = paper.logicalHeightMm > 0.0 ? paper.logicalHeightMm
-                                                            : paper.physicalHeightMm;
+    // The driver page and the PDF media box must describe the same sheet, so the
+    // logical size is used only when both of its axes are declared, exactly as
+    // PaperGeometry decides it. A per-axis fallback here produced a page option
+    // for one sheet and a media box for another.
+    const QSizeF target = PaperGeometry::forPaper(paper, false).logicalSizeMm();
+    const double targetWidth = target.width();
+    const double targetHeight = target.height();
 
     if (paper.custom && !photoMapping(paper)) {
         chosen.page.option = PrinterAdapter::customPageSizeOption(paper.physicalWidthMm,

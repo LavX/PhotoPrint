@@ -8,6 +8,7 @@
 #include <QDir>
 #include <QImage>
 #include <QImageWriter>
+#include <QRectF>
 #include <QTemporaryDir>
 #include <QtTest>
 
@@ -54,6 +55,7 @@ private slots:
     void initTestCase();
     void variantsKeepTheImageRecipeAndVaryOnlyPaper();
     void smallPaperStillGetsPositiveCells();
+    void tinyPaperKeepsCellsInsideTheirSlots();
     void sourceWithoutHeightDoesNotDivideByZero();
     void renderedVariantsGetBrighterAndDarker();
 
@@ -167,6 +169,49 @@ void TestTrialSheet::smallPaperStillGetsPositiveCells()
                  "a trial cell must stay on the paper");
         QVERIFY2(frame.cx + frame.width / 2.0 <= 20.0 && frame.cy + frame.height / 2.0 <= 30.0,
                  "a trial cell must stay on the paper");
+    }
+}
+
+void TestTrialSheet::tinyPaperKeepsCellsInsideTheirSlots()
+{
+    DocumentSnapshot document = m_document;
+    // A 2 x 3 mm sheet: the 1 mm floor used to make every cell wider than the
+    // slot it sits in, so the four variants overlapped each other.
+    PaperSpec tiny;
+    tiny.name = QStringLiteral("2 × 3 mm");
+    tiny.physicalWidthMm = 2.0;
+    tiny.physicalHeightMm = 3.0;
+    document.pages[0].paper = tiny;
+
+    const auto built = TrialSheetBuilder::build(document, QStringLiteral("frame"),
+                                                contextFor(tiny));
+    if (!built)
+        QFAIL(qPrintable(built.error().message));
+    const QList<Frame> &cells = built.value().document.pages.at(0).frames;
+    QCOMPARE(cells.size(), 4);
+
+    for (const Frame &cell : cells) {
+        QVERIFY(std::isfinite(cell.width) && std::isfinite(cell.height));
+        QVERIFY2(cell.width > 0.0 && cell.height > 0.0, "a trial cell must not be empty");
+        QVERIFY2(cell.cx - cell.width / 2.0 >= 0.0 && cell.cy - cell.height / 2.0 >= 0.0,
+                 "a trial cell must stay on the paper");
+        QVERIFY2(cell.cx + cell.width / 2.0 <= 2.0 && cell.cy + cell.height / 2.0 <= 3.0,
+                 "a trial cell must stay on the paper");
+    }
+
+    // The four slots are a 2 x 2 grid, so no two cells may share a pixel: an
+    // oversized cell would run into its neighbour's slot.
+    for (int i = 0; i < cells.size(); ++i) {
+        const QRectF first(cells.at(i).cx - cells.at(i).width / 2.0,
+                           cells.at(i).cy - cells.at(i).height / 2.0, cells.at(i).width,
+                           cells.at(i).height);
+        for (int j = i + 1; j < cells.size(); ++j) {
+            const QRectF second(cells.at(j).cx - cells.at(j).width / 2.0,
+                                cells.at(j).cy - cells.at(j).height / 2.0,
+                                cells.at(j).width, cells.at(j).height);
+            QVERIFY2(!first.intersects(second),
+                     qPrintable(QStringLiteral("cells %1 and %2 overlap").arg(i + 1).arg(j + 1)));
+        }
     }
 }
 

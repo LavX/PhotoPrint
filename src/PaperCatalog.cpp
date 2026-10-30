@@ -61,7 +61,6 @@ void writeAll(QSettings &settings, const QList<PaperSpec> &papers)
         settings.setValue(QStringLiteral("hasCheckedOffset"), paper.hasCheckedOffset);
         settings.setValue(QStringLiteral("offsetXMm"), paper.offsetXMm);
         settings.setValue(QStringLiteral("offsetYMm"), paper.offsetYMm);
-        settings.setValue(QStringLiteral("custom"), paper.custom);
     }
     settings.endArray();
     settings.sync();
@@ -166,7 +165,7 @@ CustomPaperStore::CustomPaperStore(const QString &settingsFile)
 
 CustomPaperStore::~CustomPaperStore() = default;
 
-QList<PaperSpec> CustomPaperStore::all() const
+Result<QList<PaperSpec>> CustomPaperStore::readAll() const
 {
     QList<PaperSpec> papers;
     const int count = m_settings->beginReadArray(QStringLiteral("customPapers"));
@@ -184,6 +183,8 @@ QList<PaperSpec> CustomPaperStore::all() const
         paper.hasCheckedOffset = m_settings->value(QStringLiteral("hasCheckedOffset")).toBool();
         paper.offsetXMm = m_settings->value(QStringLiteral("offsetXMm")).toDouble();
         paper.offsetYMm = m_settings->value(QStringLiteral("offsetYMm")).toDouble();
+        // Everything in this store was defined by the user: the flag follows
+        // from the store, it is not a second piece of information to keep.
         paper.custom = true;
         if (paper.name.isEmpty() || !(paper.physicalWidthMm > 0.0)
             || !(paper.physicalHeightMm > 0.0))
@@ -191,7 +192,43 @@ QList<PaperSpec> CustomPaperStore::all() const
         papers.append(paper);
     }
     m_settings->endArray();
+
+    // A list rebuilt from a half-read file would be written straight back by the
+    // next save(), and every paper the file still held would be gone. Report the
+    // damage instead of pretending the user has no papers.
+    switch (m_settings->status()) {
+    case QSettings::NoError:
+        break;
+    case QSettings::FormatError:
+        return error(QStringLiteral("paper-corrupt"),
+                     QCoreApplication::translate("PhotoPrint",
+                                                 "A papírbeállítások fájlja sérült."));
+    case QSettings::AccessError:
+        return error(QStringLiteral("paper-read"),
+                     QCoreApplication::translate("PhotoPrint",
+                                                 "A papírbeállítások nem olvashatók."));
+    }
+
+    // QSettings reads an unparsable array count as "no entries" without any
+    // error, which looks exactly like an empty store. The count key is written
+    // by every save, so entries without it can only come from a damaged file.
+    if (count == 0) {
+        const QString prefix = QStringLiteral("customPapers/");
+        for (const QString &key : m_settings->allKeys()) {
+            if (key.startsWith(prefix) && key != prefix + QStringLiteral("size")) {
+                return error(QStringLiteral("paper-corrupt"),
+                             QCoreApplication::translate("PhotoPrint",
+                                                         "A papírbeállítások fájlja sérült."));
+            }
+        }
+    }
     return papers;
+}
+
+QList<PaperSpec> CustomPaperStore::all() const
+{
+    const auto read = readAll();
+    return read ? read.value() : QList<PaperSpec>{};
 }
 
 Result<void> CustomPaperStore::save(const PaperSpec &paper)
@@ -203,7 +240,10 @@ Result<void> CustomPaperStore::save(const PaperSpec &paper)
     if (!(stored.physicalWidthMm > 0.0) || !(stored.physicalHeightMm > 0.0))
         return error(QStringLiteral("paper-size"), QCoreApplication::translate("PhotoPrint", "A papírméret érvénytelen."));
 
-    QList<PaperSpec> papers = all();
+    const auto existing = readAll();
+    if (!existing)
+        return existing.error();
+    QList<PaperSpec> papers = existing.value();
     for (int i = papers.size() - 1; i >= 0; --i) {
         if (papers.at(i).name.compare(stored.name, Qt::CaseInsensitive) == 0)
             papers.removeAt(i);
@@ -219,7 +259,10 @@ Result<void> CustomPaperStore::save(const PaperSpec &paper)
 Result<void> CustomPaperStore::remove(const QString &name)
 {
     const QString trimmed = name.trimmed();
-    QList<PaperSpec> papers = all();
+    const auto existing = readAll();
+    if (!existing)
+        return existing.error();
+    QList<PaperSpec> papers = existing.value();
     bool matched = false;
     for (int i = papers.size() - 1; i >= 0; --i) {
         if (papers.at(i).name.compare(trimmed, Qt::CaseInsensitive) == 0) {

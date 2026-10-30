@@ -45,6 +45,13 @@ public:
     CustomPaperStore(const CustomPaperStore &) = delete;
     CustomPaperStore &operator=(const CustomPaperStore &) = delete;
 
+    /// Every stored paper. No file yet is an empty list; a file that cannot be
+    /// read, or whose array cannot be parsed, is an error, so "there are none"
+    /// can never be confused with "they cannot be read".
+    Result<QList<PaperSpec>> readAll() const;
+
+    /// Convenience wrapper for the read-only callers: an unreadable file looks
+    /// like an empty list here. Use readAll() where that matters.
     QList<PaperSpec> all() const;
 
     /// Adds the paper, or replaces the stored one with the same name.

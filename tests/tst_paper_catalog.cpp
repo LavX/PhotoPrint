@@ -34,6 +34,8 @@ private slots:
     void customPaperKeepsEveryField();
     void namesAreTrimmedOnSave();
     void removingAnUnknownPaperFails();
+    void storedPapersAreAlwaysCustom();
+    void damagedPaperFileIsNotOverwritten();
     void corruptPresetFileIsNotOverwritten();
 };
 
@@ -260,6 +262,80 @@ void TestPaperCatalog::removingAnUnknownPaperFails()
     QVERIFY(!removed.ok());
     QCOMPARE(removed.error().code, QStringLiteral("paper-missing"));
     QCOMPARE(store.all().size(), 1);
+}
+
+void TestPaperCatalog::storedPapersAreAlwaysCustom()
+{
+    QTemporaryDir dir;
+    QVERIFY(dir.isValid());
+    const QString path = QDir(dir.path()).filePath(QStringLiteral("papers.ini"));
+    CustomPaperStore store(path);
+
+    // This store only holds sheets the user made, so the flag follows from the
+    // store: a paper handed in as a built-in comes back as custom, and nothing
+    // that is always true is written to the file.
+    PaperSpec paper;
+    paper.name = QStringLiteral("Saját négyzet");
+    paper.physicalWidthMm = 90.0;
+    paper.physicalHeightMm = 90.0;
+    paper.custom = false;
+    QVERIFY(store.save(paper).ok());
+
+    const auto read = store.readAll();
+    QVERIFY(read.ok());
+    QCOMPARE(read.value().size(), 1);
+    QVERIFY(read.value().first().custom);
+
+    QFile file(path);
+    QVERIFY(file.open(QIODevice::ReadOnly));
+    QVERIFY2(!file.readAll().contains("custom="), "the custom flag is not stored");
+}
+
+void TestPaperCatalog::damagedPaperFileIsNotOverwritten()
+{
+    // Two shapes of damage: a file the INI parser rejects, and one whose array
+    // count key was lost (a truncated write), which QSettings reads as "no
+    // papers" without any error at all.
+    const QList<QByteArray> damaged = {
+        QByteArray("[customPapers\nsize=1\n1\\name=Regi\n1\\widthMm=100\n1\\heightMm=150\n"),
+        QByteArray("[customPapers]\n1\\name=Regi\n1\\widthMm=100\n1\\heightMm=150\n"),
+    };
+
+    for (const QByteArray &content : damaged) {
+        QTemporaryDir dir;
+        QVERIFY(dir.isValid());
+        const QString path = QDir(dir.path()).filePath(QStringLiteral("papers.ini"));
+        {
+            QFile file(path);
+            QVERIFY(file.open(QIODevice::WriteOnly));
+            QCOMPARE(file.write(content), qint64(content.size()));
+        }
+
+        CustomPaperStore store(path);
+        const auto read = store.readAll();
+        QVERIFY2(!read.ok(), "a damaged file must not look like an empty store");
+        QCOMPARE(read.error().code, QStringLiteral("paper-corrupt"));
+        // The plain accessor still answers, so the read-only callers keep working.
+        QVERIFY(store.all().isEmpty());
+
+        PaperSpec paper;
+        paper.name = QStringLiteral("Új");
+        paper.physicalWidthMm = 100.0;
+        paper.physicalHeightMm = 150.0;
+        const auto saved = store.save(paper);
+        QVERIFY2(!saved.ok(), "saving over a damaged file would lose the old papers");
+        QCOMPARE(saved.error().code, QStringLiteral("paper-corrupt"));
+
+        const auto removed = store.remove(QStringLiteral("Regi"));
+        QVERIFY2(!removed.ok(), "removing from a damaged file would rewrite it too");
+        QCOMPARE(removed.error().code, QStringLiteral("paper-corrupt"));
+
+        // The damage stays on disk, so the user or a later repair can still get
+        // the papers back.
+        QFile file(path);
+        QVERIFY(file.open(QIODevice::ReadOnly));
+        QCOMPARE(file.readAll(), content);
+    }
 }
 
 void TestPaperCatalog::corruptPresetFileIsNotOverwritten()
