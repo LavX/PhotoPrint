@@ -48,6 +48,9 @@ modules:
 
   - name: photoprint
     buildsystem: cmake-ninja
+    # The project has no install() rules; post-install places the binary,
+    # desktop entry and icon explicitly.
+    no-make-install: true
     config-opts:
       - -DCMAKE_BUILD_TYPE=Release
     sources:
