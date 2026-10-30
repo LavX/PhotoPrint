@@ -13,6 +13,7 @@
 #include <QtTest>
 
 #include <cmath>
+#include <limits>
 
 using namespace pp;
 
@@ -57,6 +58,7 @@ private slots:
     void smallPaperStillGetsPositiveCells();
     void tinyPaperKeepsCellsInsideTheirSlots();
     void sourceWithoutHeightDoesNotDivideByZero();
+    void nonFinitePaperIsRejected();
     void renderedVariantsGetBrighterAndDarker();
 
 private:
@@ -199,6 +201,16 @@ void TestTrialSheet::tinyPaperKeepsCellsInsideTheirSlots()
                  "a trial cell must stay on the paper");
     }
 
+    // The source frame is 60 x 45 mm, so every cell must keep the 0.75 aspect
+    // ratio. A 1 mm floor used to stretch the shortest axis on tiny paper.
+    const double expectedRatio = 45.0 / 60.0;
+    for (const Frame &cell : cells) {
+        QVERIFY2(std::abs(cell.height / cell.width - expectedRatio) < 1e-6,
+                 qPrintable(QStringLiteral("cell %1x%2 broke the aspect ratio")
+                                .arg(cell.width)
+                                .arg(cell.height)));
+    }
+
     // The four slots are a 2 x 2 grid, so no two cells may share a pixel: an
     // oversized cell would run into its neighbour's slot.
     for (int i = 0; i < cells.size(); ++i) {
@@ -234,6 +246,23 @@ void TestTrialSheet::sourceWithoutHeightDoesNotDivideByZero()
         QVERIFY(std::isfinite(cell.width) && std::isfinite(cell.height));
         QVERIFY(cell.width > 0.0 && cell.height > 0.0);
     }
+}
+
+void TestTrialSheet::nonFinitePaperIsRejected()
+{
+    // An infinite sheet passes a bare "greater than zero" test and would make
+    // every cell size infinite, so it is refused up front.
+    DocumentSnapshot document = m_document;
+    PaperSpec huge;
+    huge.name = QStringLiteral("Végtelen");
+    huge.physicalWidthMm = std::numeric_limits<double>::infinity();
+    huge.physicalHeightMm = 150.0;
+    document.pages[0].paper = huge;
+
+    const auto built = TrialSheetBuilder::build(document, QStringLiteral("frame"),
+                                                contextFor(huge));
+    QVERIFY(!built.ok());
+    QCOMPARE(built.error().code, QStringLiteral("trial-paper"));
 }
 
 void TestTrialSheet::renderedVariantsGetBrighterAndDarker()

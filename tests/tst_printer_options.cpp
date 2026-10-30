@@ -112,6 +112,7 @@ private slots:
     void copiesAndPageRangeAreChecked();
     void duplexFollowsTheQueueDefault();
     void halfDeclaredLogicalSizeKeepsOneSheet();
+    void adapterPageDescribesTheSameSheetAsTheMediaBox();
     void destinationLookupNeedsTheStatus();
     void stickyCupsErrorIsClearedBeforeTheLookup();
     void printContextEqualityUsesMillimetreTolerance();
@@ -634,6 +635,63 @@ void TestPrinterOptions::halfDeclaredLogicalSizeKeepsOneSheet()
     QCOMPARE(declared.value().geometry.logicalSizeMm(), QSizeF(101.6, 145.0));
 }
 
+void TestPrinterOptions::adapterPageDescribesTheSameSheetAsTheMediaBox()
+{
+    // The PDF media box is built from the logical sheet, so the driver page has
+    // to be the same sheet. A queue that only advertises the physical sheet must
+    // not be given a page of that size behind a logical media box: the content
+    // would land on a smaller sheet, shifted and cropped.
+    PrinterCapabilities physicalOnly;
+    physicalOnly.queueName = QStringLiteral("Test");
+    PageSizeCapability physical;
+    physical.option = QStringLiteral("Physical");
+    physical.displayName = physical.option;
+    physical.widthMm = 100.0;
+    physical.heightMm = 150.0;
+    physicalOnly.pageSizes.append(physical);
+
+    const PrintSelection selection = photoSelection(); // 100 x 150 physical, 101.6 x 152.4 logical
+    const auto rejected = PrinterAdapter::resolve(physicalOnly, selection);
+    QVERIFY2(!rejected.ok(), "a page of the physical size is not the logical sheet");
+    QCOMPARE(rejected.error().code, QStringLiteral("paper-unsupported"));
+
+    // The same queue with the real logical mode resolves, and the page it names
+    // is the rectangle the media box describes.
+    PrinterCapabilities matching = physicalOnly;
+    PageSizeCapability logicalPage;
+    logicalPage.option = QStringLiteral("4x6");
+    logicalPage.displayName = logicalPage.option;
+    logicalPage.widthMm = 101.6;
+    logicalPage.heightMm = 152.4;
+    matching.pageSizes.append(logicalPage);
+
+    const auto ticket = PrinterAdapter::resolve(matching, selection);
+    if (!ticket)
+        QFAIL(qPrintable(ticket.error().message));
+    QCOMPARE(ticket.value().pageSizeOption, QStringLiteral("4x6"));
+    QCOMPARE(ticket.value().geometry.logicalSizeMm(), QSizeF(101.6, 152.4));
+    const PageSizeCapability *chosen = matching.findPageSize(ticket.value().pageSizeOption);
+    QVERIFY(chosen);
+    QCOMPARE(QSizeF(chosen->widthMm, chosen->heightMm),
+             ticket.value().geometry.logicalSizeMm());
+
+    // A custom sheet gets the custom option for the sheet the driver is asked
+    // for, which is the logical one: the option name and the media box agree.
+    PrinterCapabilities customQueue;
+    customQueue.queueName = QStringLiteral("Test");
+    PrintSelection custom = customSelection(120.0, 180.0);
+    custom.paper.logicalWidthMm = 130.0;
+    custom.paper.logicalHeightMm = 190.0;
+    const auto customTicket = PrinterAdapter::resolve(customQueue, custom);
+    if (!customTicket)
+        QFAIL(qPrintable(customTicket.error().message));
+    const QSizeF box = customTicket.value().geometry.logicalSizeMm();
+    QCOMPARE(box, QSizeF(130.0, 190.0));
+    QCOMPARE(customTicket.value().pageSizeOption,
+             PrinterAdapter::customPageSizeOption(box.width(), box.height()));
+    QCOMPARE(customTicket.value().pageSizeOption, QStringLiteral("Custom.130x190mm"));
+}
+
 void TestPrinterOptions::destinationLookupNeedsTheStatus()
 {
     // libcups answers "cannot reach the scheduler" with the same zero count as
@@ -659,6 +717,10 @@ void TestPrinterOptions::stickyCupsErrorIsClearedBeforeTheLookup()
     // libcups keeps the last error for the life of the process, and it survives
     // a successful call, so an empty enumeration must not be classified against
     // a failure left behind earlier. No scheduler is needed to see this.
+    //
+    // This is also the probe for the weak libcups setter: if the declaration in
+    // PrinterCatalog.cpp were folded to a null reference, clearCupsError() would
+    // be a no-op and the last QCOMPARE below would keep the stale error.
     clearCupsError();
     QCOMPARE(int(cupsLastError()), int(IPP_STATUS_OK));
     QCOMPARE(int(classifyDestinationLookup(0, int(cupsLastError()))),
