@@ -363,7 +363,7 @@ ColorRecipe recipeFromJson(const QJsonObject &object)
     recipe.tone.highlightCompress = tone.value(QStringLiteral("highlightCompress")).toDouble();
     recipe.paperStrength = object.value(QStringLiteral("paperStrength")).toDouble();
     recipe.grayscale = object.value(QStringLiteral("grayscale")).toBool();
-    return recipe;
+    return sanitiseRecipe(recipe);
 }
 
 struct ParsedProject {

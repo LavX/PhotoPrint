@@ -1725,7 +1725,7 @@ void MainWindow::rebuildPreviewImages()
         if (!source)
             continue;
         const bool showOriginal = m_showOriginal && frame.id == m_selectedId;
-        ColorRecipe recipe = document.recipe;
+        ColorRecipe recipe = sanitiseRecipe(document.recipe);
         recipe.tone = showOriginal ? PhotoTone{} : effectiveTone(frame);
         const QString filter = showOriginal ? QStringLiteral("original") : frame.filter;
         const int filterStrength = showOriginal ? 0 : frame.filterStrength;
@@ -1757,7 +1757,8 @@ void MainWindow::refreshPhotoList()
                               .arg(frameIndex + 1));
             item->setData(Qt::UserRole, frame.id);
             if (const std::optional<SourceImage> source = m_store.cached(frame.sourcePath)) {
-                const Result<QImage> thumb = m_store.srgb(*source, document.recipe, 96);
+                const Result<QImage> thumb =
+                    m_store.srgb(*source, sanitiseRecipe(document.recipe), 96);
                 if (thumb)
                     item->setIcon(QIcon(libraryThumbnail(thumb.value(), 64)));
             }

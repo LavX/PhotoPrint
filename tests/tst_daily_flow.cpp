@@ -80,6 +80,7 @@ private slots:
     void brightnessSliderAndPipelineRangeAgree();
     void infiniteBrightnessSaturatesAtTheBounds();
     void craftedToneStaysInsideTheSaneRange();
+    void craftedRecipeStrengthIsClamped();
 };
 
 void TestDailyFlow::threePhotosOnA4WithoutHelp()
@@ -483,6 +484,26 @@ void TestDailyFlow::digestIsPinnedToAKnownRecipe()
     recipe.grayscale = true;
     QCOMPARE(recipe.digest().toHex(),
              QByteArray("05938672d916cbc0da16139a1b77bffb939fef87670c7250266c8209e5972b5c"));
+}
+
+void TestDailyFlow::craftedRecipeStrengthIsClamped()
+{
+    // A project file is data: a huge paper strength or tone must not reach the
+    // renderer. Both the load path and the thumbnail path go through this.
+    ColorRecipe recipe;
+    recipe.paperStrength = 20.0;
+    recipe.tone.exposureEv = 99.0;
+    recipe.tone.shadowLift = 9.0;
+    const ColorRecipe safe = sanitiseRecipe(recipe);
+    QCOMPARE(safe.paperStrength, kMaxPaperEv);
+    QVERIFY(safe.tone.exposureEv <= 1.0);
+    QVERIFY(safe.tone.shadowLift <= 0.5);
+
+    recipe.paperStrength = -20.0;
+    QCOMPARE(sanitiseRecipe(recipe).paperStrength, -kMaxPaperEv);
+
+    recipe.paperStrength = std::numeric_limits<double>::quiet_NaN();
+    QCOMPARE(sanitiseRecipe(recipe).paperStrength, 0.0);
 }
 
 void TestDailyFlow::brightnessSliderAndPipelineRangeAgree()

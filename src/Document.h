@@ -166,6 +166,18 @@ struct ColorRecipe {
     QByteArray digest() const;
 };
 
+/// Clamps the recipe values that can arrive from a project file. The renderer
+/// applies the exposure directly, so nothing outside these bounds may pass.
+constexpr double kMaxPaperEv = 0.5;
+inline ColorRecipe sanitiseRecipe(ColorRecipe recipe)
+{
+    recipe.tone = sanitiseTone(recipe.tone);
+    if (std::isnan(recipe.paperStrength))
+        recipe.paperStrength = 0.0;
+    recipe.paperStrength = std::clamp(recipe.paperStrength, -kMaxPaperEv, kMaxPaperEv);
+    return recipe;
+}
+
 /// Immutable-by-convention document state. Editing code copies, changes and
 /// publishes a new snapshot; the print path records one and never edits it.
 struct DocumentSnapshot {
