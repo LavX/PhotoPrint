@@ -13,6 +13,13 @@ namespace pp {
 
 namespace {
 
+// CUPS 2.x dropped cupsSetError() from its public headers, but libcups still
+// exports the setter its own client code uses. Declared weak: if a future CUPS
+// stops exporting it, the reference stays null and an empty enumeration simply
+// keeps the old, sticky behaviour instead of the program failing to link.
+extern "C" __attribute__((weak)) void _cupsSetError(ipp_status_t status, const char *message,
+                                                    int localize);
+
 QString optionValue(cups_dest_t *dest, const char *name)
 {
     const char *value = cupsGetOption(name, dest->num_options, dest->options);
@@ -56,27 +63,48 @@ PageSizeCapability pageFromJson(const QJsonObject &object)
 
 } // namespace
 
+void clearCupsError()
+{
+    if (_cupsSetError)
+        _cupsSetError(IPP_STATUS_OK, nullptr, 0);
+}
+
+LookupAnswer classifyDestinationLookup(int count, int lastError)
+{
+    if (count > 0)
+        return LookupAnswer::Printers;
+    // libcups reports a failed lookup as 0, exactly like "no queues
+    // configured", so the status is the only signal that separates the two.
+    // A negative count is not something libcups returns today; it stays an
+    // error rather than being read as an empty answer.
+    if (count < 0 || lastError != IPP_STATUS_OK)
+        return LookupAnswer::Unavailable;
+    return LookupAnswer::NoPrinters;
+}
+
 Result<QList<PrinterCapabilities>> PrinterCatalog::refresh(std::stop_token token) const
 {
+    // The last error is sticky: one left behind by an earlier call would make a
+    // successful, empty enumeration look like a broken scheduler. A real failure
+    // always sets a fresh one, so clearing it here cannot hide anything.
+    clearCupsError();
     cups_dest_t *dests = nullptr;
     const int count = cupsGetDests(&dests);
-    // libcups reports a failed lookup as 0, exactly like "no queues configured"
-    // (cupsGetDests2() in dest.c returns 0 when it cannot connect). The IPP
-    // status left behind is the only signal that separates the two, so read it
-    // before anything else can overwrite it.
-    const ipp_status_t lastError = cupsLastError();
-    if (count <= 0) {
+    const int lastError = int(cupsLastError());
+    switch (classifyDestinationLookup(count, lastError)) {
+    case LookupAnswer::Unavailable:
         // No array was returned in this case, so there is nothing to free.
-        if (count < 0 || lastError != IPP_STATUS_OK) {
-            return error(QStringLiteral("cups-unavailable"),
-                         QCoreApplication::translate("PhotoPrint",
-                                                      "A nyomtató most nem érhető el. Ellenőrizd, hogy be "
-                                                      "van-e kapcsolva."));
-        }
+        return error(QStringLiteral("cups-unavailable"),
+                     QCoreApplication::translate("PhotoPrint",
+                                                 "A nyomtató most nem érhető el. Ellenőrizd, hogy be "
+                                                 "van-e kapcsolva."));
+    case LookupAnswer::NoPrinters:
         // A reachable scheduler with no queues is a real answer, not a CUPS
         // failure, and must not be reported as one.
         return error(QStringLiteral("no-printers"),
-                     QCoreApplication::translate("PhotoPrint", "Nincs beállított nyomtató."));
+                     QCoreApplication::translate("PhotoPrint", "Nincs nyomtató"));
+    case LookupAnswer::Printers:
+        break;
     }
 
     QList<PrinterCapabilities> result;

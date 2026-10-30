@@ -70,14 +70,18 @@ Result<TrialSheet> TrialSheetBuilder::build(const DocumentSnapshot &document,
         const double ratio = source->width > 0.0 && source->height > 0.0
             ? source->height / source->width
             : 1.0;
-        double width = cellWidth - padding;
+        const double availableWidth = cellWidth - padding;
+        const double availableHeight = cellHeight - padding;
+        double width = availableWidth;
         double height = width * ratio;
-        if (height > cellHeight - padding) {
-            height = cellHeight - padding;
-            width = height / ratio;
+        if (!(height > 0.0) || !std::isfinite(height) || height > availableHeight) {
+            height = availableHeight;
+            width = std::isfinite(ratio) && ratio > 0.0 ? height / ratio : availableWidth;
         }
-        frame.width = std::max(1.0, width);
-        frame.height = std::max(1.0, height);
+        // The cell may shrink below a millimetre on very small paper; it must
+        // never grow past the slot it sits in.
+        frame.width = std::clamp(width, std::min(1.0, availableWidth), availableWidth);
+        frame.height = std::clamp(height, std::min(1.0, availableHeight), availableHeight);
         const int column = i % 2;
         const int row = i / 2;
         frame.cx = margin + column * (cellWidth + gutter) + cellWidth / 2.0;
