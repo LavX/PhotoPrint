@@ -4,25 +4,43 @@
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
+#include <QHash>
 #include <QJsonDocument>
 #include <QJsonObject>
-#include <QHash>
+#include <QJsonParseError>
+#include <QSaveFile>
 #include <QStandardPaths>
+
+#if defined(Q_OS_UNIX)
+#include <unistd.h>
+#endif
 
 namespace pp {
 
-QString JobJournal::defaultPath()
+namespace {
+
+/// Above this size the journal is rewritten with only the last record of each
+/// job. The file is a state log, not an audit trail, so older transitions of an
+/// already finished job carry no information for the recovery checks.
+constexpr qint64 kCompactBytes = 1024 * 1024;
+
+Result<void> syncToDisk(QFile &file)
 {
-    const QString base = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
-    return QDir(base).filePath(QStringLiteral("jobs.jsonl"));
+    if (!file.flush())
+        return error(QStringLiteral("journal-write"),
+                     QCoreApplication::translate("PhotoPrint", "A nyomtatási napló nem írható."));
+#if defined(Q_OS_UNIX)
+    // flush() only drains Qt's buffer; the intent must survive a power cut
+    // before the CUPS call, so the data has to reach the device.
+    if (::fdatasync(file.handle()) != 0) {
+        return error(QStringLiteral("journal-write"),
+                     QCoreApplication::translate("PhotoPrint", "A nyomtatási napló nem írható."));
+    }
+#endif
+    return Result<void>();
 }
 
-JobJournal::JobJournal(QString path) : m_path(path.isEmpty() ? defaultPath() : std::move(path))
-{
-    QDir().mkpath(QFileInfo(m_path).absolutePath());
-}
-
-Result<void> JobJournal::appendLine(const JobRecord &record)
+QByteArray lineFor(const JobRecord &record)
 {
     QJsonObject object;
     object.insert(QStringLiteral("id"), record.id.toString(QUuid::WithoutBraces));
@@ -32,14 +50,81 @@ Result<void> JobJournal::appendLine(const JobRecord &record)
     object.insert(QStringLiteral("jobId"), record.jobId);
     object.insert(QStringLiteral("at"), record.at.toString(Qt::ISODateWithMs));
     object.insert(QStringLiteral("detail"), record.detail);
+    QByteArray line = QJsonDocument(object).toJson(QJsonDocument::Compact);
+    line.append('\n');
+    return line;
+}
 
-    QFile file(m_path);
-    if (!file.open(QIODevice::WriteOnly | QIODevice::Append))
+} // namespace
+
+QString JobJournal::defaultPath()
+{
+    const QString base = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
+    return QDir(base).filePath(QStringLiteral("jobs.jsonl"));
+}
+
+JobJournal::JobJournal(QString path) : m_path(path.isEmpty() ? defaultPath() : std::move(path))
+{
+}
+
+Result<void> JobJournal::appendLine(const JobRecord &record)
+{
+    // The directory is created here rather than in the constructor so a
+    // failure can be reported to the caller instead of being dropped.
+    if (!QDir().mkpath(QFileInfo(m_path).absolutePath())) {
         return error(QStringLiteral("journal-write"),
                      QCoreApplication::translate("PhotoPrint", "A nyomtatási napló nem írható."));
-    file.write(QJsonDocument(object).toJson(QJsonDocument::Compact));
-    file.write("\n");
-    if (!file.flush())
+    }
+    const auto compacted = compactIfNeeded();
+    if (!compacted)
+        return compacted.error();
+
+    QFile file(m_path);
+    if (!file.open(QIODevice::WriteOnly | QIODevice::Append)) {
+        return error(QStringLiteral("journal-write"),
+                     QCoreApplication::translate("PhotoPrint", "A nyomtatási napló nem írható."));
+    }
+    const QByteArray line = lineFor(record);
+    if (file.write(line) != line.size())
+        return error(QStringLiteral("journal-write"),
+                     QCoreApplication::translate("PhotoPrint", "A nyomtatási napló nem írható."));
+    return syncToDisk(file);
+}
+
+Result<void> JobJournal::compactIfNeeded()
+{
+    const QFileInfo info(m_path);
+    if (!info.exists() || info.size() <= kCompactBytes)
+        return Result<void>();
+
+    const auto records = readAll();
+    if (!records)
+        return records.error();
+
+    // Keep the last state of every job, in first-appearance order.
+    QList<JobRecord> kept;
+    QHash<QUuid, int> indexById;
+    for (const JobRecord &record : records.value()) {
+        const auto it = indexById.constFind(record.id);
+        if (it == indexById.constEnd()) {
+            indexById.insert(record.id, kept.size());
+            kept.append(record);
+        } else {
+            kept[it.value()] = record;
+        }
+    }
+
+    QSaveFile file(m_path);
+    if (!file.open(QIODevice::WriteOnly))
+        return error(QStringLiteral("journal-write"),
+                     QCoreApplication::translate("PhotoPrint", "A nyomtatási napló nem írható."));
+    for (const JobRecord &record : kept) {
+        const QByteArray line = lineFor(record);
+        if (file.write(line) != line.size())
+            return error(QStringLiteral("journal-write"),
+                         QCoreApplication::translate("PhotoPrint", "A nyomtatási napló nem írható."));
+    }
+    if (!file.commit())
         return error(QStringLiteral("journal-write"),
                      QCoreApplication::translate("PhotoPrint", "A nyomtatási napló nem írható."));
     return Result<void>();
@@ -69,19 +154,32 @@ Result<void> JobJournal::appendOutcome(const QUuid &id, const QString &state, qi
     return appendLine(record);
 }
 
-QList<JobRecord> JobJournal::entries() const
+Result<QList<JobRecord>> JobJournal::readAll() const
 {
     QList<JobRecord> records;
     QFile file(m_path);
-    if (!file.open(QIODevice::ReadOnly))
-        return records;
+    if (!file.exists())
+        return records; // first run
+    if (!file.open(QIODevice::ReadOnly)) {
+        return error(QStringLiteral("journal-read"),
+                     QCoreApplication::translate("PhotoPrint", "A nyomtatási napló nem olvasható."));
+    }
     while (!file.atEnd()) {
         const QByteArray line = file.readLine().trimmed();
         if (line.isEmpty())
             continue;
-        const QJsonObject object = QJsonDocument::fromJson(line).object();
+        QJsonParseError parseError;
+        const QJsonDocument parsed = QJsonDocument::fromJson(line, &parseError);
+        // A crash can leave a half-written last line. Skip anything that is not
+        // a complete record instead of turning it into a record with no id.
+        if (parseError.error != QJsonParseError::NoError || !parsed.isObject())
+            continue;
+        const QJsonObject object = parsed.object();
+        const QString id = object.value(QStringLiteral("id")).toString();
+        if (id.isEmpty())
+            continue;
         JobRecord record;
-        record.id = QUuid(object.value(QStringLiteral("id")).toString());
+        record.id = QUuid(id);
         record.state = object.value(QStringLiteral("state")).toString();
         record.queue = object.value(QStringLiteral("queue")).toString();
         record.pdfSha256 = object.value(QStringLiteral("pdfSha256")).toString();
@@ -92,6 +190,12 @@ QList<JobRecord> JobJournal::entries() const
         records.append(record);
     }
     return records;
+}
+
+QList<JobRecord> JobJournal::entries() const
+{
+    const auto records = readAll();
+    return records ? records.value() : QList<JobRecord>{};
 }
 
 int JobJournal::uncertainCount() const

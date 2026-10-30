@@ -3,9 +3,11 @@
 #include <QCoreApplication>
 #include <QDir>
 #include <QFile>
+#include <QFileInfo>
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QLockFile>
 #include <QSaveFile>
 #include <QStandardPaths>
 #include <QUuid>
@@ -89,12 +91,32 @@ bool samePrintContext(const PrintContext &a, const PrintContext &b)
 
 QList<PaperPreset> PaperPresetStore::all() const
 {
+    const auto read = readAll();
+    return read ? read.value() : QList<PaperPreset>{};
+}
+
+Result<QList<PaperPreset>> PaperPresetStore::readAll() const
+{
     QList<PaperPreset> presets;
     QFile file(m_path);
-    if (!file.open(QIODevice::ReadOnly))
+    if (!file.exists())
         return presets;
-    const QJsonArray array = QJsonDocument::fromJson(file.readAll()).array();
-    for (const QJsonValue &value : array) {
+    if (!file.open(QIODevice::ReadOnly))
+        return error(QStringLiteral("preset-read"),
+                     QCoreApplication::translate("PhotoPrint", "A papírbeállítások nem olvashatók."));
+    const QByteArray data = file.readAll();
+    if (data.trimmed().isEmpty())
+        return presets;
+
+    QJsonParseError parseError;
+    const QJsonDocument document = QJsonDocument::fromJson(data, &parseError);
+    if (parseError.error != QJsonParseError::NoError || !document.isArray()) {
+        return error(QStringLiteral("preset-corrupt"),
+                     QCoreApplication::translate("PhotoPrint", "A papírbeállítások fájlja sérült."));
+    }
+    for (const QJsonValue &value : document.array()) {
+        if (!value.isObject())
+            continue;
         const QJsonObject object = value.toObject();
         PaperPreset preset;
         preset.id = object.value(QStringLiteral("id")).toString();
@@ -119,7 +141,19 @@ std::optional<PaperPreset> PaperPresetStore::match(const PrintContext &context) 
 
 Result<void> PaperPresetStore::save(const PaperPreset &preset)
 {
-    QList<PaperPreset> presets = all();
+    const QString directory = QFileInfo(m_path).absolutePath();
+    if (!QDir().mkpath(directory))
+        return error(QStringLiteral("preset-write"), QCoreApplication::translate("PhotoPrint", "A papírbeállítás nem menthető."));
+
+    // The read-modify-write below must not interleave with another instance.
+    QLockFile lock(QFileInfo(m_path).absoluteFilePath() + QStringLiteral(".lock"));
+    if (!lock.tryLock(3000))
+        return error(QStringLiteral("preset-lock"), QCoreApplication::translate("PhotoPrint", "A papírbeállítás nem menthető."));
+
+    const auto existing = readAll();
+    if (!existing)
+        return existing.error();
+    QList<PaperPreset> presets = existing.value();
     for (int i = presets.size() - 1; i >= 0; --i) {
         if (samePrintContext(presets.at(i).context, preset.context))
             presets.removeAt(i);
@@ -137,7 +171,6 @@ Result<void> PaperPresetStore::save(const PaperPreset &preset)
         array.append(object);
     }
 
-    QDir().mkpath(QFileInfo(m_path).absolutePath());
     QSaveFile file(m_path);
     if (!file.open(QIODevice::WriteOnly))
         return error(QStringLiteral("preset-write"), QCoreApplication::translate("PhotoPrint", "A papírbeállítás nem menthető."));

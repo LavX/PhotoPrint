@@ -54,8 +54,14 @@ void writeAll(QSettings &settings, const QList<PaperSpec> &papers)
         settings.setValue(QStringLiteral("name"), paper.name);
         settings.setValue(QStringLiteral("widthMm"), paper.physicalWidthMm);
         settings.setValue(QStringLiteral("heightMm"), paper.physicalHeightMm);
+        settings.setValue(QStringLiteral("logicalWidthMm"), paper.logicalWidthMm);
+        settings.setValue(QStringLiteral("logicalHeightMm"), paper.logicalHeightMm);
         settings.setValue(QStringLiteral("type"), paperTypeKey(paper.type));
         settings.setValue(QStringLiteral("borderless"), paper.borderlessSupported);
+        settings.setValue(QStringLiteral("hasCheckedOffset"), paper.hasCheckedOffset);
+        settings.setValue(QStringLiteral("offsetXMm"), paper.offsetXMm);
+        settings.setValue(QStringLiteral("offsetYMm"), paper.offsetYMm);
+        settings.setValue(QStringLiteral("custom"), paper.custom);
     }
     settings.endArray();
     settings.sync();
@@ -170,8 +176,14 @@ QList<PaperSpec> CustomPaperStore::all() const
         paper.name = m_settings->value(QStringLiteral("name")).toString().trimmed();
         paper.physicalWidthMm = m_settings->value(QStringLiteral("widthMm")).toDouble();
         paper.physicalHeightMm = m_settings->value(QStringLiteral("heightMm")).toDouble();
+        // A missing logical size means "same as the physical size".
+        paper.logicalWidthMm = m_settings->value(QStringLiteral("logicalWidthMm")).toDouble();
+        paper.logicalHeightMm = m_settings->value(QStringLiteral("logicalHeightMm")).toDouble();
         paper.type = paperTypeFromKey(m_settings->value(QStringLiteral("type")).toString());
         paper.borderlessSupported = m_settings->value(QStringLiteral("borderless")).toBool();
+        paper.hasCheckedOffset = m_settings->value(QStringLiteral("hasCheckedOffset")).toBool();
+        paper.offsetXMm = m_settings->value(QStringLiteral("offsetXMm")).toDouble();
+        paper.offsetYMm = m_settings->value(QStringLiteral("offsetYMm")).toDouble();
         paper.custom = true;
         if (paper.name.isEmpty() || !(paper.physicalWidthMm > 0.0)
             || !(paper.physicalHeightMm > 0.0))
@@ -184,17 +196,18 @@ QList<PaperSpec> CustomPaperStore::all() const
 
 Result<void> CustomPaperStore::save(const PaperSpec &paper)
 {
-    if (paper.name.trimmed().isEmpty())
+    PaperSpec stored = paper;
+    stored.name = stored.name.trimmed();
+    if (stored.name.isEmpty())
         return error(QStringLiteral("paper-name"), QCoreApplication::translate("PhotoPrint", "Adj nevet a papírnak."));
-    if (!(paper.physicalWidthMm > 0.0) || !(paper.physicalHeightMm > 0.0))
+    if (!(stored.physicalWidthMm > 0.0) || !(stored.physicalHeightMm > 0.0))
         return error(QStringLiteral("paper-size"), QCoreApplication::translate("PhotoPrint", "A papírméret érvénytelen."));
 
     QList<PaperSpec> papers = all();
     for (int i = papers.size() - 1; i >= 0; --i) {
-        if (papers.at(i).name.compare(paper.name, Qt::CaseInsensitive) == 0)
+        if (papers.at(i).name.compare(stored.name, Qt::CaseInsensitive) == 0)
             papers.removeAt(i);
     }
-    PaperSpec stored = paper;
     stored.custom = true;
     papers.append(stored);
     writeAll(*m_settings, papers);
@@ -205,10 +218,18 @@ Result<void> CustomPaperStore::save(const PaperSpec &paper)
 
 Result<void> CustomPaperStore::remove(const QString &name)
 {
+    const QString trimmed = name.trimmed();
     QList<PaperSpec> papers = all();
+    bool matched = false;
     for (int i = papers.size() - 1; i >= 0; --i) {
-        if (papers.at(i).name.compare(name, Qt::CaseInsensitive) == 0)
+        if (papers.at(i).name.compare(trimmed, Qt::CaseInsensitive) == 0) {
             papers.removeAt(i);
+            matched = true;
+        }
+    }
+    if (!matched) {
+        return error(QStringLiteral("paper-missing"),
+                     QCoreApplication::translate("PhotoPrint", "Ezt a papírt nem találjuk."));
     }
     writeAll(*m_settings, papers);
     if (m_settings->status() != QSettings::NoError)

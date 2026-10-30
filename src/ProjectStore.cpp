@@ -7,10 +7,14 @@
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
+#include <QHash>
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QJsonParseError>
+#include <QMap>
 #include <QSaveFile>
+#include <QSet>
 
 #include <algorithm>
 
@@ -54,22 +58,133 @@ PaperSpec paperFromJson(const QJsonObject &object)
     return paper;
 }
 
-QJsonObject frameToJson(const Frame &frame, const QString &projectDir, const QString &portableDir)
+/// Lexical, symlink-free form of a path, always absolute.
+QString lexicalPath(const QString &path)
+{
+    return QDir::cleanPath(QFileInfo(path).absoluteFilePath());
+}
+
+bool isInsideDirectory(const QString &directory, const QString &path)
+{
+    if (directory.isEmpty() || path.isEmpty())
+        return false;
+    const QString root = lexicalPath(directory);
+    const QString candidate = lexicalPath(path);
+    const QString prefix = root.endsWith(QLatin1Char('/')) ? root : root + QLatin1Char('/');
+    return candidate.startsWith(prefix);
+}
+
+/// Resolves a project-relative `source` only when it stays inside the project
+/// directory. An empty result means the stored path is not trusted.
+QString resolveProjectSource(const QString &projectDir, const QString &stored)
+{
+    if (projectDir.isEmpty() || stored.isEmpty() || QDir::isAbsolutePath(stored))
+        return QString();
+
+    const QString joined = QDir::cleanPath(QDir(projectDir).absoluteFilePath(stored));
+    if (!isInsideDirectory(projectDir, joined))
+        return QString();
+
+    // A symlink inside the project must not lead the read outside either.
+    const QFileInfo info(joined);
+    if (info.exists()) {
+        const QString canonical = info.canonicalFilePath();
+        const QString root = QFileInfo(projectDir).canonicalFilePath();
+        if (!canonical.isEmpty() && !root.isEmpty() && !isInsideDirectory(root, canonical))
+            return QString();
+    }
+    return joined;
+}
+
+/// `original` is the legacy absolute path recorded for relinking. A relative
+/// value is only honoured through the same containment rule as `source`.
+QString resolveOriginalSource(const QString &projectDir, const QString &original)
+{
+    if (original.isEmpty())
+        return QString();
+    if (QDir::isAbsolutePath(original))
+        return QDir::cleanPath(original);
+    return resolveProjectSource(projectDir, original);
+}
+
+/// Deterministic file names for a portable copy. Unrelated sources with the
+/// same base name get a short content hash, so two different photos can never
+/// overwrite each other. Identical content is copied once and keeps the plain
+/// name, which also keeps 1.0.0 portable copies stable.
+QHash<QString, QString> portableFileNames(const DocumentSnapshot &document)
+{
+    QMap<QString, QString> baseBySource;
+    QMap<QString, QSet<QString>> sourcesByBase;
+    QMap<QString, QSet<QString>> hashesByBase;
+    QMap<QString, QString> hashBySource;
+
+    for (const Page &page : document.pages) {
+        for (const Frame &frame : page.frames) {
+            if (frame.sourcePath.isEmpty())
+                continue;
+            const QString source = lexicalPath(frame.sourcePath);
+            const QString base = QFileInfo(source).fileName();
+            if (baseBySource.contains(source))
+                continue;
+            const QString hash = QString::fromLatin1(frame.sourceSha256.toHex());
+            baseBySource.insert(source, base);
+            hashBySource.insert(source, hash);
+            sourcesByBase[base].insert(source);
+            hashesByBase[base].insert(hash);
+        }
+    }
+
+    QHash<QString, QString> names;
+    int anonymous = 1;
+    for (auto it = baseBySource.cbegin(); it != baseBySource.cend(); ++it) {
+        const QString base = it.value();
+        const QSet<QString> hashes = hashesByBase.value(base);
+        const bool sameContent =
+            sourcesByBase.value(base).size() > 1 && !hashes.contains(QString()) && hashes.size() == 1;
+        if (sourcesByBase.value(base).size() <= 1 || sameContent) {
+            names.insert(it.key(), base);
+            continue;
+        }
+
+        const QFileInfo info(it.key());
+        QString stem = info.completeBaseName();
+        if (stem.isEmpty())
+            stem = base;
+        const QString hash = hashBySource.value(it.key());
+        const QString suffix = info.suffix();
+        QString unique = hash.isEmpty()
+            ? QStringLiteral("%1-%2").arg(stem).arg(anonymous++)
+            : QStringLiteral("%1-%2").arg(stem, hash.left(8));
+        if (!suffix.isEmpty())
+            unique += QLatin1Char('.') + suffix;
+        names.insert(it.key(), unique);
+    }
+    return names;
+}
+
+QJsonObject frameToJson(const Frame &frame, const QString &projectDir, const QString &portableDir,
+                        const QHash<QString, QString> &portableNames)
 {
     QJsonObject object;
     object.insert(QStringLiteral("id"), frame.id);
 
-    QString stored = frame.sourcePath;
     if (!portableDir.isEmpty()) {
-        const QString target = QDir(portableDir).filePath(QFileInfo(frame.sourcePath).fileName());
-        stored = QDir(projectDir).relativeFilePath(target);
+        // A portable copy carries its own images and nothing about the
+        // author's disk layout.
+        const QString source = lexicalPath(frame.sourcePath);
+        const QString name = portableNames.value(source);
+        if (name.isEmpty()) {
+            object.insert(QStringLiteral("source"), QString());
+        } else {
+            const QString target = QDir(portableDir).filePath(name);
+            object.insert(QStringLiteral("source"), QDir(projectDir).relativeFilePath(target));
+        }
     } else {
         const QString relative = QDir(projectDir).relativeFilePath(frame.sourcePath);
-        if (!relative.isEmpty())
-            stored = relative;
+        object.insert(QStringLiteral("source"), relative.isEmpty() ? frame.sourcePath : relative);
+        object.insert(QStringLiteral("original"), frame.sourcePath);
     }
-    object.insert(QStringLiteral("source"), stored);
-    object.insert(QStringLiteral("original"), frame.sourcePath);
+
     object.insert(QStringLiteral("sha256"), QString::fromLatin1(frame.sourceSha256.toHex()));
     object.insert(QStringLiteral("cx"), frame.cx);
     object.insert(QStringLiteral("cy"), frame.cy);
@@ -87,21 +202,21 @@ QJsonObject frameToJson(const Frame &frame, const QString &projectDir, const QSt
     object.insert(QStringLiteral("upscale"), frame.upscale);
     object.insert(QStringLiteral("autoTone"), frame.autoTone);
     object.insert(QStringLiteral("brightness"), frame.brightness);
+    // Trial sheets number their variants and carry their own paper tone; both
+    // are part of the page the user sees, so both have to survive a save.
+    object.insert(QStringLiteral("label"), frame.label);
+    object.insert(QStringLiteral("paperOverride"), frame.paperOverride);
+    object.insert(QStringLiteral("paperEv"), frame.paperEv);
     object.insert(QStringLiteral("tone"), QJsonObject{{QStringLiteral("exposureEv"), frame.tone.exposureEv},
                                                       {QStringLiteral("shadowLift"), frame.tone.shadowLift},
                                                       {QStringLiteral("highlightCompress"), frame.tone.highlightCompress}});
     return object;
 }
 
-Frame frameFromJson(const QJsonObject &object, const QString &projectDir)
+Frame frameFromJson(const QJsonObject &object)
 {
     Frame frame;
     frame.id = object.value(QStringLiteral("id")).toString();
-    const QString stored = object.value(QStringLiteral("source")).toString();
-    const QString original = object.value(QStringLiteral("original")).toString();
-    const QFileInfo storedInfo(QDir(projectDir).filePath(stored));
-    frame.sourcePath = storedInfo.exists() ? storedInfo.absoluteFilePath()
-                                           : QFileInfo(original).absoluteFilePath();
     frame.sourceSha256 =
         QByteArray::fromHex(object.value(QStringLiteral("sha256")).toString().toLatin1());
     frame.cx = object.value(QStringLiteral("cx")).toDouble();
@@ -122,7 +237,11 @@ Frame frameFromJson(const QJsonObject &object, const QString &projectDir)
     frame.filterStrength = object.value(QStringLiteral("filterStrength")).toInt(100);
     frame.upscale = object.value(QStringLiteral("upscale")).toBool(false);
     frame.autoTone = object.value(QStringLiteral("autoTone")).toBool(true);
-    frame.brightness = object.value(QStringLiteral("brightness")).toDouble();
+    frame.brightness = clampBrightnessEv(object.value(QStringLiteral("brightness")).toDouble());
+    // Absent keys are 1.0.0 projects: plain frames without a trial label.
+    frame.label = object.value(QStringLiteral("label")).toString();
+    frame.paperOverride = object.value(QStringLiteral("paperOverride")).toBool(false);
+    frame.paperEv = object.value(QStringLiteral("paperEv")).toDouble();
     const QJsonObject tone = object.value(QStringLiteral("tone")).toObject();
     frame.tone.exposureEv = tone.value(QStringLiteral("exposureEv")).toDouble();
     frame.tone.shadowLift = tone.value(QStringLiteral("shadowLift")).toDouble();
@@ -159,11 +278,151 @@ ColorRecipe recipeFromJson(const QJsonObject &object)
     return recipe;
 }
 
+struct ParsedProject {
+    DocumentSnapshot document;
+    QList<SourceIssue> issues;
+};
+
+Result<ParsedProject> parseDocument(const QJsonObject &root, const QString &projectDir)
+{
+    ParsedProject parsed;
+    parsed.document.recipe = recipeFromJson(root.value(QStringLiteral("recipe")).toObject());
+    parsed.document.currentPage = root.value(QStringLiteral("currentPage")).toInt(0);
+    parsed.document.fineQuality = root.value(QStringLiteral("fineQuality")).toBool(true);
+
+    for (const QJsonValue &pageValue : root.value(QStringLiteral("pages")).toArray()) {
+        const QJsonObject pageObject = pageValue.toObject();
+        Page page;
+        page.id = pageObject.value(QStringLiteral("id")).toString();
+        page.paper = paperFromJson(pageObject.value(QStringLiteral("paper")).toObject());
+        page.landscape = pageObject.value(QStringLiteral("landscape")).toBool();
+        for (const QJsonValue &frameValue : pageObject.value(QStringLiteral("frames")).toArray()) {
+            const QJsonObject frameObject = frameValue.toObject();
+            Frame frame = frameFromJson(frameObject);
+            const QString stored = frameObject.value(QStringLiteral("source")).toString();
+            const QString original = frameObject.value(QStringLiteral("original")).toString();
+
+            bool blocked = false;
+            QString contained;
+            if (!stored.isEmpty()) {
+                if (QDir::isAbsolutePath(stored)) {
+                    // 1.0.0 never wrote an absolute source, but a recorded one
+                    // is in the same trust class as `original`.
+                    contained = QDir::cleanPath(stored);
+                } else if (projectDir.isEmpty()) {
+                    blocked = true;
+                } else {
+                    contained = resolveProjectSource(projectDir, stored);
+                    blocked = contained.isEmpty();
+                }
+            }
+
+            const QString fallback = resolveOriginalSource(projectDir, original);
+            if (!contained.isEmpty() && QFileInfo::exists(contained)) {
+                frame.sourcePath = contained;
+            } else if (!fallback.isEmpty()) {
+                // Absolute original: the normal way back to a photo that lives
+                // outside the project folder on this machine.
+                frame.sourcePath = fallback;
+            } else {
+                frame.sourcePath = contained; // empty when the stored path was refused
+            }
+
+            SourceIssue issue;
+            issue.frameId = frame.id;
+            issue.path = frame.sourcePath;
+            issue.expectedSha256 = frame.sourceSha256;
+            if (!frame.sourcePath.isEmpty() && QFileInfo::exists(frame.sourcePath)) {
+                const QByteArray current = fileSha256(frame.sourcePath);
+                if (!issue.expectedSha256.isEmpty() && current != issue.expectedSha256) {
+                    issue.changed = true;
+                    parsed.issues.append(issue);
+                }
+            } else {
+                issue.missing = true;
+                issue.blocked = blocked;
+                parsed.issues.append(issue);
+            }
+            page.frames.append(frame);
+        }
+        parsed.document.pages.append(page);
+    }
+
+    if (parsed.document.pages.isEmpty()) {
+        return error(QStringLiteral("project-empty"),
+                     QCoreApplication::translate("PhotoPrint", "Ezt a projektet most nem tudjuk megnyitni."));
+    }
+    parsed.document.currentPage =
+        std::clamp(parsed.document.currentPage, 0, int(parsed.document.pages.size()) - 1);
+    return parsed;
+}
+
+/// Copies every unique source into the portable folder. The caller rolls the
+/// listed targets back when any later step fails.
+Result<void> copyPortableSources(const DocumentSnapshot &document, const QString &portableDir,
+                                 const QString &projectFile, QList<QString> *created)
+{
+    const QHash<QString, QString> names = portableFileNames(document);
+    const QString projectPath = lexicalPath(projectFile);
+    QSet<QString> handled;
+
+    for (const Page &page : document.pages) {
+        for (const Frame &frame : page.frames) {
+            if (frame.sourcePath.isEmpty()) {
+                return error(QStringLiteral("source-missing"),
+                             QCoreApplication::translate("PhotoPrint", "Ezt a fotót nem találjuk."));
+            }
+            const QString source = lexicalPath(frame.sourcePath);
+            if (handled.contains(source))
+                continue;
+            handled.insert(source);
+
+            const QFileInfo info(source);
+            if (!info.exists() || !info.isFile()) {
+                return error(QStringLiteral("source-missing"),
+                             QCoreApplication::translate("PhotoPrint", "Ezt a fotót nem találjuk."));
+            }
+            if (source == projectPath) {
+                return error(QStringLiteral("portable-source"),
+                             QCoreApplication::translate("PhotoPrint", "A projektfájl nem másolható a fotók közé."));
+            }
+
+            const QString name = names.value(source);
+            const QString target = QDir::cleanPath(QDir(portableDir).filePath(name));
+            if (name.isEmpty() || !isInsideDirectory(portableDir, target) || target == projectPath) {
+                return error(QStringLiteral("portable-path"),
+                             QCoreApplication::translate("PhotoPrint", "A fotót nem sikerült a másolatba tenni."));
+            }
+
+            if (QFileInfo::exists(target)) {
+                if (fileSha256(target) == frame.sourceSha256)
+                    continue; // already carried by an earlier save
+                if (!QFile::remove(target)) {
+                    return error(QStringLiteral("portable-write"),
+                                 QCoreApplication::translate("PhotoPrint", "A fotót nem sikerült a másolatba tenni."));
+                }
+            }
+            if (!QFile::copy(source, target)) {
+                return error(QStringLiteral("portable-copy"),
+                             QCoreApplication::translate("PhotoPrint", "A fotót nem sikerült a másolatba tenni."));
+            }
+            created->append(target);
+            if (!frame.sourceSha256.isEmpty() && fileSha256(target) != frame.sourceSha256) {
+                return error(QStringLiteral("portable-hash"),
+                             QCoreApplication::translate("PhotoPrint", "A fotó másolata nem egyezik az eredetivel."));
+            }
+        }
+    }
+    return Result<void>();
+}
+
 } // namespace
 
 QByteArray ProjectStore::serialize(const DocumentSnapshot &document, const QString &projectDir,
                                    const QString &portableDir)
 {
+    const QHash<QString, QString> portableNames = portableFileNames(document);
+
     QJsonObject root;
     root.insert(QStringLiteral("format"), QStringLiteral("photoprint-project"));
     root.insert(QStringLiteral("version"), kFormatVersion);
@@ -179,7 +438,7 @@ QByteArray ProjectStore::serialize(const DocumentSnapshot &document, const QStri
         pageObject.insert(QStringLiteral("landscape"), page.landscape);
         QJsonArray frames;
         for (const Frame &frame : page.frames)
-            frames.append(frameToJson(frame, projectDir, portableDir));
+            frames.append(frameToJson(frame, projectDir, portableDir, portableNames));
         pageObject.insert(QStringLiteral("frames"), frames);
         pages.append(pageObject);
     }
@@ -205,75 +464,78 @@ Result<DocumentSnapshot> ProjectStore::deserialize(const QByteArray &json)
                      QCoreApplication::translate("PhotoPrint", "Ezt a projektet az alkalmazás egy újabb változata készítette."));
     }
 
-    DocumentSnapshot document;
-    document.recipe = recipeFromJson(root.value(QStringLiteral("recipe")).toObject());
-    document.currentPage = root.value(QStringLiteral("currentPage")).toInt(0);
-    document.fineQuality = root.value(QStringLiteral("fineQuality")).toBool(true);
-    for (const QJsonValue &pageValue : root.value(QStringLiteral("pages")).toArray()) {
-        const QJsonObject pageObject = pageValue.toObject();
-        Page page;
-        page.id = pageObject.value(QStringLiteral("id")).toString();
-        page.paper = paperFromJson(pageObject.value(QStringLiteral("paper")).toObject());
-        page.landscape = pageObject.value(QStringLiteral("landscape")).toBool();
-        for (const QJsonValue &frameValue : pageObject.value(QStringLiteral("frames")).toArray())
-            page.frames.append(frameFromJson(frameValue.toObject(), QDir::currentPath()));
-        document.pages.append(page);
-    }
-    if (document.pages.isEmpty())
-        return error(QStringLiteral("project-empty"),
-                     QCoreApplication::translate("PhotoPrint", "Ezt a projektet most nem tudjuk megnyitni."));
-    document.currentPage = std::clamp(document.currentPage, 0, int(document.pages.size()) - 1);
-    return document;
+    const auto document = parseDocument(root, QString());
+    if (!document)
+        return document.error();
+    return document.value().document;
 }
 
 Result<void> ProjectStore::save(const QString &path, const DocumentSnapshot &document,
                                 SaveMode mode)
 {
+    // An empty project cannot be opened again, so it is not written either.
+    if (document.pages.isEmpty()) {
+        return error(QStringLiteral("project-empty"),
+                     QCoreApplication::translate("PhotoPrint", "Nincs mit elmenteni."));
+    }
+    if (path.isEmpty() || QFileInfo(path).fileName().isEmpty()) {
+        return error(QStringLiteral("project-path"),
+                     QCoreApplication::translate("PhotoPrint", "A projektet nem sikerült menteni."));
+    }
+
     const QFileInfo info(path);
     const QDir projectDir(info.absolutePath());
-    if (!projectDir.exists() && !QDir().mkpath(projectDir.absolutePath()))
-        return error(QStringLiteral("project-dir"), QCoreApplication::translate("PhotoPrint", "A mappa nem hozható létre."));
+    if (!projectDir.exists() && !QDir().mkpath(projectDir.absolutePath())) {
+        return error(QStringLiteral("project-dir"),
+                     QCoreApplication::translate("PhotoPrint", "A mappa nem hozható létre."));
+    }
 
     QString portableDir;
+    bool createdPortableDir = false;
+    QList<QString> created;
+    auto rollback = [&] {
+        for (const QString &file : created)
+            QFile::remove(file);
+        if (createdPortableDir) {
+            QDir dir(portableDir);
+            if (dir.exists() && dir.isEmpty())
+                QDir().rmdir(portableDir);
+        }
+    };
+
     if (mode == SaveMode::Portable) {
         portableDir = info.absoluteFilePath() + QStringLiteral(".files");
+        createdPortableDir = !QDir(portableDir).exists();
         if (!QDir().mkpath(portableDir)) {
             return error(QStringLiteral("portable-dir"),
                          QCoreApplication::translate("PhotoPrint", "A hordozható másolat mappája nem hozható létre."));
         }
-        for (const Page &page : document.pages) {
-            for (const Frame &frame : page.frames) {
-                const QFileInfo sourceInfo(frame.sourcePath);
-                if (!sourceInfo.exists())
-                    return error(QStringLiteral("source-missing"),
-                                 QCoreApplication::translate("PhotoPrint", "Ezt a fotót nem találjuk."));
-                const QString target = QDir(portableDir).filePath(sourceInfo.fileName());
-                if (QFileInfo::exists(target)) {
-                    if (fileSha256(target) != frame.sourceSha256)
-                        return error(QStringLiteral("portable-conflict"),
-                                     QCoreApplication::translate("PhotoPrint", "Ugyanilyen nevű fotó már van a másolatban."));
-                    continue;
-                }
-                if (!QFile::copy(frame.sourcePath, target))
-                    return error(QStringLiteral("portable-copy"),
-                                 QCoreApplication::translate("PhotoPrint", "A fotót nem sikerült a másolatba tenni."));
-                if (fileSha256(target) != frame.sourceSha256) {
-                    QFile::remove(target);
-                    return error(QStringLiteral("portable-hash"),
-                                 QCoreApplication::translate("PhotoPrint", "A fotó másolata nem egyezik az eredetivel."));
-                }
-            }
+        const auto copied =
+            copyPortableSources(document, portableDir, info.absoluteFilePath(), &created);
+        if (!copied) {
+            rollback();
+            return copied.error();
         }
     }
 
     const QByteArray json = serialize(document, projectDir.absolutePath(), portableDir);
     QSaveFile file(path);
-    if (!file.open(QIODevice::WriteOnly))
-        return error(QStringLiteral("project-write"), QCoreApplication::translate("PhotoPrint", "A projektet nem sikerült menteni."));
-    if (file.write(json) != json.size())
-        return error(QStringLiteral("project-write"), QCoreApplication::translate("PhotoPrint", "A projektet nem sikerült menteni."));
-    if (!file.commit())
-        return error(QStringLiteral("project-write"), QCoreApplication::translate("PhotoPrint", "A projektet nem sikerült menteni."));
+    if (!file.open(QIODevice::WriteOnly)) {
+        rollback();
+        return error(QStringLiteral("project-write"),
+                     QCoreApplication::translate("PhotoPrint", "A projektet nem sikerült menteni."));
+    }
+    if (file.write(json) != json.size()) {
+        file.cancelWriting();
+        rollback();
+        return error(QStringLiteral("project-write"),
+                     QCoreApplication::translate("PhotoPrint", "A projektet nem sikerült menteni."));
+    }
+    if (!file.commit()) {
+        rollback();
+        return error(QStringLiteral("project-write"),
+                     QCoreApplication::translate("PhotoPrint", "A projektet nem sikerült menteni."));
+    }
     return Result<void>();
 }
 
@@ -286,7 +548,6 @@ Result<LoadedProject> ProjectStore::load(const QString &path)
     const QByteArray json = file.readAll();
     file.close();
 
-    // Source resolution needs the project directory, so parse manually first.
     QJsonParseError parseError;
     const QJsonDocument parsed = QJsonDocument::fromJson(json, &parseError);
     if (parseError.error != QJsonParseError::NoError || !parsed.isObject())
@@ -301,50 +562,14 @@ Result<LoadedProject> ProjectStore::load(const QString &path)
         return error(QStringLiteral("project-version"),
                      QCoreApplication::translate("PhotoPrint", "Ezt a projektet az alkalmazás egy újabb változata készítette."));
 
+    const auto document = parseDocument(root, QFileInfo(path).absolutePath());
+    if (!document)
+        return document.error();
+
     LoadedProject loaded;
     loaded.path = QFileInfo(path).absoluteFilePath();
-    const QDir projectDir(QFileInfo(path).absolutePath());
-    loaded.document.recipe = recipeFromJson(root.value(QStringLiteral("recipe")).toObject());
-    loaded.document.currentPage = root.value(QStringLiteral("currentPage")).toInt(0);
-    loaded.document.fineQuality = root.value(QStringLiteral("fineQuality")).toBool(true);
-    for (const QJsonValue &pageValue : root.value(QStringLiteral("pages")).toArray()) {
-        const QJsonObject pageObject = pageValue.toObject();
-        Page page;
-        page.id = pageObject.value(QStringLiteral("id")).toString();
-        page.paper = paperFromJson(pageObject.value(QStringLiteral("paper")).toObject());
-        page.landscape = pageObject.value(QStringLiteral("landscape")).toBool();
-        for (const QJsonValue &frameValue : pageObject.value(QStringLiteral("frames")).toArray()) {
-            const QJsonObject frameObject = frameValue.toObject();
-            Frame frame = frameFromJson(frameObject, projectDir.absolutePath());
-            const QString stored = frameObject.value(QStringLiteral("source")).toString();
-            const QString original = frameObject.value(QStringLiteral("original")).toString();
-            if (!QFileInfo::exists(frame.sourcePath) && QFileInfo::exists(original))
-                frame.sourcePath = QFileInfo(original).absoluteFilePath();
-
-            SourceIssue issue;
-            issue.frameId = frame.id;
-            issue.path = frame.sourcePath;
-            issue.expectedSha256 = frame.sourceSha256;
-            if (!QFileInfo::exists(frame.sourcePath)) {
-                issue.missing = true;
-                loaded.issues.append(issue);
-            } else {
-                const QByteArray current = fileSha256(frame.sourcePath);
-                if (!issue.expectedSha256.isEmpty() && current != issue.expectedSha256) {
-                    issue.changed = true;
-                    loaded.issues.append(issue);
-                }
-            }
-            Q_UNUSED(stored)
-            page.frames.append(frame);
-        }
-        loaded.document.pages.append(page);
-    }
-    if (loaded.document.pages.isEmpty())
-        return error(QStringLiteral("project-empty"),
-                     QCoreApplication::translate("PhotoPrint", "Ezt a projektet most nem tudjuk megnyitni."));
-    loaded.document.currentPage =
-        std::clamp(loaded.document.currentPage, 0, int(loaded.document.pages.size()) - 1);
+    loaded.document = document.value().document;
+    loaded.issues = document.value().issues;
     return loaded;
 }
 

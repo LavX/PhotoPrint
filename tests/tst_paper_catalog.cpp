@@ -1,6 +1,8 @@
 #include "PaperCatalog.h"
+#include "PaperPresetStore.h"
 
 #include <QDir>
+#include <QFile>
 #include <QSettings>
 #include <QTemporaryDir>
 #include <QtTest>
@@ -29,6 +31,10 @@ private slots:
     void fixedPhotoSizesAreRecognised();
     void customPapersSurviveARestart();
     void customPaperWithTheSameNameIsReplaced();
+    void customPaperKeepsEveryField();
+    void namesAreTrimmedOnSave();
+    void removingAnUnknownPaperFails();
+    void corruptPresetFileIsNotOverwritten();
 };
 
 void TestPaperCatalog::defaultsAreTheSixEverydayPapers()
@@ -174,6 +180,116 @@ void TestPaperCatalog::customPaperWithTheSameNameIsReplaced()
     auto unnamed = second;
     unnamed.name.clear();
     QVERIFY(!store.save(unnamed).ok());
+}
+
+void TestPaperCatalog::customPaperKeepsEveryField()
+{
+    QTemporaryDir dir;
+    QVERIFY(dir.isValid());
+    const QString path = QDir(dir.path()).filePath(QStringLiteral("papers.ini"));
+
+    PaperSpec custom;
+    custom.name = QStringLiteral("Egyedi");
+    custom.physicalWidthMm = 120.0;
+    custom.physicalHeightMm = 180.0;
+    custom.logicalWidthMm = 121.5;
+    custom.logicalHeightMm = 181.5;
+    custom.borderlessSupported = true;
+    custom.hasCheckedOffset = true;
+    custom.offsetXMm = 1.5;
+    custom.offsetYMm = -2.5;
+    custom.type = PaperType::Matte;
+    custom.custom = true;
+    {
+        CustomPaperStore store(path);
+        QVERIFY(store.save(custom).ok());
+    }
+    CustomPaperStore store(path);
+    const QList<PaperSpec> papers = store.all();
+    QCOMPARE(papers.size(), 1);
+    const PaperSpec &restored = papers.first();
+    QCOMPARE(restored.name, custom.name);
+    QCOMPARE(restored.physicalWidthMm, custom.physicalWidthMm);
+    QCOMPARE(restored.physicalHeightMm, custom.physicalHeightMm);
+    QCOMPARE(restored.logicalWidthMm, custom.logicalWidthMm);
+    QCOMPARE(restored.logicalHeightMm, custom.logicalHeightMm);
+    QCOMPARE(restored.borderlessSupported, custom.borderlessSupported);
+    QCOMPARE(restored.hasCheckedOffset, custom.hasCheckedOffset);
+    QCOMPARE(restored.offsetXMm, custom.offsetXMm);
+    QCOMPARE(restored.offsetYMm, custom.offsetYMm);
+    QCOMPARE(restored.type, custom.type);
+    QVERIFY(restored.custom);
+}
+
+void TestPaperCatalog::namesAreTrimmedOnSave()
+{
+    QTemporaryDir dir;
+    QVERIFY(dir.isValid());
+    const QString path = QDir(dir.path()).filePath(QStringLiteral("papers.ini"));
+    CustomPaperStore store(path);
+
+    PaperSpec custom;
+    custom.name = QStringLiteral("  Négyzet  ");
+    custom.physicalWidthMm = 120.0;
+    custom.physicalHeightMm = 120.0;
+    QVERIFY(store.save(custom).ok());
+    QCOMPARE(store.all().size(), 1);
+    QCOMPARE(store.all().first().name, QStringLiteral("Négyzet"));
+
+    custom.name = QStringLiteral("Négyzet ");
+    custom.physicalHeightMm = 130.0;
+    QVERIFY(store.save(custom).ok());
+    QCOMPARE(store.all().size(), 1);
+    QCOMPARE(store.all().first().physicalHeightMm, 130.0);
+}
+
+void TestPaperCatalog::removingAnUnknownPaperFails()
+{
+    QTemporaryDir dir;
+    QVERIFY(dir.isValid());
+    const QString path = QDir(dir.path()).filePath(QStringLiteral("papers.ini"));
+    CustomPaperStore store(path);
+
+    PaperSpec custom;
+    custom.name = QStringLiteral("Marad");
+    custom.physicalWidthMm = 100.0;
+    custom.physicalHeightMm = 150.0;
+    QVERIFY(store.save(custom).ok());
+
+    const auto removed = store.remove(QStringLiteral("Nincs ilyen"));
+    QVERIFY(!removed.ok());
+    QCOMPARE(removed.error().code, QStringLiteral("paper-missing"));
+    QCOMPARE(store.all().size(), 1);
+}
+
+void TestPaperCatalog::corruptPresetFileIsNotOverwritten()
+{
+    QTemporaryDir dir;
+    QVERIFY(dir.isValid());
+    const QString path = QDir(dir.path()).filePath(QStringLiteral("presets.json"));
+    QFile file(path);
+    QVERIFY(file.open(QIODevice::WriteOnly));
+    file.write("{ this is not a preset list");
+    file.close();
+
+    PaperPresetStore presets(path);
+    const auto read = presets.readAll();
+    QVERIFY(!read.ok());
+    QCOMPARE(read.error().code, QStringLiteral("preset-corrupt"));
+
+    PaperPreset preset;
+    preset.id = QStringLiteral("a");
+    preset.context.queueName = QStringLiteral("DCPT730DW");
+    preset.paperEv = 0.05;
+    preset.savedAt = QDateTime::currentDateTimeUtc();
+    const auto saved = presets.save(preset);
+    QVERIFY(!saved.ok());
+    QCOMPARE(saved.error().code, QStringLiteral("preset-corrupt"));
+
+    // The damaged file is left in place; a successful save must not be the
+    // reason the user's old favourites disappear without a trace.
+    QVERIFY(file.open(QIODevice::ReadOnly));
+    QCOMPARE(file.readAll(), QByteArray("{ this is not a preset list"));
 }
 
 QTEST_GUILESS_MAIN(TestPaperCatalog)
