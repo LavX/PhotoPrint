@@ -6,6 +6,7 @@
 #include <QDateTime>
 #include <QDir>
 #include <QFile>
+#include <QFileInfo>
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
@@ -63,8 +64,12 @@ private:
 
 void removeFile(const QString &path)
 {
-    if (!path.isEmpty())
-        QFile::remove(path);
+    if (path.isEmpty())
+        return;
+    // Not an error when the file is already gone; anything else leaves a
+    // spool or a manifest behind that nothing will ever look at again.
+    if (QFileInfo::exists(path) && !QFile::remove(path))
+        qWarning("JobController: %s nem törölhető", qPrintable(path));
 }
 
 } // namespace
@@ -101,7 +106,8 @@ BorderlessPlacement borderlessPlacement(const QSizeF &physicalMm, const QSizeF &
 }
 
 JobController::JobController(ImageStore &store, JobConfig config, CupsBackend *backend)
-    : m_store(store), m_config(std::move(config)), m_backend(backend), m_renderer(store)
+    : m_store(store), m_config(std::move(config)), m_backend(backend), m_renderer(store),
+      m_journal(m_config.journalPath)
 {
 }
 
@@ -115,6 +121,13 @@ QString JobController::lastPdfPath() const
 {
     QMutexLocker locker(&m_artifactMutex);
     return m_lastPdf;
+}
+
+void JobController::clearArtifacts()
+{
+    QMutexLocker locker(&m_artifactMutex);
+    m_lastManifest.clear();
+    m_lastPdf.clear();
 }
 
 Result<JobResult> JobController::start(const DocumentSnapshot &document,
@@ -133,12 +146,15 @@ Result<JobResult> JobController::start(const DocumentSnapshot &document,
         return error(QStringLiteral("job-busy"), QCoreApplication::translate("PhotoPrint", "A nyomtatás már folyamatban van."));
     BusyGuard gate(m_busy);
 
-    const qint64 startedAt = QDateTime::currentMSecsSinceEpoch();
     const qint64 lastStart = m_lastStartMsecs.load(std::memory_order_acquire);
-    if (lastStart > 0 && startedAt - lastStart < 1200) {
+    if (lastStart > 0 && QDateTime::currentMSecsSinceEpoch() - lastStart < 1200) {
         return error(QStringLiteral("job-double"),
                      QCoreApplication::translate("PhotoPrint", "A nyomtatás már elindult. Várd meg az eredményét."));
     }
+
+    // This call now owns the artifact pair: the previous job's paths describe
+    // files that may already be deleted, so they must not be reported again.
+    clearArtifacts();
 
     const QUuid id = QUuid::createUuid();
     if (!QDir().mkpath(m_config.workDir))
@@ -204,25 +220,25 @@ Result<JobResult> JobController::start(const DocumentSnapshot &document,
     if (token.stop_requested()) {
         removeFile(pdfPath);
         removeFile(manifestPath);
-        QMutexLocker locker(&m_artifactMutex);
-        m_lastManifest.clear();
+        clearArtifacts();
         return error(QStringLiteral("cancelled"),
                      QCoreApplication::translate("PhotoPrint", "A művelet megszakadt."));
     }
 
-    m_lastStartMsecs.store(QDateTime::currentMSecsSinceEpoch(), std::memory_order_release);
-    JobJournal journal(m_config.journalPath);
-    const auto intent = journal.appendIntent(id, ticket.queueName,
-                                             QString::fromLatin1(artifact.value().sha256.toHex()));
+    const auto intent = m_journal.appendIntent(id, ticket.queueName,
+                                               QString::fromLatin1(artifact.value().sha256.toHex()));
     if (!intent) {
         // The intent never became durable, so nothing was submitted and no
         // evidence has to be kept.
         removeFile(pdfPath);
         removeFile(manifestPath);
-        QMutexLocker locker(&m_artifactMutex);
-        m_lastManifest.clear();
+        clearArtifacts();
         return intent.error();
     }
+
+    // Starts the double-start window only after the intent is durable: a
+    // failed intent submitted nothing, so an immediate retry must go through.
+    m_lastStartMsecs.store(QDateTime::currentMSecsSinceEpoch(), std::memory_order_release);
 
     const SubmitOutcome outcome = m_backend->submit(ticket.queueName, artifact.value(), ticket);
 
@@ -231,13 +247,24 @@ Result<JobResult> JobController::start(const DocumentSnapshot &document,
     // uncertain. Record that explicitly and report it as uncertain instead of
     // pretending the outcome is known.
     SubmitStatus status = outcome.status;
+    QString message = messageFor(status);
     const auto recorded =
-        journal.appendOutcome(id, stateFor(outcome.status), outcome.jobId, outcome.detail);
+        m_journal.appendOutcome(id, stateFor(outcome.status), outcome.jobId, outcome.detail);
     if (!recorded) {
-        journal.appendOutcome(id, QStringLiteral("uncertain"), outcome.jobId,
-                              outcome.detail + QStringLiteral(" journal=")
-                                  + recorded.error().code);
+        const auto fallback = m_journal.appendOutcome(id, QStringLiteral("uncertain"),
+                                                     outcome.jobId,
+                                                     outcome.detail + QStringLiteral(" journal=")
+                                                         + recorded.error().code);
         status = SubmitStatus::Uncertain;
+        message = messageFor(status);
+        if (!fallback) {
+            // Nothing beyond the intent reached the journal, so no record says
+            // the outcome was lost. The person has to be told, not just the
+            // log that does not exist.
+            message += QStringLiteral(" ")
+                + QCoreApplication::translate("PhotoPrint",
+                                              "Az eredményt nem sikerült a naplóba írni.");
+        }
     }
 
     // Keep the spool only when the outcome is uncertain: then it is evidence,
@@ -251,7 +278,7 @@ Result<JobResult> JobController::start(const DocumentSnapshot &document,
     JobResult result;
     result.id = id;
     result.status = status;
-    result.message = messageFor(status);
+    result.message = message;
     result.pdfPath = keepSpool ? pdfPath : QString();
     {
         QMutexLocker locker(&m_artifactMutex);
@@ -262,7 +289,7 @@ Result<JobResult> JobController::start(const DocumentSnapshot &document,
 
 Result<void> JobController::writeManifest(const QString &path, const QUuid &id,
                                           const QByteArray &pdfSha, const PrintTicket &ticket,
-                                          const DocumentSnapshot &document)
+                                          const DocumentSnapshot &document) const
 {
     QJsonObject manifest;
     manifest.insert(QStringLiteral("id"), id.toString(QUuid::WithoutBraces));

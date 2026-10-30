@@ -2,6 +2,7 @@
 
 #include "CupsBackend.h"
 #include "Document.h"
+#include "JobJournal.h"
 #include "PageRenderer.h"
 #include "PrintTicket.h"
 #include "Result.h"
@@ -54,12 +55,20 @@ public:
 
 private:
     Result<void> writeManifest(const QString &path, const QUuid &id, const QByteArray &pdfSha,
-                               const PrintTicket &ticket, const DocumentSnapshot &document);
+                               const PrintTicket &ticket, const DocumentSnapshot &document) const;
+    /// Drops the manifest and spool paths together: they describe one job, so
+    /// half of a pair would point at a file that no longer belongs to a job.
+    void clearArtifacts();
 
     ImageStore &m_store;
     JobConfig m_config;
     CupsBackend *m_backend;
     PageRenderer m_renderer;
+    /// Lives as long as the controller rather than as long as one start(): the
+    /// journal remembers when it last compacted, so a per-print object would
+    /// rewrite a journal that its own live records keep above the threshold on
+    /// every single print.
+    JobJournal m_journal;
     /// Single-flight gate. Acquired with a compare-exchange so two concurrent
     /// start() calls cannot both pass the check and submit twice.
     std::atomic<bool> m_busy{false};

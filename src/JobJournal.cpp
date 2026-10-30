@@ -8,12 +8,17 @@
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QJsonParseError>
+#include <QLockFile>
 #include <QSaveFile>
 #include <QStandardPaths>
 
 #if defined(Q_OS_UNIX)
 #include <unistd.h>
+#elif defined(Q_OS_WIN)
+#include <io.h>
 #endif
+
+#include <algorithm>
 
 namespace pp {
 
@@ -23,6 +28,10 @@ namespace {
 /// job. The file is a state log, not an audit trail, so older transitions of an
 /// already finished job carry no information for the recovery checks.
 constexpr qint64 kCompactBytes = 1024 * 1024;
+
+/// A second instance may be appending at the same moment; wait rather than
+/// fail, but not forever.
+constexpr int kLockWaitMsecs = 2000;
 
 Result<void> syncToDisk(QFile &file)
 {
@@ -36,8 +45,32 @@ Result<void> syncToDisk(QFile &file)
         return error(QStringLiteral("journal-write"),
                      QCoreApplication::translate("PhotoPrint", "A nyomtatási napló nem írható."));
     }
+#elif defined(Q_OS_WIN)
+    // Windows has no fdatasync; _commit is the equivalent flush-to-device for
+    // a file handle. Not exercised by the test suite, which runs on Linux.
+    if (::_commit(file.handle()) != 0) {
+        return error(QStringLiteral("journal-write"),
+                     QCoreApplication::translate("PhotoPrint", "A nyomtatási napló nem írható."));
+    }
 #endif
     return Result<void>();
+}
+
+/// Undoes a failed append. Without this the bytes may outlive the error: the
+/// caller deletes the spool because the intent never became durable, yet a
+/// record left on disk is read as a pending job on the next start.
+void rollBack(QFile &file, qint64 size)
+{
+    file.flush();
+    if (!file.resize(size)) {
+        qWarning("JobJournal: a napló visszavágása %lld bájtra nem sikerült: %s",
+                 static_cast<long long>(size), qPrintable(file.errorString()));
+    }
+}
+
+QString lockPathFor(const QString &path)
+{
+    return QFileInfo(path).absoluteFilePath() + QStringLiteral(".lock");
 }
 
 QByteArray lineFor(const JobRecord &record)
@@ -63,8 +96,14 @@ QString JobJournal::defaultPath()
     return QDir(base).filePath(QStringLiteral("jobs.jsonl"));
 }
 
-JobJournal::JobJournal(QString path) : m_path(path.isEmpty() ? defaultPath() : std::move(path))
+JobJournal::JobJournal(QString path)
+    : m_path(path.isEmpty() ? defaultPath() : std::move(path)), m_compactAfter(kCompactBytes)
 {
+}
+
+Result<void> JobJournal::syncFile(QFile &file)
+{
+    return syncToDisk(file);
 }
 
 Result<void> JobJournal::appendLine(const JobRecord &record)
@@ -75,26 +114,49 @@ Result<void> JobJournal::appendLine(const JobRecord &record)
         return error(QStringLiteral("journal-write"),
                      QCoreApplication::translate("PhotoPrint", "A nyomtatási napló nem írható."));
     }
+
+    // Append and compaction are a read-modify-write pair across processes: two
+    // instances could otherwise both rewrite the file and one intent would be
+    // lost without a trace. The lock covers both steps.
+    QLockFile lock(lockPathFor(m_path));
+    if (!lock.tryLock(kLockWaitMsecs)) {
+        return error(QStringLiteral("journal-lock"),
+                     QCoreApplication::translate("PhotoPrint", "A napló jelenleg használatban van."));
+    }
+
     const auto compacted = compactIfNeeded();
     if (!compacted)
         return compacted.error();
 
+    const qint64 before = QFileInfo(m_path).size();
     QFile file(m_path);
     if (!file.open(QIODevice::WriteOnly | QIODevice::Append)) {
         return error(QStringLiteral("journal-write"),
                      QCoreApplication::translate("PhotoPrint", "A nyomtatási napló nem írható."));
     }
     const QByteArray line = lineFor(record);
-    if (file.write(line) != line.size())
+    if (file.write(line) != line.size()) {
+        rollBack(file, before);
         return error(QStringLiteral("journal-write"),
                      QCoreApplication::translate("PhotoPrint", "A nyomtatási napló nem írható."));
-    return syncToDisk(file);
+    }
+    const auto synced = syncFile(file);
+    if (!synced) {
+        // The bytes reached the file but not the device. Dropping them keeps
+        // the file in step with the caller's decision to keep no evidence.
+        rollBack(file, before);
+        return synced.error();
+    }
+    return Result<void>();
 }
 
 Result<void> JobJournal::compactIfNeeded()
 {
     const QFileInfo info(m_path);
-    if (!info.exists() || info.size() <= kCompactBytes)
+    // m_compactAfter starts at the threshold and moves to "compacted size plus
+    // one more threshold" after each rewrite, so a compacted journal that is
+    // still large cannot force a rewrite on every single append.
+    if (!info.exists() || info.size() <= m_compactAfter)
         return Result<void>();
 
     const auto records = readAll();
@@ -120,13 +182,16 @@ Result<void> JobJournal::compactIfNeeded()
                      QCoreApplication::translate("PhotoPrint", "A nyomtatási napló nem írható."));
     for (const JobRecord &record : kept) {
         const QByteArray line = lineFor(record);
-        if (file.write(line) != line.size())
+        if (file.write(line) != line.size()) {
+            file.cancelWriting();
             return error(QStringLiteral("journal-write"),
                          QCoreApplication::translate("PhotoPrint", "A nyomtatási napló nem írható."));
+        }
     }
     if (!file.commit())
         return error(QStringLiteral("journal-write"),
                      QCoreApplication::translate("PhotoPrint", "A nyomtatási napló nem írható."));
+    m_compactAfter = std::max(kCompactBytes, QFileInfo(m_path).size() + kCompactBytes);
     return Result<void>();
 }
 
@@ -178,8 +243,13 @@ Result<QList<JobRecord>> JobJournal::readAll() const
         const QString id = object.value(QStringLiteral("id")).toString();
         if (id.isEmpty())
             continue;
+        // A damaged id would otherwise collapse every such line onto the null
+        // uuid and merge unrelated jobs into one state.
+        const QUuid parsedId(id);
+        if (parsedId.isNull())
+            continue;
         JobRecord record;
-        record.id = QUuid(id);
+        record.id = parsedId;
         record.state = object.value(QStringLiteral("state")).toString();
         record.queue = object.value(QStringLiteral("queue")).toString();
         record.pdfSha256 = object.value(QStringLiteral("pdfSha256")).toString();
@@ -200,8 +270,12 @@ QList<JobRecord> JobJournal::entries() const
 
 int JobJournal::uncertainCount() const
 {
+    const auto records = readAll();
+    if (!records)
+        return -1; // cannot tell; an empty list would read as "nothing pending"
+
     QHash<QUuid, QString> lastState;
-    for (const JobRecord &record : entries())
+    for (const JobRecord &record : records.value())
         lastState.insert(record.id, record.state);
     int count = 0;
     for (const QString &state : lastState) {

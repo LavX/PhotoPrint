@@ -13,6 +13,8 @@
 #include <QFileInfo>
 #include <QImage>
 #include <QImageWriter>
+#include <QJsonDocument>
+#include <QJsonObject>
 #include <QProcess>
 #include <QTemporaryDir>
 #include <QtTest>
@@ -21,9 +23,45 @@
 #include <cmath>
 #include <thread>
 
+#if defined(Q_OS_UNIX)
+#include <sys/stat.h>
+#endif
+
 using namespace pp;
 
 namespace {
+
+quint64 inodeOf(const QString &path)
+{
+#if defined(Q_OS_UNIX)
+    struct stat info {};
+    if (::stat(QFile::encodeName(path).constData(), &info) != 0)
+        return 0;
+    return static_cast<quint64>(info.st_ino);
+#else
+    Q_UNUSED(path);
+    return 0;
+#endif
+}
+
+/// A journal above the compaction threshold whose live records alone keep it
+/// there, so a rewrite cannot bring it back under the limit.
+void writeFatJournal(const QString &path)
+{
+    QFile file(path);
+    if (!file.open(QIODevice::WriteOnly))
+        return;
+    const QString padding(4096, QLatin1Char('x'));
+    for (int i = 0; i < 300; ++i) {
+        QJsonObject object;
+        object.insert(QStringLiteral("id"),
+                      QUuid::createUuid().toString(QUuid::WithoutBraces));
+        object.insert(QStringLiteral("state"), QStringLiteral("queued"));
+        object.insert(QStringLiteral("detail"), padding);
+        file.write(QJsonDocument(object).toJson(QJsonDocument::Compact));
+        file.write("\n");
+    }
+}
 
 QImage solid(const QColor &colour)
 {
@@ -95,6 +133,10 @@ private slots:
     void missingOrChangedSourceStopsBeforeSubmit();
     void cancelledStartNeverSubmits();
     void failedJournalIntentLeavesNoSpoolOrManifest();
+    void failedIntentDoesNotBlockTheRetry();
+    void artifactsAreClearedTogether();
+    void unrecordedOutcomeIsReported();
+    void compactionIsNotRepeatedOnEveryPrint();
     void realAdapterClassifiesUncertainWithoutRetry();
     void realAdapterSendsTheResolvedOptions();
     void borderlessPlacementCoversThePage();
@@ -329,6 +371,149 @@ void TestJobController::failedJournalIntentLeavesNoSpoolOrManifest()
     QVERIFY2(workDir.entryList(QDir::Files).isEmpty(),
              qPrintable(workDir.entryList(QDir::Files).join(QLatin1Char(' '))));
     QVERIFY(!controller.busy());
+}
+
+void TestJobController::failedIntentDoesNotBlockTheRetry()
+{
+    FakeCupsBackend backend;
+    backend.outcome.status = SubmitStatus::KnownJob;
+    ImageStore store;
+    JobConfig config;
+    config.workDir = m_dir.filePath(QStringLiteral("retry-jobs"));
+    config.journalPath = m_dir.path(); // a directory: the journal cannot open it
+    JobController controller(store, config, &backend);
+
+    const auto first = controller.start(documentWith(m_source), ticketFor(a4()));
+    QVERIFY(!first.ok());
+    QCOMPARE(first.error().code, QStringLiteral("journal-write"));
+    QCOMPARE(backend.submits, 0);
+
+    // Nothing was submitted, so the double-start window must not have been
+    // opened: an immediate retry has to reach the journal again instead of
+    // being turned away with "A nyomtatás már elindult."
+    const auto second = controller.start(documentWith(m_source), ticketFor(a4()));
+    QVERIFY(!second.ok());
+    QCOMPARE(second.error().code, QStringLiteral("journal-write"));
+    QCOMPARE(backend.submits, 0);
+    const QDir workDir(config.workDir);
+    QVERIFY2(workDir.entryList(QDir::Files).isEmpty(),
+             qPrintable(workDir.entryList(QDir::Files).join(QLatin1Char(' '))));
+}
+
+void TestJobController::artifactsAreClearedTogether()
+{
+    FakeCupsBackend backend;
+    backend.outcome.status = SubmitStatus::Uncertain; // keeps the spool as evidence
+    ImageStore store;
+    JobController controller(store, m_config, &backend);
+
+    const auto first = controller.start(documentWith(m_source), ticketFor(a4()));
+    QVERIFY(first.ok());
+    const QString manifest = controller.lastManifestPath();
+    const QString pdf = controller.lastPdfPath();
+    QVERIFY(QFileInfo::exists(manifest));
+    QVERIFY(QFileInfo::exists(pdf));
+
+    // The double-start window belongs to a real submission.
+    QTest::qWait(1250);
+    DocumentSnapshot missing = documentWith(m_source);
+    missing.pages[0].frames[0].sourcePath = m_dir.filePath(QStringLiteral("missing.png"));
+    const auto second = controller.start(missing, ticketFor(a4()));
+    QVERIFY(!second.ok());
+
+    // A half pair would point at the previous job's manifest next to a spool
+    // that no longer belongs to it.
+    QVERIFY(controller.lastManifestPath().isEmpty());
+    QVERIFY(controller.lastPdfPath().isEmpty());
+
+    QFile::remove(pdf);
+    QFile::remove(manifest);
+    QFile::remove(m_config.journalPath);
+}
+
+namespace {
+/// Removes the journal while the submit call is in flight, so the intent is
+/// durable but the outcome cannot be written.
+class JournalBreakingBackend : public CupsBackend
+{
+public:
+    QString journalPath;
+    SubmitOutcome outcome;
+    int submits = 0;
+
+    SubmitOutcome submit(const QString &, const ExportArtifact &, const PrintTicket &) override
+    {
+        ++submits;
+        QFile::remove(journalPath);
+        QDir().mkpath(journalPath);
+        return outcome;
+    }
+};
+} // namespace
+
+void TestJobController::unrecordedOutcomeIsReported()
+{
+    JobConfig config;
+    config.workDir = m_dir.filePath(QStringLiteral("unrecorded-jobs"));
+    config.journalPath = m_dir.filePath(QStringLiteral("unrecorded-jobs.jsonl"));
+    JournalBreakingBackend backend;
+    backend.journalPath = config.journalPath;
+    backend.outcome.status = SubmitStatus::KnownJob;
+    backend.outcome.jobId = 12;
+    ImageStore store;
+    JobController controller(store, config, &backend);
+
+    const auto result = controller.start(documentWith(m_source), ticketFor(a4()));
+    QVERIFY(result.ok());
+    QCOMPARE(backend.submits, 1);
+    // The intent is on disk, the outcome is not: the job is uncertain and the
+    // message says so instead of reporting a clean send.
+    QCOMPARE(result.value().status, SubmitStatus::Uncertain);
+    QVERIFY(result.value().message.contains(QStringLiteral("naplóba")));
+    // The spool survives as the only evidence.
+    QVERIFY(QFileInfo::exists(result.value().pdfPath));
+
+    QDir(config.workDir).removeRecursively();
+    QDir(config.journalPath).removeRecursively();
+}
+
+void TestJobController::compactionIsNotRepeatedOnEveryPrint()
+{
+    JobConfig config;
+    config.workDir = m_dir.filePath(QStringLiteral("compacting-jobs"));
+    config.journalPath = m_dir.filePath(QStringLiteral("compacting.jsonl"));
+    writeFatJournal(config.journalPath);
+    QVERIFY(QFileInfo(config.journalPath).size() > 1024 * 1024);
+    const quint64 fatInode = inodeOf(config.journalPath);
+
+    FakeCupsBackend backend;
+    backend.outcome.status = SubmitStatus::KnownJob;
+    ImageStore store;
+    JobController controller(store, config, &backend);
+
+    const auto first = controller.start(documentWith(m_source), ticketFor(a4()));
+    QVERIFY(first.ok());
+    // The live records keep the journal above the threshold, so this print did
+    // rewrite it.
+    QVERIFY(QFileInfo(config.journalPath).size() > 1024 * 1024);
+    const quint64 compactedInode = inodeOf(config.journalPath);
+#if defined(Q_OS_UNIX)
+    QVERIFY(fatInode != 0);
+    QVERIFY2(compactedInode != fatInode, "the first print should compact");
+#endif
+
+    QTest::qWait(1250);
+    const auto second = controller.start(documentWith(m_source), ticketFor(a4()));
+    QVERIFY(second.ok());
+    // The next print must not read and rewrite the whole journal again: the
+    // controller keeps one journal for the session, so it still remembers when
+    // it last compacted.
+#if defined(Q_OS_UNIX)
+    QCOMPARE(inodeOf(config.journalPath), compactedInode);
+#endif
+
+    QDir(config.workDir).removeRecursively();
+    QFile::remove(config.journalPath);
 }
 
 void TestJobController::missingOrChangedSourceStopsBeforeSubmit()
