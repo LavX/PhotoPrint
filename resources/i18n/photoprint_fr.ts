@@ -244,10 +244,6 @@
         <translation>Langue</translation>
     </message>
     <message>
-        <source>A nyelv a következő indításnál lép életbe.</source>
-        <translation>La langue s'appliquera au prochain démarrage de PhotoPrint.</translation>
-    </message>
-    <message>
         <source>Projekt megnyitása…</source>
         <translation>Ouvrir un projet…</translation>
     </message>
@@ -319,12 +315,9 @@
         <source>Húzd ide a fotókat, vagy válaszd a Fotók hozzáadása gombot.</source>
         <translation>Déposez des photos ici ou choisissez Ajouter des photos.</translation>
     </message>
-    <message numerus="yes">
-        <source>%n. fotó</source>
-        <translation>
-            <numerusform>Photo %n</numerusform>
-            <numerusform>Photo %n</numerusform>
-        </translation>
+    <message>
+        <source>%1. fotó</source>
+        <translation>Photo %1</translation>
     </message>
     <message numerus="yes">
         <source>%1 · %n fotó</source>
@@ -394,6 +387,10 @@
         <translation>Aucune imprimante</translation>
     </message>
     <message>
+        <source>Nincs beállított nyomtató.</source>
+        <translation>Aucune imprimante n'est configurée.</translation>
+    </message>
+    <message>
         <source>A nyomtató most nem érhető el. Ellenőrizd, hogy be van-e kapcsolva.</source>
         <translation>L'imprimante n'est pas disponible pour le moment. Vérifiez qu'elle est allumée.</translation>
     </message>
@@ -459,6 +456,10 @@
     <message>
         <source>A projekt elmentve.</source>
         <translation>Le projet est enregistré.</translation>
+    </message>
+    <message>
+        <source>Nincs mit elmenteni.</source>
+        <translation>Il n'y a rien à enregistrer.</translation>
     </message>
     <message>
         <source>Projekt mentése</source>
@@ -553,6 +554,10 @@
         <translation>Le journal d'impression ne peut pas être écrit.</translation>
     </message>
     <message>
+        <source>A nyomtatási napló nem olvasható.</source>
+        <translation>Le journal d'impression ne peut pas être lu.</translation>
+    </message>
+    <message>
         <source>Ez az oldal nem található.</source>
         <translation>Cette page est introuvable.</translation>
     </message>
@@ -593,12 +598,12 @@
         <translation>Le dossier de la copie portable ne peut pas être créé.</translation>
     </message>
     <message>
-        <source>Ugyanilyen nevű fotó már van a másolatban.</source>
-        <translation>Une photo portant ce nom est déjà dans la copie.</translation>
-    </message>
-    <message>
         <source>A fotót nem sikerült a másolatba tenni.</source>
         <translation>La photo n'a pas pu être placée dans la copie.</translation>
+    </message>
+    <message>
+        <source>A projektfájl nem másolható a fotók közé.</source>
+        <translation>Le fichier de projet ne peut pas être copié avec les photos.</translation>
     </message>
     <message>
         <source>A fotó másolata nem egyezik az eredetivel.</source>
@@ -611,6 +616,10 @@
     <message>
         <source>A munkamenet mentése nem sikerült.</source>
         <translation>La session n'a pas pu être enregistrée.</translation>
+    </message>
+    <message>
+        <source>A munkamenet mentését nem sikerült törölni.</source>
+        <translation>La session enregistrée n'a pas pu être supprimée.</translation>
     </message>
     <message>
         <source>Nincs folytatható munka.</source>
@@ -645,6 +654,14 @@
         <translation>Le réglage du papier ne peut pas être enregistré.</translation>
     </message>
     <message>
+        <source>A papírbeállítások nem olvashatók.</source>
+        <translation>Impossible de lire les réglages du papier.</translation>
+    </message>
+    <message>
+        <source>A papírbeállítások fájlja sérült.</source>
+        <translation>Le fichier des réglages du papier est endommagé.</translation>
+    </message>
+    <message>
         <source>Adj nevet a papírnak.</source>
         <translation>Donnez un nom au papier.</translation>
     </message>
@@ -653,12 +670,20 @@
         <translation>Le papier n'a pas pu être enregistré.</translation>
     </message>
     <message>
+        <source>Ezt a papírt nem találjuk.</source>
+        <translation>Impossible de trouver ce papier.</translation>
+    </message>
+    <message>
         <source>A papírt nem sikerült törölni.</source>
         <translation>Le papier n'a pas pu être supprimé.</translation>
     </message>
     <message>
         <source>Nincs mit kipróbálni.</source>
         <translation>Il n'y a rien à essayer.</translation>
+    </message>
+    <message>
+        <source>Ez a papír túl kicsi a próbalaphoz.</source>
+        <translation>Ce papier est trop petit pour la feuille test.</translation>
     </message>
     <message>
         <source>Új lap</source>
@@ -679,10 +704,6 @@
     <message>
         <source>Lap hátrébb</source>
         <translation>Déplacer la page après</translation>
-    </message>
-    <message>
-        <source>%1 · %2 fotó</source>
-        <translation>%1 · %2 photos</translation>
     </message>
     <message>
         <source>Eredeti</source>

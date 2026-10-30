@@ -244,10 +244,6 @@
         <translation>语言</translation>
     </message>
     <message>
-        <source>A nyelv a következő indításnál lép életbe.</source>
-        <translation>语言将在下次启动时生效。</translation>
-    </message>
-    <message>
         <source>Projekt megnyitása…</source>
         <translation>打开项目…</translation>
     </message>
@@ -319,11 +315,9 @@
         <source>Húzd ide a fotókat, vagy válaszd a Fotók hozzáadása gombot.</source>
         <translation>将照片拖到这里，或选择“添加照片”。</translation>
     </message>
-    <message numerus="yes">
-        <source>%n. fotó</source>
-        <translation>
-            <numerusform>第 %n 张照片</numerusform>
-        </translation>
+    <message>
+        <source>%1. fotó</source>
+        <translation>第 %1 张照片</translation>
     </message>
     <message numerus="yes">
         <source>%1 · %n fotó</source>
@@ -392,6 +386,10 @@
         <translation>无打印机</translation>
     </message>
     <message>
+        <source>Nincs beállított nyomtató.</source>
+        <translation>尚未设置打印机。</translation>
+    </message>
+    <message>
         <source>A nyomtató most nem érhető el. Ellenőrizd, hogy be van-e kapcsolva.</source>
         <translation>打印机现在不可用。请检查是否已开机。</translation>
     </message>
@@ -456,6 +454,10 @@
     <message>
         <source>A projekt elmentve.</source>
         <translation>项目已保存。</translation>
+    </message>
+    <message>
+        <source>Nincs mit elmenteni.</source>
+        <translation>没有可保存的内容。</translation>
     </message>
     <message>
         <source>Projekt mentése</source>
@@ -550,6 +552,10 @@
         <translation>无法写入打印日志。</translation>
     </message>
     <message>
+        <source>A nyomtatási napló nem olvasható.</source>
+        <translation>无法读取打印日志。</translation>
+    </message>
+    <message>
         <source>Ez az oldal nem található.</source>
         <translation>找不到这个页面。</translation>
     </message>
@@ -590,12 +596,12 @@
         <translation>无法创建可移植副本的文件夹。</translation>
     </message>
     <message>
-        <source>Ugyanilyen nevű fotó már van a másolatban.</source>
-        <translation>副本中已有同名照片。</translation>
-    </message>
-    <message>
         <source>A fotót nem sikerült a másolatba tenni.</source>
         <translation>无法将照片放入副本。</translation>
+    </message>
+    <message>
+        <source>A projektfájl nem másolható a fotók közé.</source>
+        <translation>无法将项目文件复制到照片旁边。</translation>
     </message>
     <message>
         <source>A fotó másolata nem egyezik az eredetivel.</source>
@@ -608,6 +614,10 @@
     <message>
         <source>A munkamenet mentése nem sikerült.</source>
         <translation>会话保存失败。</translation>
+    </message>
+    <message>
+        <source>A munkamenet mentését nem sikerült törölni.</source>
+        <translation>无法删除已保存的会话。</translation>
     </message>
     <message>
         <source>Nincs folytatható munka.</source>
@@ -642,6 +652,14 @@
         <translation>无法保存纸张设置。</translation>
     </message>
     <message>
+        <source>A papírbeállítások nem olvashatók.</source>
+        <translation>无法读取纸张设置。</translation>
+    </message>
+    <message>
+        <source>A papírbeállítások fájlja sérült.</source>
+        <translation>纸张设置文件已损坏。</translation>
+    </message>
+    <message>
         <source>Adj nevet a papírnak.</source>
         <translation>请为纸张命名。</translation>
     </message>
@@ -650,12 +668,20 @@
         <translation>纸张保存失败。</translation>
     </message>
     <message>
+        <source>Ezt a papírt nem találjuk.</source>
+        <translation>找不到这种纸张。</translation>
+    </message>
+    <message>
         <source>A papírt nem sikerült törölni.</source>
         <translation>纸张删除失败。</translation>
     </message>
     <message>
         <source>Nincs mit kipróbálni.</source>
         <translation>没有可试印的内容。</translation>
+    </message>
+    <message>
+        <source>Ez a papír túl kicsi a próbalaphoz.</source>
+        <translation>这种纸张对于试印页来说太小。</translation>
     </message>
     <message>
         <source>Új lap</source>
@@ -676,10 +702,6 @@
     <message>
         <source>Lap hátrébb</source>
         <translation>将页面后移</translation>
-    </message>
-    <message>
-        <source>%1 · %2 fotó</source>
-        <translation>%1 · %2 张照片</translation>
     </message>
     <message>
         <source>Eredeti</source>
