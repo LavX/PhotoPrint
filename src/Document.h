@@ -8,6 +8,8 @@
 #include <QString>
 #include <QUuid>
 
+#include <algorithm>
+
 namespace pp {
 
 /// How a photograph is mapped into its frame rectangle.
@@ -53,6 +55,17 @@ struct Frame {
 
     bool operator==(const Frame &) const = default;
 };
+
+/// Bounds of the manual brightness offset, in EV. The slider and the colour
+/// pipeline share this range, so the stores clamp to it on the way in and the
+/// tone path clamps again on the way out.
+constexpr double kMinBrightnessEv = -0.5;
+constexpr double kMaxBrightnessEv = 0.5;
+
+inline double clampBrightnessEv(double ev)
+{
+    return std::clamp(ev, kMinBrightnessEv, kMaxBrightnessEv);
+}
 
 /// What the sheet is made of. The driver has no separate matt mode; matt
 /// papers are sent as inkjet paper (see PrinterAdapter).

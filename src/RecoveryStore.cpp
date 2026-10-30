@@ -7,7 +7,22 @@
 #include <QSaveFile>
 #include <QStandardPaths>
 
+#include <algorithm>
+
 namespace pp {
+
+namespace {
+
+const QString kSlotA = QStringLiteral("recovery-a.json");
+const QString kSlotB = QStringLiteral("recovery-b.json");
+const QString kManifest = QStringLiteral("latest.txt");
+
+bool isSlotName(const QString &name)
+{
+    return name == kSlotA || name == kSlotB;
+}
+
+} // namespace
 
 QString RecoveryStore::defaultDirectory()
 {
@@ -18,57 +33,119 @@ QString RecoveryStore::defaultDirectory()
 RecoveryStore::RecoveryStore(QString directory)
     : m_directory(directory.isEmpty() ? defaultDirectory() : std::move(directory))
 {
+    m_nextSlot = nextSlotFromDisk();
+}
+
+QString RecoveryStore::slotName(int index) const
+{
+    return index % 2 == 0 ? kSlotA : kSlotB;
+}
+
+QString RecoveryStore::manifestName() const
+{
+    QFile manifest(QDir(m_directory).filePath(kManifest));
+    if (!manifest.open(QIODevice::ReadOnly))
+        return QString();
+    const QString name = QString::fromLatin1(manifest.readAll()).trimmed();
+    // The manifest is a file name, never a path: anything else is ignored.
+    return isSlotName(name) ? name : QString();
+}
+
+int RecoveryStore::nextSlotFromDisk() const
+{
+    const QString latest = manifestName();
+    if (latest == kSlotA)
+        return 1;
+    if (latest == kSlotB)
+        return 0;
+
+    // No usable manifest. Overwrite the older slot when both exist, so the
+    // other complete snapshot stays readable.
+    const QFileInfo a(QDir(m_directory).filePath(kSlotA));
+    const QFileInfo b(QDir(m_directory).filePath(kSlotB));
+    if (!a.exists() && !b.exists())
+        return 0;
+    if (!a.exists())
+        return 1;
+    if (!b.exists())
+        return 0;
+    return a.lastModified() <= b.lastModified() ? 0 : 1;
 }
 
 Result<void> RecoveryStore::checkpoint(const DocumentSnapshot &document)
 {
-    if (!QDir().mkpath(m_directory))
+    if (!QDir().mkpath(m_directory)) {
         return error(QStringLiteral("recovery-dir"),
                      QCoreApplication::translate("PhotoPrint", "A munkamenet mentése nem sikerült."));
-    const QString slot = (m_nextSlot++ % 2 == 0) ? QStringLiteral("recovery-a.json")
-                                                 : QStringLiteral("recovery-b.json");
+    }
+    if (m_nextSlot != 0 && m_nextSlot != 1)
+        m_nextSlot = 0;
+
+    const int index = m_nextSlot;
+    const QString slot = slotName(index);
     ProjectStore store;
     const auto saved = store.save(QDir(m_directory).filePath(slot), document, SaveMode::Normal);
     if (!saved)
         return saved.error();
 
-    // A tiny manifest makes "the newest complete snapshot" deterministic even
-    // when both slots share the same file-system timestamp.
-    QSaveFile manifest(QDir(m_directory).filePath(QStringLiteral("latest.txt")));
-    if (!manifest.open(QIODevice::WriteOnly))
+    // The slot is complete before the manifest names it, so a crash in between
+    // leaves the manifest pointing at the previous complete snapshot. The next
+    // checkpoint picks that older slot's partner from the manifest, which is
+    // exactly the slot that may have been left unannounced.
+    QSaveFile manifest(QDir(m_directory).filePath(kManifest));
+    if (!manifest.open(QIODevice::WriteOnly)) {
         return error(QStringLiteral("recovery-manifest"),
                      QCoreApplication::translate("PhotoPrint", "A munkamenet mentése nem sikerült."));
-    manifest.write(slot.toLatin1());
-    if (!manifest.commit())
+    }
+    const QByteArray name = slot.toLatin1();
+    if (manifest.write(name) != name.size()) {
+        manifest.cancelWriting();
         return error(QStringLiteral("recovery-manifest"),
                      QCoreApplication::translate("PhotoPrint", "A munkamenet mentése nem sikerült."));
+    }
+    if (!manifest.commit()) {
+        return error(QStringLiteral("recovery-manifest"),
+                     QCoreApplication::translate("PhotoPrint", "A munkamenet mentése nem sikerült."));
+    }
+
+    m_nextSlot = (index + 1) % 2;
     return Result<void>();
 }
 
 Result<LoadedProject> RecoveryStore::loadLatest()
 {
-    QFile manifest(QDir(m_directory).filePath(QStringLiteral("latest.txt")));
-    QString preferred;
-    if (manifest.open(QIODevice::ReadOnly))
-        preferred = QString::fromLatin1(manifest.readAll()).trimmed();
-    const QString other = preferred == QLatin1String("recovery-a.json")
-        ? QStringLiteral("recovery-b.json")
-        : QStringLiteral("recovery-a.json");
+    struct Candidate {
+        QFileInfo info;
+        bool preferred = false;
+    };
 
-    QList<QFileInfo> candidates;
-    for (const QString &name : {preferred, other}) {
-        if (name.isEmpty())
-            continue;
+    const QString preferredName = manifestName();
+    QList<Candidate> candidates;
+    for (const QString &name : {kSlotA, kSlotB}) {
         const QFileInfo info(QDir(m_directory).filePath(name));
-        if (info.exists())
-            candidates.append(info);
+        if (info.exists() && info.isFile())
+            candidates.append({info, name == preferredName});
     }
-    if (candidates.isEmpty())
-        return error(QStringLiteral("recovery-empty"), QCoreApplication::translate("PhotoPrint", "Nincs folytatható munka."));
+    if (candidates.isEmpty()) {
+        return error(QStringLiteral("recovery-empty"),
+                     QCoreApplication::translate("PhotoPrint", "Nincs folytatható munka."));
+    }
+
+    // Newest first: a checkpoint that reached the slot but not the manifest is
+    // still the freshest complete snapshot. Equal timestamps (two checkpoints
+    // in the same millisecond) fall back to the manifest, then to slot order.
+    std::stable_sort(candidates.begin(), candidates.end(),
+                     [](const Candidate &left, const Candidate &right) {
+                         if (left.info.lastModified() != right.info.lastModified())
+                             return left.info.lastModified() > right.info.lastModified();
+                         if (left.preferred != right.preferred)
+                             return left.preferred;
+                         return left.info.fileName() < right.info.fileName();
+                     });
 
     ProjectStore store;
-    for (const QFileInfo &candidate : candidates) {
-        const auto loaded = store.load(candidate.absoluteFilePath());
+    for (const Candidate &candidate : candidates) {
+        const auto loaded = store.load(candidate.info.absoluteFilePath());
         if (loaded)
             return loaded;
     }
@@ -76,11 +153,20 @@ Result<LoadedProject> RecoveryStore::loadLatest()
                  QCoreApplication::translate("PhotoPrint", "A korábbi munka nem nyitható meg."));
 }
 
-void RecoveryStore::clear()
+Result<void> RecoveryStore::clear()
 {
-    for (const QString &name : {QStringLiteral("recovery-a.json"), QStringLiteral("recovery-b.json"),
-                                QStringLiteral("latest.txt")})
-        QFile::remove(QDir(m_directory).filePath(name));
+    for (const QString &name : {kSlotA, kSlotB, kManifest}) {
+        const QString path = QDir(m_directory).filePath(name);
+        if (!QFileInfo::exists(path))
+            continue;
+        if (!QFile::remove(path)) {
+            return error(QStringLiteral("recovery-clear"),
+                         QCoreApplication::translate("PhotoPrint",
+                                                     "A munkamenet mentését nem sikerült törölni."));
+        }
+    }
+    m_nextSlot = 0;
+    return Result<void>();
 }
 
 } // namespace pp

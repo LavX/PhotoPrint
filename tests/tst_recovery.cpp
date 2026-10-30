@@ -54,6 +54,9 @@ private slots:
     void initTestCase();
     void checkpointsReplaceEachOtherAtomically();
     void corruptNewestSlotFallsBackToTheOlderSnapshot();
+    void restartDoesNotOverwriteTheNewestSlot();
+    void manifestCannotPointOutsideTheDirectory();
+    void bothCorruptSlotsAreReported();
     void clearRemovesBothSlots();
 
 private:
@@ -117,6 +120,77 @@ void TestRecovery::corruptNewestSlotFallsBackToTheOlderSnapshot()
     QCOMPARE(latest.value().document.pages.at(0).frames.at(0).cx, 50.0);
 }
 
+void TestRecovery::restartDoesNotOverwriteTheNewestSlot()
+{
+    ImageStore store;
+    const auto loaded = store.load(m_imagePath, ImportPolicy{});
+    QVERIFY(loaded.ok());
+
+    const QString directory = m_dir.filePath(QStringLiteral("recovery4"));
+    {
+        RecoveryStore recovery(directory);
+        QVERIFY(recovery.checkpoint(documentWith(loaded.value(), 25.0)).ok());
+        QVERIFY(recovery.checkpoint(documentWith(loaded.value(), 75.0)).ok());
+    }
+
+    // A fresh process must continue with slot a, not overwrite slot b, the
+    // newest complete snapshot.
+    RecoveryStore restarted(directory);
+    QVERIFY(restarted.checkpoint(documentWith(loaded.value(), 95.0)).ok());
+
+    QFile manifest(QDir(directory).filePath(QStringLiteral("latest.txt")));
+    QVERIFY(manifest.open(QIODevice::ReadOnly));
+    QCOMPARE(QString::fromLatin1(manifest.readAll()).trimmed(),
+             QStringLiteral("recovery-a.json"));
+
+    const auto latest = restarted.loadLatest();
+    if (!latest)
+        QFAIL(qPrintable(latest.error().message));
+    QCOMPARE(latest.value().document.pages.at(0).frames.at(0).cx, 95.0);
+}
+
+void TestRecovery::manifestCannotPointOutsideTheDirectory()
+{
+    ImageStore store;
+    const auto loaded = store.load(m_imagePath, ImportPolicy{});
+    QVERIFY(loaded.ok());
+
+    const QString directory = m_dir.filePath(QStringLiteral("recovery5"));
+    QVERIFY(QDir().mkpath(directory));
+    RecoveryStore recovery(directory);
+    QVERIFY(recovery.checkpoint(documentWith(loaded.value(), 45.0)).ok());
+
+    // A hostile manifest must not turn into a path component.
+    const QString outside = m_dir.filePath(QStringLiteral("outside.ppj"));
+    ProjectStore projects;
+    QVERIFY(projects.save(outside, documentWith(loaded.value(), 999.0), SaveMode::Normal).ok());
+    QFile manifest(QDir(directory).filePath(QStringLiteral("latest.txt")));
+    QVERIFY(manifest.open(QIODevice::WriteOnly | QIODevice::Truncate));
+    manifest.write("../outside.ppj");
+    manifest.close();
+
+    const auto latest = recovery.loadLatest();
+    if (!latest)
+        QFAIL(qPrintable(latest.error().message));
+    QCOMPARE(latest.value().document.pages.at(0).frames.at(0).cx, 45.0);
+}
+
+void TestRecovery::bothCorruptSlotsAreReported()
+{
+    const QString directory = m_dir.filePath(QStringLiteral("recovery6"));
+    QVERIFY(QDir().mkpath(directory));
+    for (const QString &name : {QStringLiteral("recovery-a.json"), QStringLiteral("recovery-b.json")}) {
+        QFile file(QDir(directory).filePath(name));
+        QVERIFY(file.open(QIODevice::WriteOnly));
+        file.write("{ not a project");
+        file.close();
+    }
+    RecoveryStore recovery(directory);
+    const auto latest = recovery.loadLatest();
+    QVERIFY(!latest.ok());
+    QCOMPARE(latest.error().code, QStringLiteral("recovery-corrupt"));
+}
+
 void TestRecovery::clearRemovesBothSlots()
 {
     ImageStore store;
@@ -126,7 +200,7 @@ void TestRecovery::clearRemovesBothSlots()
     RecoveryStore recovery(directory);
     QVERIFY(recovery.checkpoint(documentWith(loaded.value(), 30.0)).ok());
     QVERIFY(recovery.checkpoint(documentWith(loaded.value(), 60.0)).ok());
-    recovery.clear();
+    QVERIFY(recovery.clear().ok());
     const auto latest = recovery.loadLatest();
     QVERIFY(!latest.ok());
     QCOMPARE(latest.error().code, QStringLiteral("recovery-empty"));

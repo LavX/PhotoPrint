@@ -16,12 +16,23 @@ public:
 
     Result<void> checkpoint(const DocumentSnapshot &document);
     Result<LoadedProject> loadLatest();
-    void clear();
+
+    /// Removes both slots and the manifest. Reports a failure to remove an
+    /// existing file instead of pretending the recovery data is gone.
+    Result<void> clear();
 
     QString directory() const { return m_directory; }
     static QString defaultDirectory();
 
 private:
+    QString slotName(int index) const;
+    /// The manifest slot name, or an empty string when the file is missing or
+    /// does not name one of the two slots.
+    QString manifestName() const;
+    /// The slot the next checkpoint should overwrite, derived from disk so a
+    /// restart does not clobber the newest snapshot.
+    int nextSlotFromDisk() const;
+
     QString m_directory;
     int m_nextSlot = 0;
 };
