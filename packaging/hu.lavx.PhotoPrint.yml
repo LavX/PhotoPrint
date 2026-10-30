@@ -1,0 +1,66 @@
+app-id: hu.lavx.PhotoPrint
+runtime: org.kde.Platform
+runtime-version: '6.11'
+sdk: org.kde.Sdk
+command: photoprint
+finish-args:
+  - --share=ipc
+  - --socket=wayland
+  - --socket=fallback-x11
+  - --device=dri
+  # CUPS socket, so the existing printer queues are visible inside the sandbox.
+  - --socket=cups
+  - --filesystem=xdg-pictures
+  - --filesystem=xdg-download
+  - --filesystem=xdg-documents
+
+modules:
+  - name: imagemagick
+    buildsystem: autotools
+    config-opts:
+      - --prefix=/app
+      - --disable-static
+      - --enable-shared
+      - --with-modules=no
+      - --without-perl
+      - --without-magick-plus-plus
+      - --disable-openmp
+      - --without-x
+      - --without-gslib
+      - --without-djvu
+      - --without-fftw
+      - --without-fontconfig
+      - --without-freetype
+      - --without-rsvg
+      - --without-tiff
+      - --without-webp
+      - --without-heic
+      - --without-jxl
+      - --without-lcms
+      - --with-jpeg
+      - --with-png
+      - --with-zlib
+    sources:
+      - type: archive
+        url: https://github.com/ImageMagick/ImageMagick/archive/refs/tags/7.1.2-34.tar.gz
+        sha256: f5163a573a1c1bff16358d0a592b2fb168ad0fd3b9dc5ff57dc7820eebc5cf79
+        strip-components: 1
+
+  - name: photoprint
+    buildsystem: cmake-ninja
+    config-opts:
+      - -DCMAKE_BUILD_TYPE=Release
+    sources:
+      - type: dir
+        path: ..
+        skip:
+          - build
+          - .git
+          - docs
+          - planning
+          - assets
+    post-install:
+      - install -Dm755 photoprint /app/bin/photoprint
+      - sed -i 's|^Icon=.*|Icon=hu.lavx.PhotoPrint|' resources/photoprint.desktop
+      - install -Dm644 resources/photoprint.desktop /app/share/applications/hu.lavx.PhotoPrint.desktop
+      - install -Dm644 resources/photoprint.svg /app/share/icons/hicolor/scalable/apps/hu.lavx.PhotoPrint.svg

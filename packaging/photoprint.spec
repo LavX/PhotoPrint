@@ -1,5 +1,5 @@
 Name:           photoprint
-Version:        1.0.0
+Version:        1.0.1
 Release:        1%{?dist}
 Summary:        Simple local photo printing
 License:        MIT
@@ -79,6 +79,10 @@ install -D -m 0644 resources/photoprint.svg %{buildroot}%{_datadir}/icons/hicolo
 %{_datadir}/icons/hicolor/scalable/apps/photoprint.svg
 
 %changelog
+* Fri Oct 30 2026 Laszlo Toth <lavx@lavx.hu> - 1.0.1-1
+- Correctness, security and durability fixes from the code review
+- Print resolution follows the CUPS queue up to 1200 ppi
+- Borderless placement centred and applied to exported PDFs
+
 * Fri Oct 30 2026 Laszlo Toth <lavx@lavx.hu> - 1.0.0-1
 - First public build
-- Print resolution follows the CUPS queue

@@ -99,6 +99,26 @@ under `~/.local/share`, which is what Wayland compositors use to show the app
 icon and name in the title bar and task bar. It is skipped when PhotoPrint is
 already installed system-wide.
 
+## Flatpak
+
+The manifest is `packaging/hu.lavx.PhotoPrint.yml` and targets the KDE runtime,
+which already provides Qt 6, LittleCMS2 and CUPS. ImageMagick is built as a
+module inside the sandbox.
+
+```bash
+flatpak install flathub org.kde.Platform//6.11 org.kde.Sdk//6.11
+flatpak-builder --force-clean --user --repo=build/flatpak-repo \
+  build/flatpak packaging/hu.lavx.PhotoPrint.yml
+flatpak build-bundle build/flatpak-repo build/PhotoPrint-<version>-x86_64.flatpak \
+  hu.lavx.PhotoPrint
+flatpak install --user build/PhotoPrint-<version>-x86_64.flatpak
+```
+
+The sandbox gets Wayland and X11, GPU access, the CUPS socket, and read access
+to Pictures, Downloads and Documents. Printing uses the host queues through the
+CUPS socket; the application bundles no driver. A photo outside those folders
+can be opened through the file chooser portal.
+
 ## Fedora package
 
 ```bash

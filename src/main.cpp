@@ -28,7 +28,11 @@ int main(int argc, char *argv[])
     QApplication::setApplicationName(QStringLiteral("PhotoPrint"));
     QApplication::setApplicationDisplayName(QStringLiteral("PhotoPrint"));
     QApplication::setOrganizationName(QStringLiteral("PhotoPrint"));
-    QApplication::setDesktopFileName(QStringLiteral("photoprint"));
+    // Inside a Flatpak the window must carry the Flatpak app id so the
+    // compositor can match it to the exported desktop entry and icon.
+    QApplication::setDesktopFileName(qEnvironmentVariableIsSet("FLATPAK_ID")
+                                         ? QStringLiteral("hu.lavx.PhotoPrint")
+                                         : QStringLiteral("photoprint"));
     QApplication::setApplicationVersion(pp::AboutDialog::versionString());
     QApplication::setWindowIcon(QIcon(QStringLiteral(":/icons/photoprint.png")));
 
