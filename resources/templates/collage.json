@@ -1,0 +1,828 @@
+{
+  "format": "photoprint.collage/1",
+  "lattice": 1000,
+  "unit": "normalised to the content box, 1/1000 lattice",
+  "origin": "top-left of the content box, x right, y down",
+  "templates": [
+    {
+      "id": "n01-full",
+      "name": "Egy kép az egész lapon",
+      "nameEn": "One photo, full page",
+      "photoCount": 1,
+      "family": "full",
+      "slots": [
+        {"rect": [0.000, 0.000, 1.000, 1.000], "aspect": "square"}
+      ]
+    },
+    {
+      "id": "n02-equal-side",
+      "name": "Két egyenlő kép egymás mellett",
+      "nameEn": "Two equal photos side by side",
+      "photoCount": 2,
+      "family": "equal",
+      "slots": [
+        {"rect": [0.000, 0.000, 0.500, 1.000], "aspect": "portrait"},
+        {"rect": [0.500, 0.000, 0.500, 1.000], "aspect": "portrait"}
+      ]
+    },
+    {
+      "id": "n02-equal-stack",
+      "name": "Két egyenlő kép egymás fölött",
+      "nameEn": "Two equal photos stacked",
+      "photoCount": 2,
+      "family": "equal",
+      "slots": [
+        {"rect": [0.000, 0.000, 1.000, 0.500], "aspect": "landscape"},
+        {"rect": [0.000, 0.500, 1.000, 0.500], "aspect": "landscape"}
+      ]
+    },
+    {
+      "id": "n02-hero-left",
+      "name": "Nagy kép balra, keskeny jobbra",
+      "nameEn": "Large photo left, narrow right",
+      "photoCount": 2,
+      "family": "hero",
+      "slots": [
+        {"rect": [0.000, 0.000, 0.600, 1.000], "aspect": "portrait"},
+        {"rect": [0.600, 0.000, 0.400, 1.000], "aspect": "portrait"}
+      ]
+    },
+    {
+      "id": "n02-hero-right",
+      "name": "Keskeny kép balra, nagy jobbra",
+      "nameEn": "Narrow left, large photo right",
+      "photoCount": 2,
+      "family": "hero",
+      "slots": [
+        {"rect": [0.400, 0.000, 0.600, 1.000], "aspect": "portrait"},
+        {"rect": [0.000, 0.000, 0.400, 1.000], "aspect": "portrait"}
+      ]
+    },
+    {
+      "id": "n02-hero-top",
+      "name": "Nagy kép felül, keskeny alul",
+      "nameEn": "Large photo on top, narrow below",
+      "photoCount": 2,
+      "family": "hero",
+      "slots": [
+        {"rect": [0.000, 0.000, 1.000, 0.600], "aspect": "landscape"},
+        {"rect": [0.000, 0.600, 1.000, 0.400], "aspect": "landscape"}
+      ]
+    },
+    {
+      "id": "n02-hero-bottom",
+      "name": "Keskeny kép felül, nagy alul",
+      "nameEn": "Narrow on top, large photo below",
+      "photoCount": 2,
+      "family": "hero",
+      "slots": [
+        {"rect": [0.000, 0.400, 1.000, 0.600], "aspect": "landscape"},
+        {"rect": [0.000, 0.000, 1.000, 0.400], "aspect": "landscape"}
+      ]
+    },
+    {
+      "id": "n03-equal-cols",
+      "name": "Három egyenlő kép egymás mellett",
+      "nameEn": "Three equal columns",
+      "photoCount": 3,
+      "family": "equal",
+      "slots": [
+        {"rect": [0.000, 0.000, 0.333, 1.000], "aspect": "portrait"},
+        {"rect": [0.333, 0.000, 0.333, 1.000], "aspect": "portrait"},
+        {"rect": [0.666, 0.000, 0.334, 1.000], "aspect": "portrait"}
+      ]
+    },
+    {
+      "id": "n03-equal-rows",
+      "name": "Három egyenlő kép egymás fölött",
+      "nameEn": "Three equal rows",
+      "photoCount": 3,
+      "family": "equal",
+      "slots": [
+        {"rect": [0.000, 0.000, 1.000, 0.333], "aspect": "landscape"},
+        {"rect": [0.000, 0.333, 1.000, 0.333], "aspect": "landscape"},
+        {"rect": [0.000, 0.666, 1.000, 0.334], "aspect": "landscape"}
+      ]
+    },
+    {
+      "id": "n03-hero-left-2",
+      "name": "Nagy kép balra, két kicsi jobbra",
+      "nameEn": "Large left, two small right",
+      "photoCount": 3,
+      "family": "hero",
+      "slots": [
+        {"rect": [0.000, 0.000, 0.500, 1.000], "aspect": "portrait"},
+        {"rect": [0.500, 0.000, 0.500, 0.500], "aspect": "square"},
+        {"rect": [0.500, 0.500, 0.500, 0.500], "aspect": "square"}
+      ]
+    },
+    {
+      "id": "n03-hero-top-2",
+      "name": "Nagy kép felül, két kicsi alul",
+      "nameEn": "Large on top, two small below",
+      "photoCount": 3,
+      "family": "hero",
+      "slots": [
+        {"rect": [0.000, 0.000, 1.000, 0.500], "aspect": "landscape"},
+        {"rect": [0.000, 0.500, 0.500, 0.500], "aspect": "square"},
+        {"rect": [0.500, 0.500, 0.500, 0.500], "aspect": "square"}
+      ]
+    },
+    {
+      "id": "n03-narrow-wide-narrow",
+      "name": "Két keskeny kép egy széles között",
+      "nameEn": "Narrow, wide, narrow",
+      "photoCount": 3,
+      "family": "strip",
+      "slots": [
+        {"rect": [0.000, 0.000, 0.250, 1.000], "aspect": "portrait"},
+        {"rect": [0.250, 0.000, 0.500, 1.000], "aspect": "portrait"},
+        {"rect": [0.750, 0.000, 0.250, 1.000], "aspect": "portrait"}
+      ]
+    },
+    {
+      "id": "n03-two-top-large-bottom",
+      "name": "Két kicsi felül, nagy kép alul",
+      "nameEn": "Two small on top, large below",
+      "photoCount": 3,
+      "family": "hero",
+      "slots": [
+        {"rect": [0.000, 0.400, 1.000, 0.600], "aspect": "landscape"},
+        {"rect": [0.000, 0.000, 0.500, 0.400], "aspect": "square"},
+        {"rect": [0.500, 0.000, 0.500, 0.400], "aspect": "square"}
+      ]
+    },
+    {
+      "id": "n04-grid-2x2",
+      "name": "Négy egyenlő kép rácsban",
+      "nameEn": "Four equal photos in a 2x2 grid",
+      "photoCount": 4,
+      "family": "equal",
+      "slots": [
+        {"rect": [0.000, 0.000, 0.500, 0.500], "aspect": "square"},
+        {"rect": [0.500, 0.000, 0.500, 0.500], "aspect": "square"},
+        {"rect": [0.000, 0.500, 0.500, 0.500], "aspect": "square"},
+        {"rect": [0.500, 0.500, 0.500, 0.500], "aspect": "square"}
+      ]
+    },
+    {
+      "id": "n04-strip-4",
+      "name": "Négy keskeny kép egymás mellett",
+      "nameEn": "Four narrow photos in a row",
+      "photoCount": 4,
+      "family": "strip",
+      "slots": [
+        {"rect": [0.000, 0.000, 0.250, 1.000], "aspect": "portrait"},
+        {"rect": [0.250, 0.000, 0.250, 1.000], "aspect": "portrait"},
+        {"rect": [0.500, 0.000, 0.250, 1.000], "aspect": "portrait"},
+        {"rect": [0.750, 0.000, 0.250, 1.000], "aspect": "portrait"}
+      ]
+    },
+    {
+      "id": "n04-hero-left-3",
+      "name": "Nagy kép balra, három kicsi jobbra",
+      "nameEn": "Large left, three small right",
+      "photoCount": 4,
+      "family": "hero",
+      "slots": [
+        {"rect": [0.000, 0.000, 0.500, 1.000], "aspect": "portrait"},
+        {"rect": [0.500, 0.000, 0.500, 0.334], "aspect": "square"},
+        {"rect": [0.500, 0.334, 0.500, 0.333], "aspect": "landscape"},
+        {"rect": [0.500, 0.667, 0.500, 0.333], "aspect": "landscape"}
+      ]
+    },
+    {
+      "id": "n04-hero-top-3",
+      "name": "Nagy kép felül, három kicsi alul",
+      "nameEn": "Large on top, three small below",
+      "photoCount": 4,
+      "family": "hero",
+      "slots": [
+        {"rect": [0.000, 0.000, 1.000, 0.500], "aspect": "landscape"},
+        {"rect": [0.000, 0.500, 0.333, 0.500], "aspect": "portrait"},
+        {"rect": [0.333, 0.500, 0.333, 0.500], "aspect": "portrait"},
+        {"rect": [0.666, 0.500, 0.334, 0.500], "aspect": "square"}
+      ]
+    },
+    {
+      "id": "n04-quad-stagger",
+      "name": "Négy kép lépcsőzetesen",
+      "nameEn": "Four photos, staggered columns",
+      "photoCount": 4,
+      "family": "mosaic",
+      "slots": [
+        {"rect": [0.000, 0.000, 0.500, 0.400], "aspect": "square"},
+        {"rect": [0.000, 0.400, 0.500, 0.600], "aspect": "square"},
+        {"rect": [0.500, 0.000, 0.500, 0.600], "aspect": "square"},
+        {"rect": [0.500, 0.600, 0.500, 0.400], "aspect": "square"}
+      ]
+    },
+    {
+      "id": "n04-rows-offset",
+      "name": "Négy kép eltolt osztással",
+      "nameEn": "Four photos, offset rows",
+      "photoCount": 4,
+      "family": "mosaic",
+      "slots": [
+        {"rect": [0.000, 0.000, 0.600, 0.500], "aspect": "square"},
+        {"rect": [0.600, 0.000, 0.400, 0.500], "aspect": "square"},
+        {"rect": [0.000, 0.500, 0.400, 0.500], "aspect": "square"},
+        {"rect": [0.400, 0.500, 0.600, 0.500], "aspect": "square"}
+      ]
+    },
+    {
+      "id": "n05-three-two",
+      "name": "Három kép felül, kettő alul",
+      "nameEn": "Three on top, two below",
+      "photoCount": 5,
+      "family": "mosaic",
+      "slots": [
+        {"rect": [0.000, 0.000, 0.333, 0.500], "aspect": "portrait"},
+        {"rect": [0.333, 0.000, 0.333, 0.500], "aspect": "portrait"},
+        {"rect": [0.666, 0.000, 0.334, 0.500], "aspect": "square"},
+        {"rect": [0.000, 0.500, 0.500, 0.500], "aspect": "square"},
+        {"rect": [0.500, 0.500, 0.500, 0.500], "aspect": "square"}
+      ]
+    },
+    {
+      "id": "n05-strip-4-1",
+      "name": "Négy keskeny felül, egy széles alul",
+      "nameEn": "Four narrow on top, one wide below",
+      "photoCount": 5,
+      "family": "strip",
+      "slots": [
+        {"rect": [0.000, 0.000, 0.250, 0.500], "aspect": "portrait"},
+        {"rect": [0.250, 0.000, 0.250, 0.500], "aspect": "portrait"},
+        {"rect": [0.500, 0.000, 0.250, 0.500], "aspect": "portrait"},
+        {"rect": [0.750, 0.000, 0.250, 0.500], "aspect": "portrait"},
+        {"rect": [0.000, 0.500, 1.000, 0.500], "aspect": "landscape"}
+      ]
+    },
+    {
+      "id": "n05-hero-left-4",
+      "name": "Nagy kép balra, négy kicsi jobbra",
+      "nameEn": "Large left, four small right",
+      "photoCount": 5,
+      "family": "hero",
+      "slots": [
+        {"rect": [0.000, 0.000, 0.500, 1.000], "aspect": "portrait"},
+        {"rect": [0.500, 0.000, 0.500, 0.250], "aspect": "landscape"},
+        {"rect": [0.500, 0.250, 0.500, 0.250], "aspect": "landscape"},
+        {"rect": [0.500, 0.500, 0.500, 0.250], "aspect": "landscape"},
+        {"rect": [0.500, 0.750, 0.500, 0.250], "aspect": "landscape"}
+      ]
+    },
+    {
+      "id": "n05-hero-top-4",
+      "name": "Nagy kép felül, négy keskeny alul",
+      "nameEn": "Large on top, four narrow below",
+      "photoCount": 5,
+      "family": "hero",
+      "slots": [
+        {"rect": [0.000, 0.000, 1.000, 0.500], "aspect": "landscape"},
+        {"rect": [0.000, 0.500, 0.250, 0.500], "aspect": "portrait"},
+        {"rect": [0.250, 0.500, 0.250, 0.500], "aspect": "portrait"},
+        {"rect": [0.500, 0.500, 0.250, 0.500], "aspect": "portrait"},
+        {"rect": [0.750, 0.500, 0.250, 0.500], "aspect": "portrait"}
+      ]
+    },
+    {
+      "id": "n05-frame-centre",
+      "name": "Középső kép négy kicsivel",
+      "nameEn": "Central photo with four around it",
+      "photoCount": 5,
+      "family": "frame",
+      "slots": [
+        {"rect": [0.250, 0.250, 0.500, 0.500], "aspect": "square"},
+        {"rect": [0.000, 0.000, 1.000, 0.250], "aspect": "landscape"},
+        {"rect": [0.000, 0.250, 0.250, 0.500], "aspect": "portrait"},
+        {"rect": [0.750, 0.250, 0.250, 0.500], "aspect": "portrait"},
+        {"rect": [0.000, 0.750, 1.000, 0.250], "aspect": "landscape"}
+      ]
+    },
+    {
+      "id": "n05-corner-hero-4",
+      "name": "Nagy kép bal felül, négy kicsi körülötte",
+      "nameEn": "Large top-left photo, four small around",
+      "photoCount": 5,
+      "family": "hero",
+      "slots": [
+        {"rect": [0.000, 0.000, 0.667, 0.667], "aspect": "square"},
+        {"rect": [0.667, 0.000, 0.333, 0.333], "aspect": "square"},
+        {"rect": [0.667, 0.333, 0.333, 0.334], "aspect": "square"},
+        {"rect": [0.000, 0.667, 0.500, 0.333], "aspect": "landscape"},
+        {"rect": [0.500, 0.667, 0.500, 0.333], "aspect": "landscape"}
+      ]
+    },
+    {
+      "id": "n06-grid-3x2",
+      "name": "Hat kép rácsban",
+      "nameEn": "Six photos, three by two",
+      "photoCount": 6,
+      "family": "equal",
+      "slots": [
+        {"rect": [0.000, 0.000, 0.333, 0.500], "aspect": "portrait"},
+        {"rect": [0.333, 0.000, 0.333, 0.500], "aspect": "portrait"},
+        {"rect": [0.666, 0.000, 0.334, 0.500], "aspect": "square"},
+        {"rect": [0.000, 0.500, 0.333, 0.500], "aspect": "portrait"},
+        {"rect": [0.333, 0.500, 0.333, 0.500], "aspect": "portrait"},
+        {"rect": [0.666, 0.500, 0.334, 0.500], "aspect": "square"}
+      ]
+    },
+    {
+      "id": "n06-grid-2x3",
+      "name": "Hat kép álló rácsban",
+      "nameEn": "Six photos, two by three",
+      "photoCount": 6,
+      "family": "equal",
+      "slots": [
+        {"rect": [0.000, 0.000, 0.500, 0.333], "aspect": "landscape"},
+        {"rect": [0.000, 0.333, 0.500, 0.333], "aspect": "landscape"},
+        {"rect": [0.000, 0.666, 0.500, 0.334], "aspect": "square"},
+        {"rect": [0.500, 0.000, 0.500, 0.333], "aspect": "landscape"},
+        {"rect": [0.500, 0.333, 0.500, 0.333], "aspect": "landscape"},
+        {"rect": [0.500, 0.666, 0.500, 0.334], "aspect": "square"}
+      ]
+    },
+    {
+      "id": "n06-strip-4-2",
+      "name": "Négy keskeny felül, két széles alul",
+      "nameEn": "Four narrow on top, two wide below",
+      "photoCount": 6,
+      "family": "strip",
+      "slots": [
+        {"rect": [0.000, 0.000, 0.250, 0.500], "aspect": "portrait"},
+        {"rect": [0.250, 0.000, 0.250, 0.500], "aspect": "portrait"},
+        {"rect": [0.500, 0.000, 0.250, 0.500], "aspect": "portrait"},
+        {"rect": [0.750, 0.000, 0.250, 0.500], "aspect": "portrait"},
+        {"rect": [0.000, 0.500, 0.500, 0.500], "aspect": "square"},
+        {"rect": [0.500, 0.500, 0.500, 0.500], "aspect": "square"}
+      ]
+    },
+    {
+      "id": "n06-hero-corner-5",
+      "name": "Nagy kép bal felül, öt kicsi",
+      "nameEn": "Large top-left photo, five small",
+      "photoCount": 6,
+      "family": "hero",
+      "slots": [
+        {"rect": [0.000, 0.000, 0.500, 0.667], "aspect": "square"},
+        {"rect": [0.500, 0.000, 0.500, 0.333], "aspect": "landscape"},
+        {"rect": [0.500, 0.333, 0.500, 0.334], "aspect": "square"},
+        {"rect": [0.000, 0.667, 0.333, 0.333], "aspect": "square"},
+        {"rect": [0.333, 0.667, 0.333, 0.333], "aspect": "square"},
+        {"rect": [0.666, 0.667, 0.334, 0.333], "aspect": "square"}
+      ]
+    },
+    {
+      "id": "n06-two-four",
+      "name": "Két kép felül, négy keskeny alul",
+      "nameEn": "Two on top, four narrow below",
+      "photoCount": 6,
+      "family": "mosaic",
+      "slots": [
+        {"rect": [0.000, 0.000, 0.500, 0.400], "aspect": "square"},
+        {"rect": [0.500, 0.000, 0.500, 0.400], "aspect": "square"},
+        {"rect": [0.000, 0.400, 0.250, 0.600], "aspect": "portrait"},
+        {"rect": [0.250, 0.400, 0.250, 0.600], "aspect": "portrait"},
+        {"rect": [0.500, 0.400, 0.250, 0.600], "aspect": "portrait"},
+        {"rect": [0.750, 0.400, 0.250, 0.600], "aspect": "portrait"}
+      ]
+    },
+    {
+      "id": "n06-mosaic-2-2-2",
+      "name": "Hat kép csúsztatott rácsban",
+      "nameEn": "Six photos, staggered rows",
+      "photoCount": 6,
+      "family": "mosaic",
+      "slots": [
+        {"rect": [0.000, 0.000, 0.600, 0.333], "aspect": "landscape"},
+        {"rect": [0.600, 0.000, 0.400, 0.333], "aspect": "square"},
+        {"rect": [0.000, 0.333, 0.400, 0.333], "aspect": "square"},
+        {"rect": [0.400, 0.333, 0.600, 0.333], "aspect": "landscape"},
+        {"rect": [0.000, 0.666, 0.500, 0.334], "aspect": "square"},
+        {"rect": [0.500, 0.666, 0.500, 0.334], "aspect": "square"}
+      ]
+    },
+    {
+      "id": "n07-three-two-two",
+      "name": "Hét kép három sorban",
+      "nameEn": "Seven photos in three rows",
+      "photoCount": 7,
+      "family": "bands",
+      "slots": [
+        {"rect": [0.000, 0.000, 0.333, 0.333], "aspect": "square"},
+        {"rect": [0.333, 0.000, 0.333, 0.333], "aspect": "square"},
+        {"rect": [0.666, 0.000, 0.334, 0.333], "aspect": "square"},
+        {"rect": [0.000, 0.333, 0.500, 0.333], "aspect": "landscape"},
+        {"rect": [0.500, 0.333, 0.500, 0.333], "aspect": "landscape"},
+        {"rect": [0.000, 0.666, 0.500, 0.334], "aspect": "square"},
+        {"rect": [0.500, 0.666, 0.500, 0.334], "aspect": "square"}
+      ]
+    },
+    {
+      "id": "n07-strip-4-3",
+      "name": "Négy felül, három alul",
+      "nameEn": "Four on top, three below",
+      "photoCount": 7,
+      "family": "strip",
+      "slots": [
+        {"rect": [0.000, 0.000, 0.250, 0.500], "aspect": "portrait"},
+        {"rect": [0.250, 0.000, 0.250, 0.500], "aspect": "portrait"},
+        {"rect": [0.500, 0.000, 0.250, 0.500], "aspect": "portrait"},
+        {"rect": [0.750, 0.000, 0.250, 0.500], "aspect": "portrait"},
+        {"rect": [0.000, 0.500, 0.333, 0.500], "aspect": "portrait"},
+        {"rect": [0.333, 0.500, 0.333, 0.500], "aspect": "portrait"},
+        {"rect": [0.666, 0.500, 0.334, 0.500], "aspect": "square"}
+      ]
+    },
+    {
+      "id": "n07-hero-left-6",
+      "name": "Nagy kép balra, hat kicsi jobbra",
+      "nameEn": "Large left, six small right",
+      "photoCount": 7,
+      "family": "hero",
+      "slots": [
+        {"rect": [0.000, 0.000, 0.667, 0.500], "aspect": "square"},
+        {"rect": [0.667, 0.000, 0.333, 0.250], "aspect": "square"},
+        {"rect": [0.667, 0.250, 0.333, 0.250], "aspect": "square"},
+        {"rect": [0.000, 0.500, 0.250, 0.500], "aspect": "portrait"},
+        {"rect": [0.250, 0.500, 0.250, 0.500], "aspect": "portrait"},
+        {"rect": [0.500, 0.500, 0.250, 0.500], "aspect": "portrait"},
+        {"rect": [0.750, 0.500, 0.250, 0.500], "aspect": "portrait"}
+      ]
+    },
+    {
+      "id": "n07-hero-top-6",
+      "name": "Nagy kép felül, hat kicsi alul",
+      "nameEn": "Large on top, six small below",
+      "photoCount": 7,
+      "family": "hero",
+      "slots": [
+        {"rect": [0.000, 0.000, 1.000, 0.500], "aspect": "landscape"},
+        {"rect": [0.000, 0.500, 0.333, 0.250], "aspect": "square"},
+        {"rect": [0.333, 0.500, 0.333, 0.250], "aspect": "square"},
+        {"rect": [0.666, 0.500, 0.334, 0.250], "aspect": "square"},
+        {"rect": [0.000, 0.750, 0.333, 0.250], "aspect": "square"},
+        {"rect": [0.333, 0.750, 0.333, 0.250], "aspect": "square"},
+        {"rect": [0.666, 0.750, 0.334, 0.250], "aspect": "square"}
+      ]
+    },
+    {
+      "id": "n07-quad-2-2-2-1",
+      "name": "Hét kép négy negyedben",
+      "nameEn": "Seven photos across four quadrants",
+      "photoCount": 7,
+      "family": "mosaic",
+      "slots": [
+        {"rect": [0.000, 0.000, 0.500, 0.250], "aspect": "landscape"},
+        {"rect": [0.000, 0.250, 0.500, 0.250], "aspect": "landscape"},
+        {"rect": [0.500, 0.000, 0.500, 0.250], "aspect": "landscape"},
+        {"rect": [0.500, 0.250, 0.500, 0.250], "aspect": "landscape"},
+        {"rect": [0.000, 0.500, 0.500, 0.250], "aspect": "landscape"},
+        {"rect": [0.000, 0.750, 0.500, 0.250], "aspect": "landscape"},
+        {"rect": [0.500, 0.500, 0.500, 0.500], "aspect": "square"}
+      ]
+    },
+    {
+      "id": "n07-cols-2-2-3",
+      "name": "Hét kép három oszlopban",
+      "nameEn": "Seven photos in three columns",
+      "photoCount": 7,
+      "family": "columns",
+      "slots": [
+        {"rect": [0.000, 0.000, 0.333, 0.500], "aspect": "portrait"},
+        {"rect": [0.000, 0.500, 0.333, 0.500], "aspect": "portrait"},
+        {"rect": [0.333, 0.000, 0.333, 0.500], "aspect": "portrait"},
+        {"rect": [0.333, 0.500, 0.333, 0.500], "aspect": "portrait"},
+        {"rect": [0.666, 0.000, 0.334, 0.333], "aspect": "square"},
+        {"rect": [0.666, 0.333, 0.334, 0.333], "aspect": "square"},
+        {"rect": [0.666, 0.666, 0.334, 0.334], "aspect": "square"}
+      ]
+    },
+    {
+      "id": "n08-grid-4x2",
+      "name": "Nyolc kép rácsban",
+      "nameEn": "Eight photos, four by two",
+      "photoCount": 8,
+      "family": "equal",
+      "slots": [
+        {"rect": [0.000, 0.000, 0.250, 0.500], "aspect": "portrait"},
+        {"rect": [0.250, 0.000, 0.250, 0.500], "aspect": "portrait"},
+        {"rect": [0.500, 0.000, 0.250, 0.500], "aspect": "portrait"},
+        {"rect": [0.750, 0.000, 0.250, 0.500], "aspect": "portrait"},
+        {"rect": [0.000, 0.500, 0.250, 0.500], "aspect": "portrait"},
+        {"rect": [0.250, 0.500, 0.250, 0.500], "aspect": "portrait"},
+        {"rect": [0.500, 0.500, 0.250, 0.500], "aspect": "portrait"},
+        {"rect": [0.750, 0.500, 0.250, 0.500], "aspect": "portrait"}
+      ]
+    },
+    {
+      "id": "n08-grid-2x4",
+      "name": "Nyolc kép álló rácsban",
+      "nameEn": "Eight photos, two by four",
+      "photoCount": 8,
+      "family": "equal",
+      "slots": [
+        {"rect": [0.000, 0.000, 0.500, 0.250], "aspect": "landscape"},
+        {"rect": [0.000, 0.250, 0.500, 0.250], "aspect": "landscape"},
+        {"rect": [0.000, 0.500, 0.500, 0.250], "aspect": "landscape"},
+        {"rect": [0.000, 0.750, 0.500, 0.250], "aspect": "landscape"},
+        {"rect": [0.500, 0.000, 0.500, 0.250], "aspect": "landscape"},
+        {"rect": [0.500, 0.250, 0.500, 0.250], "aspect": "landscape"},
+        {"rect": [0.500, 0.500, 0.500, 0.250], "aspect": "landscape"},
+        {"rect": [0.500, 0.750, 0.500, 0.250], "aspect": "landscape"}
+      ]
+    },
+    {
+      "id": "n08-strip-4-4",
+      "name": "Két sor, négy-négy képpel",
+      "nameEn": "Two rows of four",
+      "photoCount": 8,
+      "family": "strip",
+      "slots": [
+        {"rect": [0.000, 0.000, 0.250, 0.375], "aspect": "portrait"},
+        {"rect": [0.250, 0.000, 0.250, 0.375], "aspect": "portrait"},
+        {"rect": [0.500, 0.000, 0.250, 0.375], "aspect": "portrait"},
+        {"rect": [0.750, 0.000, 0.250, 0.375], "aspect": "portrait"},
+        {"rect": [0.000, 0.375, 0.250, 0.625], "aspect": "portrait"},
+        {"rect": [0.250, 0.375, 0.250, 0.625], "aspect": "portrait"},
+        {"rect": [0.500, 0.375, 0.250, 0.625], "aspect": "portrait"},
+        {"rect": [0.750, 0.375, 0.250, 0.625], "aspect": "portrait"}
+      ]
+    },
+    {
+      "id": "n08-hero-left-7",
+      "name": "Nagy kép balra, hét kicsi jobbra",
+      "nameEn": "Large left, seven small right",
+      "photoCount": 8,
+      "family": "hero",
+      "slots": [
+        {"rect": [0.000, 0.000, 0.500, 0.750], "aspect": "portrait"},
+        {"rect": [0.500, 0.000, 0.500, 0.250], "aspect": "landscape"},
+        {"rect": [0.500, 0.250, 0.500, 0.250], "aspect": "landscape"},
+        {"rect": [0.500, 0.500, 0.500, 0.250], "aspect": "landscape"},
+        {"rect": [0.000, 0.750, 0.250, 0.250], "aspect": "square"},
+        {"rect": [0.250, 0.750, 0.250, 0.250], "aspect": "square"},
+        {"rect": [0.500, 0.750, 0.250, 0.250], "aspect": "square"},
+        {"rect": [0.750, 0.750, 0.250, 0.250], "aspect": "square"}
+      ]
+    },
+    {
+      "id": "n08-hero-top-7",
+      "name": "Nagy kép felül, hét kicsi alul",
+      "nameEn": "Large on top, seven small below",
+      "photoCount": 8,
+      "family": "hero",
+      "slots": [
+        {"rect": [0.000, 0.000, 1.000, 0.500], "aspect": "landscape"},
+        {"rect": [0.000, 0.500, 0.250, 0.250], "aspect": "square"},
+        {"rect": [0.250, 0.500, 0.250, 0.250], "aspect": "square"},
+        {"rect": [0.500, 0.500, 0.250, 0.250], "aspect": "square"},
+        {"rect": [0.750, 0.500, 0.250, 0.250], "aspect": "square"},
+        {"rect": [0.000, 0.750, 0.333, 0.250], "aspect": "square"},
+        {"rect": [0.333, 0.750, 0.333, 0.250], "aspect": "square"},
+        {"rect": [0.666, 0.750, 0.334, 0.250], "aspect": "square"}
+      ]
+    },
+    {
+      "id": "n08-quad-mixed",
+      "name": "Nyolc kép négy negyedben",
+      "nameEn": "Eight photos across four quadrants",
+      "photoCount": 8,
+      "family": "mosaic",
+      "slots": [
+        {"rect": [0.000, 0.000, 0.500, 0.250], "aspect": "landscape"},
+        {"rect": [0.000, 0.250, 0.500, 0.250], "aspect": "landscape"},
+        {"rect": [0.500, 0.000, 0.250, 0.500], "aspect": "portrait"},
+        {"rect": [0.750, 0.000, 0.250, 0.500], "aspect": "portrait"},
+        {"rect": [0.000, 0.500, 0.250, 0.500], "aspect": "portrait"},
+        {"rect": [0.250, 0.500, 0.250, 0.500], "aspect": "portrait"},
+        {"rect": [0.500, 0.500, 0.500, 0.250], "aspect": "landscape"},
+        {"rect": [0.500, 0.750, 0.500, 0.250], "aspect": "landscape"}
+      ]
+    },
+    {
+      "id": "n09-grid-3x3",
+      "name": "Kilenc kép rácsban",
+      "nameEn": "Nine photos in a 3x3 grid",
+      "photoCount": 9,
+      "family": "equal",
+      "slots": [
+        {"rect": [0.000, 0.000, 0.333, 0.333], "aspect": "square"},
+        {"rect": [0.333, 0.000, 0.333, 0.333], "aspect": "square"},
+        {"rect": [0.666, 0.000, 0.334, 0.333], "aspect": "square"},
+        {"rect": [0.000, 0.333, 0.333, 0.333], "aspect": "square"},
+        {"rect": [0.333, 0.333, 0.333, 0.333], "aspect": "square"},
+        {"rect": [0.666, 0.333, 0.334, 0.333], "aspect": "square"},
+        {"rect": [0.000, 0.666, 0.333, 0.334], "aspect": "square"},
+        {"rect": [0.333, 0.666, 0.333, 0.334], "aspect": "square"},
+        {"rect": [0.666, 0.666, 0.334, 0.334], "aspect": "square"}
+      ]
+    },
+    {
+      "id": "n09-strip-4-4-1",
+      "name": "Négy-négy felül, egy alul",
+      "nameEn": "Four, four on top, one below",
+      "photoCount": 9,
+      "family": "strip",
+      "slots": [
+        {"rect": [0.000, 0.000, 0.250, 0.333], "aspect": "square"},
+        {"rect": [0.250, 0.000, 0.250, 0.333], "aspect": "square"},
+        {"rect": [0.500, 0.000, 0.250, 0.333], "aspect": "square"},
+        {"rect": [0.750, 0.000, 0.250, 0.333], "aspect": "square"},
+        {"rect": [0.000, 0.333, 0.250, 0.333], "aspect": "square"},
+        {"rect": [0.250, 0.333, 0.250, 0.333], "aspect": "square"},
+        {"rect": [0.500, 0.333, 0.250, 0.333], "aspect": "square"},
+        {"rect": [0.750, 0.333, 0.250, 0.333], "aspect": "square"},
+        {"rect": [0.000, 0.666, 1.000, 0.334], "aspect": "landscape"}
+      ]
+    },
+    {
+      "id": "n09-hero-left-8",
+      "name": "Nagy kép balra, nyolc kicsi",
+      "nameEn": "Large left, eight small",
+      "photoCount": 9,
+      "family": "hero",
+      "slots": [
+        {"rect": [0.000, 0.000, 0.667, 0.500], "aspect": "square"},
+        {"rect": [0.667, 0.000, 0.333, 0.250], "aspect": "square"},
+        {"rect": [0.667, 0.250, 0.333, 0.250], "aspect": "square"},
+        {"rect": [0.000, 0.500, 0.250, 0.250], "aspect": "square"},
+        {"rect": [0.250, 0.500, 0.250, 0.250], "aspect": "square"},
+        {"rect": [0.500, 0.500, 0.250, 0.250], "aspect": "square"},
+        {"rect": [0.750, 0.500, 0.250, 0.250], "aspect": "square"},
+        {"rect": [0.000, 0.750, 0.500, 0.250], "aspect": "landscape"},
+        {"rect": [0.500, 0.750, 0.500, 0.250], "aspect": "landscape"}
+      ]
+    },
+    {
+      "id": "n09-hero-top-8",
+      "name": "Nagy kép felül, nyolc kicsi alul",
+      "nameEn": "Large on top, eight small below",
+      "photoCount": 9,
+      "family": "hero",
+      "slots": [
+        {"rect": [0.000, 0.000, 1.000, 0.500], "aspect": "landscape"},
+        {"rect": [0.000, 0.500, 0.250, 0.250], "aspect": "square"},
+        {"rect": [0.250, 0.500, 0.250, 0.250], "aspect": "square"},
+        {"rect": [0.500, 0.500, 0.250, 0.250], "aspect": "square"},
+        {"rect": [0.750, 0.500, 0.250, 0.250], "aspect": "square"},
+        {"rect": [0.000, 0.750, 0.250, 0.250], "aspect": "square"},
+        {"rect": [0.250, 0.750, 0.250, 0.250], "aspect": "square"},
+        {"rect": [0.500, 0.750, 0.250, 0.250], "aspect": "square"},
+        {"rect": [0.750, 0.750, 0.250, 0.250], "aspect": "square"}
+      ]
+    },
+    {
+      "id": "n09-bands-2-3-4",
+      "name": "Kilenc kép vegyes sorokban",
+      "nameEn": "Nine photos in mixed rows",
+      "photoCount": 9,
+      "family": "bands",
+      "slots": [
+        {"rect": [0.000, 0.000, 0.500, 0.333], "aspect": "landscape"},
+        {"rect": [0.500, 0.000, 0.500, 0.333], "aspect": "landscape"},
+        {"rect": [0.000, 0.333, 0.333, 0.333], "aspect": "square"},
+        {"rect": [0.333, 0.333, 0.333, 0.333], "aspect": "square"},
+        {"rect": [0.666, 0.333, 0.334, 0.333], "aspect": "square"},
+        {"rect": [0.000, 0.666, 0.250, 0.334], "aspect": "square"},
+        {"rect": [0.250, 0.666, 0.250, 0.334], "aspect": "square"},
+        {"rect": [0.500, 0.666, 0.250, 0.334], "aspect": "square"},
+        {"rect": [0.750, 0.666, 0.250, 0.334], "aspect": "square"}
+      ]
+    },
+    {
+      "id": "n09-cols-4-3-2",
+      "name": "Kilenc kép három oszlopban",
+      "nameEn": "Nine photos in three columns",
+      "photoCount": 9,
+      "family": "columns",
+      "slots": [
+        {"rect": [0.000, 0.000, 0.333, 0.250], "aspect": "square"},
+        {"rect": [0.000, 0.250, 0.333, 0.250], "aspect": "square"},
+        {"rect": [0.000, 0.500, 0.333, 0.250], "aspect": "square"},
+        {"rect": [0.000, 0.750, 0.333, 0.250], "aspect": "square"},
+        {"rect": [0.333, 0.000, 0.333, 0.333], "aspect": "square"},
+        {"rect": [0.333, 0.333, 0.333, 0.333], "aspect": "square"},
+        {"rect": [0.333, 0.666, 0.333, 0.334], "aspect": "square"},
+        {"rect": [0.666, 0.000, 0.334, 0.500], "aspect": "square"},
+        {"rect": [0.666, 0.500, 0.334, 0.500], "aspect": "square"}
+      ]
+    },
+    {
+      "id": "n10-grid-4-3-3",
+      "name": "Tíz kép három sorban",
+      "nameEn": "Ten photos in three rows",
+      "photoCount": 10,
+      "family": "equal",
+      "slots": [
+        {"rect": [0.000, 0.000, 0.250, 0.333], "aspect": "square"},
+        {"rect": [0.250, 0.000, 0.250, 0.333], "aspect": "square"},
+        {"rect": [0.500, 0.000, 0.250, 0.333], "aspect": "square"},
+        {"rect": [0.750, 0.000, 0.250, 0.333], "aspect": "square"},
+        {"rect": [0.000, 0.333, 0.333, 0.333], "aspect": "square"},
+        {"rect": [0.333, 0.333, 0.333, 0.333], "aspect": "square"},
+        {"rect": [0.666, 0.333, 0.334, 0.333], "aspect": "square"},
+        {"rect": [0.000, 0.666, 0.333, 0.334], "aspect": "square"},
+        {"rect": [0.333, 0.666, 0.333, 0.334], "aspect": "square"},
+        {"rect": [0.666, 0.666, 0.334, 0.334], "aspect": "square"}
+      ]
+    },
+    {
+      "id": "n10-strip-4-4-2",
+      "name": "Négy-négy felül, kettő alul",
+      "nameEn": "Four, four on top, two below",
+      "photoCount": 10,
+      "family": "strip",
+      "slots": [
+        {"rect": [0.000, 0.000, 0.250, 0.400], "aspect": "portrait"},
+        {"rect": [0.250, 0.000, 0.250, 0.400], "aspect": "portrait"},
+        {"rect": [0.500, 0.000, 0.250, 0.400], "aspect": "portrait"},
+        {"rect": [0.750, 0.000, 0.250, 0.400], "aspect": "portrait"},
+        {"rect": [0.000, 0.400, 0.250, 0.300], "aspect": "square"},
+        {"rect": [0.250, 0.400, 0.250, 0.300], "aspect": "square"},
+        {"rect": [0.500, 0.400, 0.250, 0.300], "aspect": "square"},
+        {"rect": [0.750, 0.400, 0.250, 0.300], "aspect": "square"},
+        {"rect": [0.000, 0.700, 0.500, 0.300], "aspect": "landscape"},
+        {"rect": [0.500, 0.700, 0.500, 0.300], "aspect": "landscape"}
+      ]
+    },
+    {
+      "id": "n10-hero-left-9",
+      "name": "Nagy kép balra, kilenc kicsi",
+      "nameEn": "Large left, nine small",
+      "photoCount": 10,
+      "family": "hero",
+      "slots": [
+        {"rect": [0.000, 0.000, 0.667, 0.500], "aspect": "square"},
+        {"rect": [0.667, 0.000, 0.333, 0.250], "aspect": "square"},
+        {"rect": [0.667, 0.250, 0.333, 0.250], "aspect": "square"},
+        {"rect": [0.000, 0.500, 0.250, 0.250], "aspect": "square"},
+        {"rect": [0.250, 0.500, 0.250, 0.250], "aspect": "square"},
+        {"rect": [0.500, 0.500, 0.250, 0.250], "aspect": "square"},
+        {"rect": [0.750, 0.500, 0.250, 0.250], "aspect": "square"},
+        {"rect": [0.000, 0.750, 0.333, 0.250], "aspect": "square"},
+        {"rect": [0.333, 0.750, 0.333, 0.250], "aspect": "square"},
+        {"rect": [0.666, 0.750, 0.334, 0.250], "aspect": "square"}
+      ]
+    },
+    {
+      "id": "n10-bands-3-3-4",
+      "name": "Három, három és négy kép",
+      "nameEn": "Three, three and four photos",
+      "photoCount": 10,
+      "family": "bands",
+      "slots": [
+        {"rect": [0.000, 0.000, 0.333, 0.333], "aspect": "square"},
+        {"rect": [0.333, 0.000, 0.333, 0.333], "aspect": "square"},
+        {"rect": [0.666, 0.000, 0.334, 0.333], "aspect": "square"},
+        {"rect": [0.000, 0.333, 0.333, 0.333], "aspect": "square"},
+        {"rect": [0.333, 0.333, 0.333, 0.333], "aspect": "square"},
+        {"rect": [0.666, 0.333, 0.334, 0.333], "aspect": "square"},
+        {"rect": [0.000, 0.666, 0.250, 0.334], "aspect": "square"},
+        {"rect": [0.250, 0.666, 0.250, 0.334], "aspect": "square"},
+        {"rect": [0.500, 0.666, 0.250, 0.334], "aspect": "square"},
+        {"rect": [0.750, 0.666, 0.250, 0.334], "aspect": "square"}
+      ]
+    },
+    {
+      "id": "n10-cols-3-3-2-2",
+      "name": "Tíz kép négy oszlopban",
+      "nameEn": "Ten photos in four columns",
+      "photoCount": 10,
+      "family": "columns",
+      "slots": [
+        {"rect": [0.000, 0.000, 0.250, 0.333], "aspect": "square"},
+        {"rect": [0.000, 0.333, 0.250, 0.333], "aspect": "square"},
+        {"rect": [0.000, 0.666, 0.250, 0.334], "aspect": "square"},
+        {"rect": [0.250, 0.000, 0.250, 0.333], "aspect": "square"},
+        {"rect": [0.250, 0.333, 0.250, 0.333], "aspect": "square"},
+        {"rect": [0.250, 0.666, 0.250, 0.334], "aspect": "square"},
+        {"rect": [0.500, 0.000, 0.250, 0.500], "aspect": "portrait"},
+        {"rect": [0.500, 0.500, 0.250, 0.500], "aspect": "portrait"},
+        {"rect": [0.750, 0.000, 0.250, 0.500], "aspect": "portrait"},
+        {"rect": [0.750, 0.500, 0.250, 0.500], "aspect": "portrait"}
+      ]
+    },
+    {
+      "id": "n10-bands-2-4-4",
+      "name": "Két, négy és négy kép",
+      "nameEn": "Two, four and four photos",
+      "photoCount": 10,
+      "family": "bands",
+      "slots": [
+        {"rect": [0.000, 0.000, 0.500, 0.250], "aspect": "landscape"},
+        {"rect": [0.500, 0.000, 0.500, 0.250], "aspect": "landscape"},
+        {"rect": [0.000, 0.250, 0.250, 0.375], "aspect": "portrait"},
+        {"rect": [0.250, 0.250, 0.250, 0.375], "aspect": "portrait"},
+        {"rect": [0.500, 0.250, 0.250, 0.375], "aspect": "portrait"},
+        {"rect": [0.750, 0.250, 0.250, 0.375], "aspect": "portrait"},
+        {"rect": [0.000, 0.625, 0.250, 0.375], "aspect": "portrait"},
+        {"rect": [0.250, 0.625, 0.250, 0.375], "aspect": "portrait"},
+        {"rect": [0.500, 0.625, 0.250, 0.375], "aspect": "portrait"},
+        {"rect": [0.750, 0.625, 0.250, 0.375], "aspect": "portrait"}
+      ]
+    }
+  ]
+}

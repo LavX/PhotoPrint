@@ -5,6 +5,9 @@
   <qresource prefix="/effects">
     <file alias="catalogue.json">effects/catalogue.json</file>
   </qresource>
+  <qresource prefix="/templates">
+    <file alias="collage.json">templates/collage.json</file>
+  </qresource>
   <qresource prefix="/textures">
     <file alias="paper-fine.png">textures/paper-fine.png</file>
     <file alias="paper-news.png">textures/paper-news.png</file>

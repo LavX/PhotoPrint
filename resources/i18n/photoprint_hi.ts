@@ -928,5 +928,17 @@
             <numerusform>%n प्रभाव</numerusform>
         </translation>
     </message>
+    <message>
+        <source>Ezen a papíron (%1) ez az elrendezés túl kicsi lenne. Válassz nagyobb papírt.</source>
+        <translation>इस कागज़ (%1) पर यह लेआउट बहुत छोटा होगा। बड़ा कागज़ चुनें।</translation>
+    </message>
+    <message>
+        <source>Ehhez a sablonhoz %1 fotó kell, a lapon most %2 van.</source>
+        <translation>इस टेम्पलेट के लिए %1 फ़ोटो चाहिए, पेज पर अभी %2 हैं।</translation>
+    </message>
+    <message>
+        <source>Egy képnek nincs forrásfájlja, ezért a sablon nem alkalmazható.</source>
+        <translation>एक फ़ोटो का स्रोत फ़ाइल नहीं है, इसलिए टेम्पलेट लागू नहीं किया जा सकता।</translation>
+    </message>
 </context>
 </TS>

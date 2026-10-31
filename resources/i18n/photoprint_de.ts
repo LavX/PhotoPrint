@@ -928,5 +928,17 @@
             <numerusform>%n Effekte</numerusform>
         </translation>
     </message>
+    <message>
+        <source>Ezen a papíron (%1) ez az elrendezés túl kicsi lenne. Válassz nagyobb papírt.</source>
+        <translation>Dieses Layout wäre auf diesem Papier (%1) zu klein. Wähle größeres Papier.</translation>
+    </message>
+    <message>
+        <source>Ehhez a sablonhoz %1 fotó kell, a lapon most %2 van.</source>
+        <translation>Diese Vorlage braucht %1 Fotos, auf der Seite sind es jetzt %2.</translation>
+    </message>
+    <message>
+        <source>Egy képnek nincs forrásfájlja, ezért a sablon nem alkalmazható.</source>
+        <translation>Ein Foto hat keine Quelldatei, daher kann die Vorlage nicht angewendet werden.</translation>
+    </message>
 </context>
 </TS>
