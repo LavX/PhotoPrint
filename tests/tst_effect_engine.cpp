@@ -296,6 +296,129 @@ QJsonObject testRecipe(const QString &key, const QString &category, int version,
                                 {QStringLiteral("ev"), ev}}}}};
 }
 
+/// One rendered catalogue at the browser raster, shared by every distinctness
+/// gate: each gate used to render all 120 looks again, and the messages they
+/// built for passing pairs were the noisiest thing in the suite.
+struct CatalogueFrames {
+    QList<LabFrame> looks;
+    QList<QString> keys;
+    QList<QString> categories;
+    QString error;
+};
+
+const CatalogueFrames &catalogueFrames()
+{
+    static const CatalogueFrames frames = [] {
+        CatalogueFrames out;
+        const QImage source = scaledSample(QSize(240, 180));
+        for (const EffectRecipe &recipe : EffectCatalogue::instance().recipes()) {
+            const auto result =
+                EffectEngine::instance().render(source, recipe, 100, source.size(), false);
+            if (!result.ok()) {
+                out.error = recipe.key + QStringLiteral(": ") + result.error().message;
+                return out;
+            }
+            out.looks.append(labFrame(result.value()));
+            out.keys.append(recipe.key);
+            out.categories.append(recipe.category);
+        }
+        return out;
+    }();
+    return frames;
+}
+
+/// The outcome of one distinctness gate. Nothing here is formatted unless a
+/// pair fails or a caller asks for the label: a passing run must not build a
+/// single string, let alone the 13,000 the old message chain formatted.
+struct GateReport {
+    QStringList violations;
+    double tightest = 1e9;
+    int tightestLeft = -1;
+    int tightestRight = -1;
+
+    QString pairLabel() const
+    {
+        if (tightestLeft < 0 || tightestRight < 0)
+            return QStringLiteral("no pairs");
+        const CatalogueFrames &frames = catalogueFrames();
+        return QStringLiteral("%1 vs %2").arg(frames.keys.at(tightestLeft),
+                                              frames.keys.at(tightestRight));
+    }
+};
+
+GateReport withinCategoryReport()
+{
+    const CatalogueFrames &frames = catalogueFrames();
+    GateReport report;
+    if (!frames.error.isEmpty()) {
+        report.violations << frames.error;
+        return report;
+    }
+    for (int i = 0; i < frames.looks.size(); ++i) {
+        for (int j = i + 1; j < frames.looks.size(); ++j) {
+            if (frames.categories.at(i) != frames.categories.at(j))
+                continue;
+            const double distance = meanLabDistance(frames.looks.at(i), frames.looks.at(j), 1);
+            if (distance < report.tightest) {
+                report.tightest = distance;
+                report.tightestLeft = i;
+                report.tightestRight = j;
+            }
+            if (distance < kDistinctnessFloor) {
+                report.violations << QStringLiteral("%1 vs %2: deltaE %3 below the %4 floor")
+                                         .arg(frames.keys.at(i), frames.keys.at(j))
+                                         .arg(distance, 0, 'f', 2)
+                                         .arg(kDistinctnessFloor, 0, 'f', 1);
+            }
+        }
+    }
+    return report;
+}
+
+GateReport crossCategoryReport()
+{
+    constexpr int kStride = 2;
+    const CatalogueFrames &frames = catalogueFrames();
+    GateReport report;
+    if (!frames.error.isEmpty()) {
+        report.violations << frames.error;
+        return report;
+    }
+    for (int i = 0; i < frames.looks.size(); ++i) {
+        for (int j = i + 1; j < frames.looks.size(); ++j) {
+            if (frames.categories.at(i) == frames.categories.at(j))
+                continue;
+            const double distance =
+                meanLabDistance(frames.looks.at(i), frames.looks.at(j), kStride);
+            const bool family = kCorrectionFamily.contains(frames.keys.at(i))
+                && kCorrectionFamily.contains(frames.keys.at(j));
+            const double floor = family ? kCloneFloor : kCrossCategoryFloor;
+            if (distance < report.tightest) {
+                report.tightest = distance;
+                report.tightestLeft = i;
+                report.tightestRight = j;
+            }
+            if (distance < floor) {
+                report.violations << QStringLiteral("%1 vs %2: deltaE %3 below the %4 floor%5")
+                                         .arg(frames.keys.at(i), frames.keys.at(j))
+                                         .arg(distance, 0, 'f', 2)
+                                         .arg(floor, 0, 'f', 1)
+                                         .arg(family ? QStringLiteral(" (correction family)")
+                                                     : QString());
+            }
+        }
+    }
+    return report;
+}
+
+int warningCount = 0;
+
+void countMessage(QtMsgType type, const QMessageLogContext &, const QString &)
+{
+    if (type == QtWarningMsg || type == QtCriticalMsg)
+        warningCount += 1;
+}
+
 } // namespace
 
 class TestEffectEngine : public QObject
@@ -331,6 +454,7 @@ private slots:
     void rendersOffTheGuiThread();
     void catalogueDistinctnessGate();
     void catalogueCrossCategoryGate();
+    void distinctnessGatesAreQuiet();
     void catalogueRenderHashes();
     void renderCostStaysWithinBudget();
     void wandStagesSurviveThePrintPath();
@@ -1154,56 +1278,18 @@ void TestEffectEngine::rendersOffTheGuiThread()
 
 void TestEffectEngine::catalogueDistinctnessGate()
 {
-    // Every shipped look is rendered at the browser raster on the committed
-    // sample and compared inside its own category. The metric is the mean
-    // CIELAB distance across the frame (see meanLabDistance); the floor is 2.0.
-    // The tightest shipped pair is basic.neutral vs basic.warmbase at 2.19, so
-    // the gate has margin, but a new look must still clear it.
-    const QImage source = scaledSample(QSize(240, 180));
-    QHash<QString, QList<LabFrame>> byCategory;
-    QHash<QString, QList<QString>> keysByCategory;
-    for (const EffectRecipe &recipe : EffectCatalogue::instance().recipes()) {
-        const auto result =
-            EffectEngine::instance().render(source, recipe, 100, source.size(), false);
-        if (!result.ok()) {
-            QFAIL(qPrintable(recipe.key + QStringLiteral(": ") + result.error().message));
-        }
-        byCategory[recipe.category].append(labFrame(result.value()));
-        keysByCategory[recipe.category].append(recipe.key);
+    // Every shipped look is compared inside its own category at the browser
+    // raster. The metric is the mean CIELAB distance across the frame (see
+    // meanLabDistance); the floor is 2.0. The tightest shipped pair is
+    // basic.neutral vs basic.warmbase at 2.19, so the gate has margin, but a
+    // new look must still clear it. The report formats a sentence only for a
+    // pair that fails, so a passing run builds no strings at all.
+    const GateReport report = withinCategoryReport();
+    if (!report.violations.isEmpty()) {
+        QFAIL(qPrintable(report.violations.first() + QStringLiteral(" (tightest pair %1 at %2)")
+                             .arg(report.pairLabel())
+                             .arg(report.tightest, 0, 'f', 2)));
     }
-    double tightest = 1e9;
-    QString tightestPair;
-    for (const QString &category : EffectCatalogue::instance().categoryKeys()) {
-        const QList<LabFrame> &looks = byCategory.value(category);
-        const QList<QString> &keys = keysByCategory.value(category);
-        QCOMPARE(looks.size(), 10);
-        for (int i = 0; i < looks.size(); ++i) {
-            for (int j = i + 1; j < looks.size(); ++j) {
-                const double distance = meanLabDistance(looks.at(i), looks.at(j), 1);
-                if (distance < tightest) {
-                    tightest = distance;
-                    tightestPair = QStringLiteral("%1 vs %2").arg(keys.at(i), keys.at(j));
-                }
-                QVERIFY2(distance >= kDistinctnessFloor,
-                         qPrintable(QStringLiteral("%1 vs %2: deltaE %3 < %4 in '%5' "
-                                                   "(tightest so far: %6 at %7)")
-                                        .arg(keys.at(i), keys.at(j))
-                                        .arg(distance)
-                                        .arg(kDistinctnessFloor)
-                                        .arg(category)
-                                        .arg(tightest)
-                                        .arg(tightestPair)));
-            }
-        }
-    }
-    // The gate is only meaningful if the catalogue clears it with room; this is
-    // where the observed minimum is reported when it does not.
-    QVERIFY2(tightest >= kDistinctnessFloor,
-             qPrintable(QStringLiteral("tightest within-category pair %1 at deltaE %2, "
-                                       "floor %3")
-                            .arg(tightestPair)
-                            .arg(tightest)
-                            .arg(kDistinctnessFloor)));
 }
 
 void TestEffectEngine::catalogueCrossCategoryGate()
@@ -1217,53 +1303,42 @@ void TestEffectEngine::catalogueCrossCategoryGate()
     // at 1.78; all three were retuned apart. The comparison samples every second
     // pixel of the 240 px render, which is the same measurement at a quarter of
     // the work.
-    constexpr int kStride = 2;
-    const QImage source = scaledSample(QSize(240, 180));
-    QList<LabFrame> looks;
-    QList<QString> keys;
-    QList<QString> categories;
-    for (const EffectRecipe &recipe : EffectCatalogue::instance().recipes()) {
-        const auto result =
-            EffectEngine::instance().render(source, recipe, 100, source.size(), false);
-        if (!result.ok()) {
-            QFAIL(qPrintable(recipe.key + QStringLiteral(": ") + result.error().message));
-        }
-        looks.append(labFrame(result.value()));
-        keys.append(recipe.key);
-        categories.append(recipe.category);
+    const GateReport report = crossCategoryReport();
+    if (!report.violations.isEmpty()) {
+        QFAIL(qPrintable(report.violations.first() + QStringLiteral(" (tightest pair %1 at %2)")
+                             .arg(report.pairLabel())
+                             .arg(report.tightest, 0, 'f', 2)));
     }
-    double tightest = 1e9;
-    QString tightestPair;
-    for (int i = 0; i < looks.size(); ++i) {
-        for (int j = i + 1; j < looks.size(); ++j) {
-            if (categories.at(i) == categories.at(j))
-                continue;
-            const double distance = meanLabDistance(looks.at(i), looks.at(j), kStride);
-            const bool family = kCorrectionFamily.contains(keys.at(i))
-                && kCorrectionFamily.contains(keys.at(j));
-            const double floor = family ? kCloneFloor : kCrossCategoryFloor;
-            if (distance < tightest) {
-                tightest = distance;
-                tightestPair = QStringLiteral("%1 vs %2").arg(keys.at(i), keys.at(j));
-            }
-            QVERIFY2(distance >= floor,
-                     qPrintable(QStringLiteral("%1 vs %2: deltaE %3 < %4%s "
-                                               "(tightest so far: %5 at %6)")
-                                    .arg(keys.at(i), keys.at(j))
-                                    .arg(distance)
-                                    .arg(floor)
-                                    .arg(family ? QStringLiteral(" (correction family)")
-                                                : QString())
-                                    .arg(tightest)
-                                    .arg(tightestPair)));
-        }
+}
+
+void TestEffectEngine::distinctnessGatesAreQuiet()
+{
+    // A gate that formats a message for every passing pair is not only slow, it
+    // is wrong: the old cross-category message had a stray %s and a shifted .arg
+    // chain, so every passing pair emitted "QString::arg: Argument missing" and
+    // a real failure arrived mangled. Capture the message stream and require a
+    // silent run.
+    const QtMessageHandler previous = qInstallMessageHandler(countMessage);
+    warningCount = 0;
+    const GateReport within = withinCategoryReport();
+    const GateReport cross = crossCategoryReport();
+    qInstallMessageHandler(previous);
+    if (!within.violations.isEmpty())
+        QFAIL(qPrintable(within.violations.first()));
+    if (!cross.violations.isEmpty())
+        QFAIL(qPrintable(cross.violations.first()));
+    QCOMPARE(warningCount, 0);
+    // The observed minimums are reported here, on failure only.
+    if (within.tightest < kDistinctnessFloor) {
+        QFAIL(qPrintable(QStringLiteral("tightest within-category pair %1 at %2")
+                             .arg(within.pairLabel())
+                             .arg(within.tightest, 0, 'f', 2)));
     }
-    // The documented family is the only allowed slack, and it has to stay above
-    // the absolute clone floor with room.
-    QVERIFY2(tightest >= kCloneFloor + 0.1,
-             qPrintable(QStringLiteral("tightest cross-category pair %1 at deltaE %2")
-                            .arg(tightestPair)
-                            .arg(tightest)));
+    if (cross.tightest < kCloneFloor) {
+        QFAIL(qPrintable(QStringLiteral("tightest cross-category pair %1 at %2")
+                             .arg(cross.pairLabel())
+                             .arg(cross.tightest, 0, 'f', 2)));
+    }
 }
 
 void TestEffectEngine::catalogueRenderHashes()
@@ -1336,7 +1411,7 @@ void TestEffectEngine::catalogueRenderHashes()
         {"retro.sunbleach",
          "f5398082763a7c4a101c1cb401c37b8defb182b1164c4c1f9bcdeafc36833173"},
         {"retro.newsprint",
-         "fb7f01699cd03542175ae5d32bffb78017b64fe728b13cab2f5d31932526b66f"},
+         "c32cef04dcd4749ce0d7896229b18b593ec8f79786e2a97698495dde6fe730cb"},
         {"color.vivid",
          "d7306840c9a9dc5541dd17c461e1c6974441203de20a3601ce90fdb64ff056eb"},
         {"color.filmic",
@@ -1478,11 +1553,11 @@ void TestEffectEngine::catalogueRenderHashes()
         {"grain.base",
          "f88650d715decb7459ff2c0abb81a45ce37e50ef402207cbb67f67c115de9239"},
         {"print.halftone",
-         "a59008a6b7d25d3a762ba28b73bdacf46c18686422d361baa346cb0e80656f2c"},
+         "450958a9bbc204ff5525b5307fabb257edc8e925ae6c6facb32e42ff51f32b83"},
         {"print.riso",
-         "22e43084218edb589fec74aef91f94409cd14adf0acd5f9ec68b3f1f489a13da"},
+         "87413b4a0310de869bebb27ee3f62995936df2a670c757e49a1cf8daeee9a008"},
         {"print.news",
-         "45f6ec02921111f32104f31ae812e8b237991fedac9ce5f206683963c0f14f11"},
+         "613f6b27e6f86c6c111cf9d67a745c8847697210cee305aca4c56ad6a18730d2"},
         {"print.cyanotype",
          "c0356dadaa02a2636f2d6de2828cf03e3b511124c2c45042c188af5ee18e9d86"},
         {"print.screen",
@@ -1623,9 +1698,11 @@ void TestEffectEngine::wandStagesSurviveThePrintPath()
 void TestEffectEngine::halftoneDotPitchScalesWithFinishRaster()
 {
     // The dot screen is a finish stage, so it is rendered at the finish raster
-    // and the printed dot pitch follows that raster: 8 px at the 2400 reference,
-    // 12 px at 3600. Measured on flat frames so the reading is the screen, not
-    // the picture in it.
+    // and the printed pitch follows it: 6 px at 1772, 8 px at 2400, 12 px at
+    // 3600. Measured on flat frames so the reading is the screen and not the
+    // picture in it. The pitch must grow with the raster and the tone must not:
+    // a screen that is finer than the print at 300 ppi and coarser at 600 ppi
+    // shows a different number of dots for the same print.
     const auto recipe = EffectCatalogue::instance().resolve(QStringLiteral("print.halftone"));
     QVERIFY(recipe.ok());
     const auto plan = EffectEngine::compile(recipe.value());
@@ -1637,19 +1714,48 @@ void TestEffectEngine::halftoneDotPitchScalesWithFinishRaster()
     QCOMPARE(halftone.spatial.wandPass, QStringLiteral("halftone"));
     QVERIFY(halftone.spatial.finish);
 
-    double previous = 0.0;
-    for (const QSize &size : {QSize(2400, 1800), QSize(3600, 2700)}) {
+    const auto coverage = [](const QImage &screen) {
+        long long on = 0;
+        long long total = 0;
+        for (int y = 0; y < screen.height(); y += 7)
+            for (int x = 0; x < screen.width(); x += 7) {
+                total += 1;
+                if (qGray(screen.pixel(x, y)) > 127)
+                    on += 1;
+            }
+        return double(on) / double(std::max<long long>(1, total));
+    };
+
+    double previousRun = 0.0;
+    double previousCoverage = -1.0;
+    for (const int longSide : {1772, 2400, 3600}) {
+        const QSize size(longSide, longSide * 3 / 4);
         QImage frame(size, QImage::Format_RGB32);
         frame.fill(QColor(128, 128, 128));
-        const auto applied = applyWandPass(frame, halftone.spatial, size.width());
+        QImage again = frame;
+        const auto applied = applyWandPass(frame, halftone.spatial, longSide);
         QVERIFY2(applied.ok(), qPrintable(halftone.spatial.wandPass));
+        // Determinism: the same frame and raster produce the same screen.
+        const auto repeated = applyWandPass(again, halftone.spatial, longSide);
+        QVERIFY(repeated.ok());
+        QCOMPARE(hashImage(frame), hashImage(again));
+
         const double run = meanRunLength(frame);
-        QVERIFY2(run > previous,
+        QVERIFY2(run > previousRun,
                  qPrintable(QStringLiteral("pitch at %1 px: run %2, previous %3")
-                                .arg(size.width())
+                                .arg(longSide)
                                 .arg(run)
-                                .arg(previous)));
-        previous = run;
+                                .arg(previousRun)));
+        const double tone = coverage(frame);
+        if (previousCoverage >= 0.0) {
+            QVERIFY2(std::abs(tone - previousCoverage) < 0.01,
+                     qPrintable(QStringLiteral("coverage %1 at %2 px, %3 at the previous raster")
+                                    .arg(tone)
+                                    .arg(longSide)
+                                    .arg(previousCoverage)));
+        }
+        previousRun = run;
+        previousCoverage = tone;
     }
 
     // The same recipe printed keeps its finish size and stays bilevel.
