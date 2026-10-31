@@ -2,11 +2,13 @@
 #include "Document.h"
 #include "ProjectStore.h"
 #include "SheetLayout.h"
+#include "Translation.h"
 
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QSet>
+#include <QTranslator>
 #include <QtTest>
 
 #include <algorithm>
@@ -301,6 +303,12 @@ private slots:
     void batchIsSaneOnEveryPaper();
     void batchSplitsOverflowPages();
     void batchCapsAtOneHundredCopies();
+    void batchCountUnderTheFitIsCentred_data();
+    void batchCountUnderTheFitIsCentred();
+    void batchPagesBuildsCompletePages();
+    void batchCropWarningUsesVisibleFraction();
+    void batchUsesPhysicalSheet();
+    void batchFitIsMonotonic();
     void batchFramesPreserveTheSource();
     void batchRefusesBadSheets();
     void batchTinyCustomSheets();
@@ -314,16 +322,21 @@ private slots:
     void alignOneFrameOnlyCentres();
     void alignRefusesOverCapacity();
     void alignColumnOverride();
+    void alignMinVisibleReportsTheWorstCrop();
+    void alignSourcePixelsRespectRotation();
+    void alignOneFrameValidatesColumns();
 
     void distributeEqualGaps();
     void distributeShrinksTheGapAndCentres();
     void distributeKeepsSizesAndOrder();
     void distributeRefusesOverflow();
+    void distributeRefusesCrossOverflow();
     void distributeRefusesRotated();
     void distributeOneFrameCentres();
 
     void cutGuideLinesFollowTheFrameQuad();
     void cutGuideLinesSkipBrokenFrames();
+    void cutGuidesDedupeSharedEdge();
 
     void layoutFieldsSurviveSerialization();
     void oldProjectsGetTheDefaults();
@@ -333,6 +346,12 @@ private slots:
     void applyLayoutEditIsOneUndoStep();
     void applyLayoutEditNoOpGuard();
     void applyLayoutEditCanChangeOnlyTheGuides();
+    void layoutEditValidatesItsInput();
+    void layoutEditSelectionIsNavigation();
+    void layoutEditInsertionShiftsTheSelection();
+
+    void sheetLayoutStringsAreTranslated_data();
+    void sheetLayoutStringsAreTranslated();
 };
 
 void TestSheetLayout::presetsAreTheOfferedSizes()
@@ -614,12 +633,230 @@ void TestSheetLayout::batchCapsAtOneHundredCopies()
         QVERIFY(frame.label.isEmpty());
     }
 
-    // Above the action cap the count is clamped, not multiplied into pages.
-    spec.count = 1000;
+    // Above the action cap the count is refused, not silently clamped: the
+    // dialog shows maxCount() and a requested 1000 is an error it can explain.
+    spec.count = maxCount() + 1;
     const auto capped = batchGrid(sheetOfSize(210.0, 297.0), spec);
-    QVERIFY(capped.ok());
-    QCOMPARE(capped.value().count, kMaxCopies);
+    QVERIFY(!capped);
+    QCOMPARE(capped.error().code, QStringLiteral("batch-too-many-copies"));
+    QVERIFY2(capped.error().message.contains(QString::number(maxCount())),
+             qPrintable(capped.error().message));
+
+    // The page cap is a separate, explainable number.
+    QCOMPARE(maxCount(), 100);
+    QCOMPARE(maxPages(), 20);
+    spec.count = maxCount();
+    const auto perPageOne = batchGrid(sheetOfSize(60.0, 80.0), spec);
+    QVERIFY(!perPageOne);
+    QCOMPARE(perPageOne.error().code, QStringLiteral("batch-too-many-pages"));
+    QVERIFY2(perPageOne.error().message.contains(QString::number(maxPages())),
+             qPrintable(perPageOne.error().message));
 }
+
+void TestSheetLayout::batchCountUnderTheFitIsCentred_data()
+{
+    QTest::addColumn<double>("sheetWidth");
+    QTest::addColumn<double>("sheetHeight");
+    QTest::addColumn<int>("count");
+    QTest::addColumn<int>("perPage");
+    QTest::addColumn<int>("columns");
+    QTest::addColumn<int>("rows");
+    QTest::addColumn<double>("blockWidth");
+    QTest::addColumn<double>("blockHeight");
+    QTest::addColumn<double>("left");
+    QTest::addColumn<double>("top");
+    QTest::addColumn<double>("firstX");
+    QTest::addColumn<double>("firstY");
+
+    QTest::newRow("10x15 one") << 100.0 << 150.0 << 1 << 6 << 1 << 1 << 35.0 << 45.0 << 32.5
+                               << 52.5 << 50.0 << 75.0;
+    QTest::newRow("10x15 two") << 100.0 << 150.0 << 2 << 6 << 2 << 1 << 73.0 << 45.0 << 13.5
+                               << 52.5 << 31.0 << 75.0;
+    QTest::newRow("10x15 three") << 100.0 << 150.0 << 3 << 6 << 2 << 2 << 73.0 << 93.0 << 13.5
+                                 << 28.5 << 31.0 << 51.0;
+    QTest::newRow("A4 one") << 210.0 << 297.0 << 1 << 30 << 1 << 1 << 35.0 << 45.0 << 87.5
+                            << 126.0 << 105.0 << 148.5;
+    QTest::newRow("A4 two") << 210.0 << 297.0 << 2 << 30 << 2 << 1 << 73.0 << 45.0 << 68.5
+                            << 126.0 << 86.0 << 148.5;
+    QTest::newRow("A4 three") << 210.0 << 297.0 << 3 << 30 << 3 << 1 << 111.0 << 45.0 << 49.5
+                              << 126.0 << 67.0 << 148.5;
+}
+
+void TestSheetLayout::batchCountUnderTheFitIsCentred()
+{
+    QFETCH(double, sheetWidth);
+    QFETCH(double, sheetHeight);
+    QFETCH(int, count);
+    QFETCH(int, perPage);
+    QFETCH(int, columns);
+    QFETCH(int, rows);
+    QFETCH(double, blockWidth);
+    QFETCH(double, blockHeight);
+    QFETCH(double, left);
+    QFETCH(double, top);
+    QFETCH(double, firstX);
+    QFETCH(double, firstY);
+
+    BatchSpec spec;
+    spec.fillPage = false;
+    spec.count = count;
+
+    const auto grid = batchGrid(sheetOfSize(sheetWidth, sheetHeight), spec);
+    QVERIFY2(grid.ok(), qPrintable(failureText(grid)));
+    const BatchGrid &value = grid.value();
+
+    // The capacity is still the full sheet; the block is shaped to the count
+    // that actually exists, so a short count sits in the middle.
+    QCOMPARE(value.perPage, perPage);
+    QCOMPARE(value.count, count);
+    QCOMPARE(value.pageCount(), 1);
+    QCOMPARE(value.columns, columns);
+    QCOMPARE(value.rows, rows);
+    QCOMPARE(value.pagesMm.first().size(), count);
+    QVERIFY(near(value.blockWidthMm, blockWidth));
+    QVERIFY(near(value.blockHeightMm, blockHeight));
+    QVERIFY(near(value.originXMm, left));
+    QVERIFY(near(value.originYMm, top));
+    QVERIFY(near(value.leftMarginMm, left));
+    QVERIFY(near(value.rightMarginMm, left));
+    QVERIFY(near(value.topMarginMm, top));
+    QVERIFY(near(value.bottomMarginMm, top));
+    QVERIFY(nearPoint(value.pagesMm.first().first().center(), firstX, firstY));
+
+    QString why;
+    QVERIFY2(batchGridIsSane(value, &why), qPrintable(why));
+}
+
+void TestSheetLayout::batchPagesBuildsCompletePages()
+{
+    const Page target = pageOfSize(100.0, 150.0);
+    BatchSpec spec;
+    spec.fillPage = false;
+    spec.count = 20;
+    const Frame source = sampleFrame(0);
+
+    const auto pages = batchPages(target, spec, source);
+    QVERIFY2(pages.ok(), qPrintable(failureText(pages)));
+    QCOMPARE(pages.value().size(), 4);
+
+    const QList<int> counts = {6, 6, 6, 2};
+    QSet<QString> pageIds;
+    QSet<QString> frameIds;
+    for (int i = 0; i < pages.value().size(); ++i) {
+        const Page &page = pages.value().at(i);
+        QVERIFY(!page.id.isEmpty());
+        QVERIFY(!pageIds.contains(page.id));
+        pageIds.insert(page.id);
+        QCOMPARE(page.paper, target.paper);
+        QCOMPARE(page.landscape, target.landscape);
+        QVERIFY(page.cutGuides == CutGuides::None);
+        QVERIFY(page.borderlessOverride == BorderlessOverride::Off);
+        QCOMPARE(page.frames.size(), counts.at(i));
+        for (const Frame &frame : page.frames) {
+            QVERIFY(!frameIds.contains(frame.id));
+            frameIds.insert(frame.id);
+        }
+    }
+    QVERIFY(near(pages.value().first().frames.first().cx, 31.0));
+    QVERIFY(near(pages.value().first().frames.first().cy, 27.0));
+
+    // The paper overload carries the orientation through.
+    const auto landscape = batchPages(target.paper, true, spec, source);
+    QVERIFY(landscape.ok());
+    QCOMPARE(landscape.value().size(), 4);
+    int landscapeCopies = 0;
+    for (const Page &page : landscape.value()) {
+        QVERIFY(page.landscape);
+        landscapeCopies += int(page.frames.size());
+    }
+    QCOMPARE(landscapeCopies, 20);
+}
+
+void TestSheetLayout::batchCropWarningUsesVisibleFraction()
+{
+    // Symmetric, 0..1, and unknown aspects never warn.
+    QVERIFY(near(visibleFraction(2.0, 1.0), 0.5));
+    QVERIFY(near(visibleFraction(1.0, 2.0), 0.5));
+    QVERIFY(near(visibleFraction(0.0, 1.0), 1.0));
+    QVERIFY(near(visibleFraction(1.0, 0.0), 1.0));
+    QVERIFY(near(visibleFraction(std::numeric_limits<double>::quiet_NaN(), 1.0), 1.0));
+
+    BatchSpec spec;
+    spec.fillPage = true;
+    spec.sourceAspect = 1.5; // a portrait 2:3 photo
+    const auto portrait = batchGrid(sheetOfSize(100.0, 150.0), spec);
+    QVERIFY(portrait.ok());
+    QVERIFY(near(portrait.value().minVisible, 6.0 / 7.0));
+    QVERIFY(portrait.value().minVisible > 0.6);
+
+    // A landscape 3:2 photo in the same passport cell loses both sides.
+    spec.sourceAspect = 2.0 / 3.0;
+    const auto landscape = batchGrid(sheetOfSize(100.0, 150.0), spec);
+    QVERIFY(landscape.ok());
+    QVERIFY(landscape.value().minVisible < 0.6);
+
+    spec.sourceAspect = 0.0;
+    const auto unknown = batchGrid(sheetOfSize(100.0, 150.0), spec);
+    QVERIFY(unknown.ok());
+    QVERIFY(near(unknown.value().minVisible, 1.0));
+}
+
+void TestSheetLayout::batchUsesPhysicalSheet()
+{
+    // The driver's logical page is larger than the paper; a grid built on it
+    // would drift against the cutter.
+    PaperSpec paper;
+    paper.name = QStringLiteral("10 × 15 cm");
+    paper.physicalWidthMm = 100.0;
+    paper.physicalHeightMm = 150.0;
+    paper.logicalWidthMm = 101.6;
+    paper.logicalHeightMm = 152.4;
+
+    BatchSpec spec;
+    spec.fillPage = true;
+    const auto grid = batchGrid(paper, false, spec);
+    QVERIFY(grid.ok());
+    QVERIFY(near(grid.value().sheet.width, 100.0));
+    QVERIFY(near(grid.value().sheet.height, 150.0));
+    QCOMPARE(grid.value().columns, 2);
+    QCOMPARE(grid.value().rows, 3);
+    QCOMPARE(grid.value().perPage, 6);
+
+    const auto rotated = batchGrid(paper, true, spec);
+    QVERIFY(rotated.ok());
+    QVERIFY(near(rotated.value().sheet.width, 150.0));
+    QVERIFY(near(rotated.value().sheet.height, 100.0));
+    QCOMPARE(rotated.value().columns, 3);
+    QCOMPARE(rotated.value().rows, 2);
+}
+
+void TestSheetLayout::batchFitIsMonotonic()
+{
+    BatchSpec spec;
+    spec.fillPage = true;
+
+    int previous = std::numeric_limits<int>::max();
+    for (const double margin : {3.5, 4.0, 5.0, 6.0, 8.0, 10.0, 15.0}) {
+        spec.marginMm = margin;
+        const auto grid = batchGrid(sheetOfSize(100.0, 150.0), spec);
+        QVERIFY2(grid.ok(), qPrintable(failureText(grid)));
+        QVERIFY2(grid.value().perPage <= previous,
+                 qPrintable(QStringLiteral("margin %1 raised the fit").arg(margin)));
+        previous = grid.value().perPage;
+    }
+
+    spec.marginMm = kMinMarginMm;
+    previous = std::numeric_limits<int>::max();
+    for (const double gutter : {0.0, 1.0, 3.0, 5.0, 8.0, 12.0, 20.0}) {
+        spec.gutterMm = gutter;
+        const auto grid = batchGrid(sheetOfSize(100.0, 150.0), spec);
+        QVERIFY2(grid.ok(), qPrintable(failureText(grid)));
+        QVERIFY2(grid.value().perPage <= previous,
+                 qPrintable(QStringLiteral("gutter %1 raised the fit").arg(gutter)));
+        previous = grid.value().perPage;
+    }
+}
+
 
 void TestSheetLayout::batchFramesPreserveTheSource()
 {
@@ -1005,6 +1242,80 @@ void TestSheetLayout::alignColumnOverride()
     QCOMPARE(oneRow.value().rows, 1);
 }
 
+void TestSheetLayout::alignMinVisibleReportsTheWorstCrop()
+{
+    QList<Frame> frames = framesWithAspect(4, 60.0, 60.0);
+    // One very wide photo among three squares: the mean hides it, minVisible
+    // is the number the warning needs.
+    frames[3].width = 600.0;
+    frames[3].height = 60.0;
+
+    AlignSpec spec;
+    spec.marginMm = 10.0;
+    spec.gutterMm = 10.0;
+    spec.columns = 4;
+    const auto plan = alignGrid(frames, sheetOfSize(210.0, 297.0), spec);
+    QVERIFY2(plan.ok(), qPrintable(failureText(plan)));
+
+    const double cellAspect = plan.value().cellHeightMm / plan.value().cellWidthMm;
+    QVERIFY(near(plan.value().minVisible, visibleFraction(0.1, cellAspect)));
+    QVERIFY(plan.value().minVisible < 0.5);
+    QVERIFY(plan.value().meanVisible > plan.value().minVisible);
+}
+
+void TestSheetLayout::alignSourcePixelsRespectRotation()
+{
+    QList<Frame> frames = framesWithAspect(3, 90.0, 60.0);
+    AlignSpec spec;
+    spec.marginMm = 10.0;
+    spec.gutterMm = 10.0;
+
+    // Without pixel data the frame's own 3:2 landscape shape wins a one-column
+    // stack.
+    const auto plain = alignGrid(frames, sheetOfSize(210.0, 297.0), spec);
+    QVERIFY(plain.ok());
+    QCOMPARE(plain.value().columns, 1);
+    QCOMPARE(plain.value().rows, 3);
+
+    // The same 900 × 600 source turned 90 degrees is a portrait photo, and the
+    // shape search must see that, not the frame's old shape.
+    QList<QSize> pixels;
+    for (int i = 0; i < frames.size(); ++i) {
+        frames[i].imageRotationDeg = 90.0;
+        pixels.append(QSize(900, 600));
+    }
+    const auto rotated = alignGrid(frames, sheetOfSize(210.0, 297.0), spec, pixels);
+    QVERIFY2(rotated.ok(), qPrintable(failureText(rotated)));
+    QCOMPARE(rotated.value().columns, 2);
+    QCOMPARE(rotated.value().rows, 2);
+    QVERIFY(rotated.value().score > plain.value().score);
+}
+
+void TestSheetLayout::alignOneFrameValidatesColumns()
+{
+    const QList<Frame> frames = framesWithAspect(1, 60.0, 90.0);
+    const Sheet sheet = sheetOfSize(210.0, 297.0);
+
+    AlignSpec spec;
+    spec.marginMm = 10.0;
+    spec.gutterMm = 10.0;
+    spec.columns = 2; // more columns than photos
+    const auto bad = alignGrid(frames, sheet, spec);
+    QVERIFY(!bad);
+    QCOMPARE(bad.error().code, QStringLiteral("align-columns"));
+
+    spec.columns = 1;
+    const auto pinned = alignGrid(frames, sheet, spec);
+    QVERIFY(pinned.ok());
+    QCOMPARE(pinned.value().columns, 1);
+
+    spec.columns = 0;
+    const auto automatic = alignGrid(frames, sheet, spec);
+    QVERIFY(automatic.ok());
+    QCOMPARE(automatic.value().columns, 1);
+}
+
+
 void TestSheetLayout::distributeEqualGaps()
 {
     QList<Frame> frames;
@@ -1123,6 +1434,33 @@ void TestSheetLayout::distributeRefusesOverflow()
     QCOMPARE(applied.error().code, QStringLiteral("distribute-overflow"));
 }
 
+void TestSheetLayout::distributeRefusesCrossOverflow()
+{
+    // A row is centred on the cross axis too, so a photo taller than the sheet
+    // would hang off both edges.
+    QList<Frame> frames = framesWithAspect(2, 40.0, 30.0);
+    frames[0].height = 400.0;
+
+    DistributeSpec spec;
+    spec.axis = DistributeAxis::Horizontal;
+    spec.marginMm = 10.0;
+    const auto horizontal = distribute(frames, sheetOfSize(210.0, 297.0), spec);
+    QVERIFY(!horizontal);
+    QCOMPARE(horizontal.error().code, QStringLiteral("distribute-cross-overflow"));
+    QVERIFY2(horizontal.error().message.contains(QStringLiteral("1.")),
+             qPrintable(horizontal.error().message));
+
+    // The same check on a column, against the sheet width.
+    frames[0].height = 30.0;
+    frames[1].width = 250.0;
+    spec.axis = DistributeAxis::Vertical;
+    const auto vertical = distribute(frames, sheetOfSize(210.0, 297.0), spec);
+    QVERIFY(!vertical);
+    QCOMPARE(vertical.error().code, QStringLiteral("distribute-cross-overflow"));
+    QVERIFY2(vertical.error().message.contains(QStringLiteral("2.")),
+             qPrintable(vertical.error().message));
+}
+
 void TestSheetLayout::distributeRefusesRotated()
 {
     QList<Frame> frames = framesWithAspect(3, 40.0, 30.0);
@@ -1133,7 +1471,9 @@ void TestSheetLayout::distributeRefusesRotated()
     const auto plan = distribute(frames, sheetOfSize(210.0, 297.0), spec);
     QVERIFY(!plan);
     QCOMPARE(plan.error().code, QStringLiteral("distribute-rotated"));
-    QVERIFY(!plan.error().message.isEmpty());
+    // The message names which photo to straighten.
+    QVERIFY2(plan.error().message.contains(QStringLiteral("2.")),
+             qPrintable(plan.error().message));
 
     // A full turn is not a rotation.
     frames[1].angleDeg = 360.0;
@@ -1215,6 +1555,48 @@ void TestSheetLayout::cutGuideLinesSkipBrokenFrames()
     QCOMPARE(cutGuideLinesMm(page).size(), 4);
     QCOMPARE(cutGuideLinesMm(Page{}).size(), 0);
 }
+
+void TestSheetLayout::cutGuidesDedupeSharedEdge()
+{
+    Page page = pageOfSize(210.0, 297.0);
+    Frame left;
+    left.id = QStringLiteral("left");
+    left.cx = 50.0;
+    left.cy = 100.0;
+    left.width = 40.0;
+    left.height = 40.0;
+    Frame right = left;
+    right.id = QStringLiteral("right");
+    right.cx = 90.0; // the right edge of `left` at x = 70
+    page.frames = {left, right};
+
+    // Two touching frames share one edge: eight edges become seven lines.
+    const QList<QLineF> shared = cutGuideLinesMm(page);
+    QCOMPARE(shared.size(), 7);
+    int atSeventy = 0;
+    for (const QLineF &line : shared) {
+        if (near(line.p1().x(), 70.0) && near(line.p2().x(), 70.0))
+            ++atSeventy;
+        for (const QLineF &other : shared) {
+            if (&line == &other)
+                continue;
+            const bool same =
+                (near(line.p1().x(), other.p1().x()) && near(line.p1().y(), other.p1().y())
+                 && near(line.p2().x(), other.p2().x()) && near(line.p2().y(), other.p2().y()))
+                || (near(line.p1().x(), other.p2().x()) && near(line.p1().y(), other.p2().y())
+                    && near(line.p2().x(), other.p1().x())
+                    && near(line.p2().y(), other.p1().y()));
+            QVERIFY2(!same, "a cut line was emitted twice");
+        }
+    }
+    QCOMPARE(atSeventy, 1);
+
+    // Separate frames keep all eight edges.
+    right.cy = 200.0;
+    page.frames = {left, right};
+    QCOMPARE(cutGuideLinesMm(page).size(), 8);
+}
+
 
 void TestSheetLayout::layoutFieldsSurviveSerialization()
 {
@@ -1459,6 +1841,213 @@ void TestSheetLayout::applyLayoutEditCanChangeOnlyTheGuides()
     controller.undoStack()->undo();
     QVERIFY(controller.document().pages.first().cutGuides == CutGuides::None);
     QCOMPARE(controller.document().pages.first().frames, framesBefore);
+}
+
+void TestSheetLayout::layoutEditValidatesItsInput()
+{
+    DocumentSnapshot document;
+    Page a = pageOfSize(210.0, 297.0);
+    a.id = QStringLiteral("page-a");
+    a.frames = {frameForPage(0, a.id)};
+    Page b = pageOfSize(210.0, 297.0);
+    b.id = QStringLiteral("page-b");
+    b.frames = {frameForPage(1, b.id)};
+    document.pages = {a, b};
+
+    PageLayout change;
+    change.pageIndex = 0;
+    change.frames = a.frames;
+
+    const auto codeOf = [&document](const ApplyLayoutEdit &edit) {
+        const auto result = validateLayoutEdit(document, edit);
+        return result.ok() ? QString() : result.error().code;
+    };
+
+    ApplyLayoutEdit valid;
+    valid.pages.append(change);
+    QVERIFY(codeOf(valid).isEmpty());
+
+    ApplyLayoutEdit twice = valid;
+    twice.pages.append(change);
+    QCOMPARE(codeOf(twice), QStringLiteral("layout-page-duplicate"));
+
+    ApplyLayoutEdit badIndex = valid;
+    badIndex.pages.first().pageIndex = 9;
+    QCOMPARE(codeOf(badIndex), QStringLiteral("layout-page-index"));
+
+    ApplyLayoutEdit emptyId = valid;
+    Page noId;
+    emptyId.newPages.append(noId);
+    QCOMPARE(codeOf(emptyId), QStringLiteral("layout-page-id"));
+
+    ApplyLayoutEdit duplicateExisting = valid;
+    Page existing = pageOfSize(210.0, 297.0);
+    existing.id = QStringLiteral("page-b");
+    duplicateExisting.newPages.append(existing);
+    QCOMPARE(codeOf(duplicateExisting), QStringLiteral("layout-page-id"));
+
+    ApplyLayoutEdit duplicateNew = valid;
+    Page one = pageOfSize(210.0, 297.0);
+    one.id = QStringLiteral("page-n");
+    Page two = one;
+    duplicateNew.newPages = {one, two};
+    QCOMPARE(codeOf(duplicateNew), QStringLiteral("layout-page-id"));
+
+    ApplyLayoutEdit badInsert = valid;
+    badInsert.insertIndex = 5;
+    QCOMPARE(codeOf(badInsert), QStringLiteral("layout-insert-index"));
+
+    ApplyLayoutEdit badSelect = valid;
+    badSelect.selectPage = 5;
+    QCOMPARE(codeOf(badSelect), QStringLiteral("layout-select-page"));
+
+    // An invalid edit is refused as a whole: nothing is applied and no undo
+    // step is created.
+    CanvasController controller;
+    controller.setDocument(document);
+    const DocumentSnapshot before = controller.document();
+    controller.apply(badIndex);
+    QCOMPARE(controller.document(), before);
+    QCOMPARE(controller.undoStack()->count(), 0);
+}
+
+void TestSheetLayout::layoutEditSelectionIsNavigation()
+{
+    DocumentSnapshot document;
+    Page a = pageOfSize(210.0, 297.0);
+    a.id = QStringLiteral("page-a");
+    Page b = pageOfSize(210.0, 297.0);
+    b.id = QStringLiteral("page-b");
+    document.pages = {a, b};
+
+    CanvasController controller;
+    controller.setDocument(document);
+    QCOMPARE(controller.document().currentPage, 0);
+
+    ApplyLayoutEdit navigation;
+    navigation.selectPage = 1;
+    controller.apply(navigation);
+
+    // The page changes, but this is navigation, not an editable step.
+    QCOMPARE(controller.document().currentPage, 1);
+    QCOMPARE(controller.undoStack()->count(), 0);
+    QCOMPARE(controller.document().pages, document.pages);
+
+    ApplyLayoutEdit invalidSelection;
+    invalidSelection.selectPage = 7;
+    controller.apply(invalidSelection);
+    QCOMPARE(controller.document().currentPage, 1);
+    QCOMPARE(controller.undoStack()->count(), 0);
+}
+
+void TestSheetLayout::layoutEditInsertionShiftsTheSelection()
+{
+    DocumentSnapshot document;
+    Page a = pageOfSize(210.0, 297.0);
+    a.id = QStringLiteral("page-a");
+    Page b = pageOfSize(210.0, 297.0);
+    b.id = QStringLiteral("page-b");
+    b.frames = {frameForPage(1, b.id)};
+    document.pages = {a, b};
+
+    Page inserted = pageOfSize(210.0, 297.0);
+    inserted.id = QStringLiteral("page-new");
+    inserted.frames = {frameForPage(2, inserted.id)};
+
+    const QList<Frame> moved = {frameForPage(3, b.id), frameForPage(4, b.id)};
+
+    CanvasController controller;
+    controller.setDocument(document);
+
+    ApplyLayoutEdit edit;
+    PageLayout change;
+    change.pageIndex = 1;
+    change.frames = moved;
+    edit.pages.append(change);
+    edit.newPages.append(inserted);
+    edit.insertIndex = 0; // before page-a, so the changed page moves to index 2
+
+    controller.apply(edit);
+    QCOMPARE(controller.pageCount(), 3);
+    QCOMPARE(controller.document().pages.at(0).id, QStringLiteral("page-new"));
+    QCOMPARE(controller.document().pages.at(1).id, QStringLiteral("page-a"));
+    QCOMPARE(controller.document().pages.at(2).id, QStringLiteral("page-b"));
+    QCOMPARE(controller.document().pages.at(2).frames, moved);
+    // The default selection follows the changed page through the insertion.
+    QCOMPARE(controller.document().currentPage, 2);
+
+    controller.undoStack()->undo();
+    QCOMPARE(controller.document(), document);
+    QCOMPARE(controller.document().currentPage, 0);
+}
+
+void TestSheetLayout::sheetLayoutStringsAreTranslated_data()
+{
+    QTest::addColumn<QString>("code");
+    for (const QString &code : i18n::targetCodes())
+        QTest::newRow(qPrintable(code)) << code;
+}
+
+void TestSheetLayout::sheetLayoutStringsAreTranslated()
+{
+    QFETCH(QString, code);
+
+    QTranslator translator;
+    QVERIFY2(translator.load(QStringLiteral(":/i18n/photoprint_%1.qm").arg(code)),
+             qPrintable(code));
+
+    // Every sentence the engine can show has a real translation, not the
+    // Hungarian source. The size-only preset labels are allowed to read the
+    // same in a language that uses millimetres unchanged.
+    for (const QString &source : {
+             QStringLiteral("Érvénytelen papírméret."),
+             QStringLiteral("Ezen a lapon nincs fotó."),
+             QStringLiteral("Ekkora margó mellett nem marad hely. Csökkentsd a margót."),
+             QStringLiteral("A példány nagyobb, mint a lap. Válassz kisebb méretet, vagy "
+                            "nagyobb papírt."),
+             QStringLiteral("Legnagyobb: %1 × %2 mm."),
+             QStringLiteral("Egyszerre legfeljebb %1 példány készíthető."),
+             QStringLiteral("Ez %1 lap lenne. Egyszerre legfeljebb %2 lap készíthető. "
+                            "Csökkentsd a darabszámot."),
+             QStringLiteral("Érvénytelen oszlopszám."),
+             QStringLiteral("Ekkora oszlopszámmal a fotók nem férnek el olvasható méretben."),
+             QStringLiteral("Ezen a lapon legfeljebb %1 fotó fér el olvasható méretben. Most %2 "
+                            "van. Oszd el őket több lapra, vagy válassz nagyobb papírt."),
+             QStringLiteral("A %1. fotó el van forgatva, ezért nem lehet térközzel rendezni. "
+                            "Előbb állítsd egyenesbe."),
+             QStringLiteral("A %1. fotó a lap másik irányában sem fér el. Kicsinyítsd, vagy "
+                            "használd a rácsot."),
+             QStringLiteral("A fotók így nem férnek el a lapon. Kicsinyítsd őket, vagy használd "
+                            "a rácsot."),
+             QStringLiteral("Érvénytelen lapsorszám."),
+             QStringLiteral("Egy lap csak egyszer szerepelhet a módosításban."),
+             QStringLiteral("A lap azonosítója nem lehet üres."),
+             QStringLiteral("Az új lap azonosítója már létezik."),
+             QStringLiteral("Két új lap azonosítója megegyezik."),
+             QStringLiteral("Érvénytelen beszúrási hely."),
+             QStringLiteral("Érvénytelen kiválasztott lap."),
+         }) {
+        const QString text = translator.translate("PhotoPrint", source.toUtf8().constData());
+        const QString where = QStringLiteral("%1: %2").arg(code, source);
+        QVERIFY2(!text.isEmpty(), qPrintable(where + QStringLiteral(" is empty")));
+        QVERIFY2(text != source,
+                 qPrintable(where + QStringLiteral(" is still the Hungarian source")));
+    }
+
+    for (const QString &source : {
+             QStringLiteral("35 × 45 mm (igazolványkép)"),
+             QStringLiteral("50 × 70 mm"),
+             QStringLiteral("40 × 40 mm"),
+             QStringLiteral("30 × 40 mm"),
+             QStringLiteral("25 × 35 mm"),
+         }) {
+        const QString text = translator.translate("PhotoPrint", source.toUtf8().constData());
+        QVERIFY2(!text.isEmpty(), qPrintable(QStringLiteral("%1: %2 is empty").arg(code, source)));
+    }
+    const QString passport = translator.translate("PhotoPrint",
+                                                  "35 × 45 mm (igazolványkép)");
+    QVERIFY2(passport != QStringLiteral("35 × 45 mm (igazolványkép)"),
+             qPrintable(code + QStringLiteral(": the passport label is still Hungarian")));
 }
 
 QTEST_MAIN(TestSheetLayout)

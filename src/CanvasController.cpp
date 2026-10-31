@@ -3,6 +3,7 @@
 #include "LayoutEngine.h"
 
 #include <QCoreApplication>
+#include <QSet>
 #include <QUndoCommand>
 
 #include <QtMath>
@@ -38,6 +39,58 @@ LocatedFrame locate(const DocumentSnapshot &snapshot, const QString &frameId)
 }
 
 } // namespace
+
+Result<void> validateLayoutEdit(const DocumentSnapshot &document, const ApplyLayoutEdit &edit)
+{
+    QSet<int> touched;
+    for (const PageLayout &change : edit.pages) {
+        if (change.pageIndex < 0 || change.pageIndex >= document.pages.size()) {
+            return error(QStringLiteral("layout-page-index"),
+                         QCoreApplication::translate("PhotoPrint", "Érvénytelen lapsorszám."));
+        }
+        if (touched.contains(change.pageIndex)) {
+            return error(QStringLiteral("layout-page-duplicate"),
+                         QCoreApplication::translate(
+                             "PhotoPrint", "Egy lap csak egyszer szerepelhet a módosításban."));
+        }
+        touched.insert(change.pageIndex);
+    }
+
+    QSet<QString> pageIds;
+    for (const Page &page : document.pages)
+        pageIds.insert(page.id);
+    QSet<QString> newIds;
+    for (const Page &page : edit.newPages) {
+        if (page.id.isEmpty()) {
+            return error(QStringLiteral("layout-page-id"),
+                         QCoreApplication::translate("PhotoPrint",
+                                                     "A lap azonosítója nem lehet üres."));
+        }
+        if (pageIds.contains(page.id)) {
+            return error(QStringLiteral("layout-page-id"),
+                         QCoreApplication::translate(
+                             "PhotoPrint", "Az új lap azonosítója már létezik."));
+        }
+        if (newIds.contains(page.id)) {
+            return error(QStringLiteral("layout-page-id"),
+                         QCoreApplication::translate(
+                             "PhotoPrint", "Két új lap azonosítója megegyezik."));
+        }
+        newIds.insert(page.id);
+    }
+
+    if (edit.insertIndex < -1 || edit.insertIndex > document.pages.size()) {
+        return error(QStringLiteral("layout-insert-index"),
+                     QCoreApplication::translate("PhotoPrint", "Érvénytelen beszúrási hely."));
+    }
+
+    const int finalPages = int(document.pages.size()) + int(edit.newPages.size());
+    if (edit.selectPage < -1 || edit.selectPage >= finalPages) {
+        return error(QStringLiteral("layout-select-page"),
+                     QCoreApplication::translate("PhotoPrint", "Érvénytelen kiválasztott lap."));
+    }
+    return Result<void>();
+}
 
 class FrameChangeCommand : public QUndoCommand
 {
@@ -375,6 +428,8 @@ void CanvasController::apply(const DocumentEdit &edit)
                 m_undo->push(new SnapshotCommand(this, m_document, after,
                                                  QCoreApplication::translate("PhotoPrint", "Elrendezés")));
             } else if constexpr (std::is_same_v<T, ApplyLayoutEdit>) {
+                if (!validateLayoutEdit(m_document, value))
+                    return;
                 DocumentSnapshot after = m_document;
                 int firstChanged = -1;
                 for (const PageLayout &change : value.pages) {
@@ -396,11 +451,13 @@ void CanvasController::apply(const DocumentEdit &edit)
                 for (int i = 0; i < value.newPages.size(); ++i)
                     after.pages.insert(insertAt + i, value.newPages.at(i));
 
-                // A page selection alone is navigation, not an edit: it must
-                // not add an undo step and it must not change currentPage when
-                // the layout itself would not change.
-                if (after == m_document)
+                // A page selection alone is navigation, not an edit: it changes
+                // currentPage and emits the document, but adds no undo step.
+                if (after == m_document) {
+                    if (value.selectPage >= 0 && value.selectPage != m_document.currentPage)
+                        setCurrentPage(value.selectPage);
                     return;
+                }
 
                 int target = value.selectPage;
                 if (target < 0) {

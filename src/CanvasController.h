@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Document.h"
+#include "Result.h"
 
 #include <QObject>
 #include <QUndoStack>
@@ -87,6 +88,13 @@ struct ApplyLayoutEdit {
     int selectPage = -1;
     QString actionText;
 };
+
+/// Checks an ApplyLayoutEdit against the document it will be applied to. The
+/// controller refuses a malformed edit as a whole, never half applies it: an
+/// unknown page index, a page changed twice, an empty or duplicate new page id,
+/// an insertion index outside the page list, and a selected page that will not
+/// exist. The dialog can call this before it commits its own state.
+Result<void> validateLayoutEdit(const DocumentSnapshot &document, const ApplyLayoutEdit &edit);
 
 struct SetRecipeEdit {
     ColorRecipe recipe;

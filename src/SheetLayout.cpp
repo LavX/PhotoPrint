@@ -51,7 +51,7 @@ QString millimetres(double value)
 /// floor((available + gutter) / (size + gutter)); a copy that does not fit
 /// yields zero through the floor itself, so no separate special case is needed.
 /// The result stops at kMaxCopiesPerPage: one page never places more copies than
-/// the action cap, and the block is then centred over the cells it really uses.
+/// the page cap, and the block is then centred over the cells it really uses.
 int cellsAlong(double available, double size, double gutter)
 {
     if (!(available > 0.0) || !(size > 0.0) || gutter < 0.0)
@@ -99,6 +99,26 @@ bool cuttable(const Frame &frame)
             return false;
     }
     return frame.width > 0.0 && frame.height > 0.0;
+}
+
+bool samePoint(const QPointF &a, const QPointF &b)
+{
+    return std::abs(a.x() - b.x()) <= 1e-6 && std::abs(a.y() - b.y()) <= 1e-6;
+}
+
+/// Two frames with a zero gutter share an edge. Printing or drawing it twice
+/// changes nothing visually, but it makes the line count and any later hit test
+/// wrong, so a coincident line is emitted once. Opposite directions count as the
+/// same edge.
+bool containsLine(const QList<QLineF> &lines, const QLineF &line)
+{
+    for (const QLineF &existing : lines) {
+        if ((samePoint(existing.p1(), line.p1()) && samePoint(existing.p2(), line.p2()))
+            || (samePoint(existing.p1(), line.p2()) && samePoint(existing.p2(), line.p1()))) {
+            return true;
+        }
+    }
+    return false;
 }
 
 } // namespace
@@ -149,17 +169,33 @@ int countOf(int requested)
     return std::clamp(requested, 1, kMaxCopies);
 }
 
+double visibleFraction(double sourceAspect, double cellAspect)
+{
+    if (!std::isfinite(sourceAspect) || !std::isfinite(cellAspect) || sourceAspect <= 0.0
+        || cellAspect <= 0.0) {
+        return 1.0;
+    }
+    return std::min(sourceAspect / cellAspect, cellAspect / sourceAspect);
+}
+
 const QList<CopyPreset> &copyPresets()
 {
     // Plain data, not branches in the geometry: every preset is laid out by the
     // same formulas. A custom size needs no entry, it is whatever the width and
-    // height fields hold.
+    // height fields hold. The labels are marked for translation here; the
+    // dialog translates them at display time through the PhotoPrint context.
     static const QList<CopyPreset> presets = {
-        {QStringLiteral("passport"), QStringLiteral("35 × 45 mm (igazolványkép)"), 35.0, 45.0},
-        {QStringLiteral("id50x70"), QStringLiteral("50 × 70 mm"), 50.0, 70.0},
-        {QStringLiteral("sq40"), QStringLiteral("40 × 40 mm"), 40.0, 40.0},
-        {QStringLiteral("s30x40"), QStringLiteral("30 × 40 mm"), 30.0, 40.0},
-        {QStringLiteral("s25x35"), QStringLiteral("25 × 35 mm"), 25.0, 35.0},
+        {QStringLiteral("passport"),
+         QString::fromUtf8(QT_TRANSLATE_NOOP("PhotoPrint", "35 × 45 mm (igazolványkép)")), 35.0,
+         45.0},
+        {QStringLiteral("id50x70"),
+         QString::fromUtf8(QT_TRANSLATE_NOOP("PhotoPrint", "50 × 70 mm")), 50.0, 70.0},
+        {QStringLiteral("sq40"), QString::fromUtf8(QT_TRANSLATE_NOOP("PhotoPrint", "40 × 40 mm")),
+         40.0, 40.0},
+        {QStringLiteral("s30x40"),
+         QString::fromUtf8(QT_TRANSLATE_NOOP("PhotoPrint", "30 × 40 mm")), 30.0, 40.0},
+        {QStringLiteral("s25x35"),
+         QString::fromUtf8(QT_TRANSLATE_NOOP("PhotoPrint", "25 × 35 mm")), 25.0, 35.0},
     };
     return presets;
 }
@@ -196,11 +232,11 @@ Result<BatchGrid> batchGridFor(const Sheet &sheet, const BatchSpec &spec)
                          "Ekkora margó mellett nem marad hely. Csökkentsd a margót."));
     }
 
-    grid.columns = cellsAlong(availableWidth, grid.copyWidthMm, grid.gutterMm);
-    grid.rows = cellsAlong(availableHeight, grid.copyHeightMm, grid.gutterMm);
-    const qint64 cells = qint64(grid.columns) * qint64(grid.rows);
+    const int capacityColumns = cellsAlong(availableWidth, grid.copyWidthMm, grid.gutterMm);
+    const int capacityRows = cellsAlong(availableHeight, grid.copyHeightMm, grid.gutterMm);
+    const qint64 capacityCells = qint64(capacityColumns) * qint64(capacityRows);
 
-    if (cells <= 0) {
+    if (capacityCells <= 0) {
         const QString message = QCoreApplication::translate(
                                     "PhotoPrint",
                                     "A példány nagyobb, mint a lap. Válassz kisebb méretet, "
@@ -211,18 +247,40 @@ Result<BatchGrid> batchGridFor(const Sheet &sheet, const BatchSpec &spec)
         return error(QStringLiteral("copy-too-large"), message);
     }
 
-    // One page places at most the action cap, so a sheet of ten-millimetre
-    // copies reports a fit of 100 and the block is sized for the rows it uses.
-    grid.perPage = int(std::min<qint64>(cells, kMaxCopies));
-    grid.rows = (grid.perPage + grid.columns - 1) / grid.columns;
+    // A full sheet reports the page capacity, not the action cap: the two are
+    // separate limits and the dialog names both.
+    grid.perPage = int(std::min<qint64>(capacityCells, kMaxCopiesPerPage));
+    const int capacityRowsUsed = (grid.perPage + capacityColumns - 1) / capacityColumns;
+
+    if (!spec.fillPage && spec.count > maxCount()) {
+        return error(QStringLiteral("batch-too-many-copies"),
+                     QCoreApplication::translate(
+                         "PhotoPrint", "Egyszerre legfeljebb %1 példány készíthető.")
+                         .arg(maxCount()));
+    }
 
     grid.count = spec.fillPage ? grid.perPage : countOf(spec.count);
     const int pages = (grid.count + grid.perPage - 1) / grid.perPage;
-    if (pages > kMaxPagesPerAction) {
+    if (pages > maxPages()) {
         return error(QStringLiteral("batch-too-many-pages"),
-                     QCoreApplication::translate("PhotoPrint",
-                                                 "Ez %1 lap lenne. Csökkentsd a darabszámot.")
-                         .arg(pages));
+                     QCoreApplication::translate(
+                         "PhotoPrint",
+                         "Ez %1 lap lenne. Egyszerre legfeljebb %2 lap készíthető. "
+                         "Csökkentsd a darabszámot.")
+                         .arg(pages)
+                         .arg(maxPages()));
+    }
+
+    if (pages == 1) {
+        // Shape the block to the copies that exist: one copy on a sheet of six
+        // belongs in the middle, not in the first cell of the full grid.
+        grid.columns = std::min(capacityColumns, grid.count);
+        grid.rows = (grid.count + grid.columns - 1) / grid.columns;
+    } else {
+        // A multi-sheet stack keeps the full-sheet origin and pitch, so every
+        // sheet can be cut in the same guillotine pass.
+        grid.columns = capacityColumns;
+        grid.rows = capacityRowsUsed;
     }
 
     grid.blockWidthMm =
@@ -230,8 +288,14 @@ Result<BatchGrid> batchGridFor(const Sheet &sheet, const BatchSpec &spec)
     grid.blockHeightMm = grid.rows * grid.copyHeightMm + (grid.rows - 1) * grid.gutterMm;
     grid.originXMm = (sheet.width - grid.blockWidthMm) / 2.0;
     grid.originYMm = (sheet.height - grid.blockHeightMm) / 2.0;
+    grid.leftMarginMm = grid.originXMm;
+    grid.rightMarginMm = sheet.width - grid.originXMm - grid.blockWidthMm;
+    grid.topMarginMm = grid.originYMm;
+    grid.bottomMarginMm = sheet.height - grid.originYMm - grid.blockHeightMm;
     grid.pitchXMm = grid.copyWidthMm + grid.gutterMm;
     grid.pitchYMm = grid.copyHeightMm + grid.gutterMm;
+    grid.minVisible =
+        visibleFraction(spec.sourceAspect, grid.copyHeightMm / grid.copyWidthMm);
 
     int remaining = grid.count;
     grid.pagesMm.reserve(pages);
@@ -270,32 +334,84 @@ Result<BatchGrid> batchGrid(const Page &page, const BatchSpec &spec)
     return batchGridFor(sheetOf(page), spec);
 }
 
+namespace {
+
+/// One copy at one rectangle. Identity, source and sha, image rotation, crop,
+/// zoom, tone and effect survive; only what a copy owns is overridden.
+Frame copyFrameAt(const Frame &source, const QRectF &rect)
+{
+    Frame frame = source;
+    frame.id = makeId(QStringLiteral("frame"));
+    frame.cx = rect.center().x();
+    frame.cy = rect.center().y();
+    frame.width = rect.width();
+    frame.height = rect.height();
+    frame.angleDeg = 0.0;
+    frame.fit = FitMode::Fill;
+    // A copy is hand work as far as the first-use grid is concerned: a
+    // photograph added later must not reflow the sheet.
+    frame.autoPlaced = false;
+    // A label numbers trial-sheet variants, not copies of one photo.
+    frame.label.clear();
+    return frame;
+}
+
+} // namespace
+
+Result<QList<QList<Frame>>> batchPageFrames(const Frame &source, const BatchGrid &grid)
+{
+    QList<QList<Frame>> pages;
+    pages.reserve(grid.pagesMm.size());
+    for (const QList<QRectF> &rects : grid.pagesMm) {
+        QList<Frame> frames;
+        frames.reserve(rects.size());
+        for (const QRectF &rect : rects)
+            frames.append(copyFrameAt(source, rect));
+        pages.append(frames);
+    }
+    return pages;
+}
+
 Result<QList<Frame>> batchFrames(const Frame &source, const BatchGrid &grid)
 {
+    const auto pages = batchPageFrames(source, grid);
+    if (!pages)
+        return pages.error();
     QList<Frame> frames;
     frames.reserve(grid.count);
-    for (const QList<QRectF> &rects : grid.pagesMm) {
-        for (const QRectF &rect : rects) {
-            // Start from the source and override only what a copy owns. The
-            // identity, the source and its sha, the image rotation, the crop,
-            // zoom, tone and effect survive untouched.
-            Frame frame = source;
-            frame.id = makeId(QStringLiteral("frame"));
-            frame.cx = rect.center().x();
-            frame.cy = rect.center().y();
-            frame.width = rect.width();
-            frame.height = rect.height();
-            frame.angleDeg = 0.0;
-            frame.fit = FitMode::Fill;
-            // A copy is hand work as far as the first-use grid is concerned: a
-            // photograph added later must not reflow the sheet.
-            frame.autoPlaced = false;
-            // A label numbers trial-sheet variants, not copies of one photo.
-            frame.label.clear();
-            frames.append(frame);
-        }
-    }
+    for (const QList<Frame> &page : pages.value())
+        frames.append(page);
     return frames;
+}
+
+Result<QList<Page>> batchPages(const Page &targetPage, const BatchSpec &spec, const Frame &source)
+{
+    return batchPages(targetPage.paper, targetPage.landscape, spec, source);
+}
+
+Result<QList<Page>> batchPages(const PaperSpec &paper, bool landscape, const BatchSpec &spec,
+                               const Frame &source)
+{
+    const auto grid = batchGrid(paper, landscape, spec);
+    if (!grid)
+        return grid.error();
+    const auto frames = batchPageFrames(source, grid.value());
+    if (!frames)
+        return frames.error();
+
+    QList<Page> pages;
+    pages.reserve(frames.value().size());
+    for (const QList<Frame> &pageFrames : frames.value()) {
+        Page page;
+        page.id = makeId(QStringLiteral("page"));
+        page.paper = paper;
+        page.landscape = landscape;
+        page.frames = pageFrames;
+        page.cutGuides = CutGuides::None;
+        page.borderlessOverride = BorderlessOverride::Off;
+        pages.append(page);
+    }
+    return pages;
 }
 
 namespace {
@@ -322,6 +438,10 @@ Result<AlignPlan> alignGridFor(const QList<Frame> &frames, const Sheet &sheet,
 
     AlignPlan plan;
     plan.frameCount = count;
+    if (spec.columns < 0 || spec.columns > count) {
+        return error(QStringLiteral("align-columns"),
+                     QCoreApplication::translate("PhotoPrint", "Érvénytelen oszlopszám."));
+    }
     if (count == 1) {
         // One photo is centred and nothing else happens. This is deliberately
         // not "fit the page": FitPageEdit already does that.
@@ -331,13 +451,9 @@ Result<AlignPlan> alignGridFor(const QList<Frame> &frames, const Sheet &sheet,
         plan.cellHeightMm = usableHeight;
         plan.score = 1.0;
         plan.meanVisible = 1.0;
+        plan.minVisible = 1.0;
         plan.centresMm.append(QPointF(sheet.width / 2.0, sheet.height / 2.0));
         return plan;
-    }
-
-    if (spec.columns < 0 || spec.columns > count) {
-        return error(QStringLiteral("align-columns"),
-                     QCoreApplication::translate("PhotoPrint", "Érvénytelen oszlopszám."));
     }
 
     const int first = spec.columns > 0 ? spec.columns : 1;
@@ -356,9 +472,12 @@ Result<AlignPlan> alignGridFor(const QList<Frame> &frames, const Sheet &sheet,
 
         const double cellAspect = cellHeight / cellWidth;
         double visibleSum = 0.0;
+        double worstVisible = 1.0;
         for (int i = 0; i < count; ++i) {
             const double aspect = orientedAspect(frames.at(i), sourcePixels, i);
-            visibleSum += std::min(aspect / cellAspect, cellAspect / aspect);
+            const double visible = visibleFraction(aspect, cellAspect);
+            visibleSum += visible;
+            worstVisible = std::min(worstVisible, visible);
         }
         const double meanVisible = visibleSum / count;
         // The usage factor charges a grid for its empty cells, so a shape with a
@@ -379,6 +498,7 @@ Result<AlignPlan> alignGridFor(const QList<Frame> &frames, const Sheet &sheet,
             plan.cellHeightMm = cellHeight;
             plan.score = score;
             plan.meanVisible = meanVisible;
+            plan.minVisible = worstVisible;
             bestArea = area;
             haveBest = true;
         }
@@ -433,16 +553,20 @@ Result<DistributePlan> distributeFor(const QList<Frame> &frames, const Sheet &sh
     if (count == 0)
         return noFrames();
 
-    for (const Frame &frame : frames) {
+    for (int index = 0; index < count; ++index) {
+        const Frame &frame = frames.at(index);
         const double turns = std::isfinite(frame.angleDeg)
             ? std::remainder(frame.angleDeg, 360.0)
             : std::numeric_limits<double>::quiet_NaN();
         if (!std::isfinite(turns) || std::abs(turns) > 1e-9) {
+            // Name the offender: on a busy page "one photo is rotated" is not
+            // actionable, and the user does not know which row to look at.
             return error(QStringLiteral("distribute-rotated"),
                          QCoreApplication::translate(
                              "PhotoPrint",
-                             "A forgatott fotókat nem lehet térközzel rendezni. Előbb állítsd "
-                             "őket egyenesbe."));
+                             "A %1. fotó el van forgatva, ezért nem lehet térközzel rendezni. "
+                             "Előbb állítsd egyenesbe.")
+                             .arg(index + 1));
         }
     }
 
@@ -455,11 +579,27 @@ Result<DistributePlan> distributeFor(const QList<Frame> &frames, const Sheet &sh
     QList<double> sizes;
     sizes.reserve(count);
     double total = 0.0;
-    for (const Frame &frame : frames) {
+    const double crossDimension = horizontal ? sheet.height : sheet.width;
+    for (int index = 0; index < count; ++index) {
+        const Frame &frame = frames.at(index);
         const double raw = horizontal ? frame.width : frame.height;
         const double size = std::max(0.0, finiteOr(raw, 0.0));
         sizes.append(size);
         total += size;
+
+        // Centring on the cross axis puts anything taller than the sheet half
+        // outside it on both sides, so the action refuses instead of producing
+        // a layout the cutter cannot follow.
+        const double rawCross = horizontal ? frame.height : frame.width;
+        const double crossSize = std::max(0.0, finiteOr(rawCross, 0.0));
+        if (crossSize > crossDimension + kFitEpsilon) {
+            return error(QStringLiteral("distribute-cross-overflow"),
+                         QCoreApplication::translate(
+                             "PhotoPrint",
+                             "A %1. fotó a lap másik irányában sem fér el. Kicsinyítsd, vagy "
+                             "használd a rácsot.")
+                             .arg(index + 1));
+        }
     }
 
     if (!(span > 0.0) || total > span + kFitEpsilon) {
@@ -605,8 +745,11 @@ QList<QLineF> cutGuideLinesMm(const Page &page)
         const QPolygonF quad = PhotoItem::frameQuadMm(frame);
         if (quad.size() != 4)
             continue;
-        for (int i = 0; i < 4; ++i)
-            lines.append(QLineF(quad.at(i), quad.at((i + 1) % 4)));
+        for (int i = 0; i < 4; ++i) {
+            const QLineF edge(quad.at(i), quad.at((i + 1) % 4));
+            if (!containsLine(lines, edge))
+                lines.append(edge);
+        }
     }
     return lines;
 }

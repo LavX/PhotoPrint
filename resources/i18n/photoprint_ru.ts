@@ -1011,5 +1011,105 @@
         <source>Kiválasztott</source>
         <translation>Выбрано</translation>
     </message>
+    <message>
+        <source>Érvénytelen papírméret.</source>
+        <translation>Неверный размер бумаги.</translation>
+    </message>
+    <message>
+        <source>Ezen a lapon nincs fotó.</source>
+        <translation>На этой странице нет фотографий.</translation>
+    </message>
+    <message>
+        <source>Ekkora margó mellett nem marad hely. Csökkentsd a margót.</source>
+        <translation>При таком поле не остаётся места. Уменьшите поле.</translation>
+    </message>
+    <message>
+        <source>A példány nagyobb, mint a lap. Válassz kisebb méretet, vagy nagyobb papírt.</source>
+        <translation>Копия больше листа. Выберите меньший размер или большую бумагу.</translation>
+    </message>
+    <message>
+        <source>Legnagyobb: %1 × %2 mm.</source>
+        <translation>Наибольший: %1 × %2 мм.</translation>
+    </message>
+    <message>
+        <source>Egyszerre legfeljebb %1 példány készíthető.</source>
+        <translation>За один раз можно создать не более %1 копий.</translation>
+    </message>
+    <message>
+        <source>Ez %1 lap lenne. Egyszerre legfeljebb %2 lap készíthető. Csökkentsd a darabszámot.</source>
+        <translation>Получилось бы страниц: %1. За один раз можно создать не более %2 страниц. Уменьшите количество.</translation>
+    </message>
+    <message>
+        <source>Érvénytelen oszlopszám.</source>
+        <translation>Неверное число столбцов.</translation>
+    </message>
+    <message>
+        <source>Ekkora oszlopszámmal a fotók nem férnek el olvasható méretben.</source>
+        <translation>При таком числе столбцов фотографии не помещаются в читаемом размере.</translation>
+    </message>
+    <message>
+        <source>Ezen a lapon legfeljebb %1 fotó fér el olvasható méretben. Most %2 van. Oszd el őket több lapra, vagy válassz nagyobb papírt.</source>
+        <translation>На этой странице помещается не более %1 фотографий в читаемом размере. Сейчас их %2. Распределите их по большему числу страниц или выберите бумагу больше.</translation>
+    </message>
+    <message>
+        <source>A %1. fotó el van forgatva, ezért nem lehet térközzel rendezni. Előbb állítsd egyenesbe.</source>
+        <translation>Фотография %1 повёрнута, поэтому промежутки нельзя выровнять. Сначала выпрямите её.</translation>
+    </message>
+    <message>
+        <source>A %1. fotó a lap másik irányában sem fér el. Kicsinyítsd, vagy használd a rácsot.</source>
+        <translation>Фотография %1 не помещается и в другом направлении. Уменьшите её или используйте сетку.</translation>
+    </message>
+    <message>
+        <source>A fotók így nem férnek el a lapon. Kicsinyítsd őket, vagy használd a rácsot.</source>
+        <translation>Так фотографии не помещаются на странице. Уменьшите их или используйте сетку.</translation>
+    </message>
+    <message>
+        <source>Érvénytelen lapsorszám.</source>
+        <translation>Неверный номер страницы.</translation>
+    </message>
+    <message>
+        <source>Egy lap csak egyszer szerepelhet a módosításban.</source>
+        <translation>Страница может встречаться в изменении только один раз.</translation>
+    </message>
+    <message>
+        <source>A lap azonosítója nem lehet üres.</source>
+        <translation>Идентификатор страницы не может быть пустым.</translation>
+    </message>
+    <message>
+        <source>Az új lap azonosítója már létezik.</source>
+        <translation>Идентификатор новой страницы уже существует.</translation>
+    </message>
+    <message>
+        <source>Két új lap azonosítója megegyezik.</source>
+        <translation>У двух новых страниц одинаковый идентификатор.</translation>
+    </message>
+    <message>
+        <source>Érvénytelen beszúrási hely.</source>
+        <translation>Неверная позиция вставки.</translation>
+    </message>
+    <message>
+        <source>Érvénytelen kiválasztott lap.</source>
+        <translation>Неверная выбранная страница.</translation>
+    </message>
+    <message>
+        <source>35 × 45 mm (igazolványkép)</source>
+        <translation>35 × 45 мм (фотография на документы)</translation>
+    </message>
+    <message>
+        <source>50 × 70 mm</source>
+        <translation>50 × 70 мм</translation>
+    </message>
+    <message>
+        <source>40 × 40 mm</source>
+        <translation>40 × 40 мм</translation>
+    </message>
+    <message>
+        <source>30 × 40 mm</source>
+        <translation>30 × 40 мм</translation>
+    </message>
+    <message>
+        <source>25 × 35 mm</source>
+        <translation>25 × 35 мм</translation>
+    </message>
 </context>
 </TS>

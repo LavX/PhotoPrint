@@ -1001,5 +1001,105 @@
         <source>Kiválasztott</source>
         <translation>選択中</translation>
     </message>
+    <message>
+        <source>Érvénytelen papírméret.</source>
+        <translation>用紙サイズが無効です。</translation>
+    </message>
+    <message>
+        <source>Ezen a lapon nincs fotó.</source>
+        <translation>このページに写真がありません。</translation>
+    </message>
+    <message>
+        <source>Ekkora margó mellett nem marad hely. Csökkentsd a margót.</source>
+        <translation>この余白では場所が残りません。余白を小さくしてください。</translation>
+    </message>
+    <message>
+        <source>A példány nagyobb, mint a lap. Válassz kisebb méretet, vagy nagyobb papírt.</source>
+        <translation>コピーが用紙より大きいです。小さいサイズか大きい用紙を選んでください。</translation>
+    </message>
+    <message>
+        <source>Legnagyobb: %1 × %2 mm.</source>
+        <translation>最大: %1 × %2 mm。</translation>
+    </message>
+    <message>
+        <source>Egyszerre legfeljebb %1 példány készíthető.</source>
+        <translation>一度に作成できるコピーは最大 %1 枚です。</translation>
+    </message>
+    <message>
+        <source>Ez %1 lap lenne. Egyszerre legfeljebb %2 lap készíthető. Csökkentsd a darabszámot.</source>
+        <translation>%1 ページになります。一度に作成できるページは最大 %2 ページです。枚数を減らしてください。</translation>
+    </message>
+    <message>
+        <source>Érvénytelen oszlopszám.</source>
+        <translation>列数が無効です。</translation>
+    </message>
+    <message>
+        <source>Ekkora oszlopszámmal a fotók nem férnek el olvasható méretben.</source>
+        <translation>この列数では写真が読み取れる大きさで収まりません。</translation>
+    </message>
+    <message>
+        <source>Ezen a lapon legfeljebb %1 fotó fér el olvasható méretben. Most %2 van. Oszd el őket több lapra, vagy válassz nagyobb papírt.</source>
+        <translation>このページには読み取れる大きさで最大 %1 枚の写真が入ります。現在 %2 枚あります。より多くのページに分けるか、大きい用紙を選んでください。</translation>
+    </message>
+    <message>
+        <source>A %1. fotó el van forgatva, ezért nem lehet térközzel rendezni. Előbb állítsd egyenesbe.</source>
+        <translation>%1 枚目の写真が回転しているため、間隔を揃えられません。先にまっすぐにしてください。</translation>
+    </message>
+    <message>
+        <source>A %1. fotó a lap másik irányában sem fér el. Kicsinyítsd, vagy használd a rácsot.</source>
+        <translation>%1 枚目の写真はもう一方の方向にも収まりません。小さくするか、グリッドを使ってください。</translation>
+    </message>
+    <message>
+        <source>A fotók így nem férnek el a lapon. Kicsinyítsd őket, vagy használd a rácsot.</source>
+        <translation>このままでは写真がページに収まりません。小さくするか、グリッドを使ってください。</translation>
+    </message>
+    <message>
+        <source>Érvénytelen lapsorszám.</source>
+        <translation>ページ番号が無効です。</translation>
+    </message>
+    <message>
+        <source>Egy lap csak egyszer szerepelhet a módosításban.</source>
+        <translation>変更の中で同じページは一度だけ指定できます。</translation>
+    </message>
+    <message>
+        <source>A lap azonosítója nem lehet üres.</source>
+        <translation>ページ ID は空にできません。</translation>
+    </message>
+    <message>
+        <source>Az új lap azonosítója már létezik.</source>
+        <translation>新しいページ ID は既に存在します。</translation>
+    </message>
+    <message>
+        <source>Két új lap azonosítója megegyezik.</source>
+        <translation>2 つの新しいページの ID が同じです。</translation>
+    </message>
+    <message>
+        <source>Érvénytelen beszúrási hely.</source>
+        <translation>挿入位置が無効です。</translation>
+    </message>
+    <message>
+        <source>Érvénytelen kiválasztott lap.</source>
+        <translation>選択したページが無効です。</translation>
+    </message>
+    <message>
+        <source>35 × 45 mm (igazolványkép)</source>
+        <translation>35 × 45 mm (証明写真)</translation>
+    </message>
+    <message>
+        <source>50 × 70 mm</source>
+        <translation>50 × 70 mm</translation>
+    </message>
+    <message>
+        <source>40 × 40 mm</source>
+        <translation>40 × 40 mm</translation>
+    </message>
+    <message>
+        <source>30 × 40 mm</source>
+        <translation>30 × 40 mm</translation>
+    </message>
+    <message>
+        <source>25 × 35 mm</source>
+        <translation>25 × 35 mm</translation>
+    </message>
 </context>
 </TS>

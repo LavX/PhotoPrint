@@ -1006,5 +1006,105 @@
         <source>Kiválasztott</source>
         <translation>चयनित</translation>
     </message>
+    <message>
+        <source>Érvénytelen papírméret.</source>
+        <translation>अमान्य कागज़ का आकार।</translation>
+    </message>
+    <message>
+        <source>Ezen a lapon nincs fotó.</source>
+        <translation>इस पृष्ठ पर कोई फ़ोटो नहीं है।</translation>
+    </message>
+    <message>
+        <source>Ekkora margó mellett nem marad hely. Csökkentsd a margót.</source>
+        <translation>इस मार्जिन के साथ जगह नहीं बचती। मार्जिन कम करें।</translation>
+    </message>
+    <message>
+        <source>A példány nagyobb, mint a lap. Válassz kisebb méretet, vagy nagyobb papírt.</source>
+        <translation>प्रति कागज़ से बड़ी है। छोटा आकार या बड़ा कागज़ चुनें।</translation>
+    </message>
+    <message>
+        <source>Legnagyobb: %1 × %2 mm.</source>
+        <translation>सबसे बड़ा: %1 × %2 मिमी।</translation>
+    </message>
+    <message>
+        <source>Egyszerre legfeljebb %1 példány készíthető.</source>
+        <translation>एक बार में अधिकतम %1 प्रतियाँ बनाई जा सकती हैं।</translation>
+    </message>
+    <message>
+        <source>Ez %1 lap lenne. Egyszerre legfeljebb %2 lap készíthető. Csökkentsd a darabszámot.</source>
+        <translation>यह %1 पृष्ठ होंगे। एक बार में अधिकतम %2 पृष्ठ बनाए जा सकते हैं। संख्या कम करें।</translation>
+    </message>
+    <message>
+        <source>Érvénytelen oszlopszám.</source>
+        <translation>अमान्य स्तंभ संख्या।</translation>
+    </message>
+    <message>
+        <source>Ekkora oszlopszámmal a fotók nem férnek el olvasható méretben.</source>
+        <translation>इतने स्तंभों के साथ फ़ोटो पठनीय आकार में नहीं आतीं।</translation>
+    </message>
+    <message>
+        <source>Ezen a lapon legfeljebb %1 fotó fér el olvasható méretben. Most %2 van. Oszd el őket több lapra, vagy válassz nagyobb papírt.</source>
+        <translation>इस पृष्ठ पर पठनीय आकार में अधिकतम %1 फ़ोटो आती हैं। अभी %2 हैं। उन्हें अधिक पृष्ठों पर बाँटें, या बड़ा कागज़ चुनें।</translation>
+    </message>
+    <message>
+        <source>A %1. fotó el van forgatva, ezért nem lehet térközzel rendezni. Előbb állítsd egyenesbe.</source>
+        <translation>फ़ोटो %1 घुमी हुई है, इसलिए अंतराल बराबर नहीं किए जा सकते। पहले उसे सीधा करें।</translation>
+    </message>
+    <message>
+        <source>A %1. fotó a lap másik irányában sem fér el. Kicsinyítsd, vagy használd a rácsot.</source>
+        <translation>फ़ोटो %1 दूसरी दिशा में भी नहीं आती। उसे छोटा करें, या ग्रिड का उपयोग करें।</translation>
+    </message>
+    <message>
+        <source>A fotók így nem férnek el a lapon. Kicsinyítsd őket, vagy használd a rácsot.</source>
+        <translation>फ़ोटो इस तरह पृष्ठ पर नहीं आतीं। उन्हें छोटा करें, या ग्रिड का उपयोग करें।</translation>
+    </message>
+    <message>
+        <source>Érvénytelen lapsorszám.</source>
+        <translation>अमान्य पृष्ठ संख्या।</translation>
+    </message>
+    <message>
+        <source>Egy lap csak egyszer szerepelhet a módosításban.</source>
+        <translation>बदलाव में एक पृष्ठ केवल एक बार आ सकता है।</translation>
+    </message>
+    <message>
+        <source>A lap azonosítója nem lehet üres.</source>
+        <translation>पृष्ठ आईडी खाली नहीं हो सकती।</translation>
+    </message>
+    <message>
+        <source>Az új lap azonosítója már létezik.</source>
+        <translation>नए पृष्ठ की आईडी पहले से मौजूद है।</translation>
+    </message>
+    <message>
+        <source>Két új lap azonosítója megegyezik.</source>
+        <translation>दो नए पृष्ठों की आईडी एक ही है।</translation>
+    </message>
+    <message>
+        <source>Érvénytelen beszúrási hely.</source>
+        <translation>अमान्य सम्मिलन स्थान।</translation>
+    </message>
+    <message>
+        <source>Érvénytelen kiválasztott lap.</source>
+        <translation>अमान्य चयनित पृष्ठ।</translation>
+    </message>
+    <message>
+        <source>35 × 45 mm (igazolványkép)</source>
+        <translation>35 × 45 मिमी (पासपोर्ट फ़ोटो)</translation>
+    </message>
+    <message>
+        <source>50 × 70 mm</source>
+        <translation>50 × 70 मिमी</translation>
+    </message>
+    <message>
+        <source>40 × 40 mm</source>
+        <translation>40 × 40 मिमी</translation>
+    </message>
+    <message>
+        <source>30 × 40 mm</source>
+        <translation>30 × 40 मिमी</translation>
+    </message>
+    <message>
+        <source>25 × 35 mm</source>
+        <translation>25 × 35 मिमी</translation>
+    </message>
 </context>
 </TS>

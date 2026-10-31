@@ -1001,5 +1001,105 @@
         <source>Kiválasztott</source>
         <translation>已选择</translation>
     </message>
+    <message>
+        <source>Érvénytelen papírméret.</source>
+        <translation>纸张尺寸无效。</translation>
+    </message>
+    <message>
+        <source>Ezen a lapon nincs fotó.</source>
+        <translation>此页面上没有照片。</translation>
+    </message>
+    <message>
+        <source>Ekkora margó mellett nem marad hely. Csökkentsd a margót.</source>
+        <translation>这样的边距没有剩余空间。请减小边距。</translation>
+    </message>
+    <message>
+        <source>A példány nagyobb, mint a lap. Válassz kisebb méretet, vagy nagyobb papírt.</source>
+        <translation>副本比纸张大。请选择较小的尺寸或较大的纸张。</translation>
+    </message>
+    <message>
+        <source>Legnagyobb: %1 × %2 mm.</source>
+        <translation>最大：%1 × %2 毫米。</translation>
+    </message>
+    <message>
+        <source>Egyszerre legfeljebb %1 példány készíthető.</source>
+        <translation>一次最多可创建 %1 个副本。</translation>
+    </message>
+    <message>
+        <source>Ez %1 lap lenne. Egyszerre legfeljebb %2 lap készíthető. Csökkentsd a darabszámot.</source>
+        <translation>这将需要 %1 页。一次最多可创建 %2 页。请减少数量。</translation>
+    </message>
+    <message>
+        <source>Érvénytelen oszlopszám.</source>
+        <translation>列数无效。</translation>
+    </message>
+    <message>
+        <source>Ekkora oszlopszámmal a fotók nem férnek el olvasható méretben.</source>
+        <translation>使用这么多列时，照片无法以可读尺寸放下。</translation>
+    </message>
+    <message>
+        <source>Ezen a lapon legfeljebb %1 fotó fér el olvasható méretben. Most %2 van. Oszd el őket több lapra, vagy válassz nagyobb papírt.</source>
+        <translation>此页面最多可放下 %1 张可读尺寸的照片。现在有 %2 张。请分摊到更多页面，或选择更大的纸张。</translation>
+    </message>
+    <message>
+        <source>A %1. fotó el van forgatva, ezért nem lehet térközzel rendezni. Előbb állítsd egyenesbe.</source>
+        <translation>第 %1 张照片已旋转，因此无法均衡间距。请先将其摆正。</translation>
+    </message>
+    <message>
+        <source>A %1. fotó a lap másik irányában sem fér el. Kicsinyítsd, vagy használd a rácsot.</source>
+        <translation>第 %1 张照片在另一个方向也放不下。请将其缩小，或使用网格。</translation>
+    </message>
+    <message>
+        <source>A fotók így nem férnek el a lapon. Kicsinyítsd őket, vagy használd a rácsot.</source>
+        <translation>照片这样无法放在页面上。请将其缩小，或使用网格。</translation>
+    </message>
+    <message>
+        <source>Érvénytelen lapsorszám.</source>
+        <translation>页码无效。</translation>
+    </message>
+    <message>
+        <source>Egy lap csak egyszer szerepelhet a módosításban.</source>
+        <translation>同一页面在修改中只能出现一次。</translation>
+    </message>
+    <message>
+        <source>A lap azonosítója nem lehet üres.</source>
+        <translation>页面 ID 不能为空。</translation>
+    </message>
+    <message>
+        <source>Az új lap azonosítója már létezik.</source>
+        <translation>新的页面 ID 已存在。</translation>
+    </message>
+    <message>
+        <source>Két új lap azonosítója megegyezik.</source>
+        <translation>两个新页面的 ID 相同。</translation>
+    </message>
+    <message>
+        <source>Érvénytelen beszúrási hely.</source>
+        <translation>插入位置无效。</translation>
+    </message>
+    <message>
+        <source>Érvénytelen kiválasztott lap.</source>
+        <translation>所选页面无效。</translation>
+    </message>
+    <message>
+        <source>35 × 45 mm (igazolványkép)</source>
+        <translation>35 × 45 mm（证件照）</translation>
+    </message>
+    <message>
+        <source>50 × 70 mm</source>
+        <translation>50 × 70 mm</translation>
+    </message>
+    <message>
+        <source>40 × 40 mm</source>
+        <translation>40 × 40 mm</translation>
+    </message>
+    <message>
+        <source>30 × 40 mm</source>
+        <translation>30 × 40 mm</translation>
+    </message>
+    <message>
+        <source>25 × 35 mm</source>
+        <translation>25 × 35 mm</translation>
+    </message>
 </context>
 </TS>
