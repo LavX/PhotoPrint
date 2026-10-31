@@ -61,6 +61,10 @@ public:
     QRectF pageRect() const;
     QImage composedImage() const;
 
+    /// Test hook: how many times the page raster has been built. Panning never
+    /// raises it; a zoom or a resize raises it once, when the settle fires.
+    quint64 compositionCount() const { return m_compositions; }
+
     std::function<void(const QString &)> onSelectionChanged;
     std::function<void(const Frame &)> onFrameCommitted;
     std::function<void(const QString &)> onDeleteRequested;
@@ -101,7 +105,14 @@ private:
     int hitHandle(const QPointF &widgetPoint) const;
     void beginDrag(DragKind kind, int handle, const QPointF &pagePoint, const Frame &frame);
     void ensureComposed() const;
-    void invalidateComposition();
+    void composeRaster(const QSize &pixels) const;
+    QSize targetRasterSize() const;
+    QSize gestureRasterSize() const;
+    bool rasterMatchesTarget() const;
+    bool directManipulation() const;
+    void settleRaster();
+    void scheduleSettle();
+    static QSize capRasterSize(QSize pixels, qint64 maxPixels);
     void updateLiveFrame(const Frame &frame);
     Frame draggedFrame(const QPointF &pagePoint, bool fine) const;
 
@@ -119,8 +130,10 @@ private:
     QColor m_pageBorderColor{0xc7, 0xc7, 0xcc};
     QColor m_pageShadowColor{0, 0, 0, 38};
     mutable QImage m_composed;
-    mutable bool m_composedDirty = true;
-    mutable QSize m_composedPixels;
+    mutable QSizeF m_composedPageMm;
+    mutable bool m_contentDirty = true;
+    mutable quint64 m_compositions = 0;
+    QTimer *m_settleTimer = nullptr;
 };
 
 class MainWindow : public QMainWindow

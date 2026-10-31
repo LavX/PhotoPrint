@@ -71,6 +71,16 @@ namespace {
 constexpr double kHandleHalfPx = 6.0;
 constexpr double kRotateOffsetPx = 30.0;
 
+// Canvas raster policy. The composed page is a page-local bitmap: the view
+// transform (pan) never touches it; only the page content and the resolution
+// do. A zoom or a resize paints the existing bitmap scaled and sharpens once
+// the view stops moving.
+constexpr int kSettleDelayMs = 120;
+constexpr qint64 kMaxRasterPixels = 8000000;      // retained raster ceiling (8 MP)
+constexpr qint64 kGestureRasterPixels = 1000000;  // during a direct manipulation
+constexpr double kRasterMinFactor = 0.98;         // below this share of the target: sharpen
+constexpr double kRasterMaxFactor = 1.35;         // far above it: drop the excess
+
 Page emptyPage(const PaperSpec &paper)
 {
     Page page;
@@ -287,54 +297,166 @@ PageView::PageView(QWidget *parent) : QWidget(parent)
     setMouseTracking(true);
     setMinimumSize(180, 140);
     setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
+    // paintEvent() fills the whole viewport, so Qt must not clear it first.
+    setAttribute(Qt::WA_OpaquePaintEvent);
+
+    // Zoom and resize draw the existing raster immediately and rebuild it once
+    // the view has been still for a moment.
+    m_settleTimer = new QTimer(this);
+    m_settleTimer->setSingleShot(true);
+    m_settleTimer->setInterval(kSettleDelayMs);
+    connect(m_settleTimer, &QTimer::timeout, this, [this] { settleRaster(); });
 }
 
 void PageView::setDocument(const DocumentSnapshot &document)
 {
+    if (document == m_document) {
+        // Same document: no page pixel changed, so the composed raster stays.
+        // The only visible state that can still be stale is a selection that
+        // points at a frame which no longer exists.
+        if (!m_selectedId.isEmpty() && !findFrame(m_document, m_selectedId)) {
+            m_selectedId.clear();
+            update();
+        }
+        return;
+    }
     m_document = document;
     if (!m_selectedId.isEmpty() && !findFrame(m_document, m_selectedId))
         m_selectedId.clear();
-    invalidateComposition();
+    m_contentDirty = true;
     update();
 }
 
-void PageView::invalidateComposition()
+QSize PageView::capRasterSize(QSize pixels, qint64 maxPixels)
 {
-    m_composedDirty = true;
-    m_composed = QImage();
+    if (pixels.isEmpty() || maxPixels <= 0)
+        return pixels;
+    const qint64 area = static_cast<qint64>(pixels.width()) * pixels.height();
+    if (area <= maxPixels)
+        return pixels;
+    const double factor = std::sqrt(static_cast<double>(maxPixels) / static_cast<double>(area));
+    return QSize(std::max(1, static_cast<int>(pixels.width() * factor)),
+                 std::max(1, static_cast<int>(pixels.height() * factor)));
 }
 
-void PageView::ensureComposed() const
+QSize PageView::targetRasterSize() const
 {
     const QRectF page = pageRect();
     if (page.isEmpty())
-        return;
+        return {};
     const double dpr = devicePixelRatioF();
-    const int width = std::max(1, qRound(page.width() * dpr));
-    const int height = std::max(1, qRound(page.height() * dpr));
-    if (!m_composedDirty && m_composedPixels == QSize(width, height) && !m_composed.isNull())
+    const QSize pixels(std::max(1, qRound(page.width() * dpr)),
+                       std::max(1, qRound(page.height() * dpr)));
+    // A 300% viewport on a 200% display would be 23 MP; the cap keeps the
+    // retained raster bounded and lets the painter stretch it instead.
+    return capRasterSize(pixels, kMaxRasterPixels);
+}
+
+QSize PageView::gestureRasterSize() const
+{
+    const QSize target = targetRasterSize();
+    if (target.isEmpty())
+        return target;
+    // A drag needs the page at the fitted scale only: the painter stretches it
+    // for the duration of the gesture, and the release sharpens it again. The
+    // pixel budget caps the composition cost even on a HiDPI screen, where the
+    // fitted page alone is already several megapixels.
+    QSize coarse = target;
+    if (m_viewZoom > 1.0) {
+        const double factor = 1.0 / m_viewZoom;
+        coarse = QSize(std::max(1, qRound(target.width() * factor)),
+                       std::max(1, qRound(target.height() * factor)));
+    }
+    return capRasterSize(coarse, kGestureRasterPixels);
+}
+
+bool PageView::directManipulation() const
+{
+    return m_drag.kind != DragKind::None;
+}
+
+bool PageView::rasterMatchesTarget() const
+{
+    if (m_composed.isNull() || m_composedPageMm != pageMm())
+        return false;
+    const QSize target = targetRasterSize();
+    if (target.isEmpty())
+        return true;
+    const double width = m_composed.width();
+    const double height = m_composed.height();
+    // Zooming out keeps the larger raster: it is free and sharper than
+    // rebuilding a smaller one. Only a big surplus is dropped.
+    return width >= target.width() * kRasterMinFactor && width <= target.width() * kRasterMaxFactor
+        && height >= target.height() * kRasterMinFactor
+        && height <= target.height() * kRasterMaxFactor;
+}
+
+void PageView::scheduleSettle()
+{
+    if (!m_settleTimer || m_document.pages.isEmpty() || pageMm().isEmpty())
+        return;
+    m_settleTimer->start();
+}
+
+void PageView::settleRaster()
+{
+    if (!isVisible() || directManipulation() || rasterMatchesTarget())
+        return;
+    composeRaster(targetRasterSize());
+    update();
+}
+
+void PageView::composeRaster(const QSize &pixels) const
+{
+    const QSizeF page = pageMm();
+    if (page.isEmpty() || pixels.isEmpty() || m_document.pages.isEmpty())
         return;
 
-    QImage linear(width, height, QImage::Format_RGBA64_Premultiplied);
+    QImage linear(pixels, QImage::Format_RGBA64_Premultiplied);
+    if (linear.isNull())
+        return;
     linear.fill(Qt::white);
     QPainter painter(&linear);
     painter.setRenderHints(QPainter::Antialiasing | QPainter::SmoothPixmapTransform);
     QTransform scale;
-    scale.scale(static_cast<double>(width) / pageMm().width(),
-                static_cast<double>(height) / pageMm().height());
+    scale.scale(static_cast<double>(pixels.width()) / page.width(),
+                static_cast<double>(pixels.height()) / page.height());
     painter.setTransform(scale);
     paintPageContent(painter, m_document, m_document.currentPage, m_images);
     painter.end();
 
     m_composed = ColorPipeline::linearToSrgb(linear, m_document.recipe.grayscale);
-    m_composedPixels = QSize(width, height);
-    m_composedDirty = false;
+    m_composedPageMm = page;
+    m_contentDirty = false;
+    ++m_compositions;
+}
+
+void PageView::ensureComposed() const
+{
+    const QSizeF page = pageMm();
+    if (page.isEmpty() || pageRect().isEmpty() || m_document.pages.isEmpty()) {
+        m_composed = QImage();
+        m_composedPageMm = QSizeF();
+        m_contentDirty = true;
+        return;
+    }
+    if (!m_contentDirty && !m_composed.isNull() && m_composedPageMm == page)
+        return;
+
+    // During a drag the content changes on every move while the view does not:
+    // a coarse raster keeps the gesture responsive, and the release settles at
+    // the full scale.
+    composeRaster(directManipulation() ? gestureRasterSize() : targetRasterSize());
 }
 
 void PageView::setFrameImages(const QHash<QString, QImage> &images)
 {
+    // ImageStore hands out shared copies, so an unchanged set compares cheaply
+    // and must not throw the composed page away.
+    if (images == m_images)
+        return;
     m_images = images;
-    invalidateComposition();
+    m_contentDirty = true;
     update();
 }
 
@@ -343,7 +465,9 @@ void PageView::setViewZoom(double zoom)
     m_viewZoom = std::clamp(zoom, 0.25, 3.0);
     if (m_viewZoom <= 1.0)
         m_viewPan = QPointF();
-    invalidateComposition();
+    // The raster is page-local: the new zoom only changes how it is drawn. The
+    // higher resolution arrives once the zooming stops.
+    scheduleSettle();
     update();
 }
 
@@ -490,7 +614,7 @@ void PageView::updateLiveFrame(const Frame &frame)
     *target = frame;
     target->autoPlaced = false;
     m_drag.changed = true;
-    invalidateComposition();
+    m_contentDirty = true;
     update();
 }
 
@@ -545,18 +669,28 @@ Frame PageView::draggedFrame(const QPointF &pagePoint, bool fine) const
 void PageView::paintEvent(QPaintEvent *)
 {
     QPainter painter(this);
+    // WA_OpaquePaintEvent: the whole viewport is painted here, every time.
     painter.fillRect(rect(), m_canvasColor);
     const QRectF page = pageRect();
-    if (page.isEmpty())
+    if (page.isEmpty()) {
+        m_composed = QImage();
+        m_composedPageMm = QSizeF();
+        m_contentDirty = true;
         return;
+    }
 
     painter.setRenderHints(QPainter::Antialiasing | QPainter::SmoothPixmapTransform);
     painter.fillRect(page.adjusted(2, 4, 2, 6), m_pageShadowColor);
     painter.fillRect(page, Qt::white);
 
+    // The composed raster is page-local, so drawing it is a pure transform of
+    // the view: a pan repaints one blit and never a recomposition.
     ensureComposed();
     if (!m_composed.isNull())
         painter.drawImage(page, m_composed);
+
+    if (!directManipulation() && !rasterMatchesTarget())
+        scheduleSettle();
 
     painter.setPen(QPen(m_pageBorderColor, 1));
     painter.setBrush(Qt::NoBrush);
@@ -627,7 +761,9 @@ void PageView::paintEvent(QPaintEvent *)
 void PageView::resizeEvent(QResizeEvent *event)
 {
     QWidget::resizeEvent(event);
-    invalidateComposition();
+    // The page rect changed size: draw the raster we have, scaled, and rebuild
+    // it at the new scale once the resizing stops.
+    scheduleSettle();
     update();
 }
 
@@ -695,7 +831,7 @@ void PageView::mouseMoveEvent(QMouseEvent *event)
     if (m_panning) {
         m_viewPan += event->position() - m_panStart;
         m_panStart = event->position();
-        invalidateComposition();
+        // Panning moves the page, it does not change a single page pixel.
         update();
         return;
     }
@@ -735,6 +871,11 @@ void PageView::mouseReleaseEvent(QMouseEvent *event)
         const Frame *frame = selectedFramePtr();
         if (frame && onFrameCommitted)
             onFrameCommitted(*frame);
+    }
+    if (changed || !rasterMatchesTarget()) {
+        // The gesture could only afford a coarse raster or the commit dirtied
+        // the page: settle at the full scale now that the mouse is up.
+        settleRaster();
     }
 }
 
