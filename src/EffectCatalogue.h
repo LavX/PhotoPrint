@@ -171,6 +171,11 @@ struct EffectRecipe {
     int version = 1;
     QString name;        ///< the single English product name
     QString description; ///< optional one-line tooltip text
+    /// Rendering hints for the browser, never for the engine. `slow` marks a
+    /// recipe whose full-resolution render is heavy; `approximate` marks a
+    /// dither or texture recipe whose preview cannot match the print exactly.
+    bool slow = false;
+    bool approximate = false;
     QList<Stage> stages;
 
     /// `key@version`, the stable identity used by caches and tests.
@@ -211,5 +216,16 @@ private:
     QStringList m_categoryKeys;
     QHash<QString, QString> m_categoryNames;
 };
+
+/// True for recipes whose screen is a finish stage, a halftone wand pass or a
+/// dithered posterize. Strength is not a continuous control there, because the
+/// screen either exists or it does not; the model and every render path use
+/// this same rule.
+bool effectIgnoresStrength(const QString &key);
+
+/// The strength a render actually uses: dither recipes are always 100, every
+/// other recipe keeps its clamped value. The panel, the browser and the print
+/// path all go through here so they cannot disagree.
+int effectiveEffectStrength(const QString &key, int strength);
 
 } // namespace pp

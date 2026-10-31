@@ -237,7 +237,10 @@ Result<QImage> ImageStore::preparedLinear(const SourceImage &source, const Color
         }
         if (effectRecipe) {
             const EffectRecipe &effect = effectRecipe.value();
-            const int strength = std::clamp(filterStrength, 0, 100);
+            // The screen recipes ignore strength. Normalising here, at the one
+            // render boundary, is what keeps a project that stored 50 on a
+            // halftone effect identical to the panel's 100.
+            const int strength = effectiveEffectStrength(filterKey, filterStrength);
             // Zero strength is the untouched frame by contract, and staying on
             // the source path keeps it byte-identical to a legacy Original.
             if (strength == 0)

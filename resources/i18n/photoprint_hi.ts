@@ -28,6 +28,14 @@
         <translation>अपना कागज़ आकार जोड़ें या हटाएँ।</translation>
     </message>
     <message>
+        <source>Feldolgozás…</source>
+        <translation>प्रोसेस हो रहा है…</translation>
+    </message>
+    <message>
+        <source>Mégsem</source>
+        <translation>रद्द करें</translation>
+    </message>
+    <message>
         <source>Tájolás:</source>
         <translation>ओरिएंटेशन:</translation>
     </message>
@@ -117,19 +125,19 @@
     </message>
     <message>
         <source>Képhangulat</source>
-        <translation>फ़ोटो का मूड</translation>
+        <translation type="vanished">फ़ोटो का मूड</translation>
     </message>
     <message>
         <source>Szűrő</source>
-        <translation>फ़िल्टर</translation>
+        <translation type="vanished">फ़िल्टर</translation>
     </message>
     <message>
         <source>Hatás</source>
-        <translation>प्रभाव</translation>
+        <translation type="vanished">प्रभाव</translation>
     </message>
     <message>
         <source>Hatás erőssége</source>
-        <translation>प्रभाव की तीव्रता</translation>
+        <translation type="vanished">प्रभाव की तीव्रता</translation>
     </message>
     <message>
         <source>Kép nagyítása 2×</source>
@@ -347,6 +355,106 @@
         <translation>इस आकार में तस्वीर धुँधली लग सकती है।</translation>
     </message>
     <message>
+        <source>Effekt</source>
+        <translation>प्रभाव</translation>
+    </message>
+    <message>
+        <source>Effekt kiválasztása</source>
+        <translation>प्रभाव चुनें</translation>
+    </message>
+    <message>
+        <source>Alap</source>
+        <translation>मूल</translation>
+    </message>
+    <message>
+        <source>Retró</source>
+        <translation>रेट्रो</translation>
+    </message>
+    <message>
+        <source>Elmosás</source>
+        <translation>धुंधलापन</translation>
+    </message>
+    <message>
+        <source>Élesség</source>
+        <translation>विवरण</translation>
+    </message>
+    <message>
+        <source>Művészi</source>
+        <translation>कलात्मक</translation>
+    </message>
+    <message>
+        <source>Torzítás</source>
+        <translation>विकृति</translation>
+    </message>
+    <message>
+        <source>Fény</source>
+        <translation>प्रकाश</translation>
+    </message>
+    <message>
+        <source>Szemcse</source>
+        <translation>ग्रेन</translation>
+    </message>
+    <message>
+        <source>Nyomat</source>
+        <translation>प्रिंट</translation>
+    </message>
+    <message>
+        <source>Ragyogás</source>
+        <translation>चमक</translation>
+    </message>
+    <message>
+        <source>Korábbi megjelenés</source>
+        <translation>पिछला रूप</translation>
+    </message>
+    <message>
+        <source>Új effekt választása</source>
+        <translation>नया प्रभाव चुनें</translation>
+    </message>
+    <message>
+        <source>Ez az effekt teljes erősséggel jelenik meg.</source>
+        <translation>यह प्रभाव हमेशा पूरी तीव्रता पर दिखता है।</translation>
+    </message>
+    <message>
+        <source>Effektek</source>
+        <translation>प्रभाव</translation>
+    </message>
+    <message>
+        <source>Keresés név vagy kategória szerint</source>
+        <translation>नाम या श्रेणी से खोजें</translation>
+    </message>
+    <message>
+        <source>Keresés</source>
+        <translation>खोजें</translation>
+    </message>
+    <message>
+        <source>Kategóriák</source>
+        <translation>श्रेणियाँ</translation>
+    </message>
+    <message>
+        <source>Effekt erőssége</source>
+        <translation>प्रभाव की तीव्रता</translation>
+    </message>
+    <message>
+        <source>Az előnézet hozzávetőleges</source>
+        <translation>पूर्वावलोकन अनुमानित है</translation>
+    </message>
+    <message>
+        <source>Alkalmaz</source>
+        <translation>लागू करें</translation>
+    </message>
+    <message>
+        <source>Az eredeti kép effekt nélkül.</source>
+        <translation>प्रभाव के बिना फ़ोटो।</translation>
+    </message>
+    <message>
+        <source>lassú</source>
+        <translation>धीमा</translation>
+    </message>
+    <message>
+        <source>Nincs találat.</source>
+        <translation>कोई मेल नहीं।</translation>
+    </message>
+    <message>
         <source>Egyedi papír</source>
         <translation>अपना कागज़</translation>
     </message>
@@ -512,6 +620,10 @@
     <message>
         <source>Ezt a képet most nem tudjuk feldolgozni. Próbáld újra.</source>
         <translation>यह चित्र अभी संसाधित नहीं हो सकता। फिर कोशिश करें।</translation>
+    </message>
+    <message>
+        <source>Ehhez a nyomtatási mérethez a kép túl nagy. Csökkentsd a nyomtatási felbontást.</source>
+        <translation>इस प्रिंट आकार के लिए फ़ोटो बहुत बड़ी है। प्रिंट रिज़ॉल्यूशन कम करें।</translation>
     </message>
     <message>
         <source>A művelet megszakadt.</source>
@@ -707,19 +819,19 @@
     </message>
     <message>
         <source>Élénk</source>
-        <translation>जीवंत</translation>
+        <translation type="vanished">जीवंत</translation>
     </message>
     <message>
         <source>Meleg</source>
-        <translation>गर्म</translation>
+        <translation type="vanished">गर्म</translation>
     </message>
     <message>
         <source>Hűvös</source>
-        <translation>ठंडा</translation>
+        <translation type="vanished">ठंडा</translation>
     </message>
     <message>
         <source>Szépia</source>
-        <translation>सेपिया</translation>
+        <translation type="vanished">सेपिया</translation>
     </message>
     <message>
         <source>Fekete-fehér</source>
@@ -727,7 +839,7 @@
     </message>
     <message>
         <source>Éles</source>
-        <translation>तेज़</translation>
+        <translation type="vanished">तेज़</translation>
     </message>
     <message>
         <source>Fényes</source>
@@ -791,7 +903,7 @@
     </message>
     <message>
         <source>Vintage</source>
-        <translation>विंटेज</translation>
+        <translation type="vanished">विंटेज</translation>
     </message>
     <message>
         <source>A napló jelenleg használatban van.</source>
@@ -808,6 +920,13 @@
     <message>
         <source>A naplóbejegyzést nem sikerült eltávolítani. A nyomtatás nem indult el, de a napló bizonytalan feladatot jelezhet, ezért a nyomtatási fájl megmarad.</source>
         <translation>प्रिंट लॉग की प्रविष्टि हटाई नहीं जा सकी। प्रिंट शुरू नहीं हुआ, लेकिन लॉग अनिश्चित कार्य दिखा सकता है, इसलिए प्रिंट फ़ाइल रखी गई है।</translation>
+    </message>
+    <message numerus="yes">
+        <source>%n effekt</source>
+        <translation>
+            <numerusform>%n प्रभाव</numerusform>
+            <numerusform>%n प्रभाव</numerusform>
+        </translation>
     </message>
 </context>
 </TS>

@@ -1,8 +1,10 @@
 #include "Document.h"
+#include "EffectBrowserDialog.h"
 #include "ImageSource.h"
 #include "MainWindow.h"
 #include "ProjectStore.h"
 
+#include <QAbstractButton>
 #include <QCheckBox>
 #include <QComboBox>
 #include <QDir>
@@ -10,7 +12,9 @@
 #include <QFile>
 #include <QImage>
 #include <QImageWriter>
+#include <QLineEdit>
 #include <QListWidget>
+#include <QPointer>
 #include <QPushButton>
 #include <QSettings>
 #include <QSlider>
@@ -72,6 +76,7 @@ private slots:
     void noTechnicalVocabularyOnTheDailySurface();
     void smallWindowKeepsPrintVisible();
     void filterControlsUpdateTheFrame();
+    void pressAndHoldOriginalBypassesTheEffect();
     void pageCountAppearsOnThePrintButton();
     void selectionReadsStayValidAcrossSelections();
     void cachedSourceStaysValidAfterLaterLoads();
@@ -275,45 +280,55 @@ void TestDailyFlow::filterControlsUpdateTheFrame()
     QTest::qWait(100);
     QVERIFY(QMetaObject::invokeMethod(&window, "addDroppedFiles", Qt::DirectConnection,
                                       Q_ARG(QStringList, photos)));
-    QTest::qWait(250);
+    QVERIFY(window.waitForPreview(15000));
 
-    QComboBox *filterCombo = nullptr;
-    QSlider *strength = nullptr;
+    auto *effectButton = window.findChild<QPushButton *>(QStringLiteral("effectButton"));
+    auto *strength = window.findChild<QSlider *>(QStringLiteral("effectStrength"));
     QCheckBox *upscale = nullptr;
-    for (QComboBox *combo : window.findChildren<QComboBox *>()) {
-        for (int i = 0; i < combo->count(); ++i) {
-            if (combo->itemText(i) == QStringLiteral("Szépia"))
-                filterCombo = combo;
-        }
-    }
-    for (QSlider *slider : window.findChildren<QSlider *>()) {
-        if (slider->maximum() == 100 && slider->value() == 100)
-            strength = slider;
-    }
     for (QCheckBox *check : window.findChildren<QCheckBox *>()) {
         if (check->text().contains(QStringLiteral("nagyítása")))
             upscale = check;
     }
-    QVERIFY(filterCombo);
+    QVERIFY(effectButton);
     QVERIFY(strength);
     QVERIFY(upscale);
+    QCOMPARE(effectButton->text(), QStringLiteral("Eredeti"));
+    QVERIFY(!strength->isEnabled()); // nothing to scale on the untouched frame
 
-    int sepiaIndex = 0;
-    for (int i = 0; i < filterCombo->count(); ++i) {
-        if (filterCombo->itemText(i) == QStringLiteral("Szépia"))
-            sepiaIndex = i;
-    }
-    filterCombo->setCurrentIndex(sepiaIndex);
-    QTest::qWait(120);
     auto *view = window.findChild<PageView *>();
     QVERIFY(view);
+
+    // The browser replaces the old Képhangulat combo. Apply Venice, then edit
+    // the single strength field from the side panel.
+    effectButton->click();
+    QPointer<EffectBrowserDialog> dialog = window.findChild<EffectBrowserDialog *>();
+    QVERIFY(dialog);
+    QVERIFY(dialog->waitForRendering());
+    auto *categories = dialog->findChild<QListWidget *>(QStringLiteral("categoryList"));
+    QVERIFY(categories);
+    for (int row = 0; row < categories->count(); ++row) {
+        if (categories->item(row)->data(Qt::UserRole).toString() == QStringLiteral("light"))
+            categories->setCurrentRow(row);
+    }
+    QTest::qWait(20);
+    auto *venice = dialog->findChild<QAbstractButton *>(
+        QStringLiteral("effectTile_light.venice"));
+    QVERIFY(venice);
+    QTest::mouseClick(venice, Qt::LeftButton, Qt::NoModifier, venice->rect().center());
+    dialog->findChild<QPushButton *>(QStringLiteral("applyButton"))->click();
+    QTRY_VERIFY(!dialog);
+    QVERIFY(window.waitForPreview(15000));
     {
         const DocumentSnapshot snapshot = window.document();
         const Frame *frame = findFrame(snapshot, view->selectedFrame());
         QVERIFY(frame);
-        QCOMPARE(frame->filter, QStringLiteral("sepia"));
+        QCOMPARE(frame->filter, QStringLiteral("light.venice"));
+        QCOMPARE(frame->effectVersion, 1);
+        QCOMPARE(frame->filterStrength, 100);
+        QCOMPARE(effectButton->text(), QStringLiteral("Venice"));
     }
 
+    QVERIFY(strength->isEnabled());
     strength->setValue(40);
     strength->sliderReleased();
     QTest::qWait(120);
@@ -333,8 +348,27 @@ void TestDailyFlow::filterControlsUpdateTheFrame()
         QVERIFY(frame->upscale);
     }
 
-    filterCombo->setCurrentIndex(0); // Original
-    QTest::qWait(80);
+    // Eredeti is a tile, not a combo row. It writes strength 100 with version 0.
+    effectButton->click();
+    dialog = window.findChild<EffectBrowserDialog *>();
+    QVERIFY(dialog);
+    QVERIFY(dialog->waitForRendering());
+    auto *original = dialog->findChild<QAbstractButton *>(QStringLiteral("effectTile_original"));
+    QVERIFY(original);
+    QTest::mouseClick(original, Qt::LeftButton, Qt::NoModifier, original->rect().center());
+    dialog->findChild<QPushButton *>(QStringLiteral("applyButton"))->click();
+    QTRY_VERIFY(!dialog);
+    QVERIFY(window.waitForPreview(15000));
+    {
+        const DocumentSnapshot snapshot = window.document();
+        const Frame *frame = findFrame(snapshot, view->selectedFrame());
+        QVERIFY(frame);
+        QCOMPARE(frame->filter, QStringLiteral("original"));
+        QCOMPARE(frame->effectVersion, 0);
+        QCOMPARE(frame->filterStrength, 100);
+        QCOMPARE(effectButton->text(), QStringLiteral("Eredeti"));
+    }
+
     QComboBox *colorCombo = nullptr;
     for (QComboBox *combo : window.findChildren<QComboBox *>()) {
         for (int i = 0; i < combo->count(); ++i) {
@@ -350,6 +384,75 @@ void TestDailyFlow::filterControlsUpdateTheFrame()
     const QRgb centre = composed.pixel(composed.width() / 2, composed.height() / 2);
     QCOMPARE(qRed(centre), qGreen(centre));
     QCOMPARE(qGreen(centre), qBlue(centre));
+}
+
+void TestDailyFlow::pressAndHoldOriginalBypassesTheEffect()
+{
+    QTemporaryDir dir;
+    QVERIFY(dir.isValid());
+    const QStringList photos = makePhotos(dir.path());
+    QCOMPARE(photos.size(), 3);
+
+    MainWindow window;
+    window.resize(1280, 800);
+    window.show();
+    QTest::qWait(80);
+    QVERIFY(QMetaObject::invokeMethod(&window, "addDroppedFiles", Qt::DirectConnection,
+                                      Q_ARG(QStringList, photos.mid(0, 1))));
+    QVERIFY(window.waitForPreview(15000));
+
+    auto *effectButton = window.findChild<QPushButton *>(QStringLiteral("effectButton"));
+    auto *originalButton = window.findChild<QPushButton *>(QStringLiteral("originalButton"));
+    auto *view = window.findChild<PageView *>();
+    QVERIFY(effectButton);
+    QVERIFY(originalButton);
+    QVERIFY(view);
+
+    // A monochrome effect makes the difference unmistakable on a coloured photo.
+    effectButton->click();
+    QPointer<EffectBrowserDialog> dialog = window.findChild<EffectBrowserDialog *>();
+    QVERIFY(dialog);
+    QVERIFY(dialog->waitForRendering());
+    auto *categories = dialog->findChild<QListWidget *>(QStringLiteral("categoryList"));
+    QVERIFY(categories);
+    for (int row = 0; row < categories->count(); ++row) {
+        if (categories->item(row)->data(Qt::UserRole).toString() == QStringLiteral("mono"))
+            categories->setCurrentRow(row);
+    }
+    QTest::qWait(20);
+    auto *mono = dialog->findChild<QAbstractButton *>(QStringLiteral("effectTile_mono.classic"));
+    QVERIFY(mono);
+    QTest::mouseClick(mono, Qt::LeftButton, Qt::NoModifier, mono->rect().center());
+    dialog->findChild<QPushButton *>(QStringLiteral("applyButton"))->click();
+    QTRY_VERIFY(!dialog);
+    QVERIFY(window.waitForPreview(15000));
+
+    const QImage effected = view->composedImage();
+    QVERIFY(!effected.isNull());
+    const QRgb effectedCentre =
+        effected.pixel(effected.width() / 2, effected.height() / 2);
+    QCOMPARE(qRed(effectedCentre), qGreen(effectedCentre));
+    QCOMPARE(qGreen(effectedCentre), qBlue(effectedCentre));
+
+    QTest::mousePress(originalButton, Qt::LeftButton);
+    QVERIFY(window.showingOriginal());
+    // The untouched layer is prepared on the worker the first time; the page
+    // switches to it when the result arrives, not by blocking the press.
+    QVERIFY(window.waitForOriginalPreview(15000));
+    const QImage shownOriginal = view->composedImage();
+    QVERIFY(!shownOriginal.isNull());
+    const QRgb originalCentre =
+        shownOriginal.pixel(shownOriginal.width() / 2, shownOriginal.height() / 2);
+    QVERIFY(qRed(originalCentre) != qGreen(originalCentre)
+            || qGreen(originalCentre) != qBlue(originalCentre));
+
+    QTest::mouseRelease(originalButton, Qt::LeftButton);
+    QVERIFY(!window.showingOriginal());
+    const QImage back = view->composedImage();
+    QVERIFY(!back.isNull());
+    const QRgb backCentre = back.pixel(back.width() / 2, back.height() / 2);
+    QCOMPARE(qRed(backCentre), qGreen(backCentre));
+    QCOMPARE(qGreen(backCentre), qBlue(backCentre));
 }
 
 void TestDailyFlow::pageCountAppearsOnThePrintButton()

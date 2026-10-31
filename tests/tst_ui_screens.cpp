@@ -1,11 +1,15 @@
 #include "AboutDialog.h"
+#include "EffectBrowserDialog.h"
 #include "MainWindow.h"
 
+#include <QAbstractButton>
 #include <QComboBox>
 #include <QDir>
 #include <QImage>
 #include <QImageWriter>
 #include <QAbstractItemView>
+#include <QListWidget>
+#include <QPointer>
 #include <QPushButton>
 #include <QScrollArea>
 #include <QScrollBar>
@@ -69,6 +73,38 @@ void TestUiScreens::captureStates()
                                       Q_ARG(QStringList, photos)));
     QTest::qWait(450);
     QVERIFY(window.grab().save(evidenceDir() + QStringLiteral("/ui-three-photos.png")));
+
+    // Evidence for the effect browser. The first grab has no photo selected,
+    // so it is the bundled CC0 sample rather than a flat test colour.
+    EffectBrowserRequest sampleRequest;
+    EffectBrowserDialog sampleBrowser(sampleRequest, &window);
+    sampleBrowser.show();
+    QVERIFY(sampleBrowser.waitForRendering(15000));
+    QTest::qWait(120);
+    QVERIFY(sampleBrowser.grab().save(
+        evidenceDir() + QStringLiteral("/ui-effect-browser-sample.png")));
+
+    // The Nyomat category carries the slow marker on Engraving and the
+    // approximate hint on Halftone, both in one frame.
+    auto *categories =
+        sampleBrowser.findChild<QListWidget *>(QStringLiteral("categoryList"));
+    QVERIFY(categories);
+    for (int row = 0; row < categories->count(); ++row) {
+        if (categories->item(row)->data(Qt::UserRole).toString() == QStringLiteral("print"))
+            categories->setCurrentRow(row);
+    }
+    QTest::qWait(30);
+    QVERIFY(sampleBrowser.waitForRendering(15000));
+    auto *halftone = sampleBrowser.findChild<QAbstractButton *>(
+        QStringLiteral("effectTile_print.halftone"));
+    QVERIFY(halftone);
+    QTest::mouseClick(halftone, Qt::LeftButton, Qt::NoModifier, halftone->rect().center());
+    QVERIFY(sampleBrowser.waitForSelectedRender(15000));
+    QTest::qWait(120);
+    QVERIFY(sampleBrowser.grab().save(
+        evidenceDir() + QStringLiteral("/ui-effect-browser-print.png")));
+    sampleBrowser.close();
+    QTest::qWait(120);
 
     if (auto *scroll = window.findChild<QScrollArea *>()) {
         scroll->verticalScrollBar()->setValue(scroll->verticalScrollBar()->maximum());

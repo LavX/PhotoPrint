@@ -28,6 +28,14 @@
         <translation>用紙サイズを追加または削除します。</translation>
     </message>
     <message>
+        <source>Feldolgozás…</source>
+        <translation>処理中…</translation>
+    </message>
+    <message>
+        <source>Mégsem</source>
+        <translation>キャンセル</translation>
+    </message>
+    <message>
         <source>Tájolás:</source>
         <translation>向き:</translation>
     </message>
@@ -117,19 +125,19 @@
     </message>
     <message>
         <source>Képhangulat</source>
-        <translation>写真の雰囲気</translation>
+        <translation type="vanished">写真の雰囲気</translation>
     </message>
     <message>
         <source>Szűrő</source>
-        <translation>フィルター</translation>
+        <translation type="vanished">フィルター</translation>
     </message>
     <message>
         <source>Hatás</source>
-        <translation>効果</translation>
+        <translation type="vanished">効果</translation>
     </message>
     <message>
         <source>Hatás erőssége</source>
-        <translation>効果の強さ</translation>
+        <translation type="vanished">効果の強さ</translation>
     </message>
     <message>
         <source>Kép nagyítása 2×</source>
@@ -346,6 +354,106 @@
         <translation>このサイズでは写真がぼやけることがあります。</translation>
     </message>
     <message>
+        <source>Effekt</source>
+        <translation>エフェクト</translation>
+    </message>
+    <message>
+        <source>Effekt kiválasztása</source>
+        <translation>エフェクトを選択</translation>
+    </message>
+    <message>
+        <source>Alap</source>
+        <translation>ベーシック</translation>
+    </message>
+    <message>
+        <source>Retró</source>
+        <translation>レトロ</translation>
+    </message>
+    <message>
+        <source>Elmosás</source>
+        <translation>ぼかし</translation>
+    </message>
+    <message>
+        <source>Élesség</source>
+        <translation>ディテール</translation>
+    </message>
+    <message>
+        <source>Művészi</source>
+        <translation>アーティスティック</translation>
+    </message>
+    <message>
+        <source>Torzítás</source>
+        <translation>変形</translation>
+    </message>
+    <message>
+        <source>Fény</source>
+        <translation>光</translation>
+    </message>
+    <message>
+        <source>Szemcse</source>
+        <translation>グレイン</translation>
+    </message>
+    <message>
+        <source>Nyomat</source>
+        <translation>プリント</translation>
+    </message>
+    <message>
+        <source>Ragyogás</source>
+        <translation>グロー</translation>
+    </message>
+    <message>
+        <source>Korábbi megjelenés</source>
+        <translation>以前の見た目</translation>
+    </message>
+    <message>
+        <source>Új effekt választása</source>
+        <translation>新しいエフェクトを選択</translation>
+    </message>
+    <message>
+        <source>Ez az effekt teljes erősséggel jelenik meg.</source>
+        <translation>このエフェクトは常に最大の強さで表示されます。</translation>
+    </message>
+    <message>
+        <source>Effektek</source>
+        <translation>エフェクト</translation>
+    </message>
+    <message>
+        <source>Keresés név vagy kategória szerint</source>
+        <translation>名前またはカテゴリで検索</translation>
+    </message>
+    <message>
+        <source>Keresés</source>
+        <translation>検索</translation>
+    </message>
+    <message>
+        <source>Kategóriák</source>
+        <translation>カテゴリ</translation>
+    </message>
+    <message>
+        <source>Effekt erőssége</source>
+        <translation>エフェクトの強さ</translation>
+    </message>
+    <message>
+        <source>Az előnézet hozzávetőleges</source>
+        <translation>プレビューは概算です</translation>
+    </message>
+    <message>
+        <source>Alkalmaz</source>
+        <translation>適用</translation>
+    </message>
+    <message>
+        <source>Az eredeti kép effekt nélkül.</source>
+        <translation>エフェクトなしの写真です。</translation>
+    </message>
+    <message>
+        <source>lassú</source>
+        <translation>遅い</translation>
+    </message>
+    <message>
+        <source>Nincs találat.</source>
+        <translation>一致するものがありません。</translation>
+    </message>
+    <message>
         <source>Egyedi papír</source>
         <translation>用紙の設定</translation>
     </message>
@@ -510,6 +618,10 @@
     <message>
         <source>Ezt a képet most nem tudjuk feldolgozni. Próbáld újra.</source>
         <translation>この画像を処理できません。もう一度お試しください。</translation>
+    </message>
+    <message>
+        <source>Ehhez a nyomtatási mérethez a kép túl nagy. Csökkentsd a nyomtatási felbontást.</source>
+        <translation>この印刷サイズには写真が大きすぎます。印刷解像度を下げてください。</translation>
     </message>
     <message>
         <source>A művelet megszakadt.</source>
@@ -705,19 +817,19 @@
     </message>
     <message>
         <source>Élénk</source>
-        <translation>ビビッド</translation>
+        <translation type="vanished">ビビッド</translation>
     </message>
     <message>
         <source>Meleg</source>
-        <translation>ウォーム</translation>
+        <translation type="vanished">ウォーム</translation>
     </message>
     <message>
         <source>Hűvös</source>
-        <translation>クール</translation>
+        <translation type="vanished">クール</translation>
     </message>
     <message>
         <source>Szépia</source>
-        <translation>セピア</translation>
+        <translation type="vanished">セピア</translation>
     </message>
     <message>
         <source>Fekete-fehér</source>
@@ -725,7 +837,7 @@
     </message>
     <message>
         <source>Éles</source>
-        <translation>シャープ</translation>
+        <translation type="vanished">シャープ</translation>
     </message>
     <message>
         <source>Fényes</source>
@@ -789,7 +901,7 @@
     </message>
     <message>
         <source>Vintage</source>
-        <translation>ヴィンテージ</translation>
+        <translation type="vanished">ヴィンテージ</translation>
     </message>
     <message>
         <source>A napló jelenleg használatban van.</source>
@@ -806,6 +918,12 @@
     <message>
         <source>A naplóbejegyzést nem sikerült eltávolítani. A nyomtatás nem indult el, de a napló bizonytalan feladatot jelezhet, ezért a nyomtatási fájl megmarad.</source>
         <translation>印刷ログの記録を削除できませんでした。印刷は開始されていませんが、ログが不確定なジョブを示す可能性があるため、印刷ファイルは残されます。</translation>
+    </message>
+    <message numerus="yes">
+        <source>%n effekt</source>
+        <translation>
+            <numerusform>%n 個のエフェクト</numerusform>
+        </translation>
     </message>
 </context>
 </TS>

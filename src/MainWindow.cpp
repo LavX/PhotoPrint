@@ -2,8 +2,8 @@
 
 #include "AboutDialog.h"
 #include "ColorPipeline.h"
+#include "EffectBrowserDialog.h"
 #include "LayoutEngine.h"
-#include "PhotoFilters.h"
 #include "PhotoItem.h"
 #include "JobJournal.h"
 #include "Translation.h"
@@ -212,6 +212,16 @@ QListWidget#pageList::item { color: @secondary; border-radius: 8px; }
 QListWidget#pageList::item:selected { background: @selected; color: @accent; font-weight: 600; }
 QSlider::groove:horizontal { height: 4px; background: @border; border-radius: 2px; }
 QSlider::handle:horizontal { width: 16px; height: 16px; margin: -6px 0; border-radius: 8px; background: #ffffff; border: 1px solid @border; }
+QSlider::groove:horizontal:disabled { background: @border; }
+QSlider::sub-page:horizontal:disabled { background: @border; }
+QSlider::handle:horizontal:disabled { background: @hover; border-color: @border; }
+QLabel:disabled { color: @secondary; }
+QPushButton:disabled { color: @secondary; background: @window; border-color: @border; }
+QCheckBox:disabled { color: @secondary; }
+QComboBox:disabled, QSpinBox:disabled, QDoubleSpinBox:disabled { color: @secondary; background: @window; }
+QWidget#previewBusyOverlay { background: @panel; border: 1px solid @border; border-radius: 8px; }
+QWidget#previewBusyOverlay QLabel { color: @text; }
+QWidget#previewBusyOverlay QPushButton { padding: 2px 8px; color: @accent; border: none; background: transparent; }
 QCheckBox { spacing: 7px; color: @text; }
 QStatusBar { background: @window; color: @secondary; }
 QDialog, QMessageBox { background: @panel; color: @text; }
@@ -316,6 +326,31 @@ PageView::PageView(QWidget *parent) : QWidget(parent)
     m_composeWatcher = new QFutureWatcher<ComposeResult>(this);
     connect(m_composeWatcher, &QFutureWatcher<ComposeResult>::finished, this,
             [this] { handleComposeFinished(); });
+
+    // Preview generations can take a moment on a page of effects. The overlay
+    // is a small child in the corner: it never covers the canvas and it is the
+    // only thing that catches the pointer while it is visible.
+    m_busyOverlay = new QWidget(this);
+    m_busyOverlay->setObjectName(QStringLiteral("previewBusyOverlay"));
+    m_busyOverlay->setAttribute(Qt::WA_StyledBackground, true);
+    auto *busyLayout = new QHBoxLayout(m_busyOverlay);
+    busyLayout->setContentsMargins(10, 5, 6, 5);
+    busyLayout->setSpacing(8);
+    m_busyLabel = new QLabel(QCoreApplication::translate("PhotoPrint", "Feldolgozás…"),
+                             m_busyOverlay);
+    m_busyLabel->setObjectName(QStringLiteral("previewBusyLabel"));
+    m_busyCancel = new QPushButton(QCoreApplication::translate("PhotoPrint", "Mégsem"),
+                                   m_busyOverlay);
+    m_busyCancel->setObjectName(QStringLiteral("busyCancelButton"));
+    m_busyCancel->setAutoDefault(false);
+    m_busyCancel->setFlat(true);
+    busyLayout->addWidget(m_busyLabel);
+    busyLayout->addWidget(m_busyCancel);
+    connect(m_busyCancel, &QPushButton::clicked, this, [this] {
+        if (onCancelBusy)
+            onCancelBusy();
+    });
+    m_busyOverlay->hide();
 }
 
 PageView::~PageView()
@@ -713,6 +748,32 @@ void PageView::setThemeColors(const QColor &canvas, const QColor &border, const 
     update();
 }
 
+void PageView::setBusyOverlay(bool busy)
+{
+    if (!m_busyOverlay)
+        return;
+    m_busyOverlay->setVisible(busy);
+    if (busy) {
+        m_busyOverlay->adjustSize();
+        positionBusyOverlay();
+        m_busyOverlay->raise();
+    }
+}
+
+bool PageView::busyOverlayVisible() const
+{
+    return m_busyOverlay && m_busyOverlay->isVisible();
+}
+
+void PageView::positionBusyOverlay()
+{
+    if (!m_busyOverlay)
+        return;
+    const QSize hint = m_busyOverlay->sizeHint();
+    m_busyOverlay->resize(hint);
+    m_busyOverlay->move(width() - hint.width() - 16, height() - hint.height() - 16);
+}
+
 QSizeF PageView::pageMm() const
 {
     if (m_document.pages.isEmpty() || m_document.currentPage < 0
@@ -994,6 +1055,7 @@ void PageView::resizeEvent(QResizeEvent *event)
     // The page rect changed size: draw the raster we have, scaled, and rebuild
     // it at the new scale once the resizing stops.
     m_composeFailed = false;
+    positionBusyOverlay();
     scheduleSettle();
     update();
 }
@@ -1318,6 +1380,12 @@ void PageView::dropEvent(QDropEvent *event)
 MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), m_renderer(m_store)
 {
     buildUi();
+    m_previewWatcher = new QFutureWatcher<PreviewResult>(this);
+    connect(m_previewWatcher, &QFutureWatcher<PreviewResult>::finished, this,
+            &MainWindow::handlePreviewFinished);
+    m_originalWatcher = new QFutureWatcher<OriginalResult>(this);
+    connect(m_originalWatcher, &QFutureWatcher<OriginalResult>::finished, this,
+            &MainWindow::handleOriginalPreviewFinished);
     applyTheme();
     connect(QGuiApplication::styleHints(), &QStyleHints::colorSchemeChanged, this,
             [this](Qt::ColorScheme) {
@@ -1397,6 +1465,16 @@ MainWindow::~MainWindow()
     // A running CUPS call must not outlive the window that owns its watcher.
     if (m_printWatcher)
         m_printWatcher->waitForFinished();
+    // The preview worker holds a copy of the document and a pointer to the
+    // image store. Stop it and wait so the store is still alive when it exits.
+    if (m_previewStop)
+        m_previewStop->request_stop();
+    if (m_previewWatcher && m_previewWatcher->isRunning())
+        m_previewWatcher->waitForFinished();
+    if (m_originalStop)
+        m_originalStop->request_stop();
+    if (m_originalWatcher && m_originalWatcher->isRunning())
+        m_originalWatcher->waitForFinished();
     saveSettings();
 }
 
@@ -1555,6 +1633,7 @@ void MainWindow::buildUi()
     toneText->addWidget(toneTitle);
     toneText->addWidget(m_autoHint);
     m_originalButton = new QPushButton(QCoreApplication::translate("PhotoPrint", "Eredeti"), side);
+    m_originalButton->setObjectName(QStringLiteral("originalButton"));
     m_originalButton->setToolTip(QCoreApplication::translate("PhotoPrint", "Tartsd nyomva az eredeti képhez."));
     toneRow->addWidget(m_autoCheck);
     toneRow->addLayout(toneText);
@@ -1574,27 +1653,37 @@ void MainWindow::buildUi()
     sideLayout->addWidget(m_brightnessSlider);
     connect(m_brightnessSlider, &QSlider::valueChanged, this, &MainWindow::brightnessChanged);
 
-    addSection(QCoreApplication::translate("PhotoPrint", "Képhangulat"));
-    m_filterCombo = new QComboBox(side);
-    for (FilterPreset preset : {FilterPreset::Original, FilterPreset::Vivid, FilterPreset::Warm,
-                                FilterPreset::Cool, FilterPreset::Sepia,
-                                FilterPreset::BlackWhite, FilterPreset::Vintage,
-                                FilterPreset::Crisp}) {
-        m_filterCombo->addItem(filterLabel(preset), filterKey(preset));
-    }
-    m_filterCombo->setAccessibleName(QCoreApplication::translate("PhotoPrint", "Szűrő"));
-    sideLayout->addWidget(m_filterCombo);
-    connect(m_filterCombo, &QComboBox::currentIndexChanged, this,
-            &MainWindow::applyFilterSettings);
+    addSection(QCoreApplication::translate("PhotoPrint", "Effekt"));
+    m_effectButton = new QPushButton(QCoreApplication::translate("PhotoPrint", "Eredeti"), side);
+    m_effectButton->setObjectName(QStringLiteral("effectButton"));
+    m_effectButton->setAccessibleName(QCoreApplication::translate("PhotoPrint", "Effekt"));
+    m_effectButton->setToolTip(QCoreApplication::translate("PhotoPrint", "Effekt kiválasztása"));
+    sideLayout->addWidget(m_effectButton);
+    m_legacyHint = new QLabel(QCoreApplication::translate("PhotoPrint", "Új effekt választása"), side);
+    m_legacyHint->setObjectName(QStringLiteral("legacyEffectHint"));
+    m_legacyHint->setWordWrap(true);
+    m_legacyHint->setStyleSheet(QStringLiteral("color: #6e6e73; font-size: 11px;"));
+    m_legacyHint->setVisible(false);
+    sideLayout->addWidget(m_legacyHint);
+    connect(m_effectButton, &QPushButton::clicked, this, &MainWindow::openEffectBrowser);
 
-    sideLayout->addWidget(new QLabel(QCoreApplication::translate("PhotoPrint", "Hatás"), side));
-    m_filterStrength = new QSlider(Qt::Horizontal, side);
-    m_filterStrength->setAccessibleName(QCoreApplication::translate("PhotoPrint", "Hatás erőssége"));
+    m_strengthLabel = new QLabel(QCoreApplication::translate("PhotoPrint", "Effekt erőssége"), side);
+    m_strengthLabel->setObjectName(QStringLiteral("effectStrengthLabel"));
+    sideLayout->addWidget(m_strengthLabel);
+    m_filterStrength = new QSlider(Qt::Horizontal, side);    m_filterStrength->setObjectName(QStringLiteral("effectStrength"));
+    m_filterStrength->setAccessibleName(QCoreApplication::translate("PhotoPrint", "Effekt erőssége"));
     m_filterStrength->setRange(0, 100);
     m_filterStrength->setValue(100);
     m_filterStrength->setTracking(false);
     sideLayout->addWidget(m_filterStrength);
     connect(m_filterStrength, &QSlider::valueChanged, this, &MainWindow::applyFilterSettings);
+
+    m_strengthHint = new QLabel(side);
+    m_strengthHint->setObjectName(QStringLiteral("effectStrengthHint"));
+    m_strengthHint->setWordWrap(true);
+    m_strengthHint->setStyleSheet(QStringLiteral("color: #6e6e73; font-size: 11px;"));
+    m_strengthHint->setVisible(false);
+    sideLayout->addWidget(m_strengthHint);
 
     m_upscaleCheck = new QCheckBox(QCoreApplication::translate("PhotoPrint", "Kép nagyítása 2×"), side);
     m_upscaleCheck->setToolTip(
@@ -1678,6 +1767,7 @@ void MainWindow::buildUi()
     m_pageView->setAccessibleDescription(
         QCoreApplication::translate("PhotoPrint", "Nagyításnál a középső egérgombbal mozgatható a lap."));
     m_pageView->onFilesDropped = [this](const QStringList &paths) { addDroppedFiles(paths); };
+    m_pageView->onCancelBusy = [this] { cancelPreviewWork(); };
     m_pageView->onSelectionChanged = [this](const QString &frameId) {
         selectFrame(frameId, false);
     };
@@ -1896,6 +1986,10 @@ void MainWindow::setLanguage(const QString &code)
 
 void MainWindow::rebuildUi()
 {
+    // The browser labels are translated as well; close it rather than leaving
+    // a dialog in the previous language.
+    if (m_effectDialog)
+        m_effectDialog->close();
     // Everything the user was looking at survives the language change.
     const QString selected = m_selectedId;
     const bool dirty = m_dirty;
@@ -1952,6 +2046,7 @@ void MainWindow::rebuildUi()
     onDocumentChanged();
     m_restoringProject = wasRestoring;
     m_dirty = dirty;
+    updateBusyOverlay();
 
     m_orientationCombo->blockSignals(true);
     m_orientationCombo->setCurrentIndex(landscape ? 1 : 0);
@@ -2153,30 +2248,320 @@ void MainWindow::onDocumentChanged()
 
 void MainWindow::rebuildPreviewImages()
 {
+    // Every document change bumps the generation. The GUI thread never renders
+    // a page preview; the previous image stays on screen until the matching
+    // generation arrives and stale results are discarded.
+    ++m_previewGeneration;
+    m_previewDirty = true;
     const DocumentSnapshot document = m_controller.document();
-    if (document.pages.isEmpty())
+    if (document.pages.isEmpty()) {
+        m_previewDirty = false;
+        m_previewImages.clear();
+        m_originalPreviews.clear();
+        m_previewJobActive = false;
+        updateBusyOverlay();
         return;
-    const Page &page = document.pages.at(document.currentPage);
-    QHash<QString, QImage> images;
-    for (const Frame &frame : page.frames) {
-        Result<SourceImage> source = m_store.load(frame.sourcePath, ImportPolicy{});
-        if (!source)
-            continue;
-        const bool showOriginal = m_showOriginal && frame.id == m_selectedId;
-        ColorRecipe recipe = sanitiseRecipe(document.recipe);
-        recipe.tone = showOriginal ? PhotoTone{} : effectiveTone(frame);
-        const QString filter = showOriginal ? QStringLiteral("original") : frame.filter;
-        const int filterStrength = showOriginal ? 0 : frame.filterStrength;
-        const bool upscale = showOriginal ? false : frame.upscale;
-        EffectRenderTarget effectTarget;
-        effectTarget.recipeVersion = showOriginal ? 0 : frame.effectVersion;
-        Result<QImage> converted = m_store.preparedLinear(
-            source.value(), recipe, filter, filterStrength, upscale, 1600, {}, effectTarget);
-        if (!converted)
-            continue;
-        images.insert(frame.id, converted.value());
     }
-    m_previewImages = images;
+    if (m_previewWatcher && m_previewWatcher->isRunning()) {
+        if (m_previewStop)
+            m_previewStop->request_stop();
+        updateBusyOverlay();
+        return; // handlePreviewFinished starts the newest generation
+    }
+    startPreviewJob();
+}
+
+void MainWindow::startPreviewJob()
+{
+    if (!m_previewDirty || !m_previewWatcher)
+        return;
+    const DocumentSnapshot document = m_controller.document();
+    if (document.pages.isEmpty()) {
+        m_previewDirty = false;
+        return;
+    }
+    auto job = std::make_shared<PreviewJob>();
+    job->generation = m_previewGeneration;
+    job->document = document;
+    job->pageIndex = document.currentPage;
+    job->stop = std::make_shared<std::stop_source>();
+    m_previewStop = job->stop;
+    m_previewDirty = false;
+    m_previewJobActive = true;
+    updateBusyOverlay();
+
+    // The job owns a copy of the document. The store is a member of the
+    // window, and ~MainWindow waits for this future, so the pointer cannot
+    // outlive the store.
+    ImageStore *store = &m_store;
+    m_previewWatcher->setFuture(QtConcurrent::run(effectPreviewPool(), [job, store] {
+        PreviewResult result;
+        result.generation = job->generation;
+        result.pageIndex = job->pageIndex;
+        const std::stop_token token = job->stop->get_token();
+        if (job->pageIndex < 0 || job->pageIndex >= job->document.pages.size())
+            return result;
+        const Page &page = job->document.pages.at(job->pageIndex);
+        for (const Frame &frame : page.frames) {
+            if (token.stop_requested())
+                break;
+            Result<SourceImage> source = store->load(frame.sourcePath, ImportPolicy{}, token);
+            if (!source)
+                continue;
+            ColorRecipe recipe = sanitiseRecipe(job->document.recipe);
+            recipe.tone = effectiveTone(frame);
+            EffectRenderTarget target;
+            target.recipeVersion = frame.effectVersion;
+            Result<QImage> converted = store->preparedLinear(
+                source.value(), recipe, frame.filter, frame.filterStrength, frame.upscale, 1600,
+                token, target);
+            if (converted)
+                result.images.insert(frame.id, converted.value());
+        }
+        return result;
+    }));
+}
+
+void MainWindow::handlePreviewFinished()
+{
+    if (!m_previewWatcher || !m_previewWatcher->isFinished())
+        return;
+    if (m_previewDirty) {
+        startPreviewJob();
+        return;
+    }
+    const PreviewResult result = m_previewWatcher->result();
+    if (result.generation != m_previewGeneration)
+        return;
+    m_previewJobActive = false;
+    updateBusyOverlay();
+    const DocumentSnapshot document = m_controller.document();
+    if (result.pageIndex != document.currentPage)
+        return;
+    m_previewImages = result.images;
+    if (m_pageView)
+        m_pageView->setFrameImages(displayedPreviewImages());
+    updateResolutionHint();
+}
+
+QString MainWindow::sourceKeyFor(const Frame &frame) const
+{
+    // A frame's untouched layer depends on the file content and the document
+    // recipe (grayscale, paper). Two frames of the same photo share one entry.
+    const QString identity = frame.sourceSha256.isEmpty()
+        ? QStringLiteral("path:") + frame.sourcePath
+        : QString::fromLatin1(frame.sourceSha256.toHex());
+    return identity + QLatin1Char('|')
+        + QString::fromLatin1(sanitiseRecipe(m_controller.document().recipe).digest().toHex());
+}
+
+void MainWindow::startOriginalPreview(const Frame &frame)
+{
+    // The untouched layer is lazy: it is rendered the first time Eredeti is
+    // pressed and then cached by source identity. Preparing it for every frame
+    // of every preview batch doubled the work on a page of effects.
+    const QString sourceKey = sourceKeyFor(frame);
+    if (m_originalPreviews.contains(sourceKey))
+        return;
+    if (m_originalJobActive && m_originalJobSourceKey == sourceKey)
+        return;
+    ++m_originalGeneration;
+    if (m_originalStop)
+        m_originalStop->request_stop();
+
+    auto job = std::make_shared<OriginalJob>();
+    job->generation = m_originalGeneration;
+    job->sourceKey = sourceKey;
+    job->sourcePath = frame.sourcePath;
+    job->sha256 = frame.sourceSha256;
+    job->recipe = sanitiseRecipe(m_controller.document().recipe);
+    job->recipe.tone = PhotoTone{};
+    job->stop = std::make_shared<std::stop_source>();
+    m_originalStop = job->stop;
+    m_originalJobSourceKey = sourceKey;
+    m_originalJobActive = true;
+    ++m_originalRenderCount;
+    updateBusyOverlay();
+
+    ImageStore *store = &m_store;
+    m_originalWatcher->setFuture(QtConcurrent::run(effectPreviewPool(), [job, store] {
+        OriginalResult result;
+        result.generation = job->generation;
+        result.sourceKey = job->sourceKey;
+        const std::stop_token token = job->stop->get_token();
+        Result<SourceImage> source = store->load(job->sourcePath, ImportPolicy{}, token);
+        if (!source)
+            return result;
+        Result<QImage> converted = store->preparedLinear(
+            source.value(), job->recipe, QStringLiteral("original"), 100, false, 1600, token,
+            EffectRenderTarget{});
+        if (converted)
+            result.image = converted.value();
+        return result;
+    }));
+}
+
+void MainWindow::handleOriginalPreviewFinished()
+{
+    if (!m_originalWatcher || !m_originalWatcher->isFinished())
+        return;
+    const OriginalResult result = m_originalWatcher->result();
+    if (result.generation != m_originalGeneration)
+        return;
+    m_originalJobActive = false;
+    if (!result.image.isNull()) {
+        if (m_originalPreviews.size() > 64)
+            m_originalPreviews.clear();
+        m_originalPreviews.insert(result.sourceKey, result.image);
+    }
+    updateBusyOverlay();
+    if (!m_showOriginal || !m_pageView)
+        return;
+    const std::optional<Frame> frame = selectedFrame();
+    if (frame && sourceKeyFor(*frame) == result.sourceKey)
+        m_pageView->setFrameImages(displayedPreviewImages());
+}
+
+QHash<QString, QImage> MainWindow::displayedPreviewImages() const
+{
+    if (!m_showOriginal || m_selectedId.isEmpty())
+        return m_previewImages;
+    const std::optional<Frame> frame = selectedFrame();
+    if (!frame)
+        return m_previewImages;
+    const auto original = m_originalPreviews.constFind(sourceKeyFor(*frame));
+    if (original == m_originalPreviews.constEnd())
+        return m_previewImages;
+    QHash<QString, QImage> images = m_previewImages;
+    images.insert(m_selectedId, original.value());
+    return images;
+}
+
+void MainWindow::cancelPreviewWork()
+{
+    // The user asked to stop waiting. Bump both generations, so whatever the
+    // workers still finish is dropped instead of replacing the visible page.
+    ++m_previewGeneration;
+    if (m_previewStop)
+        m_previewStop->request_stop();
+    m_previewDirty = false;
+    m_previewJobActive = false;
+    ++m_originalGeneration;
+    if (m_originalStop)
+        m_originalStop->request_stop();
+    m_originalJobActive = false;
+    updateBusyOverlay();
+}
+
+void MainWindow::updateBusyOverlay()
+{
+    if (m_pageView)
+        m_pageView->setBusyOverlay(m_previewJobActive || m_originalJobActive);
+}
+
+void MainWindow::updateResolutionHint()
+{
+    if (!m_resolutionHint)
+        return;
+    m_resolutionHint->clear();
+    const std::optional<Frame> frame = selectedFrame();
+    if (!frame)
+        return;
+    const auto image = m_previewImages.constFind(frame->id);
+    if (image != m_previewImages.constEnd()
+        && LayoutEngine::resolutionHint(*frame, image->size())
+            == LayoutEngine::ResolutionHint::Low) {
+        m_resolutionHint->setText(
+            QCoreApplication::translate("PhotoPrint", "Ekkora méretben a kép életlen lehet."));
+    }
+}
+
+bool MainWindow::previewPending() const
+{
+    return m_previewDirty || m_previewJobActive;
+}
+
+bool MainWindow::waitForPreview(int timeoutMs)
+{
+    QElapsedTimer timer;
+    timer.start();
+    while (timer.elapsed() < timeoutMs) {
+        if (!previewPending())
+            return true;
+        QCoreApplication::processEvents(QEventLoop::AllEvents, 15);
+    }
+    QCoreApplication::processEvents(QEventLoop::AllEvents, 15);
+    return !previewPending();
+}
+
+bool MainWindow::waitForOriginalPreview(int timeoutMs)
+{
+    QElapsedTimer timer;
+    timer.start();
+    while (timer.elapsed() < timeoutMs) {
+        if (!m_originalJobActive)
+            return true;
+        QCoreApplication::processEvents(QEventLoop::AllEvents, 15);
+    }
+    QCoreApplication::processEvents(QEventLoop::AllEvents, 15);
+    return !m_originalJobActive;
+}
+
+void MainWindow::openEffectBrowser()
+{
+    const std::optional<Frame> frame = selectedFrame();
+    if (!frame)
+        return;
+
+    EffectBrowserRequest request;
+    request.currentKey = frame->filter;
+    request.currentVersion = frame->effectVersion;
+    request.currentStrength = frame->filterStrength;
+    if (const std::optional<SourceImage> source = m_store.cached(frame->sourcePath)) {
+        request.sampleHash = QString::fromLatin1(source->sha256.toHex().left(16));
+        if (const Result<QImage> sample =
+                m_store.srgb(source.value(), ColorRecipe{}, 480)) {
+            request.sample = sample.value();
+        }
+    } else if (const Result<SourceImage> loaded =
+                   m_store.load(frame->sourcePath, ImportPolicy{})) {
+        request.sampleHash = QString::fromLatin1(loaded.value().sha256.toHex().left(16));
+        if (const Result<QImage> sample =
+                m_store.srgb(loaded.value(), ColorRecipe{}, 480)) {
+            request.sample = sample.value();
+        }
+    }
+    if (request.sample.isNull()) {
+        request.sample = QImage(QStringLiteral(":/samples/effect-sample.jpg"));
+        request.sampleHash = QStringLiteral("bundled-sample");
+    }
+
+    auto *dialog = new EffectBrowserDialog(request, this);
+    dialog->setAttribute(Qt::WA_DeleteOnClose);
+    connect(dialog, &EffectBrowserDialog::effectChosen, this, &MainWindow::applyEffectChoice);
+    m_effectDialog = dialog;
+    dialog->show();
+    dialog->raise();
+    dialog->activateWindow();
+}
+
+void MainWindow::applyEffectChoice(const QString &key, int version, int strength)
+{
+    const std::optional<Frame> frame = selectedFrame();
+    if (!frame)
+        return;
+    Frame updated = *frame;
+    updated.filter = key;
+    updated.effectVersion = key == QLatin1String("original") ? 0 : version;
+    // The render boundary applies the same rule, so the stored value is what
+    // the preview and the print actually use.
+    updated.filterStrength = effectiveEffectStrength(key, strength);
+    if (updated.filter == frame->filter && updated.effectVersion == frame->effectVersion
+        && updated.filterStrength == frame->filterStrength)
+        return;
+    // Key, version and strength travel as one FrameChange, so one undo puts the
+    // whole previous look back.
+    m_controller.apply(FrameChange{updated.id, updated});
 }
 
 void MainWindow::refreshPhotoList()
@@ -2286,8 +2671,11 @@ void MainWindow::syncFrameControls()
     m_backwardButton->setEnabled(hasSelection);
     m_autoCheck->setEnabled(hasSelection);
     m_brightnessSlider->setEnabled(hasSelection);
-    m_filterCombo->setEnabled(hasSelection);
-    m_filterStrength->setEnabled(frame && frame->filter != QLatin1String("original"));
+    m_effectButton->setEnabled(hasSelection);
+    const bool original = frame && frame->filter == QLatin1String("original");
+    const bool dither = frame && effectIgnoresStrength(frame->filter);
+    m_filterStrength->setEnabled(hasSelection && !original && !dither);
+    m_strengthLabel->setEnabled(hasSelection && !original && !dither);
     m_upscaleCheck->setEnabled(hasSelection);
     m_originalButton->setEnabled(hasSelection);
     m_advancedToggle->setEnabled(hasSelection);
@@ -2308,13 +2696,15 @@ void MainWindow::syncFrameControls()
                 m_autoHint->setText(QCoreApplication::translate("PhotoPrint", "Finom fény- és színjavítás"));
         }
         m_brightnessSlider->setValue(brightnessEvToSlider(frame->brightness));
-        int filterIndex = 0;
-        for (int i = 0; i < m_filterCombo->count(); ++i) {
-            if (m_filterCombo->itemData(i).toString() == frame->filter)
-                filterIndex = i;
-        }
-        m_filterCombo->setCurrentIndex(filterIndex);
-        m_filterStrength->setValue(std::clamp(frame->filterStrength, 0, 100));
+        const QString label = effectButtonLabel(frame->filter, frame->effectVersion);
+        m_effectButton->setText(label);
+        m_effectButton->setAccessibleDescription(label);
+        const bool legacy =
+            isLegacyPresetKey(frame->filter) && frame->filter != QLatin1String("original");
+        m_legacyHint->setVisible(legacy);
+        m_strengthHint->setText(dither ? effectStrengthReason() : QString());
+        m_strengthHint->setVisible(dither);
+        m_filterStrength->setValue(dither ? 100 : std::clamp(frame->filterStrength, 0, 100));
         m_upscaleCheck->setChecked(frame->upscale);
         const auto image = m_previewImages.constFind(frame->id);
         if (image != m_previewImages.constEnd()
@@ -2323,6 +2713,10 @@ void MainWindow::syncFrameControls()
             m_resolutionHint->setText(
                 QCoreApplication::translate("PhotoPrint", "Ekkora méretben a kép életlen lehet."));
         }
+    } else {
+        m_effectButton->setText(QCoreApplication::translate("PhotoPrint", "Eredeti"));
+        m_legacyHint->setVisible(false);
+        m_strengthHint->setVisible(false);
     }
     m_syncing = false;
 }
@@ -3007,11 +3401,9 @@ void MainWindow::applyFilterSettings()
     if (!frame)
         return;
     Frame updated = *frame;
-    updated.filter = m_filterCombo->currentData().toString();
-    updated.filterStrength = m_filterStrength->value();
+    updated.filterStrength = effectiveEffectStrength(frame->filter, m_filterStrength->value());
     updated.upscale = m_upscaleCheck->isChecked();
-    if (updated.filter == frame->filter && updated.filterStrength == frame->filterStrength
-        && updated.upscale == frame->upscale)
+    if (updated.filterStrength == frame->filterStrength && updated.upscale == frame->upscale)
         return;
     m_controller.apply(FrameChange{updated.id, updated});
 }
@@ -3049,8 +3441,16 @@ void MainWindow::brightnessChanged(int value)
 void MainWindow::showOriginalPressed(bool pressed)
 {
     m_showOriginal = pressed;
-    rebuildPreviewImages();
-    m_pageView->setFrameImages(m_previewImages);
+    if (pressed) {
+        if (const std::optional<Frame> frame = selectedFrame()) {
+            if (!m_originalPreviews.contains(sourceKeyFor(*frame)))
+                startOriginalPreview(*frame);
+        }
+    }
+    // A cached untouched layer swaps instantly. When it is not ready yet, the
+    // current image stays and the busy overlay explains the wait; the worker
+    // installs the original as soon as it exists.
+    m_pageView->setFrameImages(displayedPreviewImages());
 }
 
 bool MainWindow::projectPrintGeometryConsistent(const DocumentSnapshot &document) const

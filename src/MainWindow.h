@@ -17,6 +17,7 @@
 #include <QElapsedTimer>
 #include <QImage>
 #include <QMainWindow>
+#include <QPointer>
 
 #include <QFutureWatcher>
 
@@ -39,6 +40,8 @@ class QTimer;
 
 namespace pp {
 
+class EffectBrowserDialog;
+
 /// The paper surface. It paints the same page recipe the export uses and adds
 /// editor-only marks; the marks never reach the PDF.
 class PageView : public QWidget
@@ -59,6 +62,11 @@ public:
     bool cropMode() const { return m_cropMode; }
     void setEmptyHint(const QString &text);
     void setThemeColors(const QColor &canvas, const QColor &border, const QColor &shadow);
+    /// A small non-blocking overlay in the corner while a preview generation
+    /// runs. The cancel button calls onCancelBusy; the widget never covers the
+    /// rest of the canvas.
+    void setBusyOverlay(bool busy);
+    bool busyOverlayVisible() const;
 
     QSizeF pageMm() const;
     QRectF pageRect() const;
@@ -91,6 +99,7 @@ public:
     std::function<void(const QStringList &)> onFilesDropped;
     std::function<void(double)> onViewZoomChanged;
     std::function<void(bool)> onCropModeChanged;
+    std::function<void()> onCancelBusy;
 
 protected:
     bool event(QEvent *event) override;
@@ -171,6 +180,7 @@ private:
     static ComposeResult composePage(const ComposeJob &job);
     void updateLiveFrame(const Frame &frame);
     Frame draggedFrame(const QPointF &pagePoint, bool fine) const;
+    void positionBusyOverlay();
 
     DocumentSnapshot m_document;
     QHash<QString, QImage> m_images;
@@ -210,6 +220,9 @@ private:
     mutable QFutureWatcher<ComposeResult> *m_composeWatcher = nullptr;
     mutable std::shared_ptr<std::stop_source> m_activeStop;
     QTimer *m_settleTimer = nullptr;
+    QWidget *m_busyOverlay = nullptr;
+    QLabel *m_busyLabel = nullptr;
+    QPushButton *m_busyCancel = nullptr;
 };
 
 class MainWindow : public QMainWindow
@@ -221,6 +234,16 @@ public:
     ~MainWindow() override;
 
     DocumentSnapshot document() const { return m_controller.document(); }
+
+    /// Test hooks for the asynchronous page preview. The GUI thread starts a
+    /// job and returns; the previous image stays installed until the matching
+    /// result arrives.
+    bool previewPending() const;
+    bool waitForPreview(int timeoutMs = 5000);
+    bool showingOriginal() const { return m_showOriginal; }
+    bool originalPreviewPending() const { return m_originalJobActive; }
+    bool waitForOriginalPreview(int timeoutMs = 5000);
+    int originalRenderCountForTest() const { return m_originalRenderCount; }
 
 protected:
     void closeEvent(QCloseEvent *event) override;
@@ -263,6 +286,10 @@ private slots:
     void showDiagnostics();
     void saveSettings();
     void restoreSettings();
+    /// Restores a loaded project. It is a slot so a test can deliver a project
+    /// without driving the file dialog; the recovery and open paths use it
+    /// directly.
+    void applyLoadedProject(const LoadedProject &loaded, bool recovery = false);
 
 private:
     void buildUi();
@@ -274,6 +301,17 @@ private:
     void addPhoto(const QString &path);
     void refreshPhotoList();
     void rebuildPreviewImages();
+    void startPreviewJob();
+    void handlePreviewFinished();
+    void startOriginalPreview(const Frame &frame);
+    void handleOriginalPreviewFinished();
+    void cancelPreviewWork();
+    void updateBusyOverlay();
+    QString sourceKeyFor(const Frame &frame) const;
+    QHash<QString, QImage> displayedPreviewImages() const;
+    void updateResolutionHint();
+    void openEffectBrowser();
+    void applyEffectChoice(const QString &key, int version, int strength);
     void syncFrameControls();
     void syncListSelection();
     void showProblem(const QString &message);
@@ -286,7 +324,6 @@ private:
     void ensurePaperInCombo(const PaperSpec &paper);
     void syncPrintControls();
     bool wantBorderless(const PaperSpec &paper) const;
-    void applyLoadedProject(const LoadedProject &loaded, bool recovery = false);
     void promptMissingSources();
     void checkpointNow();
     void updateTitle();
@@ -296,6 +333,38 @@ private:
     std::optional<Frame> selectedFrame() const;
     PaperSpec currentPaper() const;
     const PrinterCapabilities *printerByQueue(const QString &queue) const;
+
+    /// One preview build. The worker receives a copy of everything it needs and
+    /// never touches the window; a newer generation cancels it between stages.
+    struct PreviewJob {
+        quint64 generation = 0;
+        DocumentSnapshot document;
+        int pageIndex = 0;
+        std::shared_ptr<std::stop_source> stop;
+    };
+
+    struct PreviewResult {
+        quint64 generation = 0;
+        int pageIndex = -1;
+        QHash<QString, QImage> images;
+    };
+
+    /// One untouched layer, rendered only when the user first asks for it and
+    /// cached by source identity, so two frames of the same photo share it.
+    struct OriginalJob {
+        quint64 generation = 0;
+        QString sourceKey;
+        QString sourcePath;
+        QByteArray sha256;
+        ColorRecipe recipe;
+        std::shared_ptr<std::stop_source> stop;
+    };
+
+    struct OriginalResult {
+        quint64 generation = 0;
+        QString sourceKey;
+        QImage image;
+    };
 
     CanvasController m_controller;
     ImageStore m_store;
@@ -318,8 +387,11 @@ private:
     QPushButton *m_deleteButton = nullptr;
     QPushButton *m_forwardButton = nullptr;
     QAbstractButton *m_autoCheck = nullptr;
-    QComboBox *m_filterCombo = nullptr;
+    QPushButton *m_effectButton = nullptr;
+    QLabel *m_legacyHint = nullptr;
     QSlider *m_filterStrength = nullptr;
+    QLabel *m_strengthLabel = nullptr;
+    QLabel *m_strengthHint = nullptr;
     QCheckBox *m_upscaleCheck = nullptr;
     QSlider *m_brightnessSlider = nullptr;
     QPushButton *m_originalButton = nullptr;
@@ -349,6 +421,19 @@ private:
     bool m_syncing = false;
     QString m_selectedId;
     QHash<QString, QImage> m_previewImages;
+    QHash<QString, QImage> m_originalPreviews;
+    QPointer<EffectBrowserDialog> m_effectDialog;
+    QFutureWatcher<PreviewResult> *m_previewWatcher = nullptr;
+    std::shared_ptr<std::stop_source> m_previewStop;
+    quint64 m_previewGeneration = 0;
+    bool m_previewDirty = false;
+    bool m_previewJobActive = false;
+    QFutureWatcher<OriginalResult> *m_originalWatcher = nullptr;
+    std::shared_ptr<std::stop_source> m_originalStop;
+    quint64 m_originalGeneration = 0;
+    bool m_originalJobActive = false;
+    QString m_originalJobSourceKey;
+    int m_originalRenderCount = 0;
     QList<PaperSpec> m_papers;
     CustomPaperStore m_customPaperStore;
     PrinterCatalog m_catalog;
