@@ -338,6 +338,8 @@ private:
     Frame makeInitialFrame(const SourceImage &source, const Page &page) const;
     /// Small sRGB thumbnails in frame order, for the template previews. A photo
     /// that is not cached yet is left null rather than loaded on the GUI thread.
+    /// The list is cached by frame identity, because a document change arrives
+    /// for every nudge and every selection and the pixels did not change.
     QList<QImage> templatePhotoThumbnails(const Page &page);
     bool pageOverflows() const;
     bool projectPrintGeometryConsistent(const DocumentSnapshot &document) const;
@@ -435,6 +437,8 @@ private:
     QHash<QString, QImage> m_originalPreviews;
     QPointer<EffectBrowserDialog> m_effectDialog;
     QPointer<TemplateBrowserDialog> m_templateDialog;
+    QStringList m_templatePhotoKeys;
+    QList<QImage> m_templatePhotos;
     QFutureWatcher<PreviewResult> *m_previewWatcher = nullptr;
     std::shared_ptr<std::stop_source> m_previewStop;
     quint64 m_previewGeneration = 0;

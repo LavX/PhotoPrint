@@ -968,16 +968,43 @@
         <source>Ehhez a laphoz legfeljebb 10 fotóhoz van sablon.</source>
         <translation>Für diese Seite gibt es Vorlagen für höchstens 10 Fotos.</translation>
     </message>
-    <message>
-        <source>A kivágásokat az új elrendezéshez igazítjuk.</source>
-        <translation>Die Ausschnitte werden an das neue Layout angepasst.</translation>
-    </message>
     <message numerus="yes">
         <source>%n fotó</source>
         <translation>
             <numerusform>%n Foto</numerusform>
             <numerusform>%n Fotos</numerusform>
         </translation>
+    </message>
+    <message>
+        <source>Válassz %1 fotós sablont, vagy távolíts el egy fotót.</source>
+        <translation>Wähle die Vorlage für %1 Fotos oder entferne ein Foto.</translation>
+    </message>
+    <message numerus="yes">
+        <source>Válassz %1 fotós sablont, vagy távolíts el %n fotót.</source>
+        <translation>
+            <numerusform>Wähle die Vorlage für %1 Fotos oder entferne %n Foto.</numerusform>
+            <numerusform>Wähle die Vorlage für %1 Fotos oder entferne %n Fotos.</numerusform>
+        </translation>
+    </message>
+    <message>
+        <source>Az új elrendezés minden fotót a saját helyére tesz.</source>
+        <translation>Das neue Layout setzt jedes Foto an seinen eigenen Platz.</translation>
+    </message>
+    <message>
+        <source>Az új elrendezés minden fotót a saját helyére tesz, a kivágásokat ehhez igazítjuk.</source>
+        <translation>Das neue Layout setzt jedes Foto an seinen eigenen Platz, die Ausschnitte werden daran angepasst.</translation>
+    </message>
+    <message>
+        <source>Az új elrendezés minden fotót a saját helyére tesz, az elforgatást nullára állítjuk.</source>
+        <translation>Das neue Layout setzt jedes Foto an seinen eigenen Platz, die Drehung wird auf null gesetzt.</translation>
+    </message>
+    <message>
+        <source>Az új elrendezés minden fotót a saját helyére tesz, a kivágásokat és az elforgatást is ehhez igazítjuk.</source>
+        <translation>Das neue Layout setzt jedes Foto an seinen eigenen Platz, Ausschnitte und Drehung werden daran angepasst.</translation>
+    </message>
+    <message>
+        <source>Kiválasztott</source>
+        <translation>Ausgewählt</translation>
     </message>
 </context>
 </TS>

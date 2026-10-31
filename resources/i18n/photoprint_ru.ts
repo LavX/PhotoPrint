@@ -971,10 +971,6 @@
         <source>Ehhez a laphoz legfeljebb 10 fotóhoz van sablon.</source>
         <translation>Для этой страницы есть шаблоны не более чем на 10 фотографий.</translation>
     </message>
-    <message>
-        <source>A kivágásokat az új elrendezéshez igazítjuk.</source>
-        <translation>Кадрирование будет подстроено под новую раскладку.</translation>
-    </message>
     <message numerus="yes">
         <source>%n fotó</source>
         <translation>
@@ -982,6 +978,38 @@
             <numerusform>%n фотографии</numerusform>
             <numerusform>%n фотографий</numerusform>
         </translation>
+    </message>
+    <message>
+        <source>Válassz %1 fotós sablont, vagy távolíts el egy fotót.</source>
+        <translation>Выбери шаблон для %1 фотографий или удали одну фотографию.</translation>
+    </message>
+    <message numerus="yes">
+        <source>Válassz %1 fotós sablont, vagy távolíts el %n fotót.</source>
+        <translation>
+            <numerusform>Выбери шаблон для %1 фотографий или удали %n фотографию.</numerusform>
+            <numerusform>Выбери шаблон для %1 фотографий или удали %n фотографии.</numerusform>
+            <numerusform>Выбери шаблон для %1 фотографий или удали %n фотографий.</numerusform>
+        </translation>
+    </message>
+    <message>
+        <source>Az új elrendezés minden fotót a saját helyére tesz.</source>
+        <translation>Новая раскладка ставит каждую фотографию на своё место.</translation>
+    </message>
+    <message>
+        <source>Az új elrendezés minden fotót a saját helyére tesz, a kivágásokat ehhez igazítjuk.</source>
+        <translation>Новая раскладка ставит каждую фотографию на своё место, кадрирование подстраивается под неё.</translation>
+    </message>
+    <message>
+        <source>Az új elrendezés minden fotót a saját helyére tesz, az elforgatást nullára állítjuk.</source>
+        <translation>Новая раскладка ставит каждую фотографию на своё место, поворот сбрасывается в ноль.</translation>
+    </message>
+    <message>
+        <source>Az új elrendezés minden fotót a saját helyére tesz, a kivágásokat és az elforgatást is ehhez igazítjuk.</source>
+        <translation>Новая раскладка ставит каждую фотографию на своё место, кадрирование и поворот подстраиваются под неё.</translation>
+    </message>
+    <message>
+        <source>Kiválasztott</source>
+        <translation>Выбрано</translation>
     </message>
 </context>
 </TS>

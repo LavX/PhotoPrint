@@ -5,8 +5,10 @@
 
 #include <QAbstractButton>
 #include <QAbstractItemView>
+#include <QAccessible>
 #include <QButtonGroup>
 #include <QCoreApplication>
+#include <QElapsedTimer>
 #include <QHBoxLayout>
 #include <QIcon>
 #include <QKeyEvent>
@@ -16,12 +18,13 @@
 #include <QPainter>
 #include <QPainterPath>
 #include <QPushButton>
+#include <QShowEvent>
+#include <QTimer>
 #include <QVBoxLayout>
-
-#include <functional>
 
 #include <algorithm>
 #include <cmath>
+#include <functional>
 
 namespace pp {
 
@@ -31,6 +34,10 @@ namespace {
 /// not build four or nine times the raster of a thumbnail nobody zooms into.
 constexpr int kMaxPreviewPx = 260;
 constexpr int kNumberBadge = 14;
+/// One rebuild per burst of edits. Adding a photo, nudging a frame or changing
+/// the paper all publish document changes; six previews are not re-rendered for
+/// every one of them.
+constexpr int kSyncDelayMs = 120;
 
 /// The paper aspect a preview is drawn at. A paper that cannot describe a sheet
 /// falls back to the 10 × 15 cm ratio instead of dividing by zero; the slots
@@ -103,6 +110,11 @@ TemplateBrowserDialog::TemplateBrowserDialog(const TemplateBrowserRequest &reque
     if (m_request.photos.size() < m_request.frames.size())
         m_request.photos.resize(m_request.frames.size());
 
+    m_syncTimer = new QTimer(this);
+    m_syncTimer->setSingleShot(true);
+    m_syncTimer->setInterval(kSyncDelayMs);
+    connect(m_syncTimer, &QTimer::timeout, this, &TemplateBrowserDialog::runPendingSync);
+
     buildUi();
     fillChips();
     rebuildTiles();
@@ -150,7 +162,7 @@ void TemplateBrowserDialog::buildUi()
 
     m_grid = new QListWidget(this);
     m_grid->setObjectName(QStringLiteral("templateGrid"));
-    m_grid->setAccessibleName(windowTitle());
+    m_grid->setAccessibleName(gridAccessibleName());
     m_grid->setViewMode(QListView::IconMode);
     m_grid->setResizeMode(QListView::Adjust);
     m_grid->setMovement(QListView::Static);
@@ -166,6 +178,15 @@ void TemplateBrowserDialog::buildUi()
     m_mismatchLabel->setWordWrap(true);
     m_mismatchLabel->setVisible(false);
     outer->addWidget(m_mismatchLabel);
+
+    // The action that helps, and only when it helps: fewer photos than the
+    // layout needs can be fixed by adding them; more photos cannot, so that case
+    // explains itself instead of offering a button that makes it worse.
+    m_directionLabel = new QLabel(this);
+    m_directionLabel->setObjectName(QStringLiteral("templateDirection"));
+    m_directionLabel->setWordWrap(true);
+    m_directionLabel->setVisible(false);
+    outer->addWidget(m_directionLabel);
 
     m_addPhotosButton =
         new QPushButton(QCoreApplication::translate("PhotoPrint", "Fotók hozzáadása"), this);
@@ -187,18 +208,24 @@ void TemplateBrowserDialog::buildUi()
     m_paperLabel->setVisible(false);
     outer->addWidget(m_paperLabel);
 
-    m_cropLabel = new QLabel(this);
-    m_cropLabel->setObjectName(QStringLiteral("templateCropWarning"));
-    m_cropLabel->setWordWrap(true);
-    m_cropLabel->setVisible(false);
-    outer->addWidget(m_cropLabel);
+    m_noticeLabel = new QLabel(this);
+    m_noticeLabel->setObjectName(QStringLiteral("templatePositionNotice"));
+    m_noticeLabel->setWordWrap(true);
+    m_noticeLabel->setVisible(false);
+    outer->addWidget(m_noticeLabel);
+
+    m_errorLabel = new QLabel(this);
+    m_errorLabel->setObjectName(QStringLiteral("templateApplyError"));
+    m_errorLabel->setWordWrap(true);
+    m_errorLabel->setVisible(false);
+    outer->addWidget(m_errorLabel);
 
     auto *buttonRow = new QHBoxLayout;
     buttonRow->addStretch(1);
     m_applyButton = new QPushButton(QCoreApplication::translate("PhotoPrint", "Alkalmaz"), this);
     m_applyButton->setObjectName(QStringLiteral("templateApplyButton"));
     m_applyButton->setAutoDefault(false);
-    m_cancelButton = new QPushButton(QCoreApplication::translate("PhotoPrint", "Mégse"), this);
+    m_cancelButton = new QPushButton(QCoreApplication::translate("PhotoPrint", "Mégsem"), this);
     m_cancelButton->setObjectName(QStringLiteral("templateCancelButton"));
     m_cancelButton->setAutoDefault(false);
     buttonRow->addWidget(m_applyButton);
@@ -218,11 +245,17 @@ void TemplateBrowserDialog::buildUi()
             return;
         const int row = m_grid->currentRow();
         m_selectedId = row >= 0 && row < m_tiles.size() ? m_tiles.at(row).id : QString();
+        // A new choice is a new question: the previous refusal does not apply.
+        m_applyError.clear();
         refreshSelection();
         refreshStatus();
     });
     connect(m_grid, &QListWidget::itemActivated, this, [this](QListWidgetItem *) {
-        chooseSelected();
+        // Activation arrives from inside the view's own event handling. Applying
+        // publishes an edit, and the sync may rebuild this grid; clearing the
+        // item under the emitting view is not safe, so the choice runs after the
+        // emission has returned.
+        QMetaObject::invokeMethod(this, [this] { chooseSelected(); }, Qt::QueuedConnection);
     });
 }
 
@@ -245,8 +278,7 @@ void TemplateBrowserDialog::fillChips()
     m_chipLayout->addStretch(1);
     m_building = false;
 
-    const int photos = m_request.frames.size();
-    selectCount(std::clamp(photos, 2, 10));
+    selectCount(std::clamp(int(m_request.frames.size()), 2, 10));
 }
 
 int TemplateBrowserDialog::countChipCount() const
@@ -318,15 +350,82 @@ QSize TemplateBrowserDialog::previewSize() const
                  std::max(20, int(std::lround(deviceHeight / dpr))));
 }
 
+QString TemplateBrowserDialog::signature() const
+{
+    // Everything a preview depends on. The frames' geometry is deliberately
+    // absent: moving a photo does not change any thumbnail, and rebuilding six
+    // of them for a nudge is exactly the cost this guards.
+    QStringList parts;
+    parts << m_request.paper.name
+          << QString::number(m_request.paper.physicalWidthMm, 'f', 3)
+          << QString::number(m_request.paper.physicalHeightMm, 'f', 3)
+          << (m_request.landscape ? QStringLiteral("landscape") : QStringLiteral("portrait"))
+          << QString::number(currentChipCount());
+    for (const QImage &photo : m_request.photos)
+        parts << QString::number(photo.isNull() ? 0 : photo.cacheKey());
+    return parts.join(QLatin1Char('|'));
+}
+
+void TemplateBrowserDialog::scheduleSync()
+{
+    m_syncTimer->start();
+}
+
+void TemplateBrowserDialog::runPendingSync()
+{
+    if (signature() == m_builtSignature) {
+        // Only the photographs' positions changed, so nothing a preview shows is
+        // stale; the guidance can still change, because the crop report reads
+        // the frames.
+        refreshStatus();
+        return;
+    }
+    rebuildTiles();
+}
+
+bool TemplateBrowserDialog::waitForPendingSync(int timeoutMs)
+{
+    QElapsedTimer timer;
+    timer.start();
+    while (m_syncTimer->isActive() && timer.elapsed() < timeoutMs)
+        QCoreApplication::processEvents(QEventLoop::AllEvents, 10);
+    return !m_syncTimer->isActive();
+}
+
+void TemplateBrowserDialog::setPage(const PaperSpec &paper, bool landscape,
+                                    const QList<Frame> &frames, const QList<QImage> &photos)
+{
+    m_request.paper = paper;
+    m_request.landscape = landscape;
+    m_request.frames = frames;
+    m_request.photos = photos;
+    if (m_request.photos.size() < m_request.frames.size())
+        m_request.photos.resize(m_request.frames.size());
+
+    // Follow the page: the chip is the page's photo count, clamped to the
+    // catalogue. A count the page cannot have is not offered as if it were
+    // current.
+    const int target = std::clamp(int(m_request.frames.size()), 2, 10);
+    if (target != currentChipCount()) {
+        m_building = true;
+        if (QAbstractButton *chip = m_chipGroup->button(target))
+            chip->setChecked(true);
+        m_building = false;
+    }
+    scheduleSync();
+}
+
 void TemplateBrowserDialog::rebuildTiles()
 {
     const QSize preview = previewSize();
     m_grid->setIconSize(preview);
     m_grid->setGridSize(QSize(preview.width() + 20, preview.height() + 52));
+    m_grid->setAccessibleName(gridAccessibleName());
 
     m_building = true;
     m_grid->clear();
     m_tiles.clear();
+    m_applyError.clear();
 
     const int count = currentChipCount();
     const auto &catalogue = CollageTemplates::instance();
@@ -351,33 +450,26 @@ void TemplateBrowserDialog::rebuildTiles()
         item->setTextAlignment(Qt::AlignHCenter);
         item->setData(Qt::UserRole, t.id);
         item->setData(Qt::AccessibleTextRole, templateAccessibleName(t.id));
-        if (tile.mapped) {
-            item->setToolTip(t.nameEn);
-        } else {
-            // A layout too small for this paper stays visible so the page can
-            // explain why it cannot be used, but it cannot be chosen.
-            item->setFlags(item->flags() & ~(Qt::ItemIsEnabled | Qt::ItemIsSelectable));
-            item->setToolTip(tile.paperMessage);
-        }
+        // A layout that does not fit this paper stays selectable: the page has
+        // to be able to say why it cannot be used, and Apply stays off for it.
+        item->setToolTip(tile.mapped ? t.nameEn : tile.paperMessage);
+        if (!tile.mapped)
+            item->setForeground(palette().color(QPalette::Disabled, QPalette::WindowText));
         m_tiles.append(tile);
     }
 
-    // Keep the choice when the page changed under the dialog; otherwise start
-    // on the first layout that can actually be applied.
+    // Keep the choice only while it still maps. A layout that stopped fitting
+    // after a paper or orientation change is dropped, never swapped for another:
+    // silently choosing a second layout would apply something nobody picked.
     int keep = indexOfTemplate(m_selectedId);
-    if (keep < 0 || !m_tiles.at(keep).mapped) {
+    if (keep >= 0 && !m_tiles.at(keep).mapped)
         keep = -1;
-        for (int i = 0; i < m_tiles.size(); ++i) {
-            if (m_tiles.at(i).mapped) {
-                keep = i;
-                break;
-            }
-        }
-    }
     m_grid->setCurrentRow(keep);
     m_selectedId = keep >= 0 ? m_tiles.at(keep).id : QString();
     m_building = false;
 
+    m_builtSignature = signature();
+    ++m_rebuilds;
     refreshSelection();
     refreshStatus();
 }
@@ -385,7 +477,7 @@ void TemplateBrowserDialog::rebuildTiles()
 QPixmap TemplateBrowserDialog::renderPreview(const QList<QRectF> &slotRects, bool marked) const
 {
     const QSize size = previewSize();
-    const qreal dpr = devicePixelRatioF();
+    const qreal dpr = std::max<qreal>(1.0, devicePixelRatioF());
     QImage image(QSize(int(std::lround(size.width() * dpr)), int(std::lround(size.height() * dpr))),
                  QImage::Format_ARGB32_Premultiplied);
     image.setDevicePixelRatio(dpr);
@@ -431,12 +523,15 @@ QPixmap TemplateBrowserDialog::renderPreview(const QList<QRectF> &slotRects, boo
         // page's own order, so the preview never invents a new sequence.
         const QImage photo = m_request.photos.value(i);
         if (!photo.isNull()) {
-            const QImage scaled = photo.scaled(box.size().toSize(), Qt::KeepAspectRatioByExpanding,
+            // Crop at the device raster, not at the logical box, so a HiDPI
+            // preview shows the crop it will print instead of an upscale of a
+            // screen-sized one.
+            const QSize target((box.size() * dpr).toSize());
+            const QImage scaled = photo.scaled(target, Qt::KeepAspectRatioByExpanding,
                                                Qt::SmoothTransformation);
-            const int cropX = std::max(0, (scaled.width() - int(box.width())) / 2);
-            const int cropY = std::max(0, (scaled.height() - int(box.height())) / 2);
-            painter.drawImage(box, scaled,
-                              QRectF(cropX, cropY, box.width(), box.height()));
+            const int cropX = std::max(0, (scaled.width() - target.width()) / 2);
+            const int cropY = std::max(0, (scaled.height() - target.height()) / 2);
+            painter.drawImage(box, scaled, QRectF(cropX, cropY, target.width(), target.height()));
         } else {
             painter.fillRect(box, QColor(0xd4, 0xd4, 0xda));
         }
@@ -459,8 +554,10 @@ QPixmap TemplateBrowserDialog::renderPreview(const QList<QRectF> &slotRects, boo
 
     if (marked) {
         // The chosen layout carries a check, so the choice does not rest on the
-        // selection colour alone.
-        const QRectF badge(sheet.right() - 17.0, sheet.top() + 5.0, 15.0, 15.0);
+        // selection colour alone. It sits in the bottom-right corner: slot
+        // numbers are drawn in the top-left corner of their slot, so the badge
+        // can never cover one.
+        const QRectF badge(sheet.right() - 20.0, sheet.bottom() - 20.0, 15.0, 15.0);
         painter.setPen(Qt::NoPen);
         painter.setBrush(palette().color(QPalette::Highlight));
         painter.drawEllipse(badge);
@@ -477,14 +574,17 @@ QPixmap TemplateBrowserDialog::renderPreview(const QList<QRectF> &slotRects, boo
 
 void TemplateBrowserDialog::refreshSelection()
 {
+    const QString chosenLabel = QCoreApplication::translate("PhotoPrint", "Kiválasztott");
     for (int i = 0; i < m_tiles.size() && i < m_grid->count(); ++i) {
         TemplateTileState &tile = m_tiles[i];
-        if (!tile.mapped)
-            continue;
-        const bool chosen = tile.id == m_selectedId;
+        const bool chosen = tile.id == m_selectedId && tile.mapped;
         if (chosen && tile.marked.isNull())
             tile.marked = renderPreview(tile.slotRects, true);
-        m_grid->item(i)->setIcon(QIcon(chosen && !tile.marked.isNull() ? tile.marked : tile.preview));
+        QListWidgetItem *item = m_grid->item(i);
+        item->setIcon(QIcon(chosen && !tile.marked.isNull() ? tile.marked : tile.preview));
+        // The selection state is exposed to a screen reader as a word, not only
+        // as the painted check.
+        item->setData(Qt::AccessibleDescriptionRole, chosen ? chosenLabel : QString());
     }
 }
 
@@ -521,9 +621,8 @@ QStringList TemplateBrowserDialog::templateIds() const
 void TemplateBrowserDialog::selectTemplate(const QString &id)
 {
     const int index = indexOfTemplate(id);
-    if (index < 0 || !m_tiles.at(index).mapped)
-        return;
-    m_grid->setCurrentRow(index);
+    if (index >= 0)
+        m_grid->setCurrentRow(index);
 }
 
 QString TemplateBrowserDialog::selectedTemplateId() const
@@ -547,6 +646,14 @@ QString TemplateBrowserDialog::templateAccessibleName(const QString &id) const
     return QStringLiteral("%1 · %2").arg(countLabel(t->photoCount), t->nameEn);
 }
 
+QString TemplateBrowserDialog::templateAccessibleDescription(const QString &id) const
+{
+    const int index = indexOfTemplate(id);
+    if (index < 0 || index >= m_grid->count())
+        return QString();
+    return m_grid->item(index)->data(Qt::AccessibleDescriptionRole).toString();
+}
+
 QImage TemplateBrowserDialog::templateTileImage(const QString &id) const
 {
     const int index = indexOfTemplate(id);
@@ -561,15 +668,18 @@ QImage TemplateBrowserDialog::templateTileImage(const QString &id) const
 bool TemplateBrowserDialog::templateMarkedChosen(const QString &id) const
 {
     const int index = indexOfTemplate(id);
-    if (index < 0)
-        return false;
-    return m_tiles.at(index).id == m_selectedId && m_tiles.at(index).mapped;
+    return index >= 0 && m_tiles.at(index).id == m_selectedId && m_tiles.at(index).mapped;
 }
 
-bool TemplateBrowserDialog::templateEnabled(const QString &id) const
+bool TemplateBrowserDialog::templateMapped(const QString &id) const
 {
     const int index = indexOfTemplate(id);
     return index >= 0 && m_tiles.at(index).mapped;
+}
+
+QString TemplateBrowserDialog::gridAccessibleName() const
+{
+    return QStringLiteral("%1 · %2").arg(windowTitle(), paperLabel(m_request.paper));
 }
 
 bool TemplateBrowserDialog::applyEnabled() const
@@ -582,6 +692,11 @@ QString TemplateBrowserDialog::countMismatchText() const
     return m_mismatchLabel && m_mismatchLabel->isVisible() ? m_mismatchLabel->text() : QString();
 }
 
+QString TemplateBrowserDialog::directionHintText() const
+{
+    return m_directionLabel && m_directionLabel->isVisible() ? m_directionLabel->text() : QString();
+}
+
 QString TemplateBrowserDialog::capacityText() const
 {
     return m_capacityLabel && m_capacityLabel->isVisible() ? m_capacityLabel->text() : QString();
@@ -592,9 +707,14 @@ QString TemplateBrowserDialog::paperMessageText() const
     return m_paperLabel && m_paperLabel->isVisible() ? m_paperLabel->text() : QString();
 }
 
-QString TemplateBrowserDialog::cropWarningText() const
+QString TemplateBrowserDialog::positionNoticeText() const
 {
-    return m_cropLabel && m_cropLabel->isVisible() ? m_cropLabel->text() : QString();
+    return m_noticeLabel && m_noticeLabel->isVisible() ? m_noticeLabel->text() : QString();
+}
+
+QString TemplateBrowserDialog::applyErrorText() const
+{
+    return m_errorLabel && m_errorLabel->isVisible() ? m_errorLabel->text() : QString();
 }
 
 bool TemplateBrowserDialog::addPhotosVisible() const
@@ -605,6 +725,7 @@ bool TemplateBrowserDialog::addPhotosVisible() const
 void TemplateBrowserDialog::refreshStatus()
 {
     const int photos = m_request.frames.size();
+    const int chip = currentChipCount();
     const int index = indexOfTemplate(m_selectedId);
     const TemplateTileState *tile = index >= 0 ? &m_tiles.at(index) : nullptr;
     const CollageTemplate *t = tile ? templateFor(tile->id) : nullptr;
@@ -620,23 +741,46 @@ void TemplateBrowserDialog::refreshStatus()
         "PhotoPrint", "Ehhez a laphoz legfeljebb 10 fotóhoz van sablon."));
     m_capacityLabel->setVisible(tooMany);
 
-    const bool mismatch = !tooMany && t && t->photoCount != photos;
+    // A count difference belongs to the chip, not to the chosen tile: the line
+    // appears as soon as the chip is clicked, with or without a choice.
+    const bool mismatch = !tooMany && chip >= 2 && photos != chip;
     if (mismatch) {
         // The same sentence the engine refuses with, so the line and the error
         // can never drift apart.
         m_mismatchLabel->setText(
             QCoreApplication::translate("PhotoPrint",
                                         "Ehhez a sablonhoz %1 fotó kell, a lapon most %2 van.")
-                .arg(t->photoCount)
+                .arg(chip)
                 .arg(photos));
+        m_mismatchLabel->setAccessibleName(m_mismatchLabel->text());
     }
     m_mismatchLabel->setVisible(mismatch);
-    m_addPhotosButton->setVisible(mismatch);
 
+    // Only the direction that can be fixed by adding photos offers the button.
+    QString direction;
+    if (mismatch && photos > chip) {
+        const int surplus = photos - chip;
+        direction = surplus == 1
+            ? QCoreApplication::translate(
+                  "PhotoPrint", "Válassz %1 fotós sablont, vagy távolíts el egy fotót.")
+                  .arg(photos)
+            : QCoreApplication::translate(
+                  "PhotoPrint", "Válassz %1 fotós sablont, vagy távolíts el %n fotót.", nullptr,
+                  surplus)
+                  .arg(photos);
+        m_directionLabel->setAccessibleName(direction);
+    }
+    m_directionLabel->setText(direction);
+    m_directionLabel->setVisible(!direction.isEmpty());
+    m_addPhotosButton->setVisible(mismatch && photos < chip);
+
+    // A paper message belongs to the chosen layout. With nothing chosen it still
+    // explains a count that cannot be used at all, and it can never sit next to
+    // an enabled Apply, because Apply needs a mapped layout.
     QString paperMessage;
-    if (tile && !tile->mapped)
+    if (tile && !tile->mapped) {
         paperMessage = tile->paperMessage;
-    if (paperMessage.isEmpty()) {
+    } else if (!tile) {
         for (const TemplateTileState &candidate : m_tiles) {
             if (!candidate.mapped) {
                 paperMessage = candidate.paperMessage;
@@ -645,48 +789,106 @@ void TemplateBrowserDialog::refreshStatus()
         }
     }
     m_paperLabel->setText(paperMessage);
+    m_paperLabel->setAccessibleName(paperMessage);
     m_paperLabel->setVisible(!paperMessage.isEmpty());
 
-    // The crop warning is the apply() report itself, computed on the page copy.
-    // Nothing is published here: the dialog only tells the truth about what the
-    // engine would reset.
-    QString cropWarning;
-    if (tile && tile->mapped && t && tile->photoCount == photos && photos > 0) {
+    // What Apply would do, from the engine's own report: the layout moves every
+    // photo into its slot, and any crop or rotation it resets is named in the
+    // same sentence instead of staying invisible.
+    QString notice;
+    const bool applicable = tile && tile->mapped && t && tile->photoCount == photos && photos > 0;
+    if (applicable) {
         Page page;
         page.paper = m_request.paper;
         page.landscape = m_request.landscape;
         page.frames = m_request.frames;
         CollageApplyReport report;
         const auto applied = CollageTemplates::instance().apply(*t, page, &report);
-        if (applied && !report.isEmpty()) {
-            cropWarning = QCoreApplication::translate(
-                "PhotoPrint", "A kivágásokat az új elrendezéshez igazítjuk.");
+        if (applied) {
+            const bool crops = !report.cropResetIds.isEmpty();
+            const bool rotations = !report.rotationResetIds.isEmpty();
+            if (crops && rotations) {
+                notice = QCoreApplication::translate(
+                    "PhotoPrint",
+                    "Az új elrendezés minden fotót a saját helyére tesz, a kivágásokat és az "
+                    "elforgatást is ehhez igazítjuk.");
+            } else if (crops) {
+                notice = QCoreApplication::translate(
+                    "PhotoPrint",
+                    "Az új elrendezés minden fotót a saját helyére tesz, a kivágásokat ehhez "
+                    "igazítjuk.");
+            } else if (rotations) {
+                notice = QCoreApplication::translate(
+                    "PhotoPrint",
+                    "Az új elrendezés minden fotót a saját helyére tesz, az elforgatást nullára "
+                    "állítjuk.");
+            } else {
+                notice = QCoreApplication::translate(
+                    "PhotoPrint", "Az új elrendezés minden fotót a saját helyére tesz.");
+            }
         }
     }
-    m_cropLabel->setText(cropWarning);
-    m_cropLabel->setVisible(!cropWarning.isEmpty());
+    m_noticeLabel->setText(notice);
+    m_noticeLabel->setAccessibleName(notice);
+    m_noticeLabel->setVisible(!notice.isEmpty());
 
-    m_applyButton->setEnabled(tile && tile->mapped && t && t->photoCount == photos && photos > 0);
+    m_errorLabel->setText(m_applyError);
+    m_errorLabel->setAccessibleName(m_applyError);
+    m_errorLabel->setVisible(!m_applyError.isEmpty());
+
+    m_applyButton->setEnabled(applicable);
+
+    announce();
+}
+
+void TemplateBrowserDialog::announce()
+{
+    // Everything the footer currently tells the person, in reading order. A
+    // change is announced once instead of being left for a screen reader to
+    // discover on its next pass.
+    QStringList lines;
+    for (const QLabel *label : {m_mismatchLabel, m_directionLabel, m_capacityLabel, m_paperLabel,
+                                m_noticeLabel, m_errorLabel}) {
+        if (label && label->isVisible() && !label->text().isEmpty())
+            lines.append(label->text());
+    }
+    const QString guidance = lines.join(QLatin1Char(' '));
+    if (guidance == m_announced)
+        return;
+    const bool hadGuidance = !m_announced.isEmpty();
+    m_announced = guidance;
+    setAccessibleDescription(guidance);
+    if (hadGuidance && !guidance.isEmpty() && isVisible())
+        QAccessible::updateAccessibility(new QAccessibleEvent(this, QAccessible::Alert));
+}
+
+void TemplateBrowserDialog::reportApplyFailure(const QString &message)
+{
+    m_applyError = message;
+    refreshStatus();
 }
 
 void TemplateBrowserDialog::chooseSelected()
 {
-    if (!applyEnabled() || m_selectedId.isEmpty())
+    const int index = indexOfTemplate(m_selectedId);
+    if (index < 0 || !m_tiles.at(index).mapped || !applyEnabled())
         return;
+    // The dialog never applies and never closes itself: the receiver publishes
+    // the edit, and a refusal comes back through reportApplyFailure().
     emit templateChosen(m_selectedId);
-    accept();
 }
 
-void TemplateBrowserDialog::setPage(const PaperSpec &paper, bool landscape,
-                                    const QList<Frame> &frames, const QList<QImage> &photos)
+void TemplateBrowserDialog::showEvent(QShowEvent *event)
 {
-    m_request.paper = paper;
-    m_request.landscape = landscape;
-    m_request.frames = frames;
-    m_request.photos = photos;
-    if (m_request.photos.size() < m_request.frames.size())
-        m_request.photos.resize(m_request.frames.size());
-    rebuildTiles();
+    QDialog::showEvent(event);
+    // A deliberate start: the chosen layout when there is one, otherwise the
+    // chip row, because nothing is selected and Apply is off.
+    if (m_grid->currentRow() >= 0)
+        m_grid->setFocus();
+    else if (QAbstractButton *chip = m_chipGroup->checkedButton())
+        chip->setFocus();
+    else
+        m_grid->setFocus();
 }
 
 } // namespace pp

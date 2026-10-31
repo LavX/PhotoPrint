@@ -2020,8 +2020,10 @@ void MainWindow::rebuildUi()
     // a dialog in the previous language.
     if (m_effectDialog)
         m_effectDialog->close();
-    if (m_templateDialog)
+    if (m_templateDialog) {
         m_templateDialog->close();
+        m_templateDialog = nullptr;
+    }
     // Everything the user was looking at survives the language change.
     const QString selected = m_selectedId;
     const bool dirty = m_dirty;
@@ -2651,8 +2653,21 @@ bool MainWindow::applyTemplate(const QString &templateId)
     CollageApplyReport report;
     const auto frames = catalogue.apply(*chosen, page, &report);
     if (!frames) {
-        showProblem(frames.error().message);
+        // A refusal belongs where the choice was made. The picker stays open so
+        // the person can see which layout was refused and why.
+        if (m_templateDialog)
+            m_templateDialog->reportApplyFailure(frames.error().message);
+        else
+            showProblem(frames.error().message);
         return false;
+    }
+
+    // The same layout on the same page changes nothing: no second undo entry,
+    // and a saved project is not marked dirty by a click that applies nothing.
+    if (frames.value() == page.frames) {
+        if (m_templateDialog)
+            m_templateDialog->accept();
+        return true;
     }
 
     // The stack names a single pushed edit itself, so the one layout change is
@@ -2662,15 +2677,32 @@ bool MainWindow::applyTemplate(const QString &templateId)
     stack->beginMacro(QCoreApplication::translate("PhotoPrint", "Sablon alkalmazása"));
     m_controller.apply(SetFramesEdit{document.currentPage, frames.value()});
     stack->endMacro();
+    if (m_templateDialog)
+        m_templateDialog->accept();
     return true;
 }
 
 QList<QImage> MainWindow::templatePhotoThumbnails(const Page &page)
 {
+    // The picker follows the page on every document change, and a change arrives
+    // for a nudge and for a selection as well. The pixels only depend on which
+    // photographs are on the page, so the decode is cached by their identity.
+    const ColorRecipe recipe = sanitiseRecipe(m_controller.document().recipe);
+    QStringList keys;
+    keys.reserve(page.frames.size() + 1);
+    // The recipe is part of the identity: a grayscale page shows grey thumbnails.
+    keys.append(QString::fromLatin1(recipe.digest().toHex()));
+    for (const Frame &frame : page.frames) {
+        keys.append(frame.id + QLatin1Char('|')
+                    + QString::fromLatin1(frame.sourceSha256.toHex())
+                    + QLatin1Char('|') + frame.sourcePath);
+    }
+    if (keys == m_templatePhotoKeys && m_templatePhotos.size() == page.frames.size())
+        return m_templatePhotos;
+
     // Only what the preview job already decoded: opening the picker must not
     // block the window on ten photographs. A slot without a thumbnail keeps its
     // number, so the fill order is still readable.
-    const ColorRecipe recipe = sanitiseRecipe(m_controller.document().recipe);
     QList<QImage> photos;
     photos.reserve(page.frames.size());
     for (const Frame &frame : page.frames) {
@@ -2681,6 +2713,8 @@ QList<QImage> MainWindow::templatePhotoThumbnails(const Page &page)
         }
         photos.append(image);
     }
+    m_templatePhotoKeys = keys;
+    m_templatePhotos = photos;
     return photos;
 }
 

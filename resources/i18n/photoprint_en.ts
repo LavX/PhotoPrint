@@ -968,16 +968,43 @@
         <source>Ehhez a laphoz legfeljebb 10 fotóhoz van sablon.</source>
         <translation>This page supports templates for at most 10 photos.</translation>
     </message>
-    <message>
-        <source>A kivágásokat az új elrendezéshez igazítjuk.</source>
-        <translation>The crops will be adjusted to the new layout.</translation>
-    </message>
     <message numerus="yes">
         <source>%n fotó</source>
         <translation>
             <numerusform>%n photo</numerusform>
             <numerusform>%n photos</numerusform>
         </translation>
+    </message>
+    <message>
+        <source>Válassz %1 fotós sablont, vagy távolíts el egy fotót.</source>
+        <translation>Pick the template for %1 photos, or remove one photo.</translation>
+    </message>
+    <message numerus="yes">
+        <source>Válassz %1 fotós sablont, vagy távolíts el %n fotót.</source>
+        <translation>
+            <numerusform>Pick the template for %1 photos, or remove %n photo.</numerusform>
+            <numerusform>Pick the template for %1 photos, or remove %n photos.</numerusform>
+        </translation>
+    </message>
+    <message>
+        <source>Az új elrendezés minden fotót a saját helyére tesz.</source>
+        <translation>The new layout puts every photo in its own place.</translation>
+    </message>
+    <message>
+        <source>Az új elrendezés minden fotót a saját helyére tesz, a kivágásokat ehhez igazítjuk.</source>
+        <translation>The new layout puts every photo in its own place, and the crops are adjusted to it.</translation>
+    </message>
+    <message>
+        <source>Az új elrendezés minden fotót a saját helyére tesz, az elforgatást nullára állítjuk.</source>
+        <translation>The new layout puts every photo in its own place, and the rotation is set to zero.</translation>
+    </message>
+    <message>
+        <source>Az új elrendezés minden fotót a saját helyére tesz, a kivágásokat és az elforgatást is ehhez igazítjuk.</source>
+        <translation>The new layout puts every photo in its own place, and both the crops and the rotation are adjusted to it.</translation>
+    </message>
+    <message>
+        <source>Kiválasztott</source>
+        <translation>Selected</translation>
     </message>
 </context>
 </TS>

@@ -968,16 +968,43 @@
         <source>Ehhez a laphoz legfeljebb 10 fotóhoz van sablon.</source>
         <translation>Cette page accepte des modèles pour 10 photos au maximum.</translation>
     </message>
-    <message>
-        <source>A kivágásokat az új elrendezéshez igazítjuk.</source>
-        <translation>Les recadrages seront ajustés à la nouvelle disposition.</translation>
-    </message>
     <message numerus="yes">
         <source>%n fotó</source>
         <translation>
             <numerusform>%n photo</numerusform>
             <numerusform>%n photos</numerusform>
         </translation>
+    </message>
+    <message>
+        <source>Válassz %1 fotós sablont, vagy távolíts el egy fotót.</source>
+        <translation>Choisis le modèle pour %1 photos ou retire une photo.</translation>
+    </message>
+    <message numerus="yes">
+        <source>Válassz %1 fotós sablont, vagy távolíts el %n fotót.</source>
+        <translation>
+            <numerusform>Choisis le modèle pour %1 photos ou retire %n photo.</numerusform>
+            <numerusform>Choisis le modèle pour %1 photos ou retire %n photos.</numerusform>
+        </translation>
+    </message>
+    <message>
+        <source>Az új elrendezés minden fotót a saját helyére tesz.</source>
+        <translation>La nouvelle disposition place chaque photo à sa propre place.</translation>
+    </message>
+    <message>
+        <source>Az új elrendezés minden fotót a saját helyére tesz, a kivágásokat ehhez igazítjuk.</source>
+        <translation>La nouvelle disposition place chaque photo à sa propre place et les recadrages y sont ajustés.</translation>
+    </message>
+    <message>
+        <source>Az új elrendezés minden fotót a saját helyére tesz, az elforgatást nullára állítjuk.</source>
+        <translation>La nouvelle disposition place chaque photo à sa propre place et la rotation est remise à zéro.</translation>
+    </message>
+    <message>
+        <source>Az új elrendezés minden fotót a saját helyére tesz, a kivágásokat és az elforgatást is ehhez igazítjuk.</source>
+        <translation>La nouvelle disposition place chaque photo à sa propre place et les recadrages comme la rotation y sont ajustés.</translation>
+    </message>
+    <message>
+        <source>Kiválasztott</source>
+        <translation>Sélectionné</translation>
     </message>
 </context>
 </TS>

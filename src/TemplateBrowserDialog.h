@@ -15,6 +15,7 @@ class QHBoxLayout;
 class QLabel;
 class QListWidget;
 class QPushButton;
+class QTimer;
 
 namespace pp {
 
@@ -34,9 +35,10 @@ struct TemplateBrowserRequest {
     int tileLogicalPx = 120;
 };
 
-/// One tile of the current count. The preview is rebuilt when the count or the
-/// page changes; the check mark is painted into it on selection. It lives at
-/// namespace scope because moc cannot describe a nested class of a QObject.
+/// One tile of the current count. The preview is rebuilt when the count, the
+/// paper or the photographs change; the check mark is painted into it on
+/// selection. It lives at namespace scope because moc cannot describe a nested
+/// class of a QObject.
 struct TemplateTileState {
     QString id;
     QString nameEn;
@@ -44,18 +46,21 @@ struct TemplateTileState {
     bool mapped = false; ///< slotsMm() succeeded on this paper
     QString paperMessage;
     QList<QRectF> slotRects; ///< page millimetres, from slotsMm()
-    QPixmap preview;     ///< page-aspect preview without the check
-    QPixmap marked;      ///< with the check, built on first use
+    QPixmap preview;         ///< page-aspect preview without the check
+    QPixmap marked;          ///< with the check, built on first use
 };
 
 /// Collage template picker for the current page.
 ///
-/// The dialog is a preview and a chooser: it maps every browsable template
-/// against the page's paper only to draw it and to tell the truth about what
-/// apply() would do (the crop reset warning), but it never edits the document.
-/// Apply emits templateChosen() with the id and closes; MainWindow publishes the
-/// single SetFramesEdit. Browsing is never disabled, so somebody with an empty
-/// page still finds the feature and is told how many photos each layout needs.
+/// The dialog is a preview and a chooser: it maps every browsable layout
+/// against the page's paper to draw it, and it runs apply() on a copy only to
+/// tell the truth about what applying would change. It never edits the
+/// document and it never claims the page already uses a layout, because a
+/// project stores frames and no template id.
+///
+/// Apply emits templateChosen() and nothing else: MainWindow publishes the one
+/// SetFramesEdit, closes the dialog on success, and hands a refusal back through
+/// reportApplyFailure() so the picker stays open with the reason on screen.
 class TemplateBrowserDialog : public QDialog
 {
     Q_OBJECT
@@ -64,10 +69,15 @@ public:
     explicit TemplateBrowserDialog(const TemplateBrowserRequest &request,
                                    QWidget *parent = nullptr);
 
-    /// Follows the page while the dialog is open, so adding photographs from the
-    /// dialog's own button turns the mismatch line into an enabled Apply.
+    /// Follows the page while the dialog is open. The count chip follows the
+    /// page's photo count, and the tiles and the guidance are updated once the
+    /// burst of edits is over, so a nudge does not rebuild six previews.
     void setPage(const PaperSpec &paper, bool landscape, const QList<Frame> &frames,
                  const QList<QImage> &photos = {});
+    /// The reason the last Apply was refused, shown inside the dialog.
+    void reportApplyFailure(const QString &message);
+    /// Processes events until a scheduled page sync has run.
+    bool waitForPendingSync(int timeoutMs = 2000);
 
     // Inspection hooks for the tests. They describe what the user can see.
     int countChipCount() const;
@@ -80,17 +90,24 @@ public:
     QStringList templateIds() const; ///< visible tiles, in catalogue order
     void selectTemplate(const QString &id);
     QString selectedTemplateId() const;
-    QString templateLabel(const QString &id) const;          ///< the English name
+    QString templateLabel(const QString &id) const;   ///< the English name
     QString templateAccessibleName(const QString &id) const;
-    QImage templateTileImage(const QString &id) const;       ///< as painted
-    bool templateMarkedChosen(const QString &id) const;      ///< the check mark
-    bool templateEnabled(const QString &id) const;           ///< false when too small
+    QString templateAccessibleDescription(const QString &id) const;
+    QImage templateTileImage(const QString &id) const; ///< as painted
+    bool templateMarkedChosen(const QString &id) const; ///< the check mark
+    bool templateMapped(const QString &id) const;       ///< slotsMm() on this paper
+    QString gridAccessibleName() const;
+    /// How many times the tiles were (re)built. A burst of document changes
+    /// must end in one rebuild, and a nudge in none.
+    int tileRebuildCount() const { return m_rebuilds; }
 
     bool applyEnabled() const;
-    QString countMismatchText() const; ///< visible mismatch line, or empty
-    QString capacityText() const;      ///< the 11+ line, or empty
-    QString paperMessageText() const;  ///< template-too-small message, or empty
-    QString cropWarningText() const;   ///< the one crop reset line, or empty
+    QString countMismatchText() const;  ///< visible count line, or empty
+    QString directionHintText() const;  ///< what to do with too many photos
+    QString capacityText() const;       ///< the 11+ line, or empty
+    QString paperMessageText() const;   ///< template-too-small message, or empty
+    QString positionNoticeText() const; ///< what Apply changes, or empty
+    QString applyErrorText() const;     ///< a refusal from the last Apply
     bool addPhotosVisible() const;
 
 signals:
@@ -98,6 +115,9 @@ signals:
     void templateChosen(const QString &templateId);
     /// Add photographs to the current page. The caller owns the file dialog.
     void addPhotosRequested();
+
+protected:
+    void showEvent(QShowEvent *event) override;
 
 private:
     void buildUi();
@@ -109,6 +129,10 @@ private:
     /// Moves the count selection by @p delta from the keyboard and keeps the
     /// focus on the chip that is now checked.
     void stepCount(int delta);
+    void scheduleSync();
+    void runPendingSync();
+    QString signature() const;
+    void announce();
     QSizeF pageMm() const;
     QSize previewSize() const;
     int currentChipCount() const;
@@ -120,6 +144,10 @@ private:
     TemplateBrowserRequest m_request;
     QList<TemplateTileState> m_tiles; ///< tiles of the selected count, in catalogue order
     QString m_selectedId;
+    QString m_applyError;
+    QString m_builtSignature;
+    QString m_announced;
+    int m_rebuilds = 0;
     bool m_building = false;
 
     QLabel *m_subtitle = nullptr;
@@ -129,12 +157,15 @@ private:
     QList<QPushButton *> m_chipButtons;
     QListWidget *m_grid = nullptr;
     QLabel *m_mismatchLabel = nullptr;
+    QLabel *m_directionLabel = nullptr;
     QLabel *m_capacityLabel = nullptr;
     QLabel *m_paperLabel = nullptr;
-    QLabel *m_cropLabel = nullptr;
+    QLabel *m_noticeLabel = nullptr;
+    QLabel *m_errorLabel = nullptr;
     QPushButton *m_addPhotosButton = nullptr;
     QPushButton *m_applyButton = nullptr;
     QPushButton *m_cancelButton = nullptr;
+    QTimer *m_syncTimer = nullptr;
 };
 
 } // namespace pp
