@@ -285,25 +285,39 @@ bool readMask(const QJsonObject &object, StageMask *mask, Error *err, const QStr
     return true;
 }
 
-bool readBlend(const QJsonObject &object, BlendMode fallback, BlendMode *out)
+bool blendIsAllowed(BlendMode mode, std::initializer_list<BlendMode> allowed)
+{
+    for (BlendMode candidate : allowed) {
+        if (candidate == mode)
+            return true;
+    }
+    return false;
+}
+
+bool readBlend(const QJsonObject &object, BlendMode fallback, BlendMode *out,
+               std::initializer_list<BlendMode> allowed)
 {
     const QString name = object.value(QStringLiteral("blend")).toString();
-    if (name.isEmpty()) {
-        *out = fallback;
-        return true;
+    BlendMode mode = fallback;
+    if (!name.isEmpty()) {
+        if (name == QLatin1String("screen"))
+            mode = BlendMode::Screen;
+        else if (name == QLatin1String("multiply"))
+            mode = BlendMode::Multiply;
+        else if (name == QLatin1String("softlight"))
+            mode = BlendMode::SoftLight;
+        else if (name == QLatin1String("overlay"))
+            mode = BlendMode::Overlay;
+        else if (name == QLatin1String("add"))
+            mode = BlendMode::Add;
+        else
+            return false;
     }
-    if (name == QLatin1String("screen"))
-        *out = BlendMode::Screen;
-    else if (name == QLatin1String("multiply"))
-        *out = BlendMode::Multiply;
-    else if (name == QLatin1String("softlight"))
-        *out = BlendMode::SoftLight;
-    else if (name == QLatin1String("overlay"))
-        *out = BlendMode::Overlay;
-    else if (name == QLatin1String("add"))
-        *out = BlendMode::Add;
-    else
+    // A stage that ignores a blend mode must reject it at load time rather
+    // than silently rendering a different look than the recipe says.
+    if (!blendIsAllowed(mode, allowed))
         return false;
+    *out = mode;
     return true;
 }
 
@@ -541,8 +555,10 @@ Result<Stage> stageFromJson(const QJsonObject &object, const QString &where)
     case StageId::SoftFocus:
         stage.radius = clamped(object, QStringLiteral("radius"), 6.0, 0.0, 100.0);
         stage.amount = clamped(object, QStringLiteral("amount"), 0.2, 0.0, 1.0);
-        if (!readBlend(object, BlendMode::Screen, &stage.blend))
-            return parseError(where, QStringLiteral("unknown softFocus blend"));
+        if (!readBlend(object, BlendMode::Screen, &stage.blend,
+                       {BlendMode::Screen, BlendMode::SoftLight, BlendMode::Multiply,
+                        BlendMode::Overlay}))
+            return parseError(where, QStringLiteral("unknown or unsupported softFocus blend"));
         break;
     case StageId::Grain:
         stage.amount = clamped(object, QStringLiteral("amount"), 0.03, 0.0, 0.2);
@@ -568,8 +584,9 @@ Result<Stage> stageFromJson(const QJsonObject &object, const QString &where)
         stage.radius = clamped(object, QStringLiteral("radius"), 0.6, 0.0, 2.0);
         stage.intensity = clamped(object, QStringLiteral("intensity"), 0.5, 0.0, 1.0);
         stage.softness = clamped(object, QStringLiteral("softness"), 0.5, 0.0, 1.0);
-        if (!readBlend(object, BlendMode::Screen, &stage.blend))
-            return parseError(where, QStringLiteral("unknown lightLeak blend"));
+        if (!readBlend(object, BlendMode::Screen, &stage.blend,
+                       {BlendMode::Screen, BlendMode::Add}))
+            return parseError(where, QStringLiteral("unknown or unsupported lightLeak blend"));
         break;
     }
     case StageId::ExposureMask: {
@@ -596,8 +613,10 @@ Result<Stage> stageFromJson(const QJsonObject &object, const QString &where)
             return parseError(where, QStringLiteral("'texture' needs an 'asset'"));
         stage.opacity = clamped(object, QStringLiteral("opacity"), 0.2, 0.0, 1.0);
         stage.scale = clamped(object, QStringLiteral("scale"), 1.0, 0.25, 4.0);
-        if (!readBlend(object, BlendMode::Multiply, &stage.blend))
-            return parseError(where, QStringLiteral("unknown texture blend"));
+        if (!readBlend(object, BlendMode::Multiply, &stage.blend,
+                       {BlendMode::Multiply, BlendMode::SoftLight, BlendMode::Overlay,
+                        BlendMode::Screen}))
+            return parseError(where, QStringLiteral("unknown or unsupported texture blend"));
         break;
     }
     return stage;

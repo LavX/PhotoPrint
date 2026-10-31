@@ -70,6 +70,8 @@ private slots:
     void unknownKeysFail();
     void strictSchemaRejectsTypos();
     void enforceStageBudget();
+    void zeroStopGradientIsRejected();
+    void unsupportedBlendIsRejected();
     void legacyKeysStayFrozen();
 };
 
@@ -246,6 +248,44 @@ void TestEffectCatalogue::enforceStageBudget()
     const QJsonArray none{recipe(QStringLiteral("basic.test"), QStringLiteral("basic"), 1,
                                  QJsonArray{})};
     QVERIFY(!EffectCatalogue::fromJson(catalogueWith(none)).ok());
+}
+
+void TestEffectCatalogue::zeroStopGradientIsRejected()
+{
+    const auto make = [](const QJsonArray &stops) {
+        return catalogueWith(QJsonArray{recipe(
+            QStringLiteral("print.test"), QStringLiteral("print"), 1,
+            QJsonArray{stage(QStringLiteral("gradientMap"),
+                             {{QStringLiteral("stops"), stops}})})});
+    };
+    QVERIFY(!EffectCatalogue::fromJson(make(QJsonArray{})).ok());
+    QVERIFY(!EffectCatalogue::fromJson(make(QJsonArray{QJsonObject{
+        {QStringLiteral("position"), 0.0},
+        {QStringLiteral("colour"), QStringLiteral("#000000")}}})).ok());
+    QVERIFY(EffectCatalogue::fromJson(make(QJsonArray{
+        QJsonObject{{QStringLiteral("position"), 0.0},
+                    {QStringLiteral("colour"), QStringLiteral("#000000")}},
+        QJsonObject{{QStringLiteral("position"), 1.0},
+                    {QStringLiteral("colour"), QStringLiteral("#ffffff")}}})).ok());
+}
+
+void TestEffectCatalogue::unsupportedBlendIsRejected()
+{
+    const auto catalogueFor = [](const QString &stageId, const QJsonObject &extra) {
+        return EffectCatalogue::fromJson(catalogueWith(QJsonArray{recipe(
+            QStringLiteral("basic.test"), QStringLiteral("basic"), 1,
+            QJsonArray{stage(stageId, extra)})}));
+    };
+    QVERIFY(!catalogueFor(QStringLiteral("texture"),
+                          {{QStringLiteral("asset"), QStringLiteral("paper-fine")},
+                           {QStringLiteral("blend"), QStringLiteral("add")}}).ok());
+    QVERIFY(!catalogueFor(QStringLiteral("softFocus"),
+                          {{QStringLiteral("blend"), QStringLiteral("add")}}).ok());
+    QVERIFY(!catalogueFor(QStringLiteral("lightLeak"),
+                          {{QStringLiteral("blend"), QStringLiteral("multiply")}}).ok());
+    QVERIFY(catalogueFor(QStringLiteral("texture"),
+                         {{QStringLiteral("asset"), QStringLiteral("paper-fine")},
+                          {QStringLiteral("blend"), QStringLiteral("multiply")}}).ok());
 }
 
 void TestEffectCatalogue::legacyKeysStayFrozen()

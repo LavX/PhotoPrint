@@ -5,8 +5,13 @@
 #include "PhotoFilters.h"
 #include "ProjectStore.h"
 
+#include <QColor>
 #include <QColorSpace>
 #include <QCryptographicHash>
+#include <QFile>
+#include <QJsonArray>
+#include <QJsonDocument>
+#include <QJsonObject>
 #include <QFile>
 #include <QImage>
 #include <QJsonArray>
@@ -150,6 +155,15 @@ private slots:
     void strengthZeroIsIdentity();
     void everySignatureLookChangesPixels();
     void signatureLooksStayDistinct();
+    void stageOrderIsPreserved();
+    void posterizeIsNotFoldedIntoLut();
+    void vignetteIsAspectNormalised();
+    void finishStagesRunAtTarget();
+    void largeFinishRasterWorks();
+    void oversizedRasterFailsClearly();
+    void previewBloomMatchesPrint();
+    void preparedLinearHonoursVersion();
+    void goldensArePinned();
     void rendersAreDeterministic();
     void compilesIntoSegments();
     void ditheredPosterizeIsSpatial();
@@ -216,6 +230,346 @@ void TestEffectEngine::signatureLooksStayDistinct()
                                     .arg(difference)));
         }
     }
+}
+
+void TestEffectEngine::stageOrderIsPreserved()
+{
+    const auto catalogueFor = [](const QJsonArray &stages) {
+        return EffectCatalogue::fromJson(catalogueJson(QJsonArray{QJsonObject{
+            {QStringLiteral("key"), QStringLiteral("color.order")},
+            {QStringLiteral("category"), QStringLiteral("color")},
+            {QStringLiteral("version"), 1},
+            {QStringLiteral("name"), QStringLiteral("Order")},
+            {QStringLiteral("stages"), stages}}}));
+    };
+    const QJsonObject saturation{{QStringLiteral("id"), QStringLiteral("saturation")},
+                                 {QStringLiteral("amount"), -100}};
+    const QJsonObject exposure{{QStringLiteral("id"), QStringLiteral("exposure")},
+                               {QStringLiteral("ev"), 1.0}};
+    const auto colourThenTone = catalogueFor(QJsonArray{saturation, exposure});
+    const auto toneThenColour = catalogueFor(QJsonArray{exposure, saturation});
+    QVERIFY(colourThenTone.ok());
+    QVERIFY(toneThenColour.ok());
+
+    const QImage source = scaledSample(QSize(96, 72));
+    const auto first = EffectEngine::instance().render(
+        source, colourThenTone.value().resolve(QStringLiteral("color.order")).value(), 100,
+        source.size(), false);
+    const auto second = EffectEngine::instance().render(
+        source, toneThenColour.value().resolve(QStringLiteral("color.order")).value(), 100,
+        source.size(), false);
+    QVERIFY(first.ok());
+    QVERIFY(second.ok());
+    QVERIFY(hashImage(first.value()) != hashImage(second.value()));
+
+    const auto colourThenTonePlan = EffectEngine::compile(
+        colourThenTone.value().resolve(QStringLiteral("color.order")).value());
+    const auto toneThenColourPlan = EffectEngine::compile(
+        toneThenColour.value().resolve(QStringLiteral("color.order")).value());
+    QVERIFY(colourThenTonePlan.ok());
+    QVERIFY(toneThenColourPlan.ok());
+    QCOMPARE(colourThenTonePlan.value().steps.size(), 2);
+    QCOMPARE(colourThenTonePlan.value().steps.at(0).point, true);
+    QVERIFY(colourThenTonePlan.value().steps.at(0).toneStages.isEmpty());
+    QCOMPARE(colourThenTonePlan.value().steps.at(0).colourStages.first().idName,
+             QStringLiteral("saturation"));
+    QCOMPARE(colourThenTonePlan.value().steps.at(1).toneStages.first().idName,
+             QStringLiteral("exposure"));
+    QCOMPARE(toneThenColourPlan.value().steps.size(), 1);
+    QCOMPARE(toneThenColourPlan.value().steps.first().toneStages.first().idName,
+             QStringLiteral("exposure"));
+    QCOMPARE(toneThenColourPlan.value().steps.first().colourStages.first().idName,
+             QStringLiteral("saturation"));
+
+    // Every shipped recipe executes exactly the JSON order. A point step
+    // records its folded tone stages and its fused colour stages; flattening
+    // those with the spatial stages must reproduce the recipe list.
+    for (const EffectRecipe &recipe : EffectCatalogue::instance().recipes()) {
+        QStringList expected;
+        for (const Stage &stage : recipe.stages)
+            expected << stage.idName;
+        const auto plan = EffectEngine::compile(recipe);
+        QVERIFY(plan.ok());
+        QStringList actual;
+        for (const EffectPlanStep &step : plan.value().steps) {
+            if (step.point) {
+                for (const Stage &stage : step.toneStages)
+                    actual << stage.idName;
+                for (const Stage &stage : step.colourStages)
+                    actual << stage.idName;
+            } else {
+                actual << step.spatial.idName;
+            }
+        }
+        QCOMPARE(actual, expected);
+    }
+}
+
+void TestEffectEngine::posterizeIsNotFoldedIntoLut()
+{
+    const QJsonArray recipes{QJsonObject{
+        {QStringLiteral("key"), QStringLiteral("art.poster")},
+        {QStringLiteral("category"), QStringLiteral("art")},
+        {QStringLiteral("version"), 1},
+        {QStringLiteral("name"), QStringLiteral("Poster")},
+        {QStringLiteral("stages"),
+         QJsonArray{
+             QJsonObject{{QStringLiteral("id"), QStringLiteral("posterize")},
+                         {QStringLiteral("levels"), 5}},
+             QJsonObject{{QStringLiteral("id"), QStringLiteral("exposure")},
+                         {QStringLiteral("ev"), 0.1}}}},
+    }};
+    const auto catalogue = EffectCatalogue::fromJson(catalogueJson(recipes));
+    QVERIFY(catalogue.ok());
+    const auto recipe = catalogue.value().resolve(QStringLiteral("art.poster")).value();
+    const auto plan = EffectEngine::compile(recipe);
+    QVERIFY(plan.ok());
+    // The quantise is its own pass; the exposure after it is a separate point
+    // step, so the LUT interpolation cannot smear the posterize staircase.
+    QCOMPARE(plan.value().steps.first().point, false);
+    QCOMPARE(plan.value().steps.first().spatial.id, StageId::Posterize);
+    QCOMPARE(plan.value().pointSteps, 1);
+}
+
+void TestEffectEngine::vignetteIsAspectNormalised()
+{
+    const QJsonArray recipes{QJsonObject{
+        {QStringLiteral("key"), QStringLiteral("light.vignette")},
+        {QStringLiteral("category"), QStringLiteral("light")},
+        {QStringLiteral("version"), 1},
+        {QStringLiteral("name"), QStringLiteral("Vignette")},
+        {QStringLiteral("stages"),
+         QJsonArray{QJsonObject{{QStringLiteral("id"), QStringLiteral("vignette")},
+                                {QStringLiteral("amount"), 0.8},
+                                {QStringLiteral("midpoint"), 0.2},
+                                {QStringLiteral("feather"), 0.6}}}},
+    }};
+    const auto catalogue = EffectCatalogue::fromJson(catalogueJson(recipes));
+    QVERIFY(catalogue.ok());
+    const auto recipe = catalogue.value().resolve(QStringLiteral("light.vignette")).value();
+
+    QImage wide(400, 300, QImage::Format_RGB32);
+    wide.fill(QColor(128, 128, 128));
+    QImage ultraWide(400, 225, QImage::Format_RGB32);
+    ultraWide.fill(QColor(128, 128, 128));
+    const auto a = EffectEngine::instance().render(wide, recipe, 100, wide.size(), false);
+    const auto b = EffectEngine::instance().render(ultraWide, recipe, 100, ultraWide.size(), false);
+    QVERIFY(a.ok());
+    QVERIFY(b.ok());
+
+    // Top-edge midpoint is 0.5 short sides from the centre in both frames.
+    QVERIFY(std::abs(qGray(a.value().pixel(200, 0)) - qGray(b.value().pixel(200, 0))) <= 2);
+    QVERIFY(qGray(a.value().pixel(200, 0)) < 128);
+    // A point 0.3 short sides to the right of the centre gets the same factor.
+    QVERIFY(std::abs(qGray(a.value().pixel(200 + 90, 150))
+                     - qGray(b.value().pixel(200 + 68, 112)))
+            <= 2);
+}
+
+void TestEffectEngine::finishStagesRunAtTarget()
+{
+    const QJsonArray recipes{QJsonObject{
+        {QStringLiteral("key"), QStringLiteral("grain.test")},
+        {QStringLiteral("category"), QStringLiteral("grain")},
+        {QStringLiteral("version"), 1},
+        {QStringLiteral("name"), QStringLiteral("Grain Test")},
+        {QStringLiteral("stages"),
+         QJsonArray{QJsonObject{{QStringLiteral("id"), QStringLiteral("grain")},
+                                {QStringLiteral("finish"), true},
+                                {QStringLiteral("amount"), 0.08},
+                                {QStringLiteral("size"), 1},
+                                {QStringLiteral("seed"), 5}}}}}};
+    const auto catalogue = EffectCatalogue::fromJson(catalogueJson(recipes));
+    QVERIFY(catalogue.ok());
+    const auto recipe = catalogue.value().resolve(QStringLiteral("grain.test")).value();
+    const QImage source = scaledSample(QSize(1000, 750));
+
+    EffectRenderStats stats;
+    const auto result =
+        EffectEngine::instance().render(source, recipe, 100, QSize(3200, 2400), true, {}, &stats);
+    QVERIFY(result.ok());
+    QCOMPARE(result.value().size(), QSize(3200, 2400));
+    QCOMPARE(stats.gradeSize, QSize(2400, 1800));
+    QCOMPARE(stats.finishSize, QSize(3200, 2400));
+    QVERIFY(stats.finishStages);
+
+    // Every shipped grain stage is a finish stage and every recipe carrying
+    // grain declares it, so print grain is generated at the target raster.
+    for (const EffectRecipe &shipped : EffectCatalogue::instance().recipes()) {
+        bool hasGrain = false;
+        for (const Stage &stage : shipped.stages) {
+            if (stage.id == StageId::Grain) {
+                hasGrain = true;
+                QVERIFY2(stage.finish, qPrintable(shipped.key));
+            }
+        }
+        const auto plan = EffectEngine::compile(shipped);
+        QVERIFY(plan.ok());
+        if (hasGrain)
+            QVERIFY2(plan.value().hasFinishStages, qPrintable(shipped.key));
+    }
+}
+
+void TestEffectEngine::largeFinishRasterWorks()
+{
+    const auto recipe =
+        EffectCatalogue::instance().resolve(QStringLiteral("print.sepia")).value();
+    const QImage source = scaledSample(QSize(1200, 900));
+    EffectRenderStats stats;
+    const auto result =
+        EffectEngine::instance().render(source, recipe, 100, QSize(8000, 6000), true, {}, &stats);
+    QVERIFY(result.ok());
+    QCOMPARE(result.value().size(), QSize(8000, 6000));
+    QCOMPARE(stats.gradeSize, QSize(2400, 1800));
+    QCOMPARE(stats.finishSize, QSize(8000, 6000));
+    QVERIFY(stats.finishStages);
+    QVERIFY(highFrequencyEnergy(result.value()) > 0.5);
+}
+
+void TestEffectEngine::oversizedRasterFailsClearly()
+{
+    const auto recipe =
+        EffectCatalogue::instance().resolve(QStringLiteral("light.venice")).value();
+    const QImage source = scaledSample(QSize(320, 240));
+    const auto result =
+        EffectEngine::instance().render(source, recipe, 100, QSize(20000, 15000), true);
+    QVERIFY(!result.ok());
+    QCOMPARE(result.error().code, QStringLiteral("effect-size"));
+    QVERIFY(result.error().message.contains(QStringLiteral("megapixels")));
+}
+
+void TestEffectEngine::previewBloomMatchesPrint()
+{
+    const QJsonArray recipes{QJsonObject{
+        {QStringLiteral("key"), QStringLiteral("glow.bloomtest")},
+        {QStringLiteral("category"), QStringLiteral("glow")},
+        {QStringLiteral("version"), 1},
+        {QStringLiteral("name"), QStringLiteral("Bloom Test")},
+        {QStringLiteral("stages"),
+         QJsonArray{QJsonObject{{QStringLiteral("id"), QStringLiteral("bloom")},
+                                {QStringLiteral("threshold"), 0.5},
+                                {QStringLiteral("radius"), 44},
+                                {QStringLiteral("intensity"), 0.5},
+                                {QStringLiteral("tint"), QStringLiteral("#ffffff")}}}}}};
+    const auto catalogue = EffectCatalogue::fromJson(catalogueJson(recipes));
+    QVERIFY(catalogue.ok());
+    const auto recipe = catalogue.value().resolve(QStringLiteral("glow.bloomtest")).value();
+
+    QImage source(1600, 1200, QImage::Format_RGB32);
+    source.fill(QColor(40, 40, 40));
+    for (int y = 420; y < 780; ++y)
+        for (int x = 620; x < 980; ++x)
+            source.setPixel(x, y, qRgb(255, 255, 255));
+    const QImage preview = source.scaled(160, 120, Qt::IgnoreAspectRatio,
+                                         Qt::SmoothTransformation);
+    const auto small = EffectEngine::instance().render(preview, recipe, 100, preview.size(), false);
+    const auto large = EffectEngine::instance().render(source, recipe, 100, source.size(), true);
+    QVERIFY(small.ok());
+    QVERIFY(large.ok());
+    const QImage downscaled =
+        large.value().scaled(preview.size(), Qt::IgnoreAspectRatio, Qt::SmoothTransformation);
+    QVERIFY2(meanDifference(small.value(), downscaled) < 4.0,
+             qPrintable(QStringLiteral("preview bloom differs by %1")
+                            .arg(meanDifference(small.value(), downscaled))));
+    QVERIFY(std::abs(EffectEngine::referenceScale(160) - 160.0 / 2400.0) < 1e-9);
+}
+
+void TestEffectEngine::preparedLinearHonoursVersion()
+{
+    ImageStore store;
+    const SourceImage source = memorySource(scaledSample(QSize(200, 150)));
+    EffectRenderTarget target;
+    target.recipeVersion = 1;
+    const auto pinned = store.preparedLinear(source, ColorRecipe{}, QStringLiteral("light.venice"),
+                                             100, false, 0, {}, target);
+    QVERIFY(pinned.ok());
+    const auto current = store.preparedLinear(source, ColorRecipe{}, QStringLiteral("light.venice"),
+                                              100, false, 0, {});
+    QVERIFY(current.ok());
+    QCOMPARE(pinned.value(), current.value());
+
+    // A version this build does not ship falls back to the current recipe and
+    // says so instead of silently pretending to pin.
+    QTest::ignoreMessage(QtWarningMsg,
+                         "ImageSource: effect 'light.venice' has no version 99, using the "
+                         "current recipe");
+    const auto missing = store.preparedLinear(source, ColorRecipe{},
+                                              QStringLiteral("light.venice"), 100, false, 0, {},
+                                              EffectRenderTarget{99, {}});
+    QVERIFY(missing.ok());
+    QCOMPARE(missing.value(), current.value());
+
+    // The print target reaches ImageStore and is the linear layer size that
+    // PageRenderer composites, not the full source size.
+    EffectRenderTarget printed;
+    printed.printSize = QSize(400, 300);
+    const auto printLayer = store.preparedLinear(
+        source, ColorRecipe{}, QStringLiteral("light.venice"), 100, false, 0, {}, printed);
+    QVERIFY(printLayer.ok());
+    QCOMPARE(printLayer.value().size(), QSize(400, 300));
+}
+
+void TestEffectEngine::goldensArePinned()
+{
+    struct Golden {
+        const char *key;
+        const char *parameters;
+        const char *render;
+    };
+    static const Golden goldens[] = {
+        {"light.venice", "53725ad6865b92d0d397d78249268c2fc961891b3c17d5a43848140fb685197e",
+         "df6050002dc192bd2c899a04765d07a39224e120cedc4c95b524408d76fd0383"},
+        {"color.tealorange", "e2b8894fdedbb446586accd5d5023711008adee7a927167f8221d5f8b8286068",
+         "ecbc53a39e86a09dc90f626abe13f3840e3c5151c4ab838d2f31daab719b34ef"},
+        {"retro.fadedfilm", "8182c08be20e2933f4b88a20d8381a52b534c8267b842f594062e996db2d28c4",
+         "89b46bcdb0c31925e243c015f5c61a734eba02db76ea571867a97dda25c6e140"},
+        {"light.nordic", "f2234c7eb120c7ab8d9420fe900f754e72256a6b7d3d23eec8f78aafbcea4f4d",
+         "6d7b9468258cf4a35ec43b8ee3687fbaf801750a3322712cbab59d0336ecba3d"},
+        {"light.goldenhour", "8e1a03c15866341efb059a91391e0860350b6b8740ef97a9c7cef6edf8bf509c",
+         "af24b3622d7249e5d0cb0b19d9b024f4ce6f9c2edc5d6442a7c2db380e1cd1f6"},
+        {"glow.neonnight", "33ca7ccc102b8572f2d937e5eda62f9553d6087fd050215b1c04d9cc7e740279",
+         "54fa69f120586f2d4e3c573d5a8a91be398182755cecd7fe1001f23bf253fe6f"},
+        {"color.pastel", "2c582137ff133d15d0108a9659c489eda4d490a9815f467de7745254b6ecb315",
+         "2901cb5d98c0a444c5e513423ffc68f19f5f839ad59953b60eab2998a8c73a64"},
+        {"mono.contrast", "c405bdc601b8ec6032b683a8b6ccb2ccfc4ca02eaef054ae890ba43108800eb4",
+         "c9027d626f6605c718b4b7fe86a5ba0f2947a1db4443231c7bf49ce261710e08"},
+        {"print.sepia", "baf3b83b48295c42cfac6b5773da7c2170322e8516ff6931bc2553509e1f7388",
+         "07e7b08f671b580bc8fad3abfe3e4beb6c086018d003e8312217dacabe0133f4"},
+        {"retro.crossprocess", "7dc09d9dd7141edff905ad7260ea150e7d111631f21e7b9066cd6eb7eb25e446",
+         "4f56d7fe1b5afe9e1708f7d6603935745893f4ec775fb64b70a4f4acdbe78752"},
+    };
+
+    QFile sourceFile(QStringLiteral(":/effects/catalogue.json"));
+    QVERIFY(sourceFile.open(QIODevice::ReadOnly));
+    const QJsonArray rawRecipes = QJsonDocument::fromJson(sourceFile.readAll())
+                                     .object().value(QStringLiteral("recipes")).toArray();
+    QHash<QString, QString> parameters;
+    for (const QJsonValue &value : rawRecipes) {
+        const QJsonObject object = value.toObject();
+        parameters.insert(object.value(QStringLiteral("key")).toString(),
+                          QString::fromLatin1(QCryptographicHash::hash(
+                              QJsonDocument(object).toJson(QJsonDocument::Compact),
+                              QCryptographicHash::Sha256).toHex()));
+    }
+
+    const QImage source = scaledSample(QSize(240, 180));
+    int checked = 0;
+    for (const EffectRecipe &recipe : EffectCatalogue::instance().recipes()) {
+        const Golden *golden = nullptr;
+        for (const Golden &candidate : goldens) {
+            if (recipe.key == QLatin1String(candidate.key))
+                golden = &candidate;
+        }
+        QVERIFY2(golden != nullptr, qPrintable(recipe.key));
+        QCOMPARE(parameters.value(recipe.key), QString::fromLatin1(golden->parameters));
+        const auto result =
+            EffectEngine::instance().render(source, recipe, 100, source.size(), false);
+        QVERIFY(result.ok());
+        QCOMPARE(QString::fromLatin1(hashImage(result.value()).toHex()),
+                 QString::fromLatin1(golden->render));
+        checked += 1;
+    }
+    QCOMPARE(checked, 10);
 }
 
 void TestEffectEngine::rendersAreDeterministic()

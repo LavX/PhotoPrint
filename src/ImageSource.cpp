@@ -7,6 +7,7 @@
 
 #include <QCoreApplication>
 #include <QCryptographicHash>
+#include <QDebug>
 #include <QCache>
 #include <QFile>
 #include <QFileInfo>
@@ -227,8 +228,13 @@ Result<QImage> ImageStore::preparedLinear(const SourceImage &source, const Color
     if (!isLegacyPresetKey(filterKey)) {
         auto effectRecipe =
             EffectCatalogue::instance().resolve(filterKey, target.recipeVersion);
-        if (!effectRecipe && target.recipeVersion != 0)
+        if (!effectRecipe && target.recipeVersion != 0) {
+            // A project can name a version this build no longer ships. Say so
+            // and follow the current recipe; the silent fallback hid retunes.
+            qWarning("ImageSource: effect '%s' has no version %d, using the current recipe",
+                     qPrintable(filterKey), target.recipeVersion);
             effectRecipe = EffectCatalogue::instance().resolve(filterKey, 0);
+        }
         if (effectRecipe) {
             const EffectRecipe &effect = effectRecipe.value();
             const int strength = std::clamp(filterStrength, 0, 100);
@@ -285,6 +291,13 @@ Result<QImage> ImageStore::preparedLinear(const SourceImage &source, const Color
             if (!rendered) {
                 // A missing texture or a malformed recipe is a bug, not a
                 // reason to print the ungraded photo: report it.
+                if (rendered.error().code == QLatin1String("effect-size")) {
+                    return error(rendered.error().code,
+                                 QCoreApplication::translate("PhotoPrint",
+                                                             "Ehhez a nyomtatási mérethez a kép "
+                                                             "túl nagy. Csökkentsd a nyomtatási "
+                                                             "felbontást."));
+                }
                 return error(rendered.error().code,
                              QCoreApplication::translate("PhotoPrint", "Ezt a képet most nem tudjuk feldolgozni. Próbáld újra."));
             }

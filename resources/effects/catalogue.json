@@ -66,8 +66,8 @@
         { "id": "fade", "lift": 0.14, "toe": 0.5 },
         { "id": "splitTone", "shadow": "#3b3a48", "shadowStrength": 0.18,
           "highlight": "#e8d9b8", "highlightStrength": 0.22, "balance": 0.48 },
-        { "id": "grain", "amount": 0.045, "size": 1, "seed": 11, "mono": true },
-        { "id": "vignette", "amount": 0.12, "midpoint": 0.70, "feather": 0.35 }
+        { "id": "grain", "finish": true, "amount": 0.045, "size": 1, "seed": 11, "mono": true },
+        { "id": "vignette", "finish": true, "amount": 0.12, "midpoint": 0.70, "feather": 0.35 }
       ]
     },
     {
@@ -116,8 +116,8 @@
           "highlight": "#ff40a0", "highlightStrength": 0.38, "balance": 0.45 },
         { "id": "bloom", "threshold": 0.80, "radius": 40, "intensity": 0.45,
           "tint": "#ffd0f0" },
-        { "id": "grain", "amount": 0.05, "size": 1, "seed": 23, "mono": true },
-        { "id": "vignette", "amount": 0.35, "midpoint": 0.50, "feather": 0.45 }
+        { "id": "grain", "finish": true, "amount": 0.05, "size": 1, "seed": 23, "mono": true },
+        { "id": "vignette", "finish": true, "amount": 0.35, "midpoint": 0.50, "feather": 0.45 }
       ]
     },
     {
@@ -149,7 +149,7 @@
         { "id": "contrast", "amount": 52, "pivot": 0.45 },
         { "id": "curves", "master": [[0, 0], [0.22, 0.10], [0.72, 0.90], [1, 1]] },
         { "id": "localContrast", "radius": 10, "amount": 0.25 },
-        { "id": "grain", "amount": 0.035, "size": 1, "seed": 31, "mono": true }
+        { "id": "grain", "finish": true, "amount": 0.035, "size": 1, "seed": 31, "mono": true }
       ]
     },
     {
@@ -168,7 +168,7 @@
         ] },
         { "id": "vignette", "amount": 0.45, "midpoint": 0.50, "feather": 0.45 },
         { "id": "texture", "asset": "paper-fine", "opacity": 0.28, "blend": "multiply" },
-        { "id": "grain", "amount": 0.06, "size": 1, "seed": 41, "mono": true }
+        { "id": "grain", "finish": true, "amount": 0.06, "size": 1, "seed": 41, "mono": true }
       ]
     },
     {
@@ -178,7 +178,7 @@
       "name": "Cross Process",
       "description": "Independent red, green and blue curves: yellow-cyan cast, blown highlights, crushed shadows.",
       "stages": [
-        { "id": "curves", "r": [[0, 0], [1, 0.94]],
+        { "id": "curves", "r": [[0, 0.06], [1, 0.94]],
           "g": [[0, 0], [0.5, 0.48], [1, 0.88]], "b": [[0, 0.22], [1, 1]] },
         { "id": "contrast", "amount": 20, "pivot": 0.45 },
         { "id": "saturation", "amount": 30 },

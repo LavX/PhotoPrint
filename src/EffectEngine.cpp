@@ -6,9 +6,13 @@
 #include <QMutex>
 #include <QMutexLocker>
 #include <QStringList>
+#include <QThread>
 
 #include <algorithm>
+#include <atomic>
 #include <cmath>
+#include <functional>
+#include <thread>
 
 namespace pp {
 
@@ -155,121 +159,146 @@ QVector<Contributor> contributors(int sourceSize, int targetSize)
     return table;
 }
 
-void resamplePlanes(const float *source, int sw, int sh, int sourceChannels, float *target,
-                    int tw, int th, int targetChannels, int channels)
+void runBands(int height, int bandRows, const std::function<void(int, int)> &fn)
 {
-    const QVector<Contributor> horizontal = contributors(sw, tw);
-    const QVector<Contributor> vertical = contributors(sh, th);
-    std::vector<float> middle(static_cast<size_t>(tw) * sh * channels, 0.0f);
-
-    for (int y = 0; y < sh; ++y) {
-        const float *src = source + static_cast<size_t>(y) * sw * sourceChannels;
-        float *row = middle.data() + static_cast<size_t>(y) * tw * channels;
-        for (int x = 0; x < tw; ++x) {
-            const Contributor &entry = horizontal.at(x);
-            float sum[4] = {0.0f, 0.0f, 0.0f, 0.0f};
-            for (size_t k = 0; k < entry.weights.size(); ++k) {
-                const int sx = std::clamp(entry.start + int(k), 0, sw - 1);
-                const float weight = entry.weights[k];
-                const float *pixel = src + static_cast<size_t>(sx) * sourceChannels;
-                for (int c = 0; c < channels; ++c)
-                    sum[c] += pixel[c] * weight;
+    if (height <= 0)
+        return;
+    const int bands = (height + bandRows - 1) / bandRows;
+    const int threads = std::min({QThread::idealThreadCount(), 8, bands});
+    if (threads <= 1) {
+        fn(0, height);
+        return;
+    }
+    std::atomic<int> next{0};
+    std::vector<std::thread> workers;
+    workers.reserve(threads);
+    for (int t = 0; t < threads; ++t) {
+        workers.emplace_back([&] {
+            for (;;) {
+                const int index = next.fetch_add(1);
+                if (index >= bands)
+                    break;
+                const int first = index * bandRows;
+                fn(first, std::min(height, first + bandRows));
             }
-            float *out = row + static_cast<size_t>(x) * channels;
-            for (int c = 0; c < channels; ++c)
-                out[c] = sum[c];
-        }
+        });
     }
-
-    for (int y = 0; y < th; ++y) {
-        const Contributor &entry = vertical.at(y);
-        float *row = target + static_cast<size_t>(y) * tw * targetChannels;
-        for (int x = 0; x < tw; ++x) {
-            float sum[4] = {0.0f, 0.0f, 0.0f, 0.0f};
-            for (size_t k = 0; k < entry.weights.size(); ++k) {
-                const int sy = std::clamp(entry.start + int(k), 0, sh - 1);
-                const float *pixel =
-                    middle.data() + (static_cast<size_t>(sy) * tw + x) * channels;
-                const float weight = entry.weights[k];
-                for (int c = 0; c < channels; ++c)
-                    sum[c] += pixel[c] * weight;
-            }
-            float *out = row + static_cast<size_t>(x) * targetChannels;
-            for (int c = 0; c < channels; ++c)
-                out[c] = sum[c];
-        }
-    }
-}
-
-EffectRgbBuffer resampleBuffer(const EffectRgbBuffer &source, int width, int height)
-{
-    EffectRgbBuffer out;
-    out.resize(width, height);
-    if (source.width == width && source.height == height) {
-        out = source;
-        return out;
-    }
-    resamplePlanes(source.pixels.data(), source.width, source.height, 3, out.pixels.data(), width,
-                   height, 3, 3);
-    return out;
+    for (std::thread &worker : workers)
+        worker.join();
 }
 
 QImage resampleImageLanczos(const QImage &source, const QSize &size)
 {
+    if (source.isNull() || size.isEmpty())
+        return {};
     if (source.size() == size)
         return source;
+
     const QImage input = source.convertToFormat(QImage::Format_ARGB32);
-    std::vector<float> pixels(static_cast<size_t>(input.width()) * input.height() * 4);
-    for (int y = 0; y < input.height(); ++y) {
-        const QRgb *line = reinterpret_cast<const QRgb *>(input.constScanLine(y));
-        float *out = pixels.data() + static_cast<size_t>(y) * input.width() * 4;
-        for (int x = 0; x < input.width(); ++x, out += 4) {
-            out[0] = qRed(line[x]);
-            out[1] = qGreen(line[x]);
-            out[2] = qBlue(line[x]);
-            out[3] = qAlpha(line[x]);
-        }
-    }
-    std::vector<float> scaled(static_cast<size_t>(size.width()) * size.height() * 4);
-    resamplePlanes(pixels.data(), input.width(), input.height(), 4, scaled.data(), size.width(),
-                   size.height(), 4, 4);
-    QImage out(size, QImage::Format_ARGB32);
+    const int sw = input.width();
+    const int sh = input.height();
+    const int tw = size.width();
+    const int th = size.height();
+    const QVector<Contributor> horizontal = contributors(sw, tw);
+    const QVector<Contributor> vertical = contributors(sh, th);
+
+    QImage out(tw, th, QImage::Format_ARGB32);
     if (out.isNull())
         return {};
-    for (int y = 0; y < size.height(); ++y) {
-        QRgb *line = reinterpret_cast<QRgb *>(out.scanLine(y));
-        const float *in = scaled.data() + static_cast<size_t>(y) * size.width() * 4;
-        for (int x = 0; x < size.width(); ++x, in += 4) {
-            line[x] = qRgba(int(std::clamp(in[0], 0.0f, 255.0f) + 0.5f),
-                            int(std::clamp(in[1], 0.0f, 255.0f) + 0.5f),
-                            int(std::clamp(in[2], 0.0f, 255.0f) + 0.5f),
-                            int(std::clamp(in[3], 0.0f, 255.0f) + 0.5f));
+
+    // Horizontal resampling is done for a band of output rows at a time. Only
+    // the source rows that the band's vertical taps touch are materialised, so
+    // peak memory is a few megabytes even at 8000 px, not a full-width float
+    // copy of the image.
+    constexpr int kBandRows = 64;
+    const auto processBand = [&](int y0, int y1) {
+        std::vector<float> middle;
+        int sourceFirst = vertical.at(y0).start;
+        int sourceLast =
+            vertical.at(y0).start + int(vertical.at(y0).weights.size()) - 1;
+        for (int y = y0 + 1; y < y1; ++y) {
+            const Contributor &entry = vertical.at(y);
+            sourceFirst = std::min(sourceFirst, entry.start);
+            sourceLast = std::max(sourceLast, entry.start + int(entry.weights.size()) - 1);
         }
-    }
+        sourceFirst = std::clamp(sourceFirst, 0, sh - 1);
+        sourceLast = std::clamp(sourceLast, 0, sh - 1);
+        const int rows = sourceLast - sourceFirst + 1;
+        middle.assign(static_cast<size_t>(rows) * tw * 4, 0.0f);
+
+        for (int sy = sourceFirst; sy <= sourceLast; ++sy) {
+            const QRgb *srcLine = reinterpret_cast<const QRgb *>(input.constScanLine(sy));
+            float *middleRow =
+                middle.data() + static_cast<size_t>(sy - sourceFirst) * tw * 4;
+            for (int x = 0; x < tw; ++x) {
+                const Contributor &entry = horizontal.at(x);
+                float sum[4] = {0.0f, 0.0f, 0.0f, 0.0f};
+                for (size_t k = 0; k < entry.weights.size(); ++k) {
+                    const int sx = std::clamp(entry.start + int(k), 0, sw - 1);
+                    const float weight = entry.weights[k];
+                    const QRgb pixel = srcLine[sx];
+                    sum[0] += float(qRed(pixel)) * weight;
+                    sum[1] += float(qGreen(pixel)) * weight;
+                    sum[2] += float(qBlue(pixel)) * weight;
+                    sum[3] += float(qAlpha(pixel)) * weight;
+                }
+                float *outPixel = middleRow + static_cast<size_t>(x) * 4;
+                outPixel[0] = sum[0];
+                outPixel[1] = sum[1];
+                outPixel[2] = sum[2];
+                outPixel[3] = sum[3];
+            }
+        }
+
+        for (int y = y0; y < y1; ++y) {
+            const Contributor &entry = vertical.at(y);
+            QRgb *outLine = reinterpret_cast<QRgb *>(out.scanLine(y));
+            for (int x = 0; x < tw; ++x) {
+                float sum[4] = {0.0f, 0.0f, 0.0f, 0.0f};
+                for (size_t k = 0; k < entry.weights.size(); ++k) {
+                    const int sy = std::clamp(entry.start + int(k), sourceFirst, sourceLast);
+                    const float *pixel =
+                        middle.data()
+                        + (static_cast<size_t>(sy - sourceFirst) * tw + x) * 4;
+                    const float weight = entry.weights[k];
+                    sum[0] += pixel[0] * weight;
+                    sum[1] += pixel[1] * weight;
+                    sum[2] += pixel[2] * weight;
+                    sum[3] += pixel[3] * weight;
+                }
+                outLine[x] = qRgba(int(std::clamp(sum[0], 0.0f, 255.0f) + 0.5f),
+                                   int(std::clamp(sum[1], 0.0f, 255.0f) + 0.5f),
+                                   int(std::clamp(sum[2], 0.0f, 255.0f) + 0.5f),
+                                   int(std::clamp(sum[3], 0.0f, 255.0f) + 0.5f));
+            }
+        }
+    };
+    if (qint64(tw) * th >= 2'000'000)
+        runBands(th, kBandRows, processBand);
+    else
+        processBand(0, th);
     return out;
 }
 
-QImage blend(const QImage &original, const QImage &effect, int strength)
+void blendInPlace(QImage &effect, const QImage &original, int strength)
 {
-    if (strength >= 100)
-        return effect;
-    QImage out(effect.size(), QImage::Format_ARGB32);
-    if (out.isNull())
-        return {};
+    if (strength >= 100 || effect.isNull() || original.size() != effect.size())
+        return;
+    if (effect.format() != QImage::Format_ARGB32)
+        effect = effect.convertToFormat(QImage::Format_ARGB32);
+    effect.detach();
     for (int y = 0; y < effect.height(); ++y) {
         const QRgb *base = reinterpret_cast<const QRgb *>(original.constScanLine(y));
-        const QRgb *graded = reinterpret_cast<const QRgb *>(effect.constScanLine(y));
-        QRgb *line = reinterpret_cast<QRgb *>(out.scanLine(y));
+        QRgb *line = reinterpret_cast<QRgb *>(effect.scanLine(y));
         for (int x = 0; x < effect.width(); ++x) {
             const auto mix = [strength](int from, int to) {
                 return (from * (100 - strength) + to * strength + 50) / 100;
             };
-            line[x] = qRgba(mix(qRed(base[x]), qRed(graded[x])),
-                            mix(qGreen(base[x]), qGreen(graded[x])),
-                            mix(qBlue(base[x]), qBlue(graded[x])), qAlpha(base[x]));
+            line[x] = qRgba(mix(qRed(base[x]), qRed(line[x])),
+                            mix(qGreen(base[x]), qGreen(line[x])),
+                            mix(qBlue(base[x]), qBlue(line[x])), qAlpha(base[x]));
         }
     }
-    return out;
 }
 
 bool stepIsFinish(const EffectPlanStep &step)
@@ -292,6 +321,18 @@ Result<void> runSteps(EffectRgbBuffer &buffer, const QList<EffectPlanStep> &step
     return {};
 }
 
+Result<void> runFinishSteps(QImage &image, const QList<EffectPlanStep> &steps, int longSide,
+                            std::stop_token token)
+{
+    for (const EffectPlanStep &step : steps) {
+        if (token.stop_requested())
+            return error(QStringLiteral("cancelled"),
+                         QStringLiteral("The effect render was cancelled."));
+        effectstages::applyFinishStep(image, step.spatial, longSide);
+    }
+    return {};
+}
+
 } // namespace
 
 EffectEngine &EffectEngine::instance()
@@ -307,7 +348,10 @@ int EffectEngine::gradeLongSide(int targetLongSide)
 
 double EffectEngine::referenceScale(int longSide)
 {
-    return std::clamp(double(std::max(1, longSide)) / double(kGradeMax), 0.25, 4.0);
+    // Small previews need the same *relative* radius as the print. The old
+    // 0.25 floor made a 160 px bloom 2.5-3.75x too broad; 0.02 only guards
+    // against zero/negative sizes.
+    return std::clamp(double(std::max(1, longSide)) / double(kGradeMax), 0.02, 4.0);
 }
 
 QSize EffectEngine::sizeForLongSide(const QSize &size, int longSide)
@@ -341,7 +385,25 @@ Result<EffectPlan> EffectEngine::compile(const EffectRecipe &recipe)
     EffectPlan plan;
     EffectPlanStep point;
     QList<Stage> toneStages;
+    bool segmentHasColour = false;
     bool seenFinish = false;
+
+    const auto finishAllowed = [](const Stage &stage) {
+        if (stage.id == StageId::Grain || stage.id == StageId::Vignette
+            || stage.id == StageId::LightLeak || stage.id == StageId::ExposureMask)
+            return true;
+        // Only a dithered posterize is a finish decision; the plain quantise
+        // stays on the grade raster.
+        return stage.id == StageId::Posterize && stage.dither;
+    };
+    for (const Stage &stage : recipe.stages) {
+        if (stage.finish && !finishAllowed(stage)) {
+            return error(QStringLiteral("effect-plan"),
+                         QStringLiteral("Effect '%1' flags '%2' as a finish stage, but that "
+                                        "stage does not run on the 8-bit finish raster.")
+                             .arg(recipe.identity(), stage.idName));
+        }
+    }
 
     const auto appendSpatial = [&](const Stage &stage) {
         EffectPlanStep step;
@@ -357,6 +419,7 @@ Result<EffectPlan> EffectEngine::compile(const EffectRecipe &recipe)
         if (toneStages.isEmpty() && point.colourStages.isEmpty())
             return;
         point.point = true;
+        point.toneStages = toneStages;
         if (!toneStages.isEmpty()) {
             point.hasCurve = true;
             point.curve = curveLutFor(toneStages);
@@ -365,6 +428,7 @@ Result<EffectPlan> EffectEngine::compile(const EffectRecipe &recipe)
         plan.pointSteps += 1;
         point = EffectPlanStep{};
         toneStages.clear();
+        segmentHasColour = false;
     };
 
     for (const Stage &stage : recipe.stages) {
@@ -376,9 +440,10 @@ Result<EffectPlan> EffectEngine::compile(const EffectRecipe &recipe)
                              .arg(recipe.identity()));
         }
 
-        if (stage.id == StageId::Posterize && stage.dither) {
-            // Dither has to see the final raster, so it cannot fold into the
-            // 1D curve LUT even though posterize itself is a point operation.
+        if (stage.id == StageId::Posterize) {
+            // A LUT interpolates between its 1024 entries, which smears a
+            // posterize staircase. Run the quantise as its own point pass;
+            // a dithered posterize is additionally a finish stage.
             flush();
             appendSpatial(stage);
             continue;
@@ -395,6 +460,11 @@ Result<EffectPlan> EffectEngine::compile(const EffectRecipe &recipe)
                 return error(QStringLiteral("effect-plan"),
                              QStringLiteral("Effect '%1' flags the point stage '%2' as finish.")
                                  .arg(recipe.identity(), stage.idName));
+            // Phase A runs first in a segment, then Phase B. An A stage after
+            // a B stage must start a new segment or the LUT would hoist it
+            // ahead of the colour stages and change the look.
+            if (segmentHasColour)
+                flush();
             toneStages.append(stage);
             break;
         case StagePhase::PointColour:
@@ -403,6 +473,7 @@ Result<EffectPlan> EffectEngine::compile(const EffectRecipe &recipe)
                              QStringLiteral("Effect '%1' flags the point stage '%2' as finish.")
                                  .arg(recipe.identity(), stage.idName));
             point.colourStages.append(stage);
+            segmentHasColour = true;
             break;
         case StagePhase::Spatial:
         case StagePhase::Light:
@@ -421,7 +492,7 @@ Result<EffectPlan> EffectEngine::compile(const EffectRecipe &recipe)
 
 Result<QImage> EffectEngine::render(const QImage &srgb, const EffectRecipe &recipe,
                                     int strengthPercent, const QSize &targetSize, bool printPath,
-                                    std::stop_token token) const
+                                    std::stop_token token, EffectRenderStats *stats) const
 {
     if (srgb.isNull() || srgb.width() <= 0 || srgb.height() <= 0)
         return error(QStringLiteral("effect-input"),
@@ -445,9 +516,14 @@ Result<QImage> EffectEngine::render(const QImage &srgb, const EffectRecipe &reci
     QSize target = targetSize.isValid() && !targetSize.isEmpty() ? targetSize : source.size();
     if (target.width() <= 0 || target.height() <= 0)
         target = source.size();
-    if (static_cast<qint64>(target.width()) * target.height() > kMaxOutputPixels)
+    const qint64 targetPixels = static_cast<qint64>(target.width()) * target.height();
+    if (targetPixels > kMaxOutputPixels) {
         return error(QStringLiteral("effect-size"),
-                     QStringLiteral("The requested effect raster is too large."));
+                     QStringLiteral("The requested effect raster is %1 megapixels; the engine "
+                                    "supports up to %2. Lower the print resolution.")
+                         .arg(double(targetPixels) / 1'000'000.0, 0, 'f', 1)
+                         .arg(kMaxOutputPixels / 1'000'000));
+    }
 
     if (!printPath) {
         const QImage scaled = resampleImageLanczos(source, target);
@@ -460,15 +536,16 @@ Result<QImage> EffectEngine::render(const QImage &srgb, const EffectRecipe &reci
         if (result.isNull())
             return error(QStringLiteral("effect-output"), QStringLiteral("The frame cannot be built."));
         if (strength < 100)
-            result = blend(scaled, result, strength);
+            blendInPlace(result, scaled, strength);
         result.setColorSpace(source.colorSpace());
         if (sourceFormat == QImage::Format_RGB32)
             result = result.convertToFormat(QImage::Format_RGB32);
         return result;
     }
 
-    // Print path: grade at the reference bound, run the finish stages at the
-    // target (or the 8000 px guard), then resample once to the placed raster.
+    // Print path: grade and spatial work at the 2400 px bound in float, then
+    // upscale the 8-bit result to the target and run the finish stages in
+    // place there. No full-resolution float buffer is ever allocated.
     const int targetLong = std::max(target.width(), target.height());
     const int gradeLong = gradeLongSide(targetLong);
     const int finishLong = std::min(targetLong, kFinishMax);
@@ -490,22 +567,36 @@ Result<QImage> EffectEngine::render(const QImage &srgb, const EffectRecipe &reci
     if (!graded)
         return graded.error();
 
-    if (!finishSteps.isEmpty()) {
-        buffer = resampleBuffer(buffer, finishSize.width(), finishSize.height());
-        const auto finished = runSteps(buffer, finishSteps, finishLong, token);
-        if (!finished)
-            return finished.error();
+    QImage gradedImage = toImage(buffer, gradeImage);
+    if (gradedImage.isNull())
+        return error(QStringLiteral("effect-output"), QStringLiteral("The frame cannot be built."));
+
+    if (stats) {
+        stats->gradeSize = gradeSize;
+        stats->finishSize = QSize();
+        stats->finishStages = false;
     }
 
-    if (buffer.width != target.width() || buffer.height != target.height())
-        buffer = resampleBuffer(buffer, target.width(), target.height());
+    QImage flattened = std::move(gradedImage);
+    if (!finishSteps.isEmpty()) {
+        flattened = resampleImageLanczos(flattened, finishSize);
+        const auto finished = runFinishSteps(flattened, finishSteps, finishLong, token);
+        if (!finished)
+            return finished.error();
+        if (stats) {
+            stats->finishSize = finishSize;
+            stats->finishStages = true;
+        }
+    }
 
-    const QImage alpha = resampleImageLanczos(source, target);
-    QImage result = toImage(buffer, alpha);
-    if (result.isNull())
-        return error(QStringLiteral("effect-output"), QStringLiteral("The frame cannot be built."));
-    if (strength < 100)
-        result = blend(alpha, result, strength);
+    QImage result = std::move(flattened);
+    if (result.size() != target)
+        result = resampleImageLanczos(result, target);
+
+    if (strength < 100) {
+        const QImage base = resampleImageLanczos(source, target);
+        blendInPlace(result, base, strength);
+    }
     result.setColorSpace(source.colorSpace());
     if (sourceFormat == QImage::Format_RGB32)
         result = result.convertToFormat(QImage::Format_RGB32);

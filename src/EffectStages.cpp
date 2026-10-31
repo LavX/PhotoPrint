@@ -7,11 +7,15 @@
 #include <QMutex>
 #include <QMutexLocker>
 #include <QTextStream>
+#include <QThread>
 
 #include <algorithm>
 #include <array>
 #include <cmath>
+#include <atomic>
+#include <functional>
 #include <mutex>
+#include <thread>
 #include <vector>
 
 void ppInitPhotoPrintResources();
@@ -261,6 +265,8 @@ inline void applyColour(const ColourStagePrep &prep, float &r, float &g, float &
         break;
     }
     case StageId::GradientMap: {
+        if (prep.stops.size() < 2)
+            break;
         const float y = clamp01(luma709(r, g, b));
         float mapped[3] = {prep.stops.last().colour.redF(),
                            prep.stops.last().colour.greenF(),
@@ -546,29 +552,30 @@ void applyGrain(EffectRgbBuffer &buffer, const Stage &stage, double scale)
 
 void applyVignette(EffectRgbBuffer &buffer, const Stage &stage)
 {
-    const float aspect = float(buffer.width) / float(std::max(1, buffer.height));
-    const float normaliser = std::max(1.0f, aspect * 0.5f + 0.5f);
+    // The radius is measured in short-side units, not frame-normalised ones:
+    // the same physical distance from the centre gets the same falloff on a
+    // 4:3 and a 16:9 frame, and the mid-edge does not lose its vignette when
+    // the frame gets wider.
+    const float shortSide = float(std::max(1, std::min(buffer.width, buffer.height)));
     const float midpoint = float(stage.midpoint);
     const float feather = float(stage.feather);
     const float amount = float(stage.amount);
     const float roundness = float(std::clamp((stage.roundness + 1.0) / 2.0, 0.0, 1.0));
-    std::vector<float> nx2(static_cast<size_t>(buffer.width));
-    std::vector<float> nx(static_cast<size_t>(buffer.width));
+    std::vector<float> dx(static_cast<size_t>(buffer.width));
+    std::vector<float> dx2(static_cast<size_t>(buffer.width));
     for (int x = 0; x < buffer.width; ++x) {
-        const float value = ((float(x) + 0.5f) / float(buffer.width) - 0.5f) * 2.0f;
-        nx[static_cast<size_t>(x)] = value;
-        nx2[static_cast<size_t>(x)] = value * value;
+        const float value = ((float(x) + 0.5f) - float(buffer.width) * 0.5f) / shortSide;
+        dx[static_cast<size_t>(x)] = value;
+        dx2[static_cast<size_t>(x)] = value * value;
     }
     for (int y = 0; y < buffer.height; ++y) {
-        const float ny = ((float(y) + 0.5f) / float(buffer.height) - 0.5f) * 2.0f;
+        const float dy = ((float(y) + 0.5f) - float(buffer.height) * 0.5f) / shortSide;
         float *pixel = buffer.at(0, y);
         for (int x = 0; x < buffer.width; ++x, pixel += 3) {
-            const float circle =
-                std::sqrt(nx2[static_cast<size_t>(x)] + ny * ny);
-            const float square = std::max(std::abs(nx[static_cast<size_t>(x)]), std::abs(ny));
+            const float circle = std::sqrt(dx2[static_cast<size_t>(x)] + dy * dy);
+            const float square = std::max(std::abs(dx[static_cast<size_t>(x)]), std::abs(dy));
             const float distance = circle * roundness + square * (1.0f - roundness);
-            const float falloff =
-                smoothstep(midpoint, midpoint + feather, distance / normaliser);
+            const float falloff = smoothstep(midpoint, midpoint + feather, distance);
             const float factor = 1.0f - amount * falloff;
             pixel[0] *= factor;
             pixel[1] *= factor;
@@ -630,15 +637,16 @@ void applyExposureMask(EffectRgbBuffer &buffer, const Stage &stage)
     }
 }
 
-void applyPosterizeDither(EffectRgbBuffer &buffer, const Stage &stage)
+void applyPosterize(EffectRgbBuffer &buffer, const Stage &stage)
 {
     static const int bayer[4][4] = {
         {0, 8, 2, 10}, {12, 4, 14, 6}, {3, 11, 1, 9}, {15, 7, 13, 5}};
     const float levels = float(std::max(2, stage.levels));
     for (int y = 0; y < buffer.height; ++y) {
-        for (int x = 0; x < buffer.width; ++x) {
-            const float offset = (float(bayer[y % 4][x % 4]) + 0.5f) / 16.0f;
-            float *pixel = buffer.at(x, y);
+        float *pixel = buffer.at(0, y);
+        for (int x = 0; x < buffer.width; ++x, pixel += 3) {
+            const float offset = stage.dither ? (float(bayer[y % 4][x % 4]) + 0.5f) / 16.0f
+                                              : 0.5f;
             for (int c = 0; c < 3; ++c)
                 pixel[c] = std::floor(clamp01(pixel[c]) * (levels - 1.0f) + offset)
                     / (levels - 1.0f);
@@ -847,7 +855,7 @@ void applySpatialStage(EffectRgbBuffer &buffer, const Stage &stage, int longSide
         applyTexture(buffer, stage, longSide);
         break;
     case StageId::Posterize:
-        applyPosterizeDither(buffer, stage);
+        applyPosterize(buffer, stage);
         break;
     case StageId::Lut3d: {
         int size = 0;
@@ -899,6 +907,269 @@ void applyCube(EffectRgbBuffer &buffer, const QVector<float> &cube, int size)
             pixel[1] = result[1];
             pixel[2] = result[2];
         }
+    }
+}
+
+void runFinishBands(int height, int bandRows, const std::function<void(int, int)> &fn)
+{
+    if (height <= 0)
+        return;
+    const int bands = (height + bandRows - 1) / bandRows;
+    const int threads = std::min({QThread::idealThreadCount(), 8, bands});
+    if (threads <= 1) {
+        fn(0, height);
+        return;
+    }
+    std::atomic<int> next{0};
+    std::vector<std::thread> workers;
+    workers.reserve(threads);
+    for (int t = 0; t < threads; ++t) {
+        workers.emplace_back([&] {
+            for (;;) {
+                const int index = next.fetch_add(1);
+                if (index >= bands)
+                    break;
+                const int first = index * bandRows;
+                fn(first, std::min(height, first + bandRows));
+            }
+        });
+    }
+    for (std::thread &worker : workers)
+        worker.join();
+}
+
+void applyFinishStep(QImage &image, const Stage &stage, int longSide)
+{
+    if (image.isNull())
+        return;
+    if (image.format() != QImage::Format_ARGB32) {
+        QImage converted = image.convertToFormat(QImage::Format_ARGB32);
+        if (converted.isNull())
+            return;
+        image = converted;
+    }
+    // The row bands write in parallel. detach() makes the buffer unique before
+    // the first scanLine(), otherwise every worker's scanLine() sees a shared
+    // image and copies the whole frame.
+    image.detach();
+    QImage &canvas = image;
+    const int width = canvas.width();
+    const int height = canvas.height();
+    const double scale = EffectEngine::referenceScale(longSide);
+    static const int bayer[4][4] = {
+        {0, 8, 2, 10}, {12, 4, 14, 6}, {3, 11, 1, 9}, {15, 7, 13, 5}};
+
+    switch (stage.id) {
+    case StageId::Grain: {
+        const int step = std::max(1, int(std::lround(stage.size * scale)));
+        const int blocksWide = (width + step - 1) / step;
+        const float amount = float(stage.amount);
+        const auto processRows = [&](int first, int last) {
+        for (int y = first; y < last; ++y) {
+            QRgb *line = reinterpret_cast<QRgb *>(canvas.scanLine(y));
+            const int blockY = y / step;
+            for (int x = 0; x < width; ++x) {
+                const quint32 index = quint32(blockY * blocksWide + x / step);
+                const QRgb pixel = line[x];
+                const int red = qRed(pixel);
+                const int green = qGreen(pixel);
+                const int blue = qBlue(pixel);
+                // Integer luma and Q8 amplitude keep the per-pixel cost low
+                // at 8000 px; lround and three float leaves per channel made
+                // this the most expensive finish pass on the machine.
+                const int luma = (54 * red + 183 * green + 19 * blue) >> 8;
+                const int amplitude =
+                    int(amount * 255.0f * (1.0f - 0.6f * float(luma) / 255.0f) * 256.0f);
+                const auto add = [amplitude](int value, float noise) {
+                    return std::clamp(value + ((int(noise * float(amplitude))) >> 8), 0, 255);
+                };
+                if (stage.mono) {
+                    const float noise = noiseValue(index ^ stage.seed);
+                    line[x] = qRgba(add(red, noise), add(green, noise), add(blue, noise),
+                                    qAlpha(pixel));
+                } else {
+                    line[x] = qRgba(add(red, noiseValue((index * 3u) ^ stage.seed)),
+                                    add(green, noiseValue((index * 3u + 1u) ^ stage.seed)),
+                                    add(blue, noiseValue((index * 3u + 2u) ^ stage.seed)),
+                                    qAlpha(pixel));
+                }
+            }
+        }
+        };
+        if (qint64(width) * height >= 2'000'000)
+            runFinishBands(height, 128, processRows);
+        else
+            processRows(0, height);
+        break;
+    }
+    case StageId::Vignette: {
+        const float shortSide = float(std::max(1, std::min(width, height)));
+        const float midpoint = float(stage.midpoint);
+        const float feather = float(stage.feather);
+        const float amount = float(stage.amount);
+        const float roundness = float(std::clamp((stage.roundness + 1.0) / 2.0, 0.0, 1.0));
+        std::vector<float> dx(static_cast<size_t>(width));
+        std::vector<float> dx2(static_cast<size_t>(width));
+        std::vector<float> absdx(static_cast<size_t>(width));
+        for (int x = 0; x < width; ++x) {
+            const float value = ((float(x) + 0.5f) - float(width) * 0.5f) / shortSide;
+            dx[static_cast<size_t>(x)] = value;
+            dx2[static_cast<size_t>(x)] = value * value;
+            absdx[static_cast<size_t>(x)] = std::abs(value);
+        }
+        const auto processRows = [&](int first, int last) {
+        for (int y = first; y < last; ++y) {
+            const float dy = ((float(y) + 0.5f) - float(height) * 0.5f) / shortSide;
+            QRgb *line = reinterpret_cast<QRgb *>(canvas.scanLine(y));
+            for (int x = 0; x < width; ++x) {
+                const float circle = std::sqrt(dx2[static_cast<size_t>(x)] + dy * dy);
+                const float square =
+                    std::max(absdx[static_cast<size_t>(x)], std::abs(dy));
+                const float distance = circle * roundness + square * (1.0f - roundness);
+                const float factor =
+                    1.0f - amount * smoothstep(midpoint, midpoint + feather, distance);
+                const int fixed = int(factor * 256.0f + 0.5f);
+                const QRgb pixel = line[x];
+                line[x] = qRgba(std::clamp((qRed(pixel) * fixed) >> 8, 0, 255),
+                                std::clamp((qGreen(pixel) * fixed) >> 8, 0, 255),
+                                std::clamp((qBlue(pixel) * fixed) >> 8, 0, 255),
+                                qAlpha(pixel));
+            }
+        }
+        };
+        if (qint64(width) * height >= 2'000'000)
+            runFinishBands(height, 128, processRows);
+        else
+            processRows(0, height);
+        break;
+    }
+    case StageId::LightLeak: {
+        const float colour[3] = {float(stage.tintColour.redF()),
+                                 float(stage.tintColour.greenF()),
+                                 float(stage.tintColour.blueF())};
+        const float radius = std::max(1e-4f, float(stage.radius));
+        const float intensity = float(stage.intensity);
+        const float exponent = 1.0f / std::max(0.05f, float(stage.softness));
+        for (int y = 0; y < height; ++y) {
+            QRgb *line = reinterpret_cast<QRgb *>(canvas.scanLine(y));
+            for (int x = 0; x < width; ++x) {
+                const float dx = (float(x) + 0.5f) / float(width) - float(stage.centre.x());
+                const float dy = (float(y) + 0.5f) / float(height) - float(stage.centre.y());
+                const float distance = std::sqrt(dx * dx + dy * dy);
+                const float weight =
+                    std::pow(clamp01(1.0f - distance / radius), exponent) * intensity;
+                const QRgb pixel = line[x];
+                int channels[3] = {qRed(pixel), qGreen(pixel), qBlue(pixel)};
+                for (int c = 0; c < 3; ++c) {
+                    if (stage.blend == BlendMode::Add)
+                        channels[c] = int(std::lround(channels[c] + colour[c] * weight * 255.0f));
+                    else
+                        channels[c] = int(std::lround(
+                            (1.0f - (1.0f - channels[c] / 255.0f)
+                                       * (1.0f - colour[c] * weight))
+                            * 255.0f));
+                }
+                line[x] = qRgba(std::clamp(channels[0], 0, 255),
+                                std::clamp(channels[1], 0, 255),
+                                std::clamp(channels[2], 0, 255), qAlpha(pixel));
+            }
+        }
+        break;
+    }
+    case StageId::ExposureMask: {
+        const float multiplier = std::pow(2.0f, float(stage.ev));
+        const float size = std::max(1e-4f, float(stage.maskSize));
+        const float feather = std::max(1e-4f, float(stage.feather));
+        for (int y = 0; y < height; ++y) {
+            const float ny = (float(y) + 0.5f) / float(height);
+            QRgb *line = reinterpret_cast<QRgb *>(canvas.scanLine(y));
+            for (int x = 0; x < width; ++x) {
+                const float nx = (float(x) + 0.5f) / float(width);
+                float weight = 0.0f;
+                if (stage.mask.kind == MaskKind::Linear) {
+                    const float centre = float(stage.centre.y());
+                    weight =
+                        1.0f - smoothstep(centre - size * 0.5f, centre + size * 0.5f, ny);
+                    weight = smoothstep(0.0f, feather, weight);
+                } else {
+                    const float dx = nx - float(stage.centre.x());
+                    const float dy = ny - float(stage.centre.y());
+                    const float distance = std::sqrt(dx * dx + dy * dy);
+                    weight = 1.0f - smoothstep(size * (1.0f - feather), size, distance);
+                }
+                const float factor = 1.0f + (multiplier - 1.0f) * weight;
+                const QRgb pixel = line[x];
+                line[x] = qRgba(std::clamp(int(std::lround(qRed(pixel) * factor)), 0, 255),
+                                std::clamp(int(std::lround(qGreen(pixel) * factor)), 0, 255),
+                                std::clamp(int(std::lround(qBlue(pixel) * factor)), 0, 255),
+                                qAlpha(pixel));
+            }
+        }
+        break;
+    }
+    case StageId::Posterize: {
+        const float levels = float(std::max(2, stage.levels));
+        for (int y = 0; y < height; ++y) {
+            QRgb *line = reinterpret_cast<QRgb *>(canvas.scanLine(y));
+            for (int x = 0; x < width; ++x) {
+                const float offset =
+                    stage.dither ? (float(bayer[y % 4][x % 4]) + 0.5f) / 16.0f : 0.5f;
+                const QRgb pixel = line[x];
+                const auto quantise = [levels, offset](int value) {
+                    return std::clamp(
+                        int(std::floor((value / 255.0f) * (levels - 1.0f) + offset)
+                            / (levels - 1.0f) * 255.0f + 0.5f),
+                        0, 255);
+                };
+                line[x] = qRgba(quantise(qRed(pixel)), quantise(qGreen(pixel)),
+                                quantise(qBlue(pixel)), qAlpha(pixel));
+            }
+        }
+        break;
+    }
+    case StageId::Texture: {
+        const auto asset = effectTexture(stage.asset);
+        if (!asset)
+            break;
+        const QImage texture = asset.value().convertToFormat(QImage::Format_ARGB32);
+        const float tile =
+            std::max(1.0f, float(512.0 * EffectEngine::referenceScale(longSide) * stage.scale));
+        const float opacity = float(stage.opacity);
+        for (int y = 0; y < height; ++y) {
+            const int textureY = std::clamp(
+                int(std::fmod((float(y) + 0.5f) / tile, 1.0f) * float(texture.height())), 0,
+                texture.height() - 1);
+            const QRgb *textureLine =
+                reinterpret_cast<const QRgb *>(texture.constScanLine(textureY));
+            QRgb *line = reinterpret_cast<QRgb *>(canvas.scanLine(y));
+            for (int x = 0; x < width; ++x) {
+                const int textureX = std::clamp(
+                    int(std::fmod((float(x) + 0.5f) / tile, 1.0f) * float(texture.width())), 0,
+                    texture.width() - 1);
+                const QRgb texel = textureLine[textureX];
+                const float grey =
+                    (qRed(texel) + qGreen(texel) + qBlue(texel)) / (3.0f * 255.0f);
+                const QRgb pixel = line[x];
+                int channels[3] = {qRed(pixel), qGreen(pixel), qBlue(pixel)};
+                for (int c = 0; c < 3; ++c) {
+                    const float base = channels[c] / 255.0f;
+                    float blended = base * grey;
+                    if (stage.blend == BlendMode::SoftLight)
+                        blended = softLight(base, grey);
+                    else if (stage.blend == BlendMode::Overlay)
+                        blended = overlay(base, grey);
+                    else if (stage.blend == BlendMode::Screen)
+                        blended = 1.0f - (1.0f - base) * (1.0f - grey);
+                    channels[c] = std::clamp(
+                        int(std::lround((base + (blended - base) * opacity) * 255.0f)), 0, 255);
+                }
+                line[x] = qRgba(channels[0], channels[1], channels[2], qAlpha(pixel));
+            }
+        }
+        break;
+    }
+    default:
+        break;
     }
 }
 

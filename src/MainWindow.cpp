@@ -2168,8 +2168,10 @@ void MainWindow::rebuildPreviewImages()
         const QString filter = showOriginal ? QStringLiteral("original") : frame.filter;
         const int filterStrength = showOriginal ? 0 : frame.filterStrength;
         const bool upscale = showOriginal ? false : frame.upscale;
-        Result<QImage> converted =
-            m_store.preparedLinear(source.value(), recipe, filter, filterStrength, upscale, 1600);
+        EffectRenderTarget effectTarget;
+        effectTarget.recipeVersion = showOriginal ? 0 : frame.effectVersion;
+        Result<QImage> converted = m_store.preparedLinear(
+            source.value(), recipe, filter, filterStrength, upscale, 1600, {}, effectTarget);
         if (!converted)
             continue;
         images.insert(frame.id, converted.value());

@@ -41,7 +41,8 @@ struct EffectPlanStep {
     bool point = true;
     bool hasCurve = false;
     std::array<std::array<float, 1024>, 3> curve{};
-    QList<Stage> colourStages;
+    QList<Stage> toneStages;   ///< Phase A stages folded into this step, in order
+    QList<Stage> colourStages; ///< Phase B stages fused into this step, in order
     Stage spatial;
 };
 
@@ -52,6 +53,14 @@ struct EffectPlan {
     int pointSteps = 0;
     int spatialSteps = 0;
     bool hasFinishStages = false;
+};
+
+/// Optional diagnostics for tests and the performance notes. `finishSize` is
+/// the raster the finish stages actually ran at, not the requested target.
+struct EffectRenderStats {
+    QSize gradeSize;
+    QSize finishSize;
+    bool finishStages = false;
 };
 
 /// Staged grading engine. One shared instance owns the LUT, cube and texture
@@ -65,6 +74,9 @@ public:
     static constexpr int kGradeMax = 2400;
     static constexpr int kFinishMax = 8000;
     /// Final pixel guard, the same spirit as PhotoFilters::kMaxOutputPixels.
+    /// 80 MP covers 8000x6000 and a 9921x7441 4:3 frame. A full-bleed A4 at
+    /// 1200 ppi is 9921x14031 (139 MP) and is refused with `effect-size`;
+    /// lower the print resolution. The guard is checked before any allocation.
     static constexpr qint64 kMaxOutputPixels = 80'000'000;
 
     static EffectEngine &instance();
@@ -85,7 +97,7 @@ public:
     /// like the legacy filters.
     Result<QImage> render(const QImage &srgb, const EffectRecipe &recipe, int strengthPercent,
                           const QSize &targetSize, bool printPath,
-                          std::stop_token token = {}) const;
+                          std::stop_token token = {}, EffectRenderStats *stats = nullptr) const;
 
     /// A recipe's working space scale factor for spatial parameters: defined
     /// at a 2400 px reference long side, clamped to 0.25..4.
@@ -110,6 +122,9 @@ namespace effectstages {
 void bakeCurveLut(const QList<Stage> &toneStages, EffectCurveLut &lut);
 void applyPointStep(EffectRgbBuffer &buffer, const EffectPlanStep &step);
 void applySpatialStage(EffectRgbBuffer &buffer, const Stage &stage, int longSide);
+/// Finish stages run on the 8-bit target raster, after the one upscale, so no
+/// full-resolution float buffer is ever allocated.
+void applyFinishStep(QImage &image, const Stage &stage, int longSide);
 /// Trilinear cube sampling; @p cube holds size^3 * 3 floats with red fastest.
 void applyCube(EffectRgbBuffer &buffer, const QVector<float> &cube, int size);
 
