@@ -1,6 +1,7 @@
 #include "PageRenderer.h"
 
 #include "ColorPipeline.h"
+#include "EffectEngine.h"
 #include "LayoutEngine.h"
 
 #include <QCoreApplication>
@@ -296,6 +297,27 @@ private:
 
 PageRenderer::PageRenderer(ImageStore &store) : m_store(store) {}
 
+QSize PageRenderer::effectLayerSize(const Frame &frame, const QSize &sourceSize, double ppi)
+{
+    if (!(ppi > 0.0) || !std::isfinite(ppi) || !LayoutEngine::validFrame(frame)
+        || sourceSize.width() <= 0 || sourceSize.height() <= 0)
+        return {};
+    // imageSizeMm preserves the photograph's aspect and includes fit, zoom and
+    // crop. Using the frame rectangle here stretched a 4:3 photo to 2:3.
+    const QSizeF imageMm = LayoutEngine::imageSizeMm(frame, sourceSize);
+    if (imageMm.width() <= 0.0 || imageMm.height() <= 0.0)
+        return {};
+    QSize size(std::max(1, qRound(imageMm.width() / 25.4 * ppi)),
+               std::max(1, qRound(imageMm.height() / 25.4 * ppi)));
+    const int longest = std::max(size.width(), size.height());
+    if (longest > EffectEngine::kFinishMax) {
+        const double factor = double(EffectEngine::kFinishMax) / double(longest);
+        size = QSize(std::max(1, int(std::lround(size.width() * factor))),
+                     std::max(1, int(std::lround(size.height() * factor))));
+    }
+    return size;
+}
+
 void paintPageContent(QPainter &painter, const DocumentSnapshot &snapshot, int pageIndex,
                       const QHash<QString, QImage> &images)
 {
@@ -393,11 +415,11 @@ Result<QImage> PageRenderer::renderPage(const DocumentSnapshot &snapshot, int pa
         EffectRenderTarget effectTarget;
         effectTarget.recipeVersion = frame.effectVersion;
         if (options.sourceMaxDimension == 0) {
-            // The placed frame is the print raster. Grading still happens at
-            // the 2400 px engine bound; the finish stages run at this size.
-            effectTarget.printSize =
-                QSize(std::max(1, qRound(frame.width / 25.4 * ppi)),
-                      std::max(1, qRound(frame.height / 25.4 * ppi)));
+            // The layer follows the photograph's drawn size, not the frame
+            // rectangle: the page painter already crops/fits the image to the
+            // frame. The size is capped at the finish bound, and the painter
+            // performs the final scale.
+            effectTarget.printSize = effectLayerSize(frame, source.value().size(), ppi);
         }
         Result<QImage> converted =
             m_store.preparedLinear(source.value(), recipe, frame.filter, frame.filterStrength,

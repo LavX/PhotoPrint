@@ -54,7 +54,9 @@ struct Frame {
     int filterStrength = 100;                    ///< 0..100
     /// Catalogue recipe version. 0 follows the newest shipped version, which is
     /// what an old project or a freshly applied effect stores. A retune adds a
-    /// version and old projects keep the one they were saved with.
+    /// version and old projects keep the one they were saved with. Both render
+    /// paths read this field; the browser slice is what writes recipe.version
+    /// when an effect is applied, so it is still 0 for every existing frame.
     int effectVersion = 0;
     bool upscale = false;                        ///< 2x Lanczos before print
 

@@ -100,7 +100,8 @@ public:
                           std::stop_token token = {}, EffectRenderStats *stats = nullptr) const;
 
     /// A recipe's working space scale factor for spatial parameters: defined
-    /// at a 2400 px reference long side, clamped to 0.25..4.
+    /// at a 2400 px reference long side, clamped to 0.02..4. The low floor
+    /// keeps a 160 px preview's bloom the same relative size as the print.
     static double referenceScale(int longSide);
 
 private:
