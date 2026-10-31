@@ -2,6 +2,7 @@
 
 #include <QColorSpace>
 #include <QRgba64>
+#include <QThread>
 
 #include <lcms2.h>
 
@@ -88,10 +89,10 @@ constexpr qint64 kMinBandedPixels = 262144; // 512 x 512
 
 int availableBands()
 {
-    const unsigned hardware = std::thread::hardware_concurrency();
-    if (hardware == 0)
-        return 1;
-    return static_cast<int>(std::min(hardware, static_cast<unsigned>(kMaxBands)));
+    // Leave one hardware thread for the GUI: a conversion that saturates every
+    // core pushes input and paint latencies into the tens of milliseconds.
+    const int hardware = QThread::idealThreadCount();
+    return std::clamp(hardware - 1, 1, kMaxBands);
 }
 
 /// Converts rows [y0, y1) of the band. Each call owns its lcms transform: a

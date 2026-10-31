@@ -54,6 +54,7 @@
 #include <QSettings>
 #include <QStatusBar>
 #include <QTimer>
+#include <QThread>
 #include <QToolBar>
 #include <QVBoxLayout>
 #include <QWheelEvent>
@@ -77,7 +78,7 @@ constexpr double kRotateOffsetPx = 30.0;
 // the view stops moving, on a worker thread.
 constexpr int kSettleDelayMs = 120;
 constexpr qint64 kMaxRasterPixels = 8000000; // retained raster ceiling (8 MP)
-constexpr int kEditPulseMs = 200;            // crop scroll / arrow nudge burst
+constexpr int kEditPulseMs = 200;            // crop zoom or arrow nudge burst
 // A raster is kept while it is between 0.98x and 2x the view target: a slightly
 // larger raster is free and sharper than rebuilding a smaller one, and a 2x
 // surplus is still worth keeping. Outside that band the settle rebuilds.
@@ -317,6 +318,14 @@ PageView::PageView(QWidget *parent) : QWidget(parent)
             [this] { handleComposeFinished(); });
 }
 
+PageView::~PageView()
+{
+    // The worker owns copies of everything it needs, so it must not keep
+    // rendering a page whose view is gone: stop it and let it unwind.
+    if (m_activeStop)
+        m_activeStop->request_stop();
+}
+
 void PageView::setDocument(const DocumentSnapshot &document)
 {
     if (document == m_document) {
@@ -340,6 +349,7 @@ void PageView::contentChanged(bool supersede)
     m_contentDirty = true;
     ++m_contentRevision;
     m_composeFailed = false; // a real change earns one more attempt
+    m_blankRetries = 0;
     if (supersede && m_activeStop && m_composeInFlight)
         m_activeStop->request_stop();
     update();
@@ -401,9 +411,19 @@ bool PageView::dragActive() const
     return m_drag.kind != DragKind::None;
 }
 
+bool PageView::cropZoomPulseActive() const
+{
+    return m_cropZoomPulse.isValid() && m_cropZoomPulse.elapsed() < kEditPulseMs;
+}
+
+bool PageView::nudgePulseActive() const
+{
+    return m_nudgePulse.isValid() && m_nudgePulse.elapsed() < kEditPulseMs;
+}
+
 bool PageView::interactionPulseActive() const
 {
-    return m_editPulse.isValid() && m_editPulse.elapsed() < kEditPulseMs;
+    return cropZoomPulseActive() || nudgePulseActive();
 }
 
 bool PageView::interactionActive() const
@@ -413,9 +433,10 @@ bool PageView::interactionActive() const
 
 bool PageView::buildAllowed() const
 {
-    // A held pan never builds, and a burst of crop scrolls or arrow nudges is
-    // composed once when the burst ends. A drag does build, at the fitted scale.
-    return !m_panning && !interactionPulseActive();
+    // A held pan never builds while the button is down. A crop zoom is a
+    // gesture, so it builds at the fitted scale like a drag; an arrow-nudge
+    // burst only lets the frame outline move and composes once it ends.
+    return !m_panning && !nudgePulseActive();
 }
 
 bool PageView::rasterMatchesTarget() const
@@ -479,7 +500,10 @@ void PageView::startCompose() const
     const QSizeF page = pageMm();
     if (page.isEmpty() || m_document.pages.isEmpty())
         return;
-    const QSize pixels = dragActive() ? gestureRasterSize() : targetRasterSize();
+    // A drag and a crop zoom change the picture under the pointer: both compose
+    // the fitted page and let the release (or the burst end) sharpen it.
+    const bool coarse = dragActive() || cropZoomPulseActive();
+    const QSize pixels = coarse ? gestureRasterSize() : targetRasterSize();
     if (pixels.isEmpty())
         return;
 
@@ -490,6 +514,7 @@ void PageView::startCompose() const
     job.images = m_images;
     job.pageMm = page;
     job.pixels = pixels;
+    job.delayMs = m_composeDelayMs;
     job.forceFailure = m_failCompositions;
     job.stop = std::make_shared<std::stop_source>();
     m_activeStop = job.stop;
@@ -504,6 +529,8 @@ PageView::ComposeResult PageView::composePage(const ComposeJob &job)
     result.generation = job.generation;
     result.revision = job.revision;
     result.pageMm = job.pageMm;
+    if (job.delayMs > 0)
+        QThread::msleep(static_cast<unsigned long>(job.delayMs));
     if (job.stop->stop_requested()) {
         result.cancelled = true;
         return result;
@@ -556,6 +583,12 @@ void PageView::handleComposeFinished()
         // Keep the current raster and the dirty flag. Retrying on every paint
         // would spin on a permanent failure, so the guard waits for a change.
         m_composeFailed = true;
+        if (m_composed.isNull() && m_blankRetries == 0) {
+            // Nothing to fall back on: a blank canvas gets exactly one retry,
+            // then the guard applies like anywhere else.
+            ++m_blankRetries;
+            m_composeFailed = false;
+        }
     } else {
         installCompose(result);
     }
@@ -607,6 +640,7 @@ bool PageView::compositionPending() const
 void PageView::retryComposition()
 {
     m_composeFailed = false;
+    m_blankRetries = 0;
     if (m_contentDirty || !rasterMatchesTarget()) {
         if (!m_composeInFlight)
             startCompose();
@@ -620,7 +654,8 @@ void PageView::cancelInteraction(bool commitEdit)
     const bool wasActive = m_panning || dragActive() || interactionPulseActive();
     m_panning = false;
     m_drag = DragState{};
-    m_editPulse.invalidate();
+    m_cropZoomPulse.invalidate();
+    m_nudgePulse.invalidate();
     setCursor(Qt::ArrowCursor);
     if (drag.kind != DragKind::None && drag.changed) {
         if (commitEdit) {
@@ -795,7 +830,8 @@ void PageView::beginDrag(DragKind kind, int handle, const QPointF &pagePoint, co
     m_drag.startPage = pagePoint;
     m_drag.startFrame = frame;
     m_drag.changed = false;
-    m_editPulse.invalidate(); // a drag supersedes a crop or nudge burst
+    m_cropZoomPulse.invalidate(); // a drag supersedes a crop or nudge burst
+    m_nudgePulse.invalidate();
     const auto it = m_images.constFind(frame.id);
     m_drag.pixels = it == m_images.constEnd() ? QSize() : it->size();
     setCursor(kind == DragKind::CropPan ? Qt::ClosedHandCursor : Qt::ArrowCursor);
@@ -1142,9 +1178,9 @@ void PageView::wheelEvent(QWheelEvent *event)
         Frame updated = PhotoItem::zoomAt(*frame, widgetToPage(event->position()), factor, pixels);
         if (PhotoItem::clampCrop(updated, pixels).cropCenter != frame->cropCenter
             || updated.zoom != frame->zoom) {
-            // A crop scroll is a burst: no per-notch full-scale build, one
-            // composed page when the wheel stops.
-            m_editPulse.start();
+            // A crop zoom is a gesture: compose the fitted page per notch so the
+            // picture follows the wheel, and sharpen when it stops.
+            m_cropZoomPulse.start();
             scheduleSettle();
             updateLiveFrame(updated);
             if (onFrameCommitted)
@@ -1219,8 +1255,9 @@ void PageView::keyPressEvent(QKeyEvent *event)
         break;
     }
     if (nudged) {
-        // Repeated arrow keys are a burst as well: settle once at the end.
-        m_editPulse.start();
+        // Repeated arrow keys are a burst: the outline moves live and the
+        // photo is composed once when the keys stop.
+        m_nudgePulse.start();
         scheduleSettle();
         updateLiveFrame(moved);
         if (onFrameCommitted)
