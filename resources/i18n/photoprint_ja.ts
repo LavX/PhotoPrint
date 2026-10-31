@@ -937,5 +937,43 @@
         <source>Egy képnek nincs forrásfájlja, ezért a sablon nem alkalmazható.</source>
         <translation>写真の元ファイルがないため、テンプレートを適用できません。</translation>
     </message>
+    <message>
+        <source>Sablonok</source>
+        <translation>テンプレート</translation>
+    </message>
+    <message>
+        <source>Sablonok…</source>
+        <translation>テンプレート…</translation>
+    </message>
+    <message>
+        <source>Sablonok ehhez a laphoz</source>
+        <translation>このページのテンプレート</translation>
+    </message>
+    <message>
+        <source>Hány fotóhoz?</source>
+        <translation>何枚の写真用ですか？</translation>
+    </message>
+    <message>
+        <source>Fotószám</source>
+        <translation>写真の枚数</translation>
+    </message>
+    <message>
+        <source>Sablon alkalmazása</source>
+        <translation>テンプレートを適用</translation>
+    </message>
+    <message>
+        <source>Ehhez a laphoz legfeljebb 10 fotóhoz van sablon.</source>
+        <translation>このページで使えるテンプレートは最大10枚までです。</translation>
+    </message>
+    <message>
+        <source>A kivágásokat az új elrendezéshez igazítjuk.</source>
+        <translation>切り抜きは新しいレイアウトに合わせて調整されます。</translation>
+    </message>
+    <message numerus="yes">
+        <source>%n fotó</source>
+        <translation>
+            <numerusform>%n枚の写真</numerusform>
+        </translation>
+    </message>
 </context>
 </TS>

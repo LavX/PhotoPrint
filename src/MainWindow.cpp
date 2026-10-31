@@ -1,11 +1,13 @@
 #include "MainWindow.h"
 
 #include "AboutDialog.h"
+#include "CollageTemplates.h"
 #include "ColorPipeline.h"
 #include "EffectBrowserDialog.h"
 #include "LayoutEngine.h"
 #include "PhotoItem.h"
 #include "JobJournal.h"
+#include "TemplateBrowserDialog.h"
 #include "Translation.h"
 #include "TrialSheetBuilder.h"
 #include "ToneEngine.h"
@@ -1569,6 +1571,18 @@ void MainWindow::buildUi()
     libraryLayout->addWidget(m_addButton);
     connect(m_addButton, &QPushButton::clicked, this, &MainWindow::addPhotos);
 
+    // Templates sit next to the photo library, because a layout is chosen for
+    // the page the photographs are already on.
+    auto *templatesButton =
+        new QPushButton(QCoreApplication::translate("PhotoPrint", "Sablonok"), library);
+    templatesButton->setObjectName(QStringLiteral("templatesButton"));
+    templatesButton->setAccessibleName(QCoreApplication::translate("PhotoPrint", "Sablonok"));
+    templatesButton->setToolTip(
+        QCoreApplication::translate("PhotoPrint", "Sablonok ehhez a laphoz"));
+    templatesButton->setMinimumHeight(30);
+    libraryLayout->addWidget(templatesButton);
+    connect(templatesButton, &QPushButton::clicked, this, &MainWindow::openTemplateBrowser);
+
     m_photoList = new QListWidget(library);
     m_photoList->setViewMode(QListView::IconMode);
     m_photoList->setResizeMode(QListView::Adjust);
@@ -1867,6 +1881,16 @@ void MainWindow::buildUi()
     m_pagesPanel = new PagesPanel(printBar);
     m_pagesPanel->setObjectName(QStringLiteral("pagesPanel"));
     printLayout->insertWidget(0, m_pagesPanel, 0);
+    // The same picker from the page strip: the layout belongs to a page, and
+    // this is where pages are handled.
+    auto *pageTemplatesButton =
+        new QPushButton(QCoreApplication::translate("PhotoPrint", "Sablonok"), printBar);
+    pageTemplatesButton->setObjectName(QStringLiteral("pageStripTemplatesButton"));
+    pageTemplatesButton->setAccessibleName(QCoreApplication::translate("PhotoPrint", "Sablonok"));
+    pageTemplatesButton->setToolTip(
+        QCoreApplication::translate("PhotoPrint", "Sablonok ehhez a laphoz"));
+    printLayout->insertWidget(1, pageTemplatesButton, 0);
+    connect(pageTemplatesButton, &QPushButton::clicked, this, &MainWindow::openTemplateBrowser);
     m_pagesPanel->onSelect = [this](int index) { pageSelected(index); };
     m_pagesPanel->onAdd = [this] { addPage(); };
     m_pagesPanel->onDuplicate = [this] { duplicatePage(); };
@@ -1936,6 +1960,12 @@ void MainWindow::buildMenus()
     remove->setShortcut(QKeySequence::Delete);
     connect(remove, &QAction::triggered, this, &MainWindow::deleteSelected);
 
+    editMenu->addSeparator();
+    QAction *templates =
+        editMenu->addAction(QCoreApplication::translate("PhotoPrint", "Sablonok…"));
+    templates->setObjectName(QStringLiteral("templatesAction"));
+    connect(templates, &QAction::triggered, this, &MainWindow::openTemplateBrowser);
+
     buildLanguageMenu();
 
     QMenu *helpMenu = menuBar()->addMenu(QCoreApplication::translate("PhotoPrint", "Súgó"));
@@ -1990,6 +2020,8 @@ void MainWindow::rebuildUi()
     // a dialog in the previous language.
     if (m_effectDialog)
         m_effectDialog->close();
+    if (m_templateDialog)
+        m_templateDialog->close();
     // Everything the user was looking at survives the language change.
     const QString selected = m_selectedId;
     const bool dirty = m_dirty;
@@ -2244,6 +2276,11 @@ void MainWindow::onDocumentChanged()
         m_pagesPanel->setPages(document.pages, document.currentPage);
     syncFrameControls();
     syncPrintControls();
+    if (m_templateDialog && !document.pages.isEmpty()) {
+        const Page &page = document.pages.at(document.currentPage);
+        m_templateDialog->setPage(page.paper, page.landscape, page.frames,
+                                  templatePhotoThumbnails(page));
+    }
 }
 
 void MainWindow::rebuildPreviewImages()
@@ -2562,6 +2599,89 @@ void MainWindow::applyEffectChoice(const QString &key, int version, int strength
     // Key, version and strength travel as one FrameChange, so one undo puts the
     // whole previous look back.
     m_controller.apply(FrameChange{updated.id, updated});
+}
+
+void MainWindow::openTemplateBrowser()
+{
+    const DocumentSnapshot document = m_controller.document();
+    if (document.pages.isEmpty())
+        return;
+    const Page &page = document.pages.at(document.currentPage);
+    const QList<QImage> photos = templatePhotoThumbnails(page);
+
+    if (m_templateDialog) {
+        // The entry points are three doors to one picker; a second click brings
+        // the open one forward with the page it shows up to date.
+        m_templateDialog->setPage(page.paper, page.landscape, page.frames, photos);
+        m_templateDialog->raise();
+        m_templateDialog->activateWindow();
+        return;
+    }
+
+    TemplateBrowserRequest request;
+    request.paper = page.paper;
+    request.landscape = page.landscape;
+    request.frames = page.frames;
+    request.photos = photos;
+
+    auto *dialog = new TemplateBrowserDialog(request, this);
+    dialog->setAttribute(Qt::WA_DeleteOnClose);
+    connect(dialog, &TemplateBrowserDialog::templateChosen, this, &MainWindow::applyTemplate);
+    connect(dialog, &TemplateBrowserDialog::addPhotosRequested, this, &MainWindow::addPhotos);
+    m_templateDialog = dialog;
+    dialog->show();
+    dialog->raise();
+    dialog->activateWindow();
+}
+
+bool MainWindow::applyTemplate(const QString &templateId)
+{
+    const CollageTemplates &catalogue = CollageTemplates::instance();
+    const CollageTemplate *chosen = catalogue.find(templateId);
+    if (!chosen)
+        return false;
+    const DocumentSnapshot document = m_controller.document();
+    if (document.pages.isEmpty())
+        return false;
+    const Page &page = document.pages.at(document.currentPage);
+
+    // The engine returns the full frame list, so the whole layout is one edit and
+    // the frame ids survive: the selection and the cached previews stay valid,
+    // and one undo puts the previous arrangement back.
+    CollageApplyReport report;
+    const auto frames = catalogue.apply(*chosen, page, &report);
+    if (!frames) {
+        showProblem(frames.error().message);
+        return false;
+    }
+
+    // The stack names a single pushed edit itself, so the one layout change is
+    // published inside a one-command macro named after the action: one undo, and
+    // an undo entry the person can read.
+    QUndoStack *stack = m_controller.undoStack();
+    stack->beginMacro(QCoreApplication::translate("PhotoPrint", "Sablon alkalmazása"));
+    m_controller.apply(SetFramesEdit{document.currentPage, frames.value()});
+    stack->endMacro();
+    return true;
+}
+
+QList<QImage> MainWindow::templatePhotoThumbnails(const Page &page)
+{
+    // Only what the preview job already decoded: opening the picker must not
+    // block the window on ten photographs. A slot without a thumbnail keeps its
+    // number, so the fill order is still readable.
+    const ColorRecipe recipe = sanitiseRecipe(m_controller.document().recipe);
+    QList<QImage> photos;
+    photos.reserve(page.frames.size());
+    for (const Frame &frame : page.frames) {
+        QImage image;
+        if (const std::optional<SourceImage> source = m_store.cached(frame.sourcePath)) {
+            if (const Result<QImage> small = m_store.srgb(*source, recipe, 96))
+                image = small.value();
+        }
+        photos.append(image);
+    }
+    return photos;
 }
 
 void MainWindow::refreshPhotoList()

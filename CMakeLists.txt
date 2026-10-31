@@ -63,6 +63,7 @@ add_library(photoprint_core STATIC
   src/EffectStages.cpp
   src/WandStages.cpp
   src/EffectBrowserDialog.cpp
+  src/TemplateBrowserDialog.cpp
   src/MainWindow.cpp
   src/Translation.cpp
   src/AboutDialog.cpp
@@ -154,6 +155,7 @@ photoprint_test(tst_effect_catalogue)
 photoprint_test(tst_effect_engine)
 photoprint_test(tst_effect_browser)
 photoprint_test(tst_collage_templates)
+photoprint_test(tst_template_browser)
 photoprint_test(tst_ui_screens)
 photoprint_test(tst_i18n)
 photoprint_test(tst_about_dialog)

@@ -940,5 +940,44 @@
         <source>Egy képnek nincs forrásfájlja, ezért a sablon nem alkalmazható.</source>
         <translation>एक फ़ोटो का स्रोत फ़ाइल नहीं है, इसलिए टेम्पलेट लागू नहीं किया जा सकता।</translation>
     </message>
+    <message>
+        <source>Sablonok</source>
+        <translation>टेम्पलेट</translation>
+    </message>
+    <message>
+        <source>Sablonok…</source>
+        <translation>टेम्पलेट…</translation>
+    </message>
+    <message>
+        <source>Sablonok ehhez a laphoz</source>
+        <translation>इस पेज के लिए टेम्पलेट</translation>
+    </message>
+    <message>
+        <source>Hány fotóhoz?</source>
+        <translation>कितनी फ़ोटो के लिए?</translation>
+    </message>
+    <message>
+        <source>Fotószám</source>
+        <translation>फ़ोटो की संख्या</translation>
+    </message>
+    <message>
+        <source>Sablon alkalmazása</source>
+        <translation>टेम्पलेट लागू करें</translation>
+    </message>
+    <message>
+        <source>Ehhez a laphoz legfeljebb 10 fotóhoz van sablon.</source>
+        <translation>इस पेज के लिए अधिकतम 10 फ़ोटो तक टेम्पलेट उपलब्ध हैं।</translation>
+    </message>
+    <message>
+        <source>A kivágásokat az új elrendezéshez igazítjuk.</source>
+        <translation>क्रॉप नए लेआउट के अनुसार समायोजित किए जाएँगे।</translation>
+    </message>
+    <message numerus="yes">
+        <source>%n fotó</source>
+        <translation>
+            <numerusform>%n फ़ोटो</numerusform>
+            <numerusform>%n फ़ोटो</numerusform>
+        </translation>
+    </message>
 </context>
 </TS>

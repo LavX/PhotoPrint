@@ -943,5 +943,45 @@
         <source>Egy képnek nincs forrásfájlja, ezért a sablon nem alkalmazható.</source>
         <translation>У одной фотографии нет исходного файла, поэтому шаблон нельзя применить.</translation>
     </message>
+    <message>
+        <source>Sablonok</source>
+        <translation>Шаблоны</translation>
+    </message>
+    <message>
+        <source>Sablonok…</source>
+        <translation>Шаблоны…</translation>
+    </message>
+    <message>
+        <source>Sablonok ehhez a laphoz</source>
+        <translation>Шаблоны для этой страницы</translation>
+    </message>
+    <message>
+        <source>Hány fotóhoz?</source>
+        <translation>На сколько фотографий?</translation>
+    </message>
+    <message>
+        <source>Fotószám</source>
+        <translation>Количество фотографий</translation>
+    </message>
+    <message>
+        <source>Sablon alkalmazása</source>
+        <translation>Применить шаблон</translation>
+    </message>
+    <message>
+        <source>Ehhez a laphoz legfeljebb 10 fotóhoz van sablon.</source>
+        <translation>Для этой страницы есть шаблоны не более чем на 10 фотографий.</translation>
+    </message>
+    <message>
+        <source>A kivágásokat az új elrendezéshez igazítjuk.</source>
+        <translation>Кадрирование будет подстроено под новую раскладку.</translation>
+    </message>
+    <message numerus="yes">
+        <source>%n fotó</source>
+        <translation>
+            <numerusform>%n фотография</numerusform>
+            <numerusform>%n фотографии</numerusform>
+            <numerusform>%n фотографий</numerusform>
+        </translation>
+    </message>
 </context>
 </TS>

@@ -937,5 +937,43 @@
         <source>Egy képnek nincs forrásfájlja, ezért a sablon nem alkalmazható.</source>
         <translation>有一张照片没有源文件，因此无法应用模板。</translation>
     </message>
+    <message>
+        <source>Sablonok</source>
+        <translation>模板</translation>
+    </message>
+    <message>
+        <source>Sablonok…</source>
+        <translation>模板…</translation>
+    </message>
+    <message>
+        <source>Sablonok ehhez a laphoz</source>
+        <translation>此页面的模板</translation>
+    </message>
+    <message>
+        <source>Hány fotóhoz?</source>
+        <translation>用于几张照片？</translation>
+    </message>
+    <message>
+        <source>Fotószám</source>
+        <translation>照片数量</translation>
+    </message>
+    <message>
+        <source>Sablon alkalmazása</source>
+        <translation>应用模板</translation>
+    </message>
+    <message>
+        <source>Ehhez a laphoz legfeljebb 10 fotóhoz van sablon.</source>
+        <translation>此页面最多支持 10 张照片的模板。</translation>
+    </message>
+    <message>
+        <source>A kivágásokat az új elrendezéshez igazítjuk.</source>
+        <translation>裁剪将按新布局调整。</translation>
+    </message>
+    <message numerus="yes">
+        <source>%n fotó</source>
+        <translation>
+            <numerusform>%n 张照片</numerusform>
+        </translation>
+    </message>
 </context>
 </TS>

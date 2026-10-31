@@ -940,5 +940,44 @@
         <source>Egy képnek nincs forrásfájlja, ezért a sablon nem alkalmazható.</source>
         <translation>Une photo n'a pas de fichier source, le modèle ne peut donc pas être appliqué.</translation>
     </message>
+    <message>
+        <source>Sablonok</source>
+        <translation>Modèles</translation>
+    </message>
+    <message>
+        <source>Sablonok…</source>
+        <translation>Modèles…</translation>
+    </message>
+    <message>
+        <source>Sablonok ehhez a laphoz</source>
+        <translation>Modèles pour cette page</translation>
+    </message>
+    <message>
+        <source>Hány fotóhoz?</source>
+        <translation>Pour combien de photos ?</translation>
+    </message>
+    <message>
+        <source>Fotószám</source>
+        <translation>Nombre de photos</translation>
+    </message>
+    <message>
+        <source>Sablon alkalmazása</source>
+        <translation>Appliquer le modèle</translation>
+    </message>
+    <message>
+        <source>Ehhez a laphoz legfeljebb 10 fotóhoz van sablon.</source>
+        <translation>Cette page accepte des modèles pour 10 photos au maximum.</translation>
+    </message>
+    <message>
+        <source>A kivágásokat az új elrendezéshez igazítjuk.</source>
+        <translation>Les recadrages seront ajustés à la nouvelle disposition.</translation>
+    </message>
+    <message numerus="yes">
+        <source>%n fotó</source>
+        <translation>
+            <numerusform>%n photo</numerusform>
+            <numerusform>%n photos</numerusform>
+        </translation>
+    </message>
 </context>
 </TS>

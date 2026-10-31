@@ -940,5 +940,44 @@
         <source>Egy képnek nincs forrásfájlja, ezért a sablon nem alkalmazható.</source>
         <translation>Ein Foto hat keine Quelldatei, daher kann die Vorlage nicht angewendet werden.</translation>
     </message>
+    <message>
+        <source>Sablonok</source>
+        <translation>Vorlagen</translation>
+    </message>
+    <message>
+        <source>Sablonok…</source>
+        <translation>Vorlagen…</translation>
+    </message>
+    <message>
+        <source>Sablonok ehhez a laphoz</source>
+        <translation>Vorlagen für diese Seite</translation>
+    </message>
+    <message>
+        <source>Hány fotóhoz?</source>
+        <translation>Für wie viele Fotos?</translation>
+    </message>
+    <message>
+        <source>Fotószám</source>
+        <translation>Fotoanzahl</translation>
+    </message>
+    <message>
+        <source>Sablon alkalmazása</source>
+        <translation>Vorlage anwenden</translation>
+    </message>
+    <message>
+        <source>Ehhez a laphoz legfeljebb 10 fotóhoz van sablon.</source>
+        <translation>Für diese Seite gibt es Vorlagen für höchstens 10 Fotos.</translation>
+    </message>
+    <message>
+        <source>A kivágásokat az új elrendezéshez igazítjuk.</source>
+        <translation>Die Ausschnitte werden an das neue Layout angepasst.</translation>
+    </message>
+    <message numerus="yes">
+        <source>%n fotó</source>
+        <translation>
+            <numerusform>%n Foto</numerusform>
+            <numerusform>%n Fotos</numerusform>
+        </translation>
+    </message>
 </context>
 </TS>
