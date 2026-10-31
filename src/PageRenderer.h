@@ -67,6 +67,13 @@ public:
                                     std::stop_token token = {},
                                     const RenderOptions &options = {}) const;
 
+    /// Pixel size of the effect layer for one frame at @p ppi. The source
+    /// aspect is preserved through LayoutEngine::imageSizeMm, and the layer is
+    /// capped at EffectEngine::kFinishMax so a 1200 ppi page never asks the
+    /// effect engine for a 100+ megapixel frame. The page painter scales the
+    /// capped layer into place.
+    static QSize effectLayerSize(const Frame &frame, const QSize &sourceSize, double ppi);
+
 private:
     ImageStore &m_store;
 };

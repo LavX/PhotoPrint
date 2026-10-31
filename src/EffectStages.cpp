@@ -468,33 +468,60 @@ inline float overlay(float base, float blend)
     return base <= 0.5f ? 2.0f * base * blend : 1.0f - 2.0f * (1.0f - base) * (1.0f - blend);
 }
 
+QImage mipTexture(const QString &asset, int level);
+
+inline float textureGrey(const QImage &mip, float u, float v)
+{
+    const int width = mip.width();
+    const int height = mip.height();
+    const float x = u * float(width) - 0.5f;
+    const float y = v * float(height) - 0.5f;
+    const int x0 = int(std::floor(x));
+    const int y0 = int(std::floor(y));
+    const float fx = x - float(x0);
+    const float fy = y - float(y0);
+    const int x1 = (x0 + 1) % width;
+    const int y1 = (y0 + 1) % height;
+    const int xa = ((x0 % width) + width) % width;
+    const int ya = ((y0 % height) + height) % height;
+    const float top = (qRed(mip.pixel(xa, ya)) * (1.0f - fx)
+                       + qRed(mip.pixel(x1, ya)) * fx)
+        / 255.0f;
+    const float bottom = (qRed(mip.pixel(xa, y1)) * (1.0f - fx)
+                          + qRed(mip.pixel(x1, y1)) * fx)
+        / 255.0f;
+    return top * (1.0f - fy) + bottom * fy;
+}
+
 void applyTexture(EffectRgbBuffer &buffer, const Stage &stage, int longSide)
 {
     const auto asset = effectTexture(stage.asset);
     if (!asset)
         return;
-    const QImage texture = asset.value().convertToFormat(QImage::Format_ARGB32);
     const int width = buffer.width;
     const int height = buffer.height;
     const double scale = EffectEngine::referenceScale(longSide) * std::max(0.25, stage.scale);
     const float tile = std::max(1.0f, float(512.0 * scale));
     const float opacity = float(stage.opacity);
-    const int textureWidth = texture.width();
-    const int textureHeight = texture.height();
+
+    // A 512 px tile squeezed into a 10-50 px preview must be mip-filtered,
+    // otherwise the paper grain aliases into moire.
+    int level = 0;
+    int mipSize = 512;
+    while (mipSize > int(tile * 2.0f) && mipSize > 8) {
+        mipSize /= 2;
+        ++level;
+    }
+    const QImage mip = mipTexture(stage.asset, level);
+    if (mip.isNull())
+        return;
 
     for (int y = 0; y < height; ++y) {
-        const QRgb *textureLine =
-            reinterpret_cast<const QRgb *>(texture.constScanLine(
-                std::clamp(int(std::fmod((float(y) + 0.5f) / tile, 1.0f)
-                               * float(textureHeight)),
-                           0, textureHeight - 1)));
+        const float v = std::fmod((float(y) + 0.5f) / tile, 1.0f);
         float *pixel = buffer.at(0, y);
         for (int x = 0; x < width; ++x, pixel += 3) {
-            const float u = std::fmod((float(x) + 0.5f) / tile, 1.0f) * float(textureWidth);
-            const int x0 = std::clamp(int(u), 0, textureWidth - 1);
-            const QRgb texel = textureLine[x0];
-            const float grey =
-                (qRed(texel) + qGreen(texel) + qBlue(texel)) / (3.0f * 255.0f);
+            const float u = std::fmod((float(x) + 0.5f) / tile, 1.0f);
+            const float grey = textureGrey(mip, u, v);
             for (int c = 0; c < 3; ++c) {
                 float blended = pixel[c] * grey;
                 if (stage.blend == BlendMode::SoftLight)
@@ -561,6 +588,15 @@ void applyVignette(EffectRgbBuffer &buffer, const Stage &stage)
     const float feather = float(stage.feather);
     const float amount = float(stage.amount);
     const float roundness = float(std::clamp((stage.roundness + 1.0) / 2.0, 0.0, 1.0));
+    const float dxCorner = float(buffer.width) * 0.5f / shortSide;
+    const float dyCorner = float(buffer.height) * 0.5f / shortSide;
+    const float circleCorner = std::sqrt(dxCorner * dxCorner + dyCorner * dyCorner);
+    const float squareCorner = std::max(dxCorner, dyCorner);
+    const float corner = std::max(1e-6f, circleCorner * roundness
+                                             + squareCorner * (1.0f - roundness));
+    // Corner is 1.0 for every aspect, so the authored amount lands at the
+    // corner. A feather that would run past the corner clamps at it.
+    const float edge = std::min(1.0f, midpoint + feather);
     std::vector<float> dx(static_cast<size_t>(buffer.width));
     std::vector<float> dx2(static_cast<size_t>(buffer.width));
     for (int x = 0; x < buffer.width; ++x) {
@@ -574,8 +610,9 @@ void applyVignette(EffectRgbBuffer &buffer, const Stage &stage)
         for (int x = 0; x < buffer.width; ++x, pixel += 3) {
             const float circle = std::sqrt(dx2[static_cast<size_t>(x)] + dy * dy);
             const float square = std::max(std::abs(dx[static_cast<size_t>(x)]), std::abs(dy));
-            const float distance = circle * roundness + square * (1.0f - roundness);
-            const float falloff = smoothstep(midpoint, midpoint + feather, distance);
+            const float distance =
+                (circle * roundness + square * (1.0f - roundness)) / corner;
+            const float falloff = smoothstep(midpoint, edge, distance);
             const float factor = 1.0f - amount * falloff;
             pixel[0] *= factor;
             pixel[1] *= factor;
@@ -1008,6 +1045,13 @@ void applyFinishStep(QImage &image, const Stage &stage, int longSide)
         const float feather = float(stage.feather);
         const float amount = float(stage.amount);
         const float roundness = float(std::clamp((stage.roundness + 1.0) / 2.0, 0.0, 1.0));
+        const float dxCorner = float(width) * 0.5f / shortSide;
+        const float dyCorner = float(height) * 0.5f / shortSide;
+        const float circleCorner = std::sqrt(dxCorner * dxCorner + dyCorner * dyCorner);
+        const float squareCorner = std::max(dxCorner, dyCorner);
+        const float corner = std::max(1e-6f, circleCorner * roundness
+                                                 + squareCorner * (1.0f - roundness));
+        const float edge = std::min(1.0f, midpoint + feather);
         std::vector<float> dx(static_cast<size_t>(width));
         std::vector<float> dx2(static_cast<size_t>(width));
         std::vector<float> absdx(static_cast<size_t>(width));
@@ -1025,9 +1069,9 @@ void applyFinishStep(QImage &image, const Stage &stage, int longSide)
                 const float circle = std::sqrt(dx2[static_cast<size_t>(x)] + dy * dy);
                 const float square =
                     std::max(absdx[static_cast<size_t>(x)], std::abs(dy));
-                const float distance = circle * roundness + square * (1.0f - roundness);
-                const float factor =
-                    1.0f - amount * smoothstep(midpoint, midpoint + feather, distance);
+                const float distance =
+                    (circle * roundness + square * (1.0f - roundness)) / corner;
+                const float factor = 1.0f - amount * smoothstep(midpoint, edge, distance);
                 const int fixed = int(factor * 256.0f + 0.5f);
                 const QRgb pixel = line[x];
                 line[x] = qRgba(std::clamp((qRed(pixel) * fixed) >> 8, 0, 255),
@@ -1131,24 +1175,24 @@ void applyFinishStep(QImage &image, const Stage &stage, int longSide)
         const auto asset = effectTexture(stage.asset);
         if (!asset)
             break;
-        const QImage texture = asset.value().convertToFormat(QImage::Format_ARGB32);
         const float tile =
             std::max(1.0f, float(512.0 * EffectEngine::referenceScale(longSide) * stage.scale));
         const float opacity = float(stage.opacity);
+        int level = 0;
+        int mipSize = 512;
+        while (mipSize > int(tile * 2.0f) && mipSize > 8) {
+            mipSize /= 2;
+            ++level;
+        }
+        const QImage mip = mipTexture(stage.asset, level);
+        if (mip.isNull())
+            break;
         for (int y = 0; y < height; ++y) {
-            const int textureY = std::clamp(
-                int(std::fmod((float(y) + 0.5f) / tile, 1.0f) * float(texture.height())), 0,
-                texture.height() - 1);
-            const QRgb *textureLine =
-                reinterpret_cast<const QRgb *>(texture.constScanLine(textureY));
+            const float v = std::fmod((float(y) + 0.5f) / tile, 1.0f);
             QRgb *line = reinterpret_cast<QRgb *>(canvas.scanLine(y));
             for (int x = 0; x < width; ++x) {
-                const int textureX = std::clamp(
-                    int(std::fmod((float(x) + 0.5f) / tile, 1.0f) * float(texture.width())), 0,
-                    texture.width() - 1);
-                const QRgb texel = textureLine[textureX];
-                const float grey =
-                    (qRed(texel) + qGreen(texel) + qBlue(texel)) / (3.0f * 255.0f);
+                const float u = std::fmod((float(x) + 0.5f) / tile, 1.0f);
+                const float grey = textureGrey(mip, u, v);
                 const QRgb pixel = line[x];
                 int channels[3] = {qRed(pixel), qGreen(pixel), qBlue(pixel)};
                 for (int c = 0; c < 3; ++c) {
@@ -1186,6 +1230,44 @@ TextureCache &textureCache()
 {
     static TextureCache cache;
     return cache;
+}
+
+struct MipCache {
+    QMutex mutex;
+    QHash<QString, QVector<QImage>> levels;
+};
+
+MipCache &mipCache()
+{
+    static MipCache cache;
+    return cache;
+}
+
+QImage mipTexture(const QString &asset, int level)
+{
+    {
+        QMutexLocker locker(&mipCache().mutex);
+        const auto it = mipCache().levels.constFind(asset);
+        if (it != mipCache().levels.constEnd() && it->size() > level)
+            return it.value().at(level);
+    }
+    const auto base = effectTexture(asset);
+    if (!base)
+        return {};
+    QVector<QImage> levels;
+    levels.append(base.value().convertToFormat(QImage::Format_ARGB32));
+    for (int i = 1; i <= level; ++i) {
+        const QImage &previous = levels.last();
+        levels.append(previous.scaled(std::max(1, previous.width() / 2),
+                                      std::max(1, previous.height() / 2),
+                                      Qt::IgnoreAspectRatio, Qt::SmoothTransformation));
+    }
+    QMutexLocker locker(&mipCache().mutex);
+    auto &stored = mipCache().levels[asset];
+    if (stored.size() > level)
+        return stored.at(level);
+    stored = levels;
+    return stored.at(level);
 }
 
 struct CubeCache {
