@@ -40,6 +40,14 @@ struct SourceImage {
     QSize size() const { return pixels.size(); }
 };
 
+/// A catalogue effect may be pinned to a recipe version. 0 follows the newest
+/// version. `printSize` is the placed raster the caller wants; an empty size
+/// keeps the prepared source size (doubled by the frame's legacy upscale flag).
+struct EffectRenderTarget {
+    int recipeVersion = 0;
+    QSize printSize;
+};
+
 /// Loads and caches decoded originals and derived sRGB previews. The original
 /// file is only ever read.
 class ImageStore
@@ -74,9 +82,13 @@ public:
 
     /// Linear layer with the frame's filter and optional 2x enlarging applied.
     /// Upscaling is skipped for bounded previews; the print path passes 0.
+    /// Legacy filter keys take the unchanged PhotoFilters path. Any other key
+    /// is looked up in the effect catalogue before the original fast path;
+    /// unknown keys fall back to the original pixels.
     Result<QImage> preparedLinear(const SourceImage &source, const ColorRecipe &recipe,
                                   const QString &filterKey, int filterStrength, bool upscale,
-                                  int maxDimension, std::stop_token token = {});
+                                  int maxDimension, std::stop_token token = {},
+                                  const EffectRenderTarget &target = {});
 
     void clear();
 
@@ -86,5 +98,11 @@ private:
 };
 
 QByteArray fileSha256(const QString &path);
+
+/// The eight frozen 1.0.x preset keys, plus the `bw` spelling used by the
+/// research notes as an alias for `blackwhite`. This set never grows: new
+/// effects are catalogue recipes, so the legacy branch stays dead weight rather
+/// than becoming a second system.
+bool isLegacyPresetKey(const QString &key);
 
 } // namespace pp

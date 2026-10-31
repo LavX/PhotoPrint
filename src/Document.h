@@ -50,8 +50,12 @@ struct Frame {
     bool paperOverride = false; ///< trial variants carry their own paper tone
     double paperEv = 0.0;
     QString label; ///< optional number on a trial sheet
-    QString filter = QStringLiteral("original"); ///< PhotoFilters key
+    QString filter = QStringLiteral("original"); ///< PhotoFilters key or catalogue effect key
     int filterStrength = 100;                    ///< 0..100
+    /// Catalogue recipe version. 0 follows the newest shipped version, which is
+    /// what an old project or a freshly applied effect stores. A retune adds a
+    /// version and old projects keep the one they were saved with.
+    int effectVersion = 0;
     bool upscale = false;                        ///< 2x Lanczos before print
 
     bool operator==(const Frame &) const = default;

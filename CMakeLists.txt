@@ -57,6 +57,9 @@ add_library(photoprint_core STATIC
   src/ColorPipeline.cpp
   src/PageRenderer.cpp
   src/PhotoFilters.cpp
+  src/EffectCatalogue.cpp
+  src/EffectEngine.cpp
+  src/EffectStages.cpp
   src/MainWindow.cpp
   src/Translation.cpp
   src/AboutDialog.cpp
@@ -144,6 +147,8 @@ photoprint_test(tst_paper_catalog)
 photoprint_test(tst_daily_flow)
 photoprint_test(tst_filters)
 photoprint_test(tst_filter_integration)
+photoprint_test(tst_effect_catalogue)
+photoprint_test(tst_effect_engine)
 photoprint_test(tst_ui_screens)
 photoprint_test(tst_i18n)
 photoprint_test(tst_about_dialog)
