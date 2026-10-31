@@ -81,6 +81,10 @@ struct RowBand {
 
 constexpr int kMaxBands = 16;
 constexpr int kMinRowsPerBand = 64;
+// Banding has fixed costs (thread start-up plus one lcms transform per band,
+// about a millisecond each). Below this pixel count the calling thread finishes
+// first, so small pages are converted serially.
+constexpr qint64 kMinBandedPixels = 262144; // 512 x 512
 
 int availableBands()
 {
@@ -242,6 +246,14 @@ QImage ColorPipeline::linearToSrgb(const QImage &linearPremultiplied, bool grays
     return linearToSrgbBanded(linearPremultiplied, grayscale, 0, token);
 }
 
+int ColorPipeline::bandsFor(const QSize &size)
+{
+    if (size.isEmpty()
+        || static_cast<qint64>(size.width()) * size.height() < kMinBandedPixels)
+        return 1;
+    return std::clamp(availableBands(), 1, std::max(1, size.height() / kMinRowsPerBand));
+}
+
 QImage ColorPipeline::linearToSrgbBanded(const QImage &linearPremultiplied, bool grayscale, int bands,
                                          std::stop_token token)
 {
@@ -265,8 +277,8 @@ QImage ColorPipeline::linearToSrgbBanded(const QImage &linearPremultiplied, bool
     band.target = output.bits(); // detaches once, before any band starts
     band.targetStride = output.bytesPerLine();
 
-    const int wanted = bands > 0 ? bands : availableBands();
-    const int count = std::clamp(wanted, 1, std::max(1, height / kMinRowsPerBand));
+    const int count = bands > 0 ? std::clamp(bands, 1, std::max(1, height / kMinRowsPerBand))
+                                : bandsFor(QSize(width, height));
     if (count <= 1) {
         if (!convertLinearRows(band, width, 0, height, grayscale, token))
             return {};

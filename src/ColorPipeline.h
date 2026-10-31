@@ -27,12 +27,16 @@ public:
     static QImage linearToSrgb(const QImage &linearPremultiplied, bool grayscale = false,
                                std::stop_token token = {});
 
+    /// Row band count used for a page of this size: 1 below the banding
+    /// threshold where the fixed costs dominate, otherwise one band per
+    /// hardware thread, capped at 16 and at one band per 64 rows.
+    static int bandsFor(const QSize &size);
+
     /// Same conversion, split into exactly `bands` row strips. `bands <= 1`
-    /// converts on the calling thread, 0 picks one band per hardware thread
-    /// (capped at 16). Every band creates its own lcms transform because lcms
-    /// transforms are stateful and are not reentrant. Exists so tests can
-    /// compare the serial and parallel paths; production code should call
-    /// linearToSrgb().
+    /// converts on the calling thread, 0 uses bandsFor(). Every band creates its
+    /// own lcms transform because lcms transforms are stateful and are not
+    /// reentrant. Exists so tests can compare the serial and parallel paths;
+    /// production code should call linearToSrgb().
     static QImage linearToSrgbBanded(const QImage &linearPremultiplied, bool grayscale, int bands,
                                      std::stop_token token = {});
 

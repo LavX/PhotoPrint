@@ -123,6 +123,12 @@ photoprint_test(tst_window_smoke)
 photoprint_test(tst_layout)
 photoprint_test(tst_canvas_edits)
 photoprint_test(tst_canvas_cache)
+
+# The same cache contract on a 200% display: the raster, the cap and the
+# gesture policy must hold at devicePixelRatio 2 as well.
+add_test(NAME tst_canvas_cache_hidpi COMMAND tst_canvas_cache WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
+set_tests_properties(tst_canvas_cache_hidpi PROPERTIES ENVIRONMENT
+  "QT_QPA_PLATFORM=offscreen;QT_SCALE_FACTOR=2;PHOTOPRINT_NO_CUPS=1;PHOTOPRINT_NO_SETTINGS=1;PHOTOPRINT_NO_RECOVERY=1")
 photoprint_test(tst_printer_options)
 photoprint_test(tst_paper_geometry)
 photoprint_test(tst_composition)

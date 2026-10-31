@@ -74,12 +74,15 @@ constexpr double kRotateOffsetPx = 30.0;
 // Canvas raster policy. The composed page is a page-local bitmap: the view
 // transform (pan) never touches it; only the page content and the resolution
 // do. A zoom or a resize paints the existing bitmap scaled and sharpens once
-// the view stops moving.
+// the view stops moving, on a worker thread.
 constexpr int kSettleDelayMs = 120;
-constexpr qint64 kMaxRasterPixels = 8000000;      // retained raster ceiling (8 MP)
-constexpr qint64 kGestureRasterPixels = 1000000;  // during a direct manipulation
-constexpr double kRasterMinFactor = 0.98;         // below this share of the target: sharpen
-constexpr double kRasterMaxFactor = 1.35;         // far above it: drop the excess
+constexpr qint64 kMaxRasterPixels = 8000000; // retained raster ceiling (8 MP)
+constexpr int kEditPulseMs = 200;            // crop scroll / arrow nudge burst
+// A raster is kept while it is between 0.98x and 2x the view target: a slightly
+// larger raster is free and sharper than rebuilding a smaller one, and a 2x
+// surplus is still worth keeping. Outside that band the settle rebuilds.
+constexpr double kRasterMinFactor = 0.98;
+constexpr double kRasterMaxFactor = 2.0;
 
 Page emptyPage(const PaperSpec &paper)
 {
@@ -306,6 +309,12 @@ PageView::PageView(QWidget *parent) : QWidget(parent)
     m_settleTimer->setSingleShot(true);
     m_settleTimer->setInterval(kSettleDelayMs);
     connect(m_settleTimer, &QTimer::timeout, this, [this] { settleRaster(); });
+
+    // Page rasters are built off the GUI thread. The watcher lives on this
+    // object, so a result arriving after destruction is simply dropped.
+    m_composeWatcher = new QFutureWatcher<ComposeResult>(this);
+    connect(m_composeWatcher, &QFutureWatcher<ComposeResult>::finished, this,
+            [this] { handleComposeFinished(); });
 }
 
 void PageView::setDocument(const DocumentSnapshot &document)
@@ -323,8 +332,27 @@ void PageView::setDocument(const DocumentSnapshot &document)
     m_document = document;
     if (!m_selectedId.isEmpty() && !findFrame(m_document, m_selectedId))
         m_selectedId.clear();
+    contentChanged(true);
+}
+
+void PageView::contentChanged(bool supersede)
+{
     m_contentDirty = true;
+    ++m_contentRevision;
+    m_composeFailed = false; // a real change earns one more attempt
+    if (supersede && m_activeStop && m_composeInFlight)
+        m_activeStop->request_stop();
     update();
+}
+
+void PageView::setFrameImages(const QHash<QString, QImage> &images)
+{
+    // ImageStore hands out shared copies, so an unchanged set compares cheaply
+    // and must not throw the composed page away.
+    if (images == m_images)
+        return;
+    m_images = images;
+    contentChanged(true);
 }
 
 QSize PageView::capRasterSize(QSize pixels, qint64 maxPixels)
@@ -357,22 +385,37 @@ QSize PageView::gestureRasterSize() const
     const QSize target = targetRasterSize();
     if (target.isEmpty())
         return target;
-    // A drag needs the page at the fitted scale only: the painter stretches it
-    // for the duration of the gesture, and the release sharpens it again. The
-    // pixel budget caps the composition cost even on a HiDPI screen, where the
-    // fitted page alone is already several megapixels.
-    QSize coarse = target;
-    if (m_viewZoom > 1.0) {
-        const double factor = 1.0 / m_viewZoom;
-        coarse = QSize(std::max(1, qRound(target.width() * factor)),
-                       std::max(1, qRound(target.height() * factor)));
-    }
-    return capRasterSize(coarse, kGestureRasterPixels);
+    // A drag composes the page at the fitted scale: the painter stretches it for
+    // the duration of the gesture and the release rebuilds at full scale. That
+    // is the documented "1x coarse raster", so it follows the display scale
+    // instead of hiding an extra cap.
+    if (m_viewZoom <= 1.0)
+        return target;
+    const double factor = 1.0 / m_viewZoom;
+    return QSize(std::max(1, qRound(target.width() * factor)),
+                 std::max(1, qRound(target.height() * factor)));
 }
 
-bool PageView::directManipulation() const
+bool PageView::dragActive() const
 {
     return m_drag.kind != DragKind::None;
+}
+
+bool PageView::interactionPulseActive() const
+{
+    return m_editPulse.isValid() && m_editPulse.elapsed() < kEditPulseMs;
+}
+
+bool PageView::interactionActive() const
+{
+    return m_panning || dragActive() || interactionPulseActive();
+}
+
+bool PageView::buildAllowed() const
+{
+    // A held pan never builds, and a burst of crop scrolls or arrow nudges is
+    // composed once when the burst ends. A drag does build, at the fitted scale.
+    return !m_panning && !interactionPulseActive();
 }
 
 bool PageView::rasterMatchesTarget() const
@@ -384,8 +427,6 @@ bool PageView::rasterMatchesTarget() const
         return true;
     const double width = m_composed.width();
     const double height = m_composed.height();
-    // Zooming out keeps the larger raster: it is free and sharper than
-    // rebuilding a smaller one. Only a big surplus is dropped.
     return width >= target.width() * kRasterMinFactor && width <= target.width() * kRasterMaxFactor
         && height >= target.height() * kRasterMinFactor
         && height <= target.height() * kRasterMaxFactor;
@@ -400,35 +441,141 @@ void PageView::scheduleSettle()
 
 void PageView::settleRaster()
 {
-    if (!isVisible() || directManipulation() || rasterMatchesTarget())
+    if (!isVisible() || m_document.pages.isEmpty() || pageMm().isEmpty())
         return;
-    composeRaster(targetRasterSize());
-    update();
+    if (m_panning || dragActive())
+        return; // the release settles: never compose under a held button
+    if (interactionPulseActive()) {
+        scheduleSettle();
+        return;
+    }
+    if (!m_composeWatcher || m_composeInFlight) {
+        scheduleSettle(); // try again once the running build has landed
+        return;
+    }
+    if (m_composeFailed)
+        return; // a failed build waits for a real change or an explicit retry
+    if (!m_contentDirty && rasterMatchesTarget())
+        return;
+
+    // A zoom-out leaves a raster with more pixels than the view needs. The
+    // painter would scale it down anyway, so replace it with the scaled copy
+    // here: that releases the surplus (32 MiB at the cap) before the worker
+    // allocates the replacement, and the interim picture is unchanged.
+    const QSize target = targetRasterSize();
+    if (!m_composed.isNull() && !m_contentDirty && target.width() > 0
+        && m_composed.width() > target.width() * 1.02) {
+        m_composed =
+            m_composed.scaled(target, Qt::IgnoreAspectRatio, Qt::SmoothTransformation);
+        update();
+    }
+    startCompose();
 }
 
-void PageView::composeRaster(const QSize &pixels) const
+void PageView::startCompose() const
 {
+    if (!m_composeWatcher || m_composeInFlight)
+        return;
     const QSizeF page = pageMm();
-    if (page.isEmpty() || pixels.isEmpty() || m_document.pages.isEmpty())
+    if (page.isEmpty() || m_document.pages.isEmpty())
+        return;
+    const QSize pixels = dragActive() ? gestureRasterSize() : targetRasterSize();
+    if (pixels.isEmpty())
         return;
 
-    QImage linear(pixels, QImage::Format_RGBA64_Premultiplied);
+    ComposeJob job;
+    job.generation = ++m_composeGeneration;
+    job.revision = m_contentRevision;
+    job.document = m_document;
+    job.images = m_images;
+    job.pageMm = page;
+    job.pixels = pixels;
+    job.forceFailure = m_failCompositions;
+    job.stop = std::make_shared<std::stop_source>();
+    m_activeStop = job.stop;
+    m_composeInFlight = true;
+    ++m_composeRequests;
+    m_composeWatcher->setFuture(QtConcurrent::run([job] { return composePage(job); }));
+}
+
+PageView::ComposeResult PageView::composePage(const ComposeJob &job)
+{
+    ComposeResult result;
+    result.generation = job.generation;
+    result.revision = job.revision;
+    result.pageMm = job.pageMm;
+    if (job.stop->stop_requested()) {
+        result.cancelled = true;
+        return result;
+    }
+    if (job.forceFailure)
+        return result; // an empty raster, the way a failed allocation looks
+
+    QImage linear(job.pixels, QImage::Format_RGBA64_Premultiplied);
     if (linear.isNull())
-        return;
+        return result;
     linear.fill(Qt::white);
     QPainter painter(&linear);
     painter.setRenderHints(QPainter::Antialiasing | QPainter::SmoothPixmapTransform);
     QTransform scale;
-    scale.scale(static_cast<double>(pixels.width()) / page.width(),
-                static_cast<double>(pixels.height()) / page.height());
+    scale.scale(static_cast<double>(job.pixels.width()) / job.pageMm.width(),
+                static_cast<double>(job.pixels.height()) / job.pageMm.height());
     painter.setTransform(scale);
-    paintPageContent(painter, m_document, m_document.currentPage, m_images);
+    paintPageContent(painter, job.document, job.document.currentPage, job.images);
     painter.end();
 
-    m_composed = ColorPipeline::linearToSrgb(linear, m_document.recipe.grayscale);
-    m_composedPageMm = page;
-    m_contentDirty = false;
+    if (job.stop->stop_requested()) {
+        result.cancelled = true;
+        return result;
+    }
+    result.image =
+        ColorPipeline::linearToSrgb(linear, job.document.recipe.grayscale, job.stop->get_token());
+    if (result.image.isNull() && job.stop->stop_requested())
+        result.cancelled = true;
+    return result;
+}
+
+void PageView::handleComposeFinished()
+{
+    if (!m_composeWatcher || !m_composeWatcher->isFinished())
+        return;
+    const ComposeResult result = m_composeWatcher->result();
+    if (result.generation == 0 || result.generation == m_handledGeneration)
+        return; // the queued signal and a direct wait can both land here
+    m_handledGeneration = result.generation;
+    m_composeInFlight = false;
+    m_activeStop.reset();
+
+    if (result.cancelled) {
+        // Superseded by a newer request: drop it without touching the display.
+    } else if (result.pageMm != pageMm()) {
+        // The paper changed while the worker ran: those pixels belong to another
+        // page and must not be stretched over this one.
+        m_contentDirty = true;
+    } else if (result.image.isNull()) {
+        // Keep the current raster and the dirty flag. Retrying on every paint
+        // would spin on a permanent failure, so the guard waits for a change.
+        m_composeFailed = true;
+    } else {
+        installCompose(result);
+    }
+
+    if (m_composeFailed || !isVisible())
+        return;
+    if (m_contentDirty && buildAllowed())
+        startCompose(); // a newer document arrived while this one was building
+    else if (!rasterMatchesTarget() && !interactionActive())
+        scheduleSettle(); // the settle that armed this build was consumed
+}
+
+void PageView::installCompose(const ComposeResult &result)
+{
+    m_composed = result.image;
+    m_composedPageMm = result.pageMm;
+    m_contentDirty = result.revision != m_contentRevision;
+    m_composeFailed = false;
     ++m_compositions;
+    update();
 }
 
 void PageView::ensureComposed() const
@@ -440,24 +587,55 @@ void PageView::ensureComposed() const
         m_contentDirty = true;
         return;
     }
-    if (!m_contentDirty && !m_composed.isNull() && m_composedPageMm == page)
+    if (!m_composed.isNull() && m_composedPageMm != page) {
+        // Another paper or orientation: the old raster has the wrong aspect and
+        // cannot stand in for the new page.
+        m_composed = QImage();
+        m_composedPageMm = QSizeF();
+        m_contentDirty = true;
+    }
+    if (!m_contentDirty || m_composeFailed || !buildAllowed())
         return;
-
-    // During a drag the content changes on every move while the view does not:
-    // a coarse raster keeps the gesture responsive, and the release settles at
-    // the full scale.
-    composeRaster(directManipulation() ? gestureRasterSize() : targetRasterSize());
+    startCompose(); // no-op while a build is already in flight
 }
 
-void PageView::setFrameImages(const QHash<QString, QImage> &images)
+bool PageView::compositionPending() const
 {
-    // ImageStore hands out shared copies, so an unchanged set compares cheaply
-    // and must not throw the composed page away.
-    if (images == m_images)
-        return;
-    m_images = images;
-    m_contentDirty = true;
-    update();
+    return m_composeInFlight;
+}
+
+void PageView::retryComposition()
+{
+    m_composeFailed = false;
+    if (m_contentDirty || !rasterMatchesTarget()) {
+        if (!m_composeInFlight)
+            startCompose();
+        scheduleSettle();
+    }
+}
+
+void PageView::cancelInteraction(bool commitEdit)
+{
+    const DragState drag = m_drag;
+    const bool wasActive = m_panning || dragActive() || interactionPulseActive();
+    m_panning = false;
+    m_drag = DragState{};
+    m_editPulse.invalidate();
+    setCursor(Qt::ArrowCursor);
+    if (drag.kind != DragKind::None && drag.changed) {
+        if (commitEdit) {
+            // Losing the mouse-up is not an undo request: keep the edit.
+            if (const Frame *frame = selectedFramePtr(); frame && onFrameCommitted)
+                onFrameCommitted(*frame);
+        } else if (Frame *frame = findFrame(m_document, drag.startFrame.id)) {
+            // The widget is going away: leave the document as the user had it.
+            *frame = drag.startFrame;
+            ++m_contentRevision;
+            m_contentDirty = true;
+        }
+    }
+    if (wasActive)
+        scheduleSettle();
 }
 
 void PageView::setViewZoom(double zoom)
@@ -467,6 +645,7 @@ void PageView::setViewZoom(double zoom)
         m_viewPan = QPointF();
     // The raster is page-local: the new zoom only changes how it is drawn. The
     // higher resolution arrives once the zooming stops.
+    m_composeFailed = false;
     scheduleSettle();
     update();
 }
@@ -509,7 +688,22 @@ QSizeF PageView::pageMm() const
 
 QImage PageView::composedImage() const
 {
-    ensureComposed();
+    // A test and utility accessor, never the paint path: it waits for the build
+    // that matches the current document so the caller can read pixels.
+    for (int pass = 0; pass < 8; ++pass) {
+        if (!m_composeWatcher)
+            break;
+        if (!m_composeInFlight) {
+            if (m_composeFailed || !m_contentDirty || m_document.pages.isEmpty()
+                || pageMm().isEmpty())
+                break;
+            startCompose();
+            if (!m_composeInFlight)
+                break;
+        }
+        m_composeWatcher->waitForFinished();
+        const_cast<PageView *>(this)->handleComposeFinished();
+    }
     return m_composed;
 }
 
@@ -601,6 +795,7 @@ void PageView::beginDrag(DragKind kind, int handle, const QPointF &pagePoint, co
     m_drag.startPage = pagePoint;
     m_drag.startFrame = frame;
     m_drag.changed = false;
+    m_editPulse.invalidate(); // a drag supersedes a crop or nudge burst
     const auto it = m_images.constFind(frame.id);
     m_drag.pixels = it == m_images.constEnd() ? QSize() : it->size();
     setCursor(kind == DragKind::CropPan ? Qt::ClosedHandCursor : Qt::ArrowCursor);
@@ -614,8 +809,9 @@ void PageView::updateLiveFrame(const Frame &frame)
     *target = frame;
     target->autoPlaced = false;
     m_drag.changed = true;
-    m_contentDirty = true;
-    update();
+    // A move inside a drag keeps the running build: the frame preview advances
+    // one composition behind the pointer instead of starving every build.
+    contentChanged(false);
 }
 
 Frame PageView::draggedFrame(const QPointF &pagePoint, bool fine) const
@@ -684,13 +880,11 @@ void PageView::paintEvent(QPaintEvent *)
     painter.fillRect(page, Qt::white);
 
     // The composed raster is page-local, so drawing it is a pure transform of
-    // the view: a pan repaints one blit and never a recomposition.
+    // the view: a pan repaints one blit and never a recomposition. A build that
+    // is still running simply leaves the previous raster on screen.
     ensureComposed();
     if (!m_composed.isNull())
         painter.drawImage(page, m_composed);
-
-    if (!directManipulation() && !rasterMatchesTarget())
-        scheduleSettle();
 
     painter.setPen(QPen(m_pageBorderColor, 1));
     painter.setBrush(Qt::NoBrush);
@@ -763,8 +957,66 @@ void PageView::resizeEvent(QResizeEvent *event)
     QWidget::resizeEvent(event);
     // The page rect changed size: draw the raster we have, scaled, and rebuild
     // it at the new scale once the resizing stops.
+    m_composeFailed = false;
     scheduleSettle();
     update();
+}
+
+void PageView::showEvent(QShowEvent *event)
+{
+    QWidget::showEvent(event);
+    // The view may have been resized or moved to another screen while hidden.
+    scheduleSettle();
+}
+
+void PageView::hideEvent(QHideEvent *event)
+{
+    QWidget::hideEvent(event);
+    // No mouse-up will arrive for a gesture that was running when we went away.
+    cancelInteraction(false);
+}
+
+void PageView::focusOutEvent(QFocusEvent *event)
+{
+    QWidget::focusOutEvent(event);
+    // A drag whose release went to another window must not keep moving frames.
+    cancelInteraction(true);
+}
+
+bool PageView::event(QEvent *event)
+{
+    switch (event->type()) {
+    case QEvent::DevicePixelRatioChange:
+    case QEvent::ScreenChangeInternal:
+        // The raster is in the device pixels of the old screen: keep drawing it
+        // scaled and rebuild once the window has landed on its new screen.
+        m_composeFailed = false;
+        scheduleSettle();
+        update();
+        break;
+    default:
+        break;
+    }
+    return QWidget::event(event);
+}
+
+void PageView::changeEvent(QEvent *event)
+{
+    switch (event->type()) {
+    case QEvent::ActivationChange:
+    case QEvent::WindowDeactivate:
+    case QEvent::ApplicationDeactivate:
+        // Alt-Tab in the middle of a drag: the mouse-up will never arrive, and
+        // no gesture can be running while the window is being activated.
+        if (dragActive() || m_panning) {
+            cancelInteraction(true);
+            update();
+        }
+        break;
+    default:
+        break;
+    }
+    QWidget::changeEvent(event);
 }
 
 void PageView::mousePressEvent(QMouseEvent *event)
@@ -857,6 +1109,9 @@ void PageView::mouseReleaseEvent(QMouseEvent *event)
     if (event->button() == Qt::MiddleButton) {
         m_panning = false;
         setCursor(Qt::ArrowCursor);
+        // The pan itself changed no pixel, but a zoom or an edit that happened
+        // before or during it may still be waiting for its sharpening pass.
+        scheduleSettle();
         event->accept();
         return;
     }
@@ -872,11 +1127,9 @@ void PageView::mouseReleaseEvent(QMouseEvent *event)
         if (frame && onFrameCommitted)
             onFrameCommitted(*frame);
     }
-    if (changed || !rasterMatchesTarget()) {
-        // The gesture could only afford a coarse raster or the commit dirtied
-        // the page: settle at the full scale now that the mouse is up.
-        settleRaster();
-    }
+    // The gesture could only afford a coarse raster: schedule the full-scale
+    // rebuild instead of composing inside the event that ends the drag.
+    scheduleSettle();
 }
 
 void PageView::wheelEvent(QWheelEvent *event)
@@ -889,6 +1142,10 @@ void PageView::wheelEvent(QWheelEvent *event)
         Frame updated = PhotoItem::zoomAt(*frame, widgetToPage(event->position()), factor, pixels);
         if (PhotoItem::clampCrop(updated, pixels).cropCenter != frame->cropCenter
             || updated.zoom != frame->zoom) {
+            // A crop scroll is a burst: no per-notch full-scale build, one
+            // composed page when the wheel stops.
+            m_editPulse.start();
+            scheduleSettle();
             updateLiveFrame(updated);
             if (onFrameCommitted)
                 onFrameCommitted(updated);
@@ -962,6 +1219,9 @@ void PageView::keyPressEvent(QKeyEvent *event)
         break;
     }
     if (nudged) {
+        // Repeated arrow keys are a burst as well: settle once at the end.
+        m_editPulse.start();
+        scheduleSettle();
         updateLiveFrame(moved);
         if (onFrameCommitted)
             onFrameCommitted(moved);
