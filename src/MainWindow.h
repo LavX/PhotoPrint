@@ -14,6 +14,7 @@
 #include "RecoveryStore.h"
 
 #include <QHash>
+#include <QElapsedTimer>
 #include <QImage>
 #include <QMainWindow>
 
@@ -22,6 +23,7 @@
 #include <functional>
 #include <memory>
 #include <optional>
+#include <stop_token>
 
 class QAbstractButton;
 class QCheckBox;
@@ -59,11 +61,24 @@ public:
 
     QSizeF pageMm() const;
     QRectF pageRect() const;
+    /// Blocks until the raster matches the current document, so callers can read
+    /// pixels. The paint path never uses this; it draws what is installed.
     QImage composedImage() const;
+    /// The size of the raster installed right now, without waiting for a build.
+    QSize composedRasterSize() const { return m_composed.size(); }
 
-    /// Test hook: how many times the page raster has been built. Panning never
+    /// Test hook: how many page rasters have been installed. Panning never
     /// raises it; a zoom or a resize raises it once, when the settle fires.
     quint64 compositionCount() const { return m_compositions; }
+    /// Test hook: how many raster builds were started, installed or not.
+    quint64 compositionRequestCount() const { return m_composeRequests; }
+    /// Test hook: is a build running on the worker thread right now.
+    bool compositionPending() const;
+    /// Test hook: make the following builds fail the way an allocation or an
+    /// lcms error would, so the retry guard can be exercised.
+    void failCompositionsForTest(bool fail) { m_failCompositions = fail; }
+    /// Clears the failed-build guard and tries once more.
+    void retryComposition();
 
     std::function<void(const QString &)> onSelectionChanged;
     std::function<void(const Frame &)> onFrameCommitted;
@@ -74,8 +89,13 @@ public:
     std::function<void(bool)> onCropModeChanged;
 
 protected:
+    bool event(QEvent *event) override;
     void paintEvent(QPaintEvent *event) override;
     void resizeEvent(QResizeEvent *event) override;
+    void changeEvent(QEvent *event) override;
+    void showEvent(QShowEvent *event) override;
+    void hideEvent(QHideEvent *event) override;
+    void focusOutEvent(QFocusEvent *event) override;
     void mousePressEvent(QMouseEvent *event) override;
     void mouseMoveEvent(QMouseEvent *event) override;
     void mouseReleaseEvent(QMouseEvent *event) override;
@@ -97,6 +117,27 @@ private:
         bool changed = false;
     };
 
+    /// One raster build, handed to a worker thread. Everything the worker needs
+    /// is copied in: it never touches PageView or its members.
+    struct ComposeJob {
+        quint64 generation = 0;
+        quint64 revision = 0;
+        DocumentSnapshot document;
+        QHash<QString, QImage> images;
+        QSizeF pageMm;
+        QSize pixels;
+        bool forceFailure = false;
+        std::shared_ptr<std::stop_source> stop;
+    };
+
+    struct ComposeResult {
+        QImage image;
+        QSizeF pageMm;
+        quint64 generation = 0;
+        quint64 revision = 0;
+        bool cancelled = false;
+    };
+
     const Frame *selectedFramePtr() const;
     QTransform pageToWidget() const;
     QPointF widgetToPage(const QPointF &point) const;
@@ -105,14 +146,22 @@ private:
     int hitHandle(const QPointF &widgetPoint) const;
     void beginDrag(DragKind kind, int handle, const QPointF &pagePoint, const Frame &frame);
     void ensureComposed() const;
-    void composeRaster(const QSize &pixels) const;
+    void startCompose() const;
+    void handleComposeFinished();
+    void installCompose(const ComposeResult &result);
+    void contentChanged(bool supersede);
+    bool dragActive() const;
+    bool interactionActive() const;
+    bool interactionPulseActive() const;
+    bool buildAllowed() const;
+    void cancelInteraction(bool commitEdit);
     QSize targetRasterSize() const;
     QSize gestureRasterSize() const;
     bool rasterMatchesTarget() const;
-    bool directManipulation() const;
     void settleRaster();
     void scheduleSettle();
     static QSize capRasterSize(QSize pixels, qint64 maxPixels);
+    static ComposeResult composePage(const ComposeJob &job);
     void updateLiveFrame(const Frame &frame);
     Frame draggedFrame(const QPointF &pagePoint, bool fine) const;
 
@@ -126,13 +175,27 @@ private:
     bool m_panning = false;
     QPointF m_panStart;
     DragState m_drag;
+    QElapsedTimer m_editPulse;
     QColor m_canvasColor{0xd9, 0xd9, 0xde};
     QColor m_pageBorderColor{0xc7, 0xc7, 0xcc};
     QColor m_pageShadowColor{0, 0, 0, 38};
+    // Page raster cache. A build runs on a worker thread from a copy of the
+    // document and the prepared images and is installed by
+    // handleComposeFinished(); the GUI thread only ever draws what is installed,
+    // so no paint, pan, zoom or release waits for a composition.
     mutable QImage m_composed;
     mutable QSizeF m_composedPageMm;
     mutable bool m_contentDirty = true;
+    mutable bool m_composeFailed = false;
+    mutable quint64 m_contentRevision = 1;
+    mutable quint64 m_composeGeneration = 0;
+    mutable quint64 m_handledGeneration = 0;
+    mutable quint64 m_composeRequests = 0;
     mutable quint64 m_compositions = 0;
+    mutable bool m_failCompositions = false;
+    mutable bool m_composeInFlight = false;
+    mutable QFutureWatcher<ComposeResult> *m_composeWatcher = nullptr;
+    mutable std::shared_ptr<std::stop_source> m_activeStop;
     QTimer *m_settleTimer = nullptr;
 };
 
