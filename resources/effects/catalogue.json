@@ -1,0 +1,190 @@
+{
+  "schema": "photoprint.effects/1",
+  "version": 1,
+  "categories": [
+    { "key": "basic",  "name": "Basics" },
+    { "key": "mono",   "name": "Black & white" },
+    { "key": "retro",  "name": "Retro" },
+    { "key": "color",  "name": "Colour" },
+    { "key": "blur",   "name": "Blur" },
+    { "key": "detail", "name": "Detail" },
+    { "key": "art",    "name": "Artistic" },
+    { "key": "warp",   "name": "Distort" },
+    { "key": "light",  "name": "Light" },
+    { "key": "grain",  "name": "Grain" },
+    { "key": "print",  "name": "Print" },
+    { "key": "glow",   "name": "Glow" }
+  ],
+  "recipes": [
+    {
+      "key": "light.venice",
+      "category": "light",
+      "version": 1,
+      "name": "Venice",
+      "description": "Late-afternoon stone, slate-blue shadows and a soft halation on the highlights.",
+      "stages": [
+        { "id": "whiteBalance", "temperature": 10, "tint": 2 },
+        { "id": "exposure", "ev": 0.12 },
+        { "id": "contrast", "amount": 14, "pivot": 0.45 },
+        { "id": "curves", "master": [[0, 0], [0.22, 0.205], [0.55, 0.575], [1, 1]] },
+        { "id": "splitTone", "shadow": "#2e3a4e", "shadowStrength": 0.40,
+          "highlight": "#e8c9a0", "highlightStrength": 0.38, "balance": 0.55 },
+        { "id": "vibrance", "amount": 14 },
+        { "id": "fade", "lift": 0.05, "toe": 0.65 },
+        { "id": "bloom", "threshold": 0.80, "radius": 44, "intensity": 0.30,
+          "tint": "#ffe6c0" },
+        { "id": "grain", "finish": true, "amount": 0.030, "size": 1, "seed": 7, "mono": true },
+        { "id": "vignette", "finish": true, "amount": 0.22, "midpoint": 0.62, "feather": 0.40 }
+      ]
+    },
+    {
+      "key": "color.tealorange",
+      "category": "color",
+      "version": 1,
+      "name": "Teal & Orange",
+      "description": "Cinematic teal shadows against warm skin and amber highlights.",
+      "stages": [
+        { "id": "whiteBalance", "temperature": 8, "tint": 0 },
+        { "id": "contrast", "amount": 16, "pivot": 0.45 },
+        { "id": "splitTone", "shadow": "#1e3c46", "shadowStrength": 0.45,
+          "highlight": "#f0a868", "highlightStrength": 0.42, "balance": 0.52 },
+        { "id": "vibrance", "amount": 18 },
+        { "id": "fade", "lift": 0.03, "toe": 0.6 },
+        { "id": "vignette", "amount": 0.20, "midpoint": 0.60, "feather": 0.40 }
+      ]
+    },
+    {
+      "key": "retro.fadedfilm",
+      "category": "retro",
+      "version": 1,
+      "name": "Faded Film",
+      "description": "Low contrast, lifted blacks and a cyan-brown crossover with fine grain.",
+      "stages": [
+        { "id": "whiteBalance", "temperature": 4, "tint": 1 },
+        { "id": "contrast", "amount": -18, "pivot": 0.45 },
+        { "id": "saturation", "amount": -16 },
+        { "id": "fade", "lift": 0.14, "toe": 0.5 },
+        { "id": "splitTone", "shadow": "#3b3a48", "shadowStrength": 0.18,
+          "highlight": "#e8d9b8", "highlightStrength": 0.22, "balance": 0.48 },
+        { "id": "grain", "finish": true, "amount": 0.045, "size": 1, "seed": 11, "mono": true },
+        { "id": "vignette", "finish": true, "amount": 0.12, "midpoint": 0.70, "feather": 0.35 }
+      ]
+    },
+    {
+      "key": "light.nordic",
+      "category": "light",
+      "version": 1,
+      "name": "Nordic",
+      "description": "Cool, clean and high-key: blue shadows and near-neutral highlights.",
+      "stages": [
+        { "id": "whiteBalance", "temperature": -24, "tint": -5 },
+        { "id": "exposure", "ev": 0.08 },
+        { "id": "contrast", "amount": 12, "pivot": 0.45 },
+        { "id": "splitTone", "shadow": "#26384a", "shadowStrength": 0.30,
+          "highlight": "#dfe8ee", "highlightStrength": 0.20, "balance": 0.55 },
+        { "id": "vibrance", "amount": 6 },
+        { "id": "vignette", "amount": 0.18, "midpoint": 0.62, "feather": 0.40 }
+      ]
+    },
+    {
+      "key": "light.goldenhour",
+      "category": "light",
+      "version": 1,
+      "name": "Golden Hour",
+      "description": "Warm late sun on the highlights without turning skin orange.",
+      "stages": [
+        { "id": "whiteBalance", "temperature": 26, "tint": 6 },
+        { "id": "exposure", "ev": 0.15 },
+        { "id": "splitTone", "shadow": "#3a3020", "shadowStrength": 0.20,
+          "highlight": "#ffd9a0", "highlightStrength": 0.40, "balance": 0.58 },
+        { "id": "bloom", "threshold": 0.82, "radius": 46, "intensity": 0.35,
+          "tint": "#ffe8c8" },
+        { "id": "vignette", "amount": 0.16, "midpoint": 0.65, "feather": 0.40 }
+      ]
+    },
+    {
+      "key": "glow.neonnight",
+      "category": "glow",
+      "version": 1,
+      "name": "Neon Night",
+      "description": "Deep shadows, blue midtones and magenta highlights with strong bloom.",
+      "stages": [
+        { "id": "exposure", "ev": -0.25 },
+        { "id": "contrast", "amount": 22, "pivot": 0.45 },
+        { "id": "saturation", "amount": 45 },
+        { "id": "splitTone", "shadow": "#2038a0", "shadowStrength": 0.35,
+          "highlight": "#ff40a0", "highlightStrength": 0.38, "balance": 0.45 },
+        { "id": "bloom", "threshold": 0.80, "radius": 40, "intensity": 0.45,
+          "tint": "#ffd0f0" },
+        { "id": "grain", "finish": true, "amount": 0.05, "size": 1, "seed": 23, "mono": true },
+        { "id": "vignette", "finish": true, "amount": 0.35, "midpoint": 0.50, "feather": 0.45 }
+      ]
+    },
+    {
+      "key": "color.pastel",
+      "category": "color",
+      "version": 1,
+      "name": "Matte Pastel",
+      "description": "Pale, airy and low in contrast, with warm highlights and a little bloom.",
+      "stages": [
+        { "id": "exposure", "ev": 0.18 },
+        { "id": "contrast", "amount": -20, "pivot": 0.45 },
+        { "id": "saturation", "amount": -24 },
+        { "id": "fade", "lift": 0.12, "toe": 0.8 },
+        { "id": "splitTone", "shadow": "#4a4a5e", "shadowStrength": 0.12,
+          "highlight": "#ffe4d0", "highlightStrength": 0.30, "balance": 0.62 },
+        { "id": "vibrance", "amount": 8 },
+        { "id": "bloom", "threshold": 0.88, "radius": 50, "intensity": 0.18,
+          "tint": "#fff0e0" }
+      ]
+    },
+    {
+      "key": "mono.contrast",
+      "category": "mono",
+      "version": 1,
+      "name": "Hard Contrast",
+      "description": "Near-black shadows, bright highlights and crisp micro-contrast.",
+      "stages": [
+        { "id": "saturation", "amount": -100 },
+        { "id": "contrast", "amount": 52, "pivot": 0.45 },
+        { "id": "curves", "master": [[0, 0], [0.22, 0.10], [0.72, 0.90], [1, 1]] },
+        { "id": "localContrast", "radius": 10, "amount": 0.25 },
+        { "id": "grain", "finish": true, "amount": 0.035, "size": 1, "seed": 31, "mono": true }
+      ]
+    },
+    {
+      "key": "print.sepia",
+      "category": "print",
+      "version": 1,
+      "name": "Sepia Drama",
+      "description": "A three-stop sepia print on textured paper, with a heavy vignette and grain.",
+      "stages": [
+        { "id": "saturation", "amount": -100 },
+        { "id": "contrast", "amount": 28, "pivot": 0.45 },
+        { "id": "gradientMap", "stops": [
+          { "position": 0.0, "colour": "#241a12" },
+          { "position": 0.5, "colour": "#c8a070" },
+          { "position": 1.0, "colour": "#f6e8cc" }
+        ] },
+        { "id": "vignette", "amount": 0.45, "midpoint": 0.50, "feather": 0.45 },
+        { "id": "texture", "asset": "paper-fine", "opacity": 0.28, "blend": "multiply" },
+        { "id": "grain", "finish": true, "amount": 0.06, "size": 1, "seed": 41, "mono": true }
+      ]
+    },
+    {
+      "key": "retro.crossprocess",
+      "category": "retro",
+      "version": 1,
+      "name": "Cross Process",
+      "description": "Independent red, green and blue curves: yellow-cyan cast, blown highlights, crushed shadows.",
+      "stages": [
+        { "id": "curves", "r": [[0, 0.06], [1, 0.94]],
+          "g": [[0, 0], [0.5, 0.48], [1, 0.88]], "b": [[0, 0.22], [1, 1]] },
+        { "id": "contrast", "amount": 20, "pivot": 0.45 },
+        { "id": "saturation", "amount": 30 },
+        { "id": "fade", "lift": 0.06, "toe": 0.6 },
+        { "id": "vignette", "amount": 0.22, "midpoint": 0.55, "feather": 0.45 }
+      ]
+    }
+  ]
+}

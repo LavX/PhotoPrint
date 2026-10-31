@@ -1,16 +1,20 @@
 #include "ImageSource.h"
 
 #include "ColorPipeline.h"
+#include "EffectCatalogue.h"
+#include "EffectEngine.h"
 #include "PhotoFilters.h"
 
 #include <QCoreApplication>
 #include <QCryptographicHash>
+#include <QDebug>
 #include <QCache>
 #include <QFile>
 #include <QFileInfo>
 #include <QImageReader>
 #include <QMutex>
 #include <QMutexLocker>
+#include <QSet>
 #include <QStringList>
 
 #include <utility>
@@ -48,6 +52,19 @@ QByteArray fileSha256(const QString &path)
     if (!hash.addData(&file))
         return {};
     return hash.result();
+}
+
+bool isLegacyPresetKey(const QString &key)
+{
+    // "blackwhite" is the key 1.0.x writes; "bw" is the spelling in the
+    // research notes and is accepted for hand-edited projects. Neither the set
+    // nor its meaning changes when the catalogue grows.
+    static const QSet<QString> keys = {
+        QStringLiteral("original"), QStringLiteral("vivid"),  QStringLiteral("warm"),
+        QStringLiteral("cool"),     QStringLiteral("sepia"),  QStringLiteral("blackwhite"),
+        QStringLiteral("bw"),       QStringLiteral("vintage"), QStringLiteral("crisp"),
+    };
+    return keys.contains(key);
 }
 
 struct ImageStore::Private {
@@ -200,9 +217,106 @@ Result<QImage> ImageStore::srgb(const SourceImage &source, const ColorRecipe &re
 
 Result<QImage> ImageStore::preparedLinear(const SourceImage &source, const ColorRecipe &recipe,
                                           const QString &filterKey, int filterStrength,
-                                          bool upscale, int maxDimension, std::stop_token token)
+                                          bool upscale, int maxDimension, std::stop_token token,
+                                          const EffectRenderTarget &target)
 {
-    const FilterPreset preset = filterFromKey(filterKey);
+    const bool preview = maxDimension > 0;
+
+    // Catalogue first, before the original fast path: any non-legacy key may be
+    // a recipe. A missing key still falls through to "original", so a
+    // hand-edited project cannot fail to load.
+    if (!isLegacyPresetKey(filterKey)) {
+        auto effectRecipe =
+            EffectCatalogue::instance().resolve(filterKey, target.recipeVersion);
+        if (!effectRecipe && target.recipeVersion != 0) {
+            // A project can name a version this build no longer ships. Say so
+            // and follow the current recipe; the silent fallback hid retunes.
+            qWarning("ImageSource: effect '%s' has no version %d, using the current recipe",
+                     qPrintable(filterKey), target.recipeVersion);
+            effectRecipe = EffectCatalogue::instance().resolve(filterKey, 0);
+        }
+        if (effectRecipe) {
+            const EffectRecipe &effect = effectRecipe.value();
+            const int strength = std::clamp(filterStrength, 0, 100);
+            // Zero strength is the untouched frame by contract, and staying on
+            // the source path keeps it byte-identical to a legacy Original.
+            if (strength == 0)
+                return linear(source, recipe, maxDimension, token);
+            const QString raster = preview
+                ? QString::number(maxDimension)
+                : (target.printSize.isValid()
+                       ? QStringLiteral("%1x%2").arg(target.printSize.width()).arg(target.printSize.height())
+                       : QStringLiteral("source"));
+            const QString mode = QStringLiteral("e|%1|%2|%3|%4|%5")
+                                     .arg(effect.identity())
+                                     .arg(strength)
+                                     .arg(raster)
+                                     .arg(upscale ? 1 : 0)
+                                     .arg(preview ? QStringLiteral("p") : QStringLiteral("t"));
+            const QString key = cacheKey(mode, source.path, source.sha256, recipe, maxDimension);
+            {
+                QMutexLocker locker(&d->mutex);
+                if (QImage *hit = d->previews.object(key)) {
+                    QImage copy = *hit;
+                    return copy;
+                }
+            }
+
+            Result<QImage> base = linear(source, recipe, maxDimension, token);
+            if (!base)
+                return base.error();
+            QImage srgb = ColorPipeline::linearToSrgbWithAlpha(base.value(), token);
+            if (srgb.isNull()) {
+                return error(QStringLiteral("colour-conversion"),
+                             QCoreApplication::translate("PhotoPrint", "Ezt a képet most nem tudjuk feldolgozni. Próbáld újra."));
+            }
+
+            QSize output;
+            if (preview) {
+                output = srgb.size();
+            } else if (target.printSize.isValid() && !target.printSize.isEmpty()) {
+                output = target.printSize;
+            } else {
+                output = srgb.size();
+                if (upscale) {
+                    const QSize doubled = srgb.size() * 2;
+                    if (static_cast<qint64>(doubled.width()) * doubled.height()
+                        <= EffectEngine::kMaxOutputPixels)
+                        output = doubled;
+                }
+            }
+
+            const auto rendered = EffectEngine::instance().render(
+                srgb, effect, strength, output, !preview, token);
+            if (!rendered) {
+                // A missing texture or a malformed recipe is a bug, not a
+                // reason to print the ungraded photo: report it.
+                if (rendered.error().code == QLatin1String("effect-size")) {
+                    return error(rendered.error().code,
+                                 QCoreApplication::translate("PhotoPrint",
+                                                             "Ehhez a nyomtatási mérethez a kép "
+                                                             "túl nagy. Csökkentsd a nyomtatási "
+                                                             "felbontást."));
+                }
+                return error(rendered.error().code,
+                             QCoreApplication::translate("PhotoPrint", "Ezt a képet most nem tudjuk feldolgozni. Próbáld újra."));
+            }
+            const QImage linearResult = ColorPipeline::srgbToLinear(rendered.value(), token);
+            if (linearResult.isNull()) {
+                return error(QStringLiteral("colour-conversion"),
+                             QCoreApplication::translate("PhotoPrint", "Ezt a képet most nem tudjuk feldolgozni. Próbáld újra."));
+            }
+            {
+                QMutexLocker locker(&d->mutex);
+                d->previews.insert(key, new QImage(linearResult),
+                                   std::max(1, static_cast<int>(linearResult.sizeInBytes() / 1024)));
+            }
+            return linearResult;
+        }
+    }
+
+    const FilterPreset preset =
+        filterKey == QLatin1String("bw") ? FilterPreset::BlackWhite : filterFromKey(filterKey);
     if (preset == FilterPreset::Original && !upscale)
         return linear(source, recipe, maxDimension, token);
 

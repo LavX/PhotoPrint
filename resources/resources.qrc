@@ -2,4 +2,17 @@
   <qresource prefix="/icons">
     <file alias="photoprint.png">photoprint-256.png</file>
   </qresource>
+  <qresource prefix="/effects">
+    <file alias="catalogue.json">effects/catalogue.json</file>
+  </qresource>
+  <qresource prefix="/textures">
+    <file alias="paper-fine.png">textures/paper-fine.png</file>
+    <file alias="paper-news.png">textures/paper-news.png</file>
+    <file alias="paper-soft.png">textures/paper-soft.png</file>
+    <file alias="paper-wash.png">textures/paper-wash.png</file>
+    <file alias="dust-fine.png">textures/dust-fine.png</file>
+  </qresource>
+  <qresource prefix="/samples">
+    <file alias="effect-sample.jpg">samples/effect-sample.jpg</file>
+  </qresource>
 </RCC>

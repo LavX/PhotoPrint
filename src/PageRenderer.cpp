@@ -390,9 +390,18 @@ Result<QImage> PageRenderer::renderPage(const DocumentSnapshot &snapshot, int pa
         // it goes through the recipe clamp as well instead of reaching std::pow
         // unbounded.
         recipe = sanitiseRecipe(recipe);
+        EffectRenderTarget effectTarget;
+        effectTarget.recipeVersion = frame.effectVersion;
+        if (options.sourceMaxDimension == 0) {
+            // The placed frame is the print raster. Grading still happens at
+            // the 2400 px engine bound; the finish stages run at this size.
+            effectTarget.printSize =
+                QSize(std::max(1, qRound(frame.width / 25.4 * ppi)),
+                      std::max(1, qRound(frame.height / 25.4 * ppi)));
+        }
         Result<QImage> converted =
             m_store.preparedLinear(source.value(), recipe, frame.filter, frame.filterStrength,
-                                   frame.upscale, options.sourceMaxDimension, token);
+                                   frame.upscale, options.sourceMaxDimension, token, effectTarget);
         if (!converted)
             return converted.error();
         images.insert(frame.id, converted.value());

@@ -283,6 +283,7 @@ QJsonObject frameToJson(const Frame &frame, const QString &projectDir, const QSt
     object.insert(QStringLiteral("autoPlaced"), frame.autoPlaced);
     object.insert(QStringLiteral("filter"), frame.filter);
     object.insert(QStringLiteral("filterStrength"), frame.filterStrength);
+    object.insert(QStringLiteral("effectVersion"), frame.effectVersion);
     object.insert(QStringLiteral("upscale"), frame.upscale);
     object.insert(QStringLiteral("autoTone"), frame.autoTone);
     object.insert(QStringLiteral("brightness"), frame.brightness);
@@ -319,6 +320,9 @@ Frame frameFromJson(const QJsonObject &object)
     frame.autoPlaced = object.value(QStringLiteral("autoPlaced")).toBool(true);
     frame.filter = object.value(QStringLiteral("filter")).toString(QStringLiteral("original"));
     frame.filterStrength = object.value(QStringLiteral("filterStrength")).toInt(100);
+    // Missing key means a 1.0.1 project: 0 follows the current recipe.
+    frame.effectVersion =
+        std::max(0, object.value(QStringLiteral("effectVersion")).toInt(0));
     frame.upscale = object.value(QStringLiteral("upscale")).toBool(false);
     frame.autoTone = object.value(QStringLiteral("autoTone")).toBool(true);
     frame.brightness = clampBrightnessEv(object.value(QStringLiteral("brightness")).toDouble());
