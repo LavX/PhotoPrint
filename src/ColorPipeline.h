@@ -22,9 +22,19 @@ public:
     /// Flattens a linear premultiplied layer set onto white paper and converts
     /// the finished page to sRGB 8-bit for screen or PDF. With `grayscale` the
     /// linear luminance is written into all three channels before the sRGB
-    /// conversion, so preview and export are neutral by construction.
+    /// conversion, so preview and export are neutral by construction. Rows are
+    /// converted in parallel bands; the output is bit identical to a serial run.
     static QImage linearToSrgb(const QImage &linearPremultiplied, bool grayscale = false,
                                std::stop_token token = {});
+
+    /// Same conversion, split into exactly `bands` row strips. `bands <= 1`
+    /// converts on the calling thread, 0 picks one band per hardware thread
+    /// (capped at 16). Every band creates its own lcms transform because lcms
+    /// transforms are stateful and are not reentrant. Exists so tests can
+    /// compare the serial and parallel paths; production code should call
+    /// linearToSrgb().
+    static QImage linearToSrgbBanded(const QImage &linearPremultiplied, bool grayscale, int bands,
+                                     std::stop_token token = {});
 
     /// Linear premultiplied -> sRGB with alpha preserved (no white flatten).
     static QImage linearToSrgbWithAlpha(const QImage &linearPremultiplied,

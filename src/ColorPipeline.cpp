@@ -6,7 +6,10 @@
 #include <lcms2.h>
 
 #include <algorithm>
+#include <atomic>
 #include <cmath>
+#include <system_error>
+#include <thread>
 #include <vector>
 
 namespace pp {
@@ -64,6 +67,85 @@ void applyTone(double *rgb, const ColorRecipe &recipe)
 quint16 to16(double value)
 {
     return static_cast<quint16>(std::lround(clamp01(value) * 65535.0));
+}
+
+/// One thread's worth of rows to convert. The pointers come from the source and
+/// target QImage once, before any band runs, so no thread touches the QImage
+/// headers.
+struct RowBand {
+    const uchar *source = nullptr;
+    qsizetype sourceStride = 0;
+    uchar *target = nullptr;
+    qsizetype targetStride = 0;
+};
+
+constexpr int kMaxBands = 16;
+constexpr int kMinRowsPerBand = 64;
+
+int availableBands()
+{
+    const unsigned hardware = std::thread::hardware_concurrency();
+    if (hardware == 0)
+        return 1;
+    return static_cast<int>(std::min(hardware, static_cast<unsigned>(kMaxBands)));
+}
+
+/// Converts rows [y0, y1) of the band. Each call owns its lcms transform: a
+/// transform holds per-conversion state and must never be shared by threads.
+/// The per-pixel maths is the serial path unchanged, so the result is bit
+/// identical whatever the banding.
+bool convertLinearRows(const RowBand &band, int width, int y0, int y1, bool grayscale,
+                       std::stop_token token)
+{
+    WorkingSpace &space = workingSpace();
+    cmsHTRANSFORM transform = cmsCreateTransform(space.linearRec2020, TYPE_RGB_16, space.srgb,
+                                                 TYPE_RGB_8, INTENT_RELATIVE_COLORIMETRIC,
+                                                 cmsFLAGS_BLACKPOINTCOMPENSATION);
+    if (!transform)
+        return false;
+
+    std::vector<quint16> straightened(static_cast<size_t>(width) * 3);
+    std::vector<uchar> srgb(static_cast<size_t>(width) * 3);
+    bool complete = true;
+    for (int y = y0; y < y1; ++y) {
+        if (token.stop_requested()) {
+            complete = false;
+            break;
+        }
+        const QRgba64 *src =
+            reinterpret_cast<const QRgba64 *>(band.source + static_cast<qsizetype>(y) * band.sourceStride);
+        for (int x = 0; x < width; ++x) {
+            const quint16 a = src[x].alpha();
+            // The page is flattened onto white paper: premultiplied colour plus
+            // the remaining white share is the straight linear value.
+            const double remaining = 1.0 - a / 65535.0;
+            straightened[x * 3] = static_cast<quint16>(std::min<quint32>(
+                65535, static_cast<quint32>(src[x].red()) + static_cast<quint32>(remaining * 65535.0)));
+            straightened[x * 3 + 1] = static_cast<quint16>(std::min<quint32>(
+                65535, static_cast<quint32>(src[x].green()) + static_cast<quint32>(remaining * 65535.0)));
+            straightened[x * 3 + 2] = static_cast<quint16>(std::min<quint32>(
+                65535, static_cast<quint32>(src[x].blue()) + static_cast<quint32>(remaining * 65535.0)));
+            if (grayscale) {
+                // Rec.709 luma on the linear values. Neutral input survives the
+                // Rec.2020 -> sRGB transform unchanged, so the result is grey.
+                const double luminance = (0.2126 * straightened[x * 3]
+                                          + 0.7152 * straightened[x * 3 + 1]
+                                          + 0.0722 * straightened[x * 3 + 2])
+                    / 65535.0;
+                const quint16 value = to16(luminance);
+                straightened[x * 3] = value;
+                straightened[x * 3 + 1] = value;
+                straightened[x * 3 + 2] = value;
+            }
+        }
+        cmsDoTransform(transform, straightened.data(), srgb.data(), width);
+        QRgb *dst = reinterpret_cast<QRgb *>(band.target + static_cast<qsizetype>(y) * band.targetStride);
+        for (int x = 0; x < width; ++x)
+            dst[x] = qRgb(srgb[x * 3], srgb[x * 3 + 1], srgb[x * 3 + 2]);
+    }
+
+    cmsDeleteTransform(transform);
+    return complete;
 }
 
 } // namespace
@@ -157,6 +239,12 @@ QImage ColorPipeline::toLinear(const SourceImage &source, const ColorRecipe &rec
 QImage ColorPipeline::linearToSrgb(const QImage &linearPremultiplied, bool grayscale,
                                    std::stop_token token)
 {
+    return linearToSrgbBanded(linearPremultiplied, grayscale, 0, token);
+}
+
+QImage ColorPipeline::linearToSrgbBanded(const QImage &linearPremultiplied, bool grayscale, int bands,
+                                         std::stop_token token)
+{
     if (linearPremultiplied.isNull())
         return {};
     const QImage input = linearPremultiplied.format() == QImage::Format_RGBA64_Premultiplied
@@ -171,52 +259,49 @@ QImage ColorPipeline::linearToSrgb(const QImage &linearPremultiplied, bool grays
     if (output.isNull())
         return {};
 
-    WorkingSpace &space = workingSpace();
-    cmsHTRANSFORM transform = cmsCreateTransform(space.linearRec2020, TYPE_RGB_16, space.srgb,
-                                                 TYPE_RGB_8, INTENT_RELATIVE_COLORIMETRIC,
-                                                 cmsFLAGS_BLACKPOINTCOMPENSATION);
-    if (!transform)
-        return {};
+    RowBand band;
+    band.source = input.constBits();
+    band.sourceStride = input.bytesPerLine();
+    band.target = output.bits(); // detaches once, before any band starts
+    band.targetStride = output.bytesPerLine();
 
-    std::vector<quint16> straightened(static_cast<size_t>(width) * 3);
-    std::vector<uchar> srgb(static_cast<size_t>(width) * 3);
-    for (int y = 0; y < height; ++y) {
-        if (token.stop_requested()) {
-            cmsDeleteTransform(transform);
+    const int wanted = bands > 0 ? bands : availableBands();
+    const int count = std::clamp(wanted, 1, std::max(1, height / kMinRowsPerBand));
+    if (count <= 1) {
+        if (!convertLinearRows(band, width, 0, height, grayscale, token))
             return {};
-        }
-        const QRgba64 *src = reinterpret_cast<const QRgba64 *>(input.constScanLine(y));
-        for (int x = 0; x < width; ++x) {
-            const quint16 a = src[x].alpha();
-            // The page is flattened onto white paper: premultiplied colour plus
-            // the remaining white share is the straight linear value.
-            const double remaining = 1.0 - a / 65535.0;
-            straightened[x * 3] = static_cast<quint16>(std::min<quint32>(
-                65535, static_cast<quint32>(src[x].red()) + static_cast<quint32>(remaining * 65535.0)));
-            straightened[x * 3 + 1] = static_cast<quint16>(std::min<quint32>(
-                65535, static_cast<quint32>(src[x].green()) + static_cast<quint32>(remaining * 65535.0)));
-            straightened[x * 3 + 2] = static_cast<quint16>(std::min<quint32>(
-                65535, static_cast<quint32>(src[x].blue()) + static_cast<quint32>(remaining * 65535.0)));
-            if (grayscale) {
-                // Rec.709 luma on the linear values. Neutral input survives the
-                // Rec.2020 -> sRGB transform unchanged, so the result is grey.
-                const double luminance = (0.2126 * straightened[x * 3]
-                                          + 0.7152 * straightened[x * 3 + 1]
-                                          + 0.0722 * straightened[x * 3 + 2])
-                    / 65535.0;
-                const quint16 value = to16(luminance);
-                straightened[x * 3] = value;
-                straightened[x * 3 + 1] = value;
-                straightened[x * 3 + 2] = value;
-            }
-        }
-        cmsDoTransform(transform, straightened.data(), srgb.data(), width);
-        QRgb *dst = reinterpret_cast<QRgb *>(output.scanLine(y));
-        for (int x = 0; x < width; ++x)
-            dst[x] = qRgb(srgb[x * 3], srgb[x * 3 + 1], srgb[x * 3 + 2]);
+        return output;
     }
 
-    cmsDeleteTransform(transform);
+    const int rows = (height + count - 1) / count;
+    // Self-contained bands on plain threads: the number of threads is bounded by
+    // the hardware and by the band count, and no band ever waits on another, so
+    // the conversion cannot deadlock behind a busy thread pool.
+    std::atomic<bool> failed{false};
+    const auto runBand = [&](int y0, int y1) {
+        if (!convertLinearRows(band, width, y0, y1, grayscale, token))
+            failed.store(true, std::memory_order_relaxed);
+    };
+    std::vector<std::thread> workers;
+    workers.reserve(static_cast<size_t>(count - 1));
+    for (int index = 0; index < count; ++index) {
+        const int y0 = index * rows;
+        const int y1 = std::min(height, y0 + rows);
+        if (index + 1 == count) {
+            runBand(y0, y1); // the calling thread converts the last band
+            break;
+        }
+        try {
+            workers.emplace_back([&runBand, y0, y1] { runBand(y0, y1); });
+        } catch (const std::system_error &) {
+            // The machine cannot give us another thread: convert here instead.
+            runBand(y0, y1);
+        }
+    }
+    for (std::thread &worker : workers)
+        worker.join();
+    if (failed.load())
+        return {};
     return output;
 }
 
