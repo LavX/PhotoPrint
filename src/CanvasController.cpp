@@ -374,6 +374,52 @@ void CanvasController::apply(const DocumentEdit &edit)
                 after.pages[value.pageIndex].frames = value.frames;
                 m_undo->push(new SnapshotCommand(this, m_document, after,
                                                  QCoreApplication::translate("PhotoPrint", "Elrendezés")));
+            } else if constexpr (std::is_same_v<T, ApplyLayoutEdit>) {
+                DocumentSnapshot after = m_document;
+                int firstChanged = -1;
+                for (const PageLayout &change : value.pages) {
+                    if (change.pageIndex < 0 || change.pageIndex >= after.pages.size())
+                        continue;
+                    Page &page = after.pages[change.pageIndex];
+                    if (change.frames)
+                        page.frames = *change.frames;
+                    if (change.cutGuides)
+                        page.cutGuides = *change.cutGuides;
+                    if (change.borderlessOverride)
+                        page.borderlessOverride = *change.borderlessOverride;
+                    if (firstChanged < 0 || change.pageIndex < firstChanged)
+                        firstChanged = change.pageIndex;
+                }
+                const int insertAt = value.insertIndex < 0
+                    ? int(after.pages.size())
+                    : std::clamp(value.insertIndex, 0, int(after.pages.size()));
+                for (int i = 0; i < value.newPages.size(); ++i)
+                    after.pages.insert(insertAt + i, value.newPages.at(i));
+
+                // A page selection alone is navigation, not an edit: it must
+                // not add an undo step and it must not change currentPage when
+                // the layout itself would not change.
+                if (after == m_document)
+                    return;
+
+                int target = value.selectPage;
+                if (target < 0) {
+                    if (firstChanged >= 0) {
+                        target = firstChanged;
+                        if (!value.newPages.isEmpty() && insertAt <= target)
+                            target += int(value.newPages.size());
+                    } else if (!value.newPages.isEmpty()) {
+                        target = insertAt;
+                    } else {
+                        target = after.currentPage;
+                    }
+                }
+                after.currentPage = std::clamp(target, 0, int(after.pages.size()) - 1);
+
+                const QString text = value.actionText.isEmpty()
+                    ? QCoreApplication::translate("PhotoPrint", "Elrendezés")
+                    : value.actionText;
+                m_undo->push(new SnapshotCommand(this, m_document, after, text));
             } else if constexpr (std::is_same_v<T, SetPaperEdit>) {
                 if (value.pageIndex >= 0 && value.pageIndex < m_document.pages.size()
                     && m_document.pages.at(value.pageIndex).paper != value.paper)

@@ -132,4 +132,50 @@ QSizeF pageSizeMm(const Page &page)
                           : QSizeF(page.paper.physicalWidthMm, page.paper.physicalHeightMm);
 }
 
+QString cutGuidesKey(CutGuides value)
+{
+    switch (value) {
+    case CutGuides::Screen:
+        return QStringLiteral("screen");
+    case CutGuides::Print:
+        return QStringLiteral("print");
+    case CutGuides::None:
+        break;
+    }
+    return QStringLiteral("none");
+}
+
+CutGuides cutGuidesFromKey(const QString &key)
+{
+    // A strict whitelist: any other spelling, including an empty missing key,
+    // is the safe default rather than a guess at what the author meant.
+    if (key == QLatin1String("screen"))
+        return CutGuides::Screen;
+    if (key == QLatin1String("print"))
+        return CutGuides::Print;
+    return CutGuides::None;
+}
+
+QString borderlessOverrideKey(BorderlessOverride value)
+{
+    switch (value) {
+    case BorderlessOverride::Off:
+        return QStringLiteral("off");
+    case BorderlessOverride::On:
+        return QStringLiteral("on");
+    case BorderlessOverride::Auto:
+        break;
+    }
+    return QStringLiteral("auto");
+}
+
+BorderlessOverride borderlessOverrideFromKey(const QString &key)
+{
+    if (key == QLatin1String("off"))
+        return BorderlessOverride::Off;
+    if (key == QLatin1String("on"))
+        return BorderlessOverride::On;
+    return BorderlessOverride::Auto;
+}
+
 } // namespace pp

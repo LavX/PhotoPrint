@@ -384,6 +384,10 @@ Result<ParsedProject> parseDocument(const QJsonObject &root, const QString &proj
         page.id = pageObject.value(QStringLiteral("id")).toString();
         page.paper = paperFromJson(pageObject.value(QStringLiteral("paper")).toObject());
         page.landscape = pageObject.value(QStringLiteral("landscape")).toBool();
+        page.cutGuides =
+            cutGuidesFromKey(pageObject.value(QStringLiteral("cutGuides")).toString());
+        page.borderlessOverride = borderlessOverrideFromKey(
+            pageObject.value(QStringLiteral("borderlessOverride")).toString());
         for (const QJsonValue &frameValue : pageObject.value(QStringLiteral("frames")).toArray()) {
             const QJsonObject frameObject = frameValue.toObject();
             Frame frame = frameFromJson(frameObject);
@@ -580,6 +584,15 @@ QByteArray ProjectStore::serialize(const DocumentSnapshot &document, const QStri
         pageObject.insert(QStringLiteral("id"), page.id);
         pageObject.insert(QStringLiteral("paper"), paperToJson(page.paper));
         pageObject.insert(QStringLiteral("landscape"), page.landscape);
+        // Both keys are optional and written only when they say something. An
+        // older build ignores them, and a page that never made the choice reads
+        // back with the safe default.
+        if (page.cutGuides != CutGuides::None)
+            pageObject.insert(QStringLiteral("cutGuides"), cutGuidesKey(page.cutGuides));
+        if (page.borderlessOverride != BorderlessOverride::Auto) {
+            pageObject.insert(QStringLiteral("borderlessOverride"),
+                              borderlessOverrideKey(page.borderlessOverride));
+        }
         QJsonArray frames;
         for (const Frame &frame : page.frames)
             frames.append(frameToJson(frame, projectDir, portableDir, portableNames));
