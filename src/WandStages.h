@@ -59,13 +59,13 @@ QStringList wandRequiredSymbols(WandPass pass);
 /// smear the alpha plane and produce halos on a transparent frame.
 Result<void> applyWandPass(QImage &image, const Stage &stage, int longSide);
 
-/// The 8x8 clustered-dot screen. The threshold matrix is stretched over one
-/// screen cell of @p period whole pixels, so the dot pitch is the authored
-/// pitch, the screen is exactly periodic, and the raster scales it. This is the
-/// only screen the halftone pass uses: no recipe depends on
-/// `/etc/ImageMagick-7/thresholds.xml`, and the screen cannot change shape when
-/// the print size moves by a percent. Deterministic, allocation free beyond the
-/// image itself.
+/// The clustered-dot screen the halftone pass uses, at a cell of @p period whole
+/// pixels. Thresholds grow from the centre of the cell and are spaced evenly in
+/// that order, so the dot pitch is the authored pitch, the coverage of a flat
+/// patch is the same at every pitch, and the screen is exactly periodic. This is
+/// the only screen: no recipe depends on `/etc/ImageMagick-7/thresholds.xml`, and
+/// the screen cannot change shape when the print size moves by a percent.
+/// Deterministic and allocation free beyond one per-pitch threshold table.
 void orderedDither8x8(QImage &image, int period);
 
 } // namespace pp

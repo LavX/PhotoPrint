@@ -210,30 +210,45 @@ int passRasterCap(WandPass pass)
         return 0;
     }
 }
-/// The 8x8 clustered-dot threshold screen. Rank order is the distance of the
-/// cell from the tile centre, so each tile grows one round dot instead of a
-/// dispersed crosshatch. Built once, deterministic, no external data: the
-/// catalogue must not depend on ImageMagick's `thresholds.xml`.
-const std::array<std::array<int, 8>, 8> &clusteredDot()
+/// Thresholds for one screen pitch, `cell` x `cell` pixels. Cells are ordered by
+/// their distance from the centre, so the dot grows as a round cluster, and the
+/// thresholds are spread evenly over 0..255 in that order, so the coverage of a
+/// flat patch is the same at every pitch. Both halves matter: ranking by
+/// distance with *area*-spaced thresholds (or with a fixed 8x8 matrix stretched
+/// over a smaller cell) drifts the tone of a flat area by several percent as
+/// soon as the pitch is not a multiple of eight, which is exactly the pitch a
+/// print at 1772 or 3600 px asks for.
+std::vector<int> screenThresholds(int cell)
 {
-    static const std::array<std::array<int, 8>, 8> matrix = [] {
-        std::array<std::pair<double, int>, 64> cells{};
-        for (int y = 0; y < 8; ++y) {
-            for (int x = 0; x < 8; ++x) {
-                const double dx = std::abs(double(x) + 0.5 - 4.0);
-                const double dy = std::abs(double(y) + 0.5 - 4.0);
-                cells[static_cast<size_t>(y * 8 + x)] = {dx * dx + dy * dy, y * 8 + x};
-            }
+    const int count = cell * cell;
+    std::vector<std::pair<double, int>> cells(static_cast<size_t>(count));
+    for (int y = 0; y < cell; ++y) {
+        const double dy = (double(y) + 0.5) * 8.0 / double(cell) - 4.0;
+        for (int x = 0; x < cell; ++x) {
+            const double dx = (double(x) + 0.5) * 8.0 / double(cell) - 4.0;
+            cells[static_cast<size_t>(y) * cell + x] = {dx * dx + dy * dy,
+                                                        y * cell + x};
         }
-        std::sort(cells.begin(), cells.end());
-        std::array<std::array<int, 8>, 8> out{};
-        for (int rank = 0; rank < 64; ++rank) {
-            const int index = cells[static_cast<size_t>(rank)].second;
-            out[static_cast<size_t>(index / 8)][static_cast<size_t>(index % 8)] = rank;
-        }
-        return out;
-    }();
-    return matrix;
+    }
+    std::sort(cells.begin(), cells.end());
+    std::vector<int> thresholds(static_cast<size_t>(count), 128);
+    for (int rank = 0; rank < count; ++rank) {
+        const int index = cells[static_cast<size_t>(rank)].second;
+        thresholds[static_cast<size_t>(index)] = std::clamp(
+            static_cast<int>(std::lround((double(rank) + 0.5) * 255.0 / double(count))),
+            1, 255);
+    }
+    return thresholds;
+}
+
+/// Screen cell in whole device pixels. A pitch of 8.1 px cannot tile a pixel
+/// grid: the dot phase would drift by a pixel every ~76 px and leave a visible
+/// beat in a flat area. Rounding keeps the screen exactly periodic, which is
+/// what a real screen does. The floor is the smallest cell that still holds a
+/// dot: below four pixels the cell has too few samples to draw one.
+int halftonePeriod(const Stage &stage, double scale)
+{
+    return std::clamp(static_cast<int>(std::lround(stage.wandSize * scale)), 4, 512);
 }
 
 QImage scaledTo(const QImage &image, const QSize &size, Qt::TransformationMode mode)
@@ -568,37 +583,6 @@ bool runPixelate(QImage &image, const Stage &stage, double scale)
     return !image.isNull();
 }
 
-/// The dot screen. The 8x8 threshold matrix is stretched over one screen cell
-/// of @p period pixels, so the dot pitch follows the raster exactly: the
-/// authored period is a fraction of the reference raster and a preview needs a
-/// sub-8-pixel screen. This is the only screen the pass has: ImageMagick's
-/// threshold maps are an 8 px tile, so using them meant switching algorithms
-/// whenever the scaled pitch was not a whole multiple of 8, and a 1.3 percent
-/// change of print size flipped the screen shape. The in-process screen also
-/// avoids a Q16 wand of the whole finish raster (594 MB at 7087 px) for what is
-/// a 40-line dither.
-bool runHalftone(QImage &image, const Stage &stage, double scale)
-{
-    // A pitch of 8.1 px cannot tile a pixel grid: the dot phase would drift by
-    // a pixel every ~76 px and leave a visible beat in a flat area. Rounding to
-    // whole pixels keeps the screen exactly periodic, which is what a real
-    // screen does; the pitch still scales with the raster over any real change
-    // of print size. Below 8 px the 8x8 matrix has too few addressable samples
-    // to form a dot at all (a 2 px cell degenerates into a striped quantise), so
-    // the cell is floored at the smallest screen that still reads as a screen:
-    // a 2400 px raster and anything above it gets exactly the authored pitch,
-    // a smaller one keeps an 8 px screen instead of a degenerate finer one.
-    const int period = std::clamp(static_cast<int>(std::lround(stage.wandSize * scale)),
-                                  8, 512);
-    const QSize original = image.size();
-    QImage working = image;
-    orderedDither8x8(working, period);
-    if (working.isNull() || working.size() != original)
-        return false;
-    image = working;
-    return true;
-}
-
 } // namespace
 
 QString wandPassName(WandPass pass)
@@ -712,61 +696,19 @@ void orderedDither8x8(QImage &image, int period)
         image = converted;
     }
     image.detach();
-    // One screen cell is `period` whole pixels across and holds the whole 8x8
-    // threshold matrix, so the dot pitch is the authored pitch, the screen is
-    // exactly periodic, and the raster scales it. When the cell is a multiple of
-    // eight every matrix entry maps to a whole block of pixels and the sample is
-    // exact. Any other period is sampled from the same matrix as a continuous,
-    // wrapping field: a nearest sample would cover some ranks twice and shift
-    // the tone of a flat area by several percent, while the interpolated field
-    // keeps the mean of the screen.
+    // One screen cell is `period` whole pixels across, so the dot pitch is the
+    // authored pitch, the screen is exactly periodic, and the raster scales it.
+    // The threshold of a pixel is the area of the dot that covers it, which
+    // keeps the tone linear at every pitch: a pitch of six or nine pixels does
+    // not shift the density of a flat area.
     const int cell = std::clamp(period, 1, 1024);
-    const auto &matrix = clusteredDot();
-    const int block = cell % 8 == 0 ? cell / 8 : 0;
-
-    std::vector<int> columnLow(static_cast<size_t>(image.width()));
-    std::vector<int> columnHigh(static_cast<size_t>(image.width()));
-    std::vector<double> columnFraction(static_cast<size_t>(image.width()));
-    for (int x = 0; x < image.width(); ++x) {
-        double u = 0.0;
-        if (block > 0) {
-            u = double((x % cell) / block);
-        } else {
-            u = (double(x % cell) + 0.5) * 8.0 / double(cell) - 0.5;
-            u -= std::floor(u / 8.0) * 8.0;
-        }
-        const int low = std::clamp(static_cast<int>(u), 0, 7);
-        columnLow[static_cast<size_t>(x)] = low;
-        columnHigh[static_cast<size_t>(x)] = (low + 1) % 8;
-        columnFraction[static_cast<size_t>(x)] = u - double(low);
-    }
-
+    const std::vector<int> thresholds = screenThresholds(cell);
     for (int y = 0; y < image.height(); ++y) {
-        double v = 0.0;
-        if (block > 0) {
-            v = double((y % cell) / block);
-        } else {
-            v = (double(y % cell) + 0.5) * 8.0 / double(cell) - 0.5;
-            v -= std::floor(v / 8.0) * 8.0;
-        }
-        const int rowLow = std::clamp(static_cast<int>(v), 0, 7);
-        const int rowHigh = (rowLow + 1) % 8;
-        const double fy = v - double(rowLow);
-        const auto &top = matrix[static_cast<size_t>(rowLow)];
-        const auto &bottom = matrix[static_cast<size_t>(rowHigh)];
+        const int *row = thresholds.data()
+            + static_cast<size_t>(y % cell) * static_cast<size_t>(cell);
         QRgb *line = reinterpret_cast<QRgb *>(image.scanLine(y));
         for (int x = 0; x < image.width(); ++x) {
-            const int low = columnLow[static_cast<size_t>(x)];
-            const int high = columnHigh[static_cast<size_t>(x)];
-            const double fx = columnFraction[static_cast<size_t>(x)];
-            const double rank = (double(top[static_cast<size_t>(low)]) * (1.0 - fx)
-                                 + double(top[static_cast<size_t>(high)]) * fx)
-                    * (1.0 - fy)
-                + (double(bottom[static_cast<size_t>(low)]) * (1.0 - fx)
-                   + double(bottom[static_cast<size_t>(high)]) * fx)
-                    * fy;
-            const int threshold =
-                static_cast<int>(std::lround((rank + 1.0) * 256.0 / 65.0));
+            const int threshold = row[x % cell];
             const QRgb pixel = line[x];
             line[x] = qRgba(qRed(pixel) >= threshold ? 255 : 0,
                             qGreen(pixel) >= threshold ? 255 : 0,
@@ -788,10 +730,28 @@ Result<void> applyWandPass(QImage &image, const Stage &stage, int longSide)
     if (!capability.available) {
         return error(QStringLiteral("effect-unavailable"), capability.reason);
     }
-    ensureMagick();
 
-    const std::vector<unsigned char> alpha = alphaBytes(image);
     const double scale = EffectEngine::referenceScale(longSide);
+    if (pass == WandPass::Halftone) {
+        // The screen is in-process, so there is nothing to hand to MagickWand.
+        // Dithering the caller's frame directly avoids the RGB32 copy, the alpha
+        // plane and the re-attach, which is what made a 7087 px print peak at
+        // 593 MB for a pass that only ever touched RGB bytes.
+        if (image.format() != QImage::Format_ARGB32
+            && image.format() != QImage::Format_RGB32) {
+            QImage converted = image.convertToFormat(QImage::Format_ARGB32);
+            if (converted.isNull()) {
+                return error(QStringLiteral("effect-input"),
+                             QStringLiteral("The frame cannot be read."));
+            }
+            image = converted;
+        }
+        orderedDither8x8(image, halftonePeriod(stage, scale));
+        return {};
+    }
+
+    ensureMagick();
+    const std::vector<unsigned char> alpha = alphaBytes(image);
     QImage working = image.format() == QImage::Format_RGB32
         ? image
         : image.convertToFormat(QImage::Format_RGB32);
@@ -824,7 +784,8 @@ Result<void> applyWandPass(QImage &image, const Stage &stage, int longSide)
     case WandPass::Edge: ok = runEdge(working, stage, scale); break;
     case WandPass::Emboss: ok = runEmboss(working, stage, scale); break;
     case WandPass::Kuwahara: ok = runKuwahara(working, stage, scale); break;
-    case WandPass::Halftone: ok = runHalftone(working, stage, scale); break;
+    // Handled above, before any copy: the screen never reaches the wand.
+    case WandPass::Halftone: ok = true; break;
     case WandPass::Mirror: ok = runMirror(working, stage, scale); break;
     case WandPass::Kaleido: ok = runKaleido(working, stage, scale); break;
     case WandPass::Stretch: ok = runStretch(working, stage, scale); break;

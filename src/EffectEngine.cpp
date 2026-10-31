@@ -666,6 +666,10 @@ Result<QImage> EffectEngine::render(const QImage &srgb, const EffectRecipe &reci
     QImage gradedImage = toImage(buffer, gradeImage);
     if (gradedImage.isNull())
         return error(QStringLiteral("effect-output"), QStringLiteral("The frame cannot be built."));
+    // The float grade buffer is dead from here on. At a 7087 px print it is the
+    // second largest allocation in the process after the finish frame, and the
+    // finish phase does not need a byte of it.
+    buffer = EffectRgbBuffer{};
 
     if (stats) {
         stats->gradeSize = gradeSize;
