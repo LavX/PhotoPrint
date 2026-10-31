@@ -10,6 +10,8 @@
 #include <QEvent>
 #include <QImage>
 #include <QRgba64>
+#include <QThread>
+#include <QWheelEvent>
 #include <QtTest>
 #include <QtMath>
 
@@ -153,6 +155,13 @@ QImage linearPattern(int width, int height, int alphaMode)
     return image;
 }
 
+void sendWheel(PageView &view, const QPointF &position, int angle)
+{
+    QWheelEvent event(position, QPointF(view.mapToGlobal(position.toPoint())), QPoint(),
+                      QPoint(0, angle), Qt::NoButton, Qt::NoModifier, Qt::NoScrollPhase, false);
+    QApplication::sendEvent(&view, &event);
+}
+
 /// Waits for the raster the current document needs. composedImage() blocks on a
 /// running build and starts one if the content is stale, which is exactly what a
 /// test wants and the paint path never does.
@@ -180,9 +189,14 @@ private slots:
     void zoomOutKeepsTheSharpRaster();
     void largeViewportStaysInsideTheCap();
     void cropPanUsesTheFittedScale();
+    void cropWheelComposesAtFittedScale();
+    void nudgeBurstBuildsOnceAfterThePulse();
     void composedPixelsFollowTheDocument();
     void goldenRasterAtRestIsStable();
     void failedComposeDoesNotLoop();
+    void blankCanvasGetsExactlyOneRetry();
+    void inFlightBuildIsSupersededByANewDocument();
+    void inFlightBuildIsSupersededByAPaperChange();
     void lostMouseUpResetsTheGesture();
     void parallelConversionMatchesSerial();
 };
@@ -532,6 +546,85 @@ void TestCanvasCache::cropPanUsesTheFittedScale()
     QCOMPARE(view.composedImage().size(), target);
 }
 
+
+void TestCanvasCache::cropWheelComposesAtFittedScale()
+{
+    // A crop zoom changes the photo inside the frame on every notch, so the
+    // canvas has to advance with the wheel: builds at the fitted scale, never
+    // the 200% target, and one sharpening pass when the wheel stops.
+    const DocumentSnapshot document = pageWithFrames(1);
+    PageView view;
+    view.resize(900, 700);
+    view.setDocument(document);
+    view.setFrameImages(preparedImages(document));
+    view.show();
+    QVERIFY(QTest::qWaitForWindowExposed(&view));
+    view.setSelectedFrame(document.pages.first().frames.first().id);
+    view.setCropMode(true);
+    view.setViewZoom(2.0);
+    QTRY_VERIFY_WITH_TIMEOUT(view.compositionCount() >= 1, 15000);
+    settle(view);
+    QTest::qWait(250);
+    const QSize target = targetRasterSize(view);
+    const QSize fitted = fittedRasterSize(view);
+    const quint64 before = view.compositionCount();
+    const Frame frame = document.pages.first().frames.first();
+    const QPointF centre = pageToWidget(view, QPointF(frame.cx, frame.cy));
+
+    for (int notch = 0; notch < 6; ++notch) {
+        sendWheel(view, centre, 40);
+        QTest::qWait(30);
+    }
+
+    // The picture advanced during the gesture: not zero builds, and each one was
+    // composed at the fitted scale rather than at the 200% target.
+    QVERIFY2(view.compositionCount() >= before + 2,
+             qPrintable(QStringLiteral("builds during the crop wheel: %1")
+                            .arg(view.compositionCount() - before)));
+    const QImage coarse = view.composedImage();
+    QVERIFY2(closeTo(coarse.size(), fitted, 2),
+             qPrintable(QStringLiteral("crop wheel raster %1x%2, fitted %3x%4, target %5x%6")
+                            .arg(coarse.width()).arg(coarse.height())
+                            .arg(fitted.width()).arg(fitted.height())
+                            .arg(target.width()).arg(target.height())));
+    QVERIFY(coarse.width() < target.width());
+
+    // Once the wheel stops, the settle sharpens to the full target.
+    QTRY_VERIFY_WITH_TIMEOUT(closeTo(view.composedImage().size(), target, 2), 15000);
+}
+
+void TestCanvasCache::nudgeBurstBuildsOnceAfterThePulse()
+{
+    // An arrow nudge moves the outline live; only the photo trails. The burst
+    // composes once, after it ends, and not once per key press.
+    const DocumentSnapshot document = pageWithFrames(1);
+    PageView view;
+    view.resize(900, 700);
+    view.setDocument(document);
+    view.setFrameImages(preparedImages(document));
+    view.show();
+    QVERIFY(QTest::qWaitForWindowExposed(&view));
+    view.setSelectedFrame(document.pages.first().frames.first().id);
+    settle(view);
+    QTest::qWait(250);
+    const quint64 before = view.compositionCount();
+    const quint64 requests = view.compositionRequestCount();
+
+    for (int press = 0; press < 6; ++press) {
+        QTest::keyClick(&view, Qt::Key_Right);
+        QTest::qWait(30);
+    }
+    // No build while the pulse is alive.
+    QCOMPARE(view.compositionCount(), before);
+    QCOMPARE(view.compositionRequestCount(), requests);
+
+    // Exactly one build after the burst, at the full target scale.
+    QTRY_COMPARE_WITH_TIMEOUT(view.compositionCount(), before + 1, 15000);
+    QTest::qWait(400);
+    QCOMPARE(view.compositionCount(), before + 1);
+    QCOMPARE(view.composedImage().size(), targetRasterSize(view));
+}
+
 void TestCanvasCache::composedPixelsFollowTheDocument()
 {
     const DocumentSnapshot document = centredFrame();
@@ -665,6 +758,113 @@ void TestCanvasCache::failedComposeDoesNotLoop()
     QTRY_COMPARE_WITH_TIMEOUT(view.compositionCount(), rebuilt + 1, 15000);
 }
 
+
+void TestCanvasCache::blankCanvasGetsExactlyOneRetry()
+{
+    // Nothing on screen to keep: a failed first build must not leave the canvas
+    // blank for ever, but the guard must still stop after one retry.
+    const DocumentSnapshot document = pageWithFrames(2);
+    PageView view;
+    view.resize(900, 700);
+    view.failCompositionsForTest(true);
+    view.setDocument(document);
+    view.setFrameImages(preparedImages(document));
+    view.show();
+    QVERIFY(QTest::qWaitForWindowExposed(&view));
+
+    QTRY_VERIFY_WITH_TIMEOUT(view.compositionRequestCount() >= 1, 15000);
+    QTRY_VERIFY_WITH_TIMEOUT(!view.compositionPending(), 15000);
+    QTest::qWait(400); // a spinning retry would have been counted by now
+    QCOMPARE(view.compositionRequestCount(), 2); // the build and one retry
+    QCOMPARE(view.compositionCount(), 0);
+    QVERIFY(view.composedImage().isNull());
+
+    for (int pass = 0; pass < 5; ++pass) {
+        view.repaint();
+        QTest::qWait(20);
+    }
+    QTest::qWait(200);
+    QCOMPARE(view.compositionRequestCount(), 2);
+
+    // A working pipeline recovers through the explicit retry.
+    view.failCompositionsForTest(false);
+    view.retryComposition();
+    QTRY_COMPARE_WITH_TIMEOUT(view.compositionCount(), 1, 15000);
+    QVERIFY(!view.composedImage().isNull());
+}
+
+void TestCanvasCache::inFlightBuildIsSupersededByANewDocument()
+{
+    const DocumentSnapshot centred = centredFrame(); // frame over the page centre
+    PageView view;
+    view.resize(900, 700);
+    view.setDocument(centred);
+    view.setFrameImages(preparedImages(centred));
+    view.show();
+    QVERIFY(QTest::qWaitForWindowExposed(&view));
+    settle(view);
+    QTest::qWait(150);
+
+    // A slow build for a document whose photo does not cover the centre.
+    view.setComposeDelayForTest(300);
+    DocumentSnapshot left = centredFrame();
+    left.pages[0].frames[0].cx = 40.0;
+    view.setDocument(left);
+    QTRY_VERIFY_WITH_TIMEOUT(view.compositionPending(), 5000);
+    const quint64 installed = view.compositionCount();
+
+    // The centre-covering document arrives before that build wakes up.
+    view.setDocument(centred);
+    settle(view);
+    view.setComposeDelayForTest(0);
+
+    // Only the newest document may reach the screen.
+    QCOMPARE(view.compositionCount(), installed + 1);
+    const QImage raster = view.composedImage();
+    QVERIFY(!raster.isNull());
+    const QRgb middle = raster.pixel(raster.width() / 2, raster.height() / 2);
+    QVERIFY2(qRed(middle) > 150 && qGreen(middle) < 100,
+             qPrintable(QStringLiteral("centre %1,%2,%3")
+                            .arg(qRed(middle)).arg(qGreen(middle)).arg(qBlue(middle))));
+}
+
+void TestCanvasCache::inFlightBuildIsSupersededByAPaperChange()
+{
+    const DocumentSnapshot a4 = centredFrame(); // 210 x 297 mm
+    DocumentSnapshot photo = centredFrame();
+    photo.pages[0].paper.name = QStringLiteral("10 x 15 cm");
+    photo.pages[0].paper.physicalWidthMm = 100.0;
+    photo.pages[0].paper.physicalHeightMm = 150.0;
+
+    PageView view;
+    view.resize(900, 700);
+    view.setDocument(photo);
+    view.setFrameImages(preparedImages(photo));
+    view.show();
+    QVERIFY(QTest::qWaitForWindowExposed(&view));
+    settle(view);
+    QTest::qWait(150);
+
+    // Start an A4 raster, then go back to the photo paper while it is building.
+    view.setComposeDelayForTest(300);
+    view.setDocument(a4);
+    QTRY_VERIFY_WITH_TIMEOUT(view.compositionPending(), 5000);
+    view.setDocument(photo);
+    settle(view);
+    view.setComposeDelayForTest(0);
+
+    const QImage raster = view.composedImage();
+    QVERIFY(!raster.isNull());
+    QVERIFY(closeTo(raster.size(), targetRasterSize(view), 2));
+    // A4 and 10x15 differ in aspect, so a stale-paper raster would show up here.
+    const QRectF page = view.pageRect();
+    const double rasterAspect = double(raster.width()) / raster.height();
+    const double pageAspect = page.width() / page.height();
+    QVERIFY2(std::abs(rasterAspect - pageAspect) < 0.01,
+             qPrintable(QStringLiteral("raster aspect %1, page aspect %2")
+                            .arg(rasterAspect).arg(pageAspect)));
+}
+
 void TestCanvasCache::lostMouseUpResetsTheGesture()
 {
     const DocumentSnapshot document = pageWithFrames(1);
@@ -714,6 +914,10 @@ void TestCanvasCache::parallelConversionMatchesSerial()
     QCOMPARE(ColorPipeline::bandsFor(QSize(200, 130)), 1);
     QVERIFY(ColorPipeline::bandsFor(QSize(1346, 1904)) > 1);
     QVERIFY(ColorPipeline::bandsFor(QSize(20000, 20000)) <= 16);
+    // One hardware thread is kept for the GUI.
+    const int ideal = QThread::idealThreadCount();
+    if (ideal > 1)
+        QVERIFY(ColorPipeline::bandsFor(QSize(2000, 2000)) <= ideal - 1);
 
     const QList<QSize> sizes = {QSize(3, 2), QSize(64, 3), QSize(200, 130), QSize(301, 257),
                                 QSize(673, 952)};

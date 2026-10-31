@@ -47,6 +47,7 @@ class PageView : public QWidget
 
 public:
     explicit PageView(QWidget *parent = nullptr);
+    ~PageView() override;
 
     void setDocument(const DocumentSnapshot &document);
     void setFrameImages(const QHash<QString, QImage> &images);
@@ -77,6 +78,9 @@ public:
     /// Test hook: make the following builds fail the way an allocation or an
     /// lcms error would, so the retry guard can be exercised.
     void failCompositionsForTest(bool fail) { m_failCompositions = fail; }
+    /// Test hook: keep the worker busy for this long before it composes, so a
+    /// test can change the document while a build is in flight.
+    void setComposeDelayForTest(int milliseconds) { m_composeDelayMs = milliseconds; }
     /// Clears the failed-build guard and tries once more.
     void retryComposition();
 
@@ -126,6 +130,7 @@ private:
         QHash<QString, QImage> images;
         QSizeF pageMm;
         QSize pixels;
+        int delayMs = 0;
         bool forceFailure = false;
         std::shared_ptr<std::stop_source> stop;
     };
@@ -153,6 +158,8 @@ private:
     bool dragActive() const;
     bool interactionActive() const;
     bool interactionPulseActive() const;
+    bool cropZoomPulseActive() const;
+    bool nudgePulseActive() const;
     bool buildAllowed() const;
     void cancelInteraction(bool commitEdit);
     QSize targetRasterSize() const;
@@ -175,7 +182,11 @@ private:
     bool m_panning = false;
     QPointF m_panStart;
     DragState m_drag;
-    QElapsedTimer m_editPulse;
+    // Two different edit bursts: a crop zoom is a gesture and composes at the
+    // fitted scale like a drag, an arrow nudge lets the photo trail and composes
+    // once when the burst ends.
+    QElapsedTimer m_cropZoomPulse;
+    QElapsedTimer m_nudgePulse;
     QColor m_canvasColor{0xd9, 0xd9, 0xde};
     QColor m_pageBorderColor{0xc7, 0xc7, 0xcc};
     QColor m_pageShadowColor{0, 0, 0, 38};
@@ -187,6 +198,8 @@ private:
     mutable QSizeF m_composedPageMm;
     mutable bool m_contentDirty = true;
     mutable bool m_composeFailed = false;
+    mutable int m_composeDelayMs = 0;
+    mutable int m_blankRetries = 0;
     mutable quint64 m_contentRevision = 1;
     mutable quint64 m_composeGeneration = 0;
     mutable quint64 m_handledGeneration = 0;
