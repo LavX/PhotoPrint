@@ -937,5 +937,69 @@
         <source>Egy képnek nincs forrásfájlja, ezért a sablon nem alkalmazható.</source>
         <translation>写真の元ファイルがないため、テンプレートを適用できません。</translation>
     </message>
+    <message>
+        <source>Sablonok</source>
+        <translation>テンプレート</translation>
+    </message>
+    <message>
+        <source>Sablonok…</source>
+        <translation>テンプレート…</translation>
+    </message>
+    <message>
+        <source>Sablonok ehhez a laphoz</source>
+        <translation>このページのテンプレート</translation>
+    </message>
+    <message>
+        <source>Hány fotóhoz?</source>
+        <translation>何枚の写真用ですか？</translation>
+    </message>
+    <message>
+        <source>Fotószám</source>
+        <translation>写真の枚数</translation>
+    </message>
+    <message>
+        <source>Sablon alkalmazása</source>
+        <translation>テンプレートを適用</translation>
+    </message>
+    <message>
+        <source>Ehhez a laphoz legfeljebb 10 fotóhoz van sablon.</source>
+        <translation>このページで使えるテンプレートは最大10枚までです。</translation>
+    </message>
+    <message numerus="yes">
+        <source>%n fotó</source>
+        <translation>
+            <numerusform>%n枚の写真</numerusform>
+        </translation>
+    </message>
+    <message>
+        <source>Válassz %1 fotós sablont, vagy távolíts el egy fotót.</source>
+        <translation>%1枚用のテンプレートを選ぶか、写真を1枚削除してください。</translation>
+    </message>
+    <message numerus="yes">
+        <source>Válassz %1 fotós sablont, vagy távolíts el %n fotót.</source>
+        <translation>
+            <numerusform>%1枚用のテンプレートを選ぶか、写真を%n枚削除してください。</numerusform>
+        </translation>
+    </message>
+    <message>
+        <source>Az új elrendezés minden fotót a saját helyére tesz.</source>
+        <translation>新しいレイアウトはそれぞれの写真を所定の位置に置きます。</translation>
+    </message>
+    <message>
+        <source>Az új elrendezés minden fotót a saját helyére tesz, a kivágásokat ehhez igazítjuk.</source>
+        <translation>新しいレイアウトはそれぞれの写真を所定の位置に置き、切り抜きもそれに合わせて調整されます。</translation>
+    </message>
+    <message>
+        <source>Az új elrendezés minden fotót a saját helyére tesz, az elforgatást nullára állítjuk.</source>
+        <translation>新しいレイアウトはそれぞれの写真を所定の位置に置き、回転はゼロに戻ります。</translation>
+    </message>
+    <message>
+        <source>Az új elrendezés minden fotót a saját helyére tesz, a kivágásokat és az elforgatást is ehhez igazítjuk.</source>
+        <translation>新しいレイアウトはそれぞれの写真を所定の位置に置き、切り抜きと回転もそれに合わせて調整されます。</translation>
+    </message>
+    <message>
+        <source>Kiválasztott</source>
+        <translation>選択中</translation>
+    </message>
 </context>
 </TS>

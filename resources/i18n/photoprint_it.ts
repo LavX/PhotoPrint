@@ -940,5 +940,71 @@
         <source>Egy képnek nincs forrásfájlja, ezért a sablon nem alkalmazható.</source>
         <translation>Una foto non ha un file di origine, quindi il modello non può essere applicato.</translation>
     </message>
+    <message>
+        <source>Sablonok</source>
+        <translation>Modelli</translation>
+    </message>
+    <message>
+        <source>Sablonok…</source>
+        <translation>Modelli…</translation>
+    </message>
+    <message>
+        <source>Sablonok ehhez a laphoz</source>
+        <translation>Modelli per questa pagina</translation>
+    </message>
+    <message>
+        <source>Hány fotóhoz?</source>
+        <translation>Per quante foto?</translation>
+    </message>
+    <message>
+        <source>Fotószám</source>
+        <translation>Numero di foto</translation>
+    </message>
+    <message>
+        <source>Sablon alkalmazása</source>
+        <translation>Applica modello</translation>
+    </message>
+    <message>
+        <source>Ehhez a laphoz legfeljebb 10 fotóhoz van sablon.</source>
+        <translation>Questa pagina supporta modelli per un massimo di 10 foto.</translation>
+    </message>
+    <message numerus="yes">
+        <source>%n fotó</source>
+        <translation>
+            <numerusform>%n foto</numerusform>
+            <numerusform>%n foto</numerusform>
+        </translation>
+    </message>
+    <message>
+        <source>Válassz %1 fotós sablont, vagy távolíts el egy fotót.</source>
+        <translation>Scegli il modello da %1 foto o rimuovi una foto.</translation>
+    </message>
+    <message numerus="yes">
+        <source>Válassz %1 fotós sablont, vagy távolíts el %n fotót.</source>
+        <translation>
+            <numerusform>Scegli il modello da %1 foto o rimuovi %n foto.</numerusform>
+            <numerusform>Scegli il modello da %1 foto o rimuovi %n foto.</numerusform>
+        </translation>
+    </message>
+    <message>
+        <source>Az új elrendezés minden fotót a saját helyére tesz.</source>
+        <translation>Il nuovo layout mette ogni foto al proprio posto.</translation>
+    </message>
+    <message>
+        <source>Az új elrendezés minden fotót a saját helyére tesz, a kivágásokat ehhez igazítjuk.</source>
+        <translation>Il nuovo layout mette ogni foto al proprio posto e i ritagli vengono adattati.</translation>
+    </message>
+    <message>
+        <source>Az új elrendezés minden fotót a saját helyére tesz, az elforgatást nullára állítjuk.</source>
+        <translation>Il nuovo layout mette ogni foto al proprio posto e la rotazione viene azzerata.</translation>
+    </message>
+    <message>
+        <source>Az új elrendezés minden fotót a saját helyére tesz, a kivágásokat és az elforgatást is ehhez igazítjuk.</source>
+        <translation>Il nuovo layout mette ogni foto al proprio posto e sia i ritagli sia la rotazione vengono adattati.</translation>
+    </message>
+    <message>
+        <source>Kiválasztott</source>
+        <translation>Selezionato</translation>
+    </message>
 </context>
 </TS>

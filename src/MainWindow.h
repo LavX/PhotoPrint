@@ -41,6 +41,7 @@ class QTimer;
 namespace pp {
 
 class EffectBrowserDialog;
+class TemplateBrowserDialog;
 
 /// The paper surface. It paints the same page recipe the export uses and adds
 /// editor-only marks; the marks never reach the PDF.
@@ -290,6 +291,13 @@ private slots:
     /// without driving the file dialog; the recovery and open paths use it
     /// directly.
     void applyLoadedProject(const LoadedProject &loaded, bool recovery = false);
+    /// The collage template picker for the current page. Browsing never touches
+    /// the document; the chosen template comes back to applyTemplate().
+    void openTemplateBrowser();
+    /// Applies one catalogue template to the current page as a single
+    /// SetFramesEdit, so one undo restores the layout. Returns false and says
+    /// why on the status line when the engine refuses.
+    bool applyTemplate(const QString &templateId);
 
 private:
     void buildUi();
@@ -328,6 +336,11 @@ private:
     void checkpointNow();
     void updateTitle();
     Frame makeInitialFrame(const SourceImage &source, const Page &page) const;
+    /// Small sRGB thumbnails in frame order, for the template previews. A photo
+    /// that is not cached yet is left null rather than loaded on the GUI thread.
+    /// The list is cached by frame identity, because a document change arrives
+    /// for every nudge and every selection and the pixels did not change.
+    QList<QImage> templatePhotoThumbnails(const Page &page);
     bool pageOverflows() const;
     bool projectPrintGeometryConsistent(const DocumentSnapshot &document) const;
     std::optional<Frame> selectedFrame() const;
@@ -423,6 +436,9 @@ private:
     QHash<QString, QImage> m_previewImages;
     QHash<QString, QImage> m_originalPreviews;
     QPointer<EffectBrowserDialog> m_effectDialog;
+    QPointer<TemplateBrowserDialog> m_templateDialog;
+    QStringList m_templatePhotoKeys;
+    QList<QImage> m_templatePhotos;
     QFutureWatcher<PreviewResult> *m_previewWatcher = nullptr;
     std::shared_ptr<std::stop_source> m_previewStop;
     quint64 m_previewGeneration = 0;

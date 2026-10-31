@@ -940,5 +940,71 @@
         <source>Egy képnek nincs forrásfájlja, ezért a sablon nem alkalmazható.</source>
         <translation>एक फ़ोटो का स्रोत फ़ाइल नहीं है, इसलिए टेम्पलेट लागू नहीं किया जा सकता।</translation>
     </message>
+    <message>
+        <source>Sablonok</source>
+        <translation>टेम्पलेट</translation>
+    </message>
+    <message>
+        <source>Sablonok…</source>
+        <translation>टेम्पलेट…</translation>
+    </message>
+    <message>
+        <source>Sablonok ehhez a laphoz</source>
+        <translation>इस पेज के लिए टेम्पलेट</translation>
+    </message>
+    <message>
+        <source>Hány fotóhoz?</source>
+        <translation>कितनी फ़ोटो के लिए?</translation>
+    </message>
+    <message>
+        <source>Fotószám</source>
+        <translation>फ़ोटो की संख्या</translation>
+    </message>
+    <message>
+        <source>Sablon alkalmazása</source>
+        <translation>टेम्पलेट लागू करें</translation>
+    </message>
+    <message>
+        <source>Ehhez a laphoz legfeljebb 10 fotóhoz van sablon.</source>
+        <translation>इस पेज के लिए अधिकतम 10 फ़ोटो तक टेम्पलेट उपलब्ध हैं।</translation>
+    </message>
+    <message numerus="yes">
+        <source>%n fotó</source>
+        <translation>
+            <numerusform>%n फ़ोटो</numerusform>
+            <numerusform>%n फ़ोटो</numerusform>
+        </translation>
+    </message>
+    <message>
+        <source>Válassz %1 fotós sablont, vagy távolíts el egy fotót.</source>
+        <translation>%1 फ़ोटो वाला टेम्पलेट चुनें, या एक फ़ोटो हटा दें।</translation>
+    </message>
+    <message numerus="yes">
+        <source>Válassz %1 fotós sablont, vagy távolíts el %n fotót.</source>
+        <translation>
+            <numerusform>%1 फ़ोटो वाला टेम्पलेट चुनें, या %n फ़ोटो हटा दें।</numerusform>
+            <numerusform>%1 फ़ोटो वाला टेम्पलेट चुनें, या %n फ़ोटो हटा दें।</numerusform>
+        </translation>
+    </message>
+    <message>
+        <source>Az új elrendezés minden fotót a saját helyére tesz.</source>
+        <translation>नया लेआउट हर फ़ोटो को उसकी अपनी जगह पर रखता है।</translation>
+    </message>
+    <message>
+        <source>Az új elrendezés minden fotót a saját helyére tesz, a kivágásokat ehhez igazítjuk.</source>
+        <translation>नया लेआउट हर फ़ोटो को उसकी अपनी जगह पर रखता है और क्रॉप उसी के अनुसार समायोजित किए जाते हैं।</translation>
+    </message>
+    <message>
+        <source>Az új elrendezés minden fotót a saját helyére tesz, az elforgatást nullára állítjuk.</source>
+        <translation>नया लेआउट हर फ़ोटो को उसकी अपनी जगह पर रखता है और घुमाव शून्य कर दिया जाता है।</translation>
+    </message>
+    <message>
+        <source>Az új elrendezés minden fotót a saját helyére tesz, a kivágásokat és az elforgatást is ehhez igazítjuk.</source>
+        <translation>नया लेआउट हर फ़ोटो को उसकी अपनी जगह पर रखता है और क्रॉप तथा घुमाव दोनों उसी के अनुसार समायोजित किए जाते हैं।</translation>
+    </message>
+    <message>
+        <source>Kiválasztott</source>
+        <translation>चयनित</translation>
+    </message>
 </context>
 </TS>

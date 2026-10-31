@@ -940,5 +940,71 @@
         <source>Egy képnek nincs forrásfájlja, ezért a sablon nem alkalmazható.</source>
         <translation>Ein Foto hat keine Quelldatei, daher kann die Vorlage nicht angewendet werden.</translation>
     </message>
+    <message>
+        <source>Sablonok</source>
+        <translation>Vorlagen</translation>
+    </message>
+    <message>
+        <source>Sablonok…</source>
+        <translation>Vorlagen…</translation>
+    </message>
+    <message>
+        <source>Sablonok ehhez a laphoz</source>
+        <translation>Vorlagen für diese Seite</translation>
+    </message>
+    <message>
+        <source>Hány fotóhoz?</source>
+        <translation>Für wie viele Fotos?</translation>
+    </message>
+    <message>
+        <source>Fotószám</source>
+        <translation>Fotoanzahl</translation>
+    </message>
+    <message>
+        <source>Sablon alkalmazása</source>
+        <translation>Vorlage anwenden</translation>
+    </message>
+    <message>
+        <source>Ehhez a laphoz legfeljebb 10 fotóhoz van sablon.</source>
+        <translation>Für diese Seite gibt es Vorlagen für höchstens 10 Fotos.</translation>
+    </message>
+    <message numerus="yes">
+        <source>%n fotó</source>
+        <translation>
+            <numerusform>%n Foto</numerusform>
+            <numerusform>%n Fotos</numerusform>
+        </translation>
+    </message>
+    <message>
+        <source>Válassz %1 fotós sablont, vagy távolíts el egy fotót.</source>
+        <translation>Wähle die Vorlage für %1 Fotos oder entferne ein Foto.</translation>
+    </message>
+    <message numerus="yes">
+        <source>Válassz %1 fotós sablont, vagy távolíts el %n fotót.</source>
+        <translation>
+            <numerusform>Wähle die Vorlage für %1 Fotos oder entferne %n Foto.</numerusform>
+            <numerusform>Wähle die Vorlage für %1 Fotos oder entferne %n Fotos.</numerusform>
+        </translation>
+    </message>
+    <message>
+        <source>Az új elrendezés minden fotót a saját helyére tesz.</source>
+        <translation>Das neue Layout setzt jedes Foto an seinen eigenen Platz.</translation>
+    </message>
+    <message>
+        <source>Az új elrendezés minden fotót a saját helyére tesz, a kivágásokat ehhez igazítjuk.</source>
+        <translation>Das neue Layout setzt jedes Foto an seinen eigenen Platz, die Ausschnitte werden daran angepasst.</translation>
+    </message>
+    <message>
+        <source>Az új elrendezés minden fotót a saját helyére tesz, az elforgatást nullára állítjuk.</source>
+        <translation>Das neue Layout setzt jedes Foto an seinen eigenen Platz, die Drehung wird auf null gesetzt.</translation>
+    </message>
+    <message>
+        <source>Az új elrendezés minden fotót a saját helyére tesz, a kivágásokat és az elforgatást is ehhez igazítjuk.</source>
+        <translation>Das neue Layout setzt jedes Foto an seinen eigenen Platz, Ausschnitte und Drehung werden daran angepasst.</translation>
+    </message>
+    <message>
+        <source>Kiválasztott</source>
+        <translation>Ausgewählt</translation>
+    </message>
 </context>
 </TS>

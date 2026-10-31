@@ -1,6 +1,7 @@
 #include "AboutDialog.h"
 #include "EffectBrowserDialog.h"
 #include "MainWindow.h"
+#include "TemplateBrowserDialog.h"
 
 #include <QAbstractButton>
 #include <QComboBox>
@@ -73,6 +74,33 @@ void TestUiScreens::captureStates()
                                       Q_ARG(QStringList, photos)));
     QTest::qWait(450);
     QVERIFY(window.grab().save(evidenceDir() + QStringLiteral("/ui-three-photos.png")));
+
+    // Evidence for the collage template picker. Three photos on the page, so
+    // the count-3 layouts are the applicable ones; a chosen layout shows the
+    // check and what applying it changes.
+    auto *templatesButton = window.findChild<QPushButton *>(QStringLiteral("templatesButton"));
+    QVERIFY(templatesButton);
+    templatesButton->click();
+    auto *picker = window.findChild<TemplateBrowserDialog *>();
+    QVERIFY(picker);
+    QVERIFY(picker->isVisible());
+    picker->selectTemplate(picker->templateIds().first());
+    QTest::qWait(150);
+    QVERIFY(picker->grab().save(evidenceDir() + QStringLiteral("/ui-template-picker.png")));
+
+    // More photos than the chosen count: the picker explains what to do and
+    // offers no add button.
+    picker->selectCount(2);
+    QTest::qWait(120);
+    QVERIFY(picker->grab().save(evidenceDir() + QStringLiteral("/ui-template-picker-2.png")));
+
+    // Fewer photos than the chosen count: the one direction a button can fix.
+    picker->selectCount(5);
+    QTest::qWait(120);
+    QVERIFY(picker->grab().save(
+        evidenceDir() + QStringLiteral("/ui-template-picker-add-photos.png")));
+    picker->close();
+    QTest::qWait(120);
 
     // Evidence for the effect browser. The first grab has no photo selected,
     // so it is the bundled CC0 sample rather than a flat test colour.
