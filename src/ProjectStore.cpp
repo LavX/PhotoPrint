@@ -2,6 +2,8 @@
 
 #include "ImageSource.h"
 #include "PaperCatalog.h"
+#include "SlotGeometry.h"
+#include "SlotLayoutEngine.h"
 
 #include <QCoreApplication>
 #include <QDir>
@@ -246,6 +248,102 @@ QHash<QString, QString> portableFileNames(const DocumentSnapshot &document)
     return names;
 }
 
+/// A border colour is written as #rrggbb when it is opaque and #aarrggbb
+/// otherwise, the shortest form that round-trips. The loader accepts any colour
+/// QColor understands, because the value is data, not a direction to trust.
+QJsonValue colourToJson(const QColor &colour)
+{
+    if (colour.alpha() == 255)
+        return colour.name(QColor::HexRgb);
+    return colour.name(QColor::HexArgb);
+}
+
+QJsonObject slotStyleToJson(const SlotStyle &stored)
+{
+    const SlotStyle style = SlotGeometry::sanitiseStyle(stored);
+    QJsonObject object;
+    object.insert(QStringLiteral("marginMm"), style.marginMm);
+    object.insert(QStringLiteral("gutterMm"), style.gutterMm);
+    object.insert(QStringLiteral("borderMm"), style.borderMm);
+    object.insert(QStringLiteral("borderColor"), colourToJson(style.borderColor));
+    object.insert(QStringLiteral("cornerRadiusMm"), style.cornerRadiusMm);
+    return object;
+}
+
+/// Reads one page's `layout` object. Every failure is local: a bad slot is
+/// skipped, a slot list that cannot describe one is an empty layout, and an
+/// empty layout drops its style, so a style with no slots never surprises a
+/// later apply with a border the user never saw on a photograph.
+struct ParsedLayout {
+    QList<Slot> slotList;
+    SlotStyle style;
+    QString layoutId;
+};
+
+ParsedLayout layoutFromJson(const QJsonValue &value)
+{
+    ParsedLayout parsed;
+    if (!value.isObject())
+        return parsed;
+    const QJsonObject object = value.toObject();
+
+    QList<Slot> slotValues;
+    QSet<QString> ids;
+    const QJsonValue slotsValue = object.value(QStringLiteral("slots"));
+    if (slotsValue.isArray()) {
+        for (const QJsonValue &slotValue : slotsValue.toArray()) {
+            if (slotValues.size() >= SlotGeometry::kMaxSlotsPerPage)
+                break;
+            if (!slotValue.isObject())
+                continue;
+            const QJsonObject slotObject = slotValue.toObject();
+            Slot slot;
+            slot.id = slotObject.value(QStringLiteral("id")).toString();
+            if (slot.id.isEmpty() || ids.contains(slot.id))
+                continue;
+            const QJsonArray unit = slotObject.value(QStringLiteral("unit")).toArray();
+            if (unit.size() != 4)
+                continue;
+            bool numbers = true;
+            for (int i = 0; i < 4; ++i) {
+                if (!unit.at(i).isDouble())
+                    numbers = false;
+            }
+            if (!numbers)
+                continue;
+            slot.unitRect = QRectF(unit.at(0).toDouble(), unit.at(1).toDouble(),
+                                   unit.at(2).toDouble(), unit.at(3).toDouble());
+            if (!SlotGeometry::sanitiseUnitRect(&slot.unitRect))
+                continue;
+            ids.insert(slot.id);
+            slotValues.append(slot);
+        }
+    }
+    if (slotValues.isEmpty())
+        return parsed; // style and template go with the slots they describe
+
+    parsed.slotList = slotValues;
+    parsed.layoutId = object.value(QStringLiteral("template")).toString();
+    const QJsonValue styleValue = object.value(QStringLiteral("style"));
+    if (styleValue.isObject()) {
+        const QJsonObject styleObject = styleValue.toObject();
+        SlotStyle style;
+        style.marginMm = styleObject.value(QStringLiteral("marginMm")).toDouble(0.0);
+        style.gutterMm = styleObject.value(QStringLiteral("gutterMm")).toDouble(0.0);
+        style.borderMm = styleObject.value(QStringLiteral("borderMm")).toDouble(0.0);
+        style.cornerRadiusMm =
+            styleObject.value(QStringLiteral("cornerRadiusMm")).toDouble(0.0);
+        const QString colour = styleObject.value(QStringLiteral("borderColor")).toString();
+        if (!colour.isEmpty()) {
+            const QColor parsedColour(colour);
+            if (parsedColour.isValid())
+                style.borderColor = parsedColour;
+        }
+        parsed.style = SlotGeometry::sanitiseStyle(style);
+    }
+    return parsed;
+}
+
 QJsonObject frameToJson(const Frame &frame, const QString &projectDir, const QString &portableDir,
                         const QHash<QString, QString> &portableNames)
 {
@@ -281,6 +379,10 @@ QJsonObject frameToJson(const Frame &frame, const QString &projectDir, const QSt
     object.insert(QStringLiteral("fit"), frame.fit == FitMode::Fill ? QStringLiteral("fill")
                                                                     : QStringLiteral("full"));
     object.insert(QStringLiteral("autoPlaced"), frame.autoPlaced);
+    // Optional and omitted when the frame is free, so a layout-free project is
+    // byte-identical to a 1.0.1 file and an older build ignores the key.
+    if (!frame.slotId.isEmpty())
+        object.insert(QStringLiteral("slotId"), frame.slotId);
     object.insert(QStringLiteral("filter"), frame.filter);
     object.insert(QStringLiteral("filterStrength"), frame.filterStrength);
     object.insert(QStringLiteral("effectVersion"), frame.effectVersion);
@@ -318,6 +420,7 @@ Frame frameFromJson(const QJsonObject &object)
         ? FitMode::Fill
         : FitMode::Full;
     frame.autoPlaced = object.value(QStringLiteral("autoPlaced")).toBool(true);
+    frame.slotId = object.value(QStringLiteral("slotId")).toString();
     frame.filter = object.value(QStringLiteral("filter")).toString(QStringLiteral("original"));
     frame.filterStrength = object.value(QStringLiteral("filterStrength")).toInt(100);
     // Missing key means a 1.0.1 project: 0 follows the current recipe.
@@ -388,6 +491,10 @@ Result<ParsedProject> parseDocument(const QJsonObject &root, const QString &proj
             cutGuidesFromKey(pageObject.value(QStringLiteral("cutGuides")).toString());
         page.borderlessOverride = borderlessOverrideFromKey(
             pageObject.value(QStringLiteral("borderlessOverride")).toString());
+        const ParsedLayout layout = layoutFromJson(pageObject.value(QStringLiteral("layout")));
+        page.slotList = layout.slotList;
+        page.slotStyle = layout.style;
+        page.layoutId = layout.layoutId;
         for (const QJsonValue &frameValue : pageObject.value(QStringLiteral("frames")).toArray()) {
             const QJsonObject frameObject = frameValue.toObject();
             Frame frame = frameFromJson(frameObject);
@@ -462,6 +569,14 @@ Result<ParsedProject> parseDocument(const QJsonObject &root, const QString &proj
     }
     parsed.document.currentPage =
         std::clamp(parsed.document.currentPage, 0, int(parsed.document.pages.size()) - 1);
+    // The loader sanitises the slot invariant: dangling and duplicate
+    // assignments become free frames and every remaining slotted frame takes its
+    // slot's geometry. A corrupt file is therefore representable only as "these
+    // photographs are free", never as a frame pointing at nothing.
+    auto repaired = SlotLayoutEngine::repair(parsed.document);
+    if (!repaired)
+        return repaired.error();
+    parsed.document = repaired.value();
     return parsed;
 }
 
@@ -592,6 +707,26 @@ QByteArray ProjectStore::serialize(const DocumentSnapshot &document, const QStri
         if (page.borderlessOverride != BorderlessOverride::Auto) {
             pageObject.insert(QStringLiteral("borderlessOverride"),
                               borderlessOverrideKey(page.borderlessOverride));
+        }
+        // One optional object per page. A page without slots writes nothing, so
+        // a layout-free project stays byte-identical to a 1.0.1 file. Inside it,
+        // the template and the style are omitted at their defaults too.
+        if (page.hasLayout()) {
+            QJsonObject layout;
+            if (!page.layoutId.isEmpty())
+                layout.insert(QStringLiteral("template"), page.layoutId);
+            if (!(page.slotStyle == SlotStyle{}))
+                layout.insert(QStringLiteral("style"), slotStyleToJson(page.slotStyle));
+            QJsonArray slotArray;
+            for (const Slot &slot : page.slotList) {
+                slotArray.append(QJsonObject{
+                    {QStringLiteral("id"), slot.id},
+                    {QStringLiteral("unit"),
+                     QJsonArray{slot.unitRect.x(), slot.unitRect.y(),
+                                slot.unitRect.width(), slot.unitRect.height()}}});
+            }
+            layout.insert(QStringLiteral("slots"), slotArray);
+            pageObject.insert(QStringLiteral("layout"), layout);
         }
         QJsonArray frames;
         for (const Frame &frame : page.frames)

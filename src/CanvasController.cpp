@@ -1,6 +1,8 @@
 #include "CanvasController.h"
 
 #include "LayoutEngine.h"
+#include "SlotGeometry.h"
+#include "SlotLayoutEngine.h"
 
 #include <QCoreApplication>
 #include <QSet>
@@ -38,6 +40,48 @@ LocatedFrame locate(const DocumentSnapshot &snapshot, const QString &frameId)
     return located;
 }
 
+Result<void> validateSlotState(const QList<Slot> &slotValues, const QList<Frame> &frames)
+{
+    if (slotValues.size() > SlotGeometry::kMaxSlotsPerPage) {
+        return error(QStringLiteral("layout-slot-cap"),
+                     QCoreApplication::translate("PhotoPrint",
+                                                 "Egy lapon legfeljebb 12 hely lehet."));
+    }
+    QSet<QString> slotIds;
+    for (const Slot &slot : slotValues) {
+        if (slot.id.isEmpty() || slotIds.contains(slot.id)) {
+            return error(QStringLiteral("layout-slot-id"),
+                         QCoreApplication::translate(
+                             "PhotoPrint",
+                             "A hely azonosítója üres vagy ismétlődik."));
+        }
+        if (!SlotGeometry::unitRectIsValid(slot.unitRect)) {
+            return error(QStringLiteral("layout-slot-unit"),
+                         QCoreApplication::translate("PhotoPrint",
+                                                     "A hely a lapon kívülre esik."));
+        }
+        slotIds.insert(slot.id);
+    }
+    QSet<QString> assigned;
+    for (const Frame &frame : frames) {
+        if (frame.slotId.isEmpty())
+            continue;
+        if (!slotIds.contains(frame.slotId)) {
+            return error(QStringLiteral("layout-slot-dangling"),
+                         QCoreApplication::translate(
+                             "PhotoPrint",
+                             "Egy fotó olyan helyre hivatkozik, amely nem létezik."));
+        }
+        if (assigned.contains(frame.slotId)) {
+            return error(QStringLiteral("layout-slot-duplicate"),
+                         QCoreApplication::translate(
+                             "PhotoPrint", "Két fotó nem kerülhet ugyanabba a helybe."));
+        }
+        assigned.insert(frame.slotId);
+    }
+    return Result<void>();
+}
+
 } // namespace
 
 Result<void> validateLayoutEdit(const DocumentSnapshot &document, const ApplyLayoutEdit &edit)
@@ -54,6 +98,16 @@ Result<void> validateLayoutEdit(const DocumentSnapshot &document, const ApplyLay
                              "PhotoPrint", "Egy lap csak egyszer szerepelhet a módosításban."));
         }
         touched.insert(change.pageIndex);
+
+        // The slot invariant is validated on the page the edit produces, not on
+        // the edit's fields alone: replacing only the frames or only the slot
+        // list must not be able to create a dangling assignment.
+        const Page &page = document.pages.at(change.pageIndex);
+        const QList<Slot> &slotValues = change.slotList ? *change.slotList : page.slotList;
+        const QList<Frame> &frames = change.frames ? *change.frames : page.frames;
+        auto slotState = validateSlotState(slotValues, frames);
+        if (!slotState)
+            return slotState;
     }
 
     QSet<QString> pageIds;
@@ -182,6 +236,12 @@ void rotatePageTo(Page &page, bool targetLandscape)
     const bool forward = targetLandscape;
     page.landscape = targetLandscape;
     for (Frame &frame : page.frames) {
+        // A slotted frame's rectangle is owned by its slot, which is stored in
+        // unit space and therefore survives the turn by construction. Rotating
+        // its geometry here would bank a 90 degree angle on every turn; the
+        // remap below re-derives it instead.
+        if (!frame.slotId.isEmpty())
+            continue;
         const double oldX = frame.cx;
         const double oldY = frame.cy;
         if (forward) {
@@ -197,6 +257,11 @@ void rotatePageTo(Page &page, bool targetLandscape)
             frame.angleDeg -= 360.0;
         while (frame.angleDeg <= -180.0)
             frame.angleDeg += 360.0;
+    }
+    if (page.hasLayout()) {
+        const auto remapped = SlotLayoutEngine::remap(page);
+        if (remapped)
+            page = remapped.value();
     }
 }
 
@@ -302,6 +367,7 @@ CanvasController::CanvasController(QObject *parent) : QObject(parent), m_undo(ne
 void CanvasController::setDocument(const DocumentSnapshot &document)
 {
     m_document = document;
+    repairDocument();
     m_undo->clear();
     emit documentChanged(m_document);
 }
@@ -442,6 +508,12 @@ void CanvasController::apply(const DocumentEdit &edit)
                         page.cutGuides = *change.cutGuides;
                     if (change.borderlessOverride)
                         page.borderlessOverride = *change.borderlessOverride;
+                    if (change.slotList)
+                        page.slotList = *change.slotList;
+                    if (change.slotStyle)
+                        page.slotStyle = *change.slotStyle;
+                    if (change.layoutId)
+                        page.layoutId = *change.layoutId;
                     if (firstChanged < 0 || change.pageIndex < firstChanged)
                         firstChanged = change.pageIndex;
                 }
@@ -492,6 +564,7 @@ void CanvasController::applyFrame(const QString &frameId, const Frame &frame)
     if (!target)
         return;
     *target = frame;
+    repairDocument();
     emit documentChanged(m_document);
 }
 
@@ -502,6 +575,7 @@ void CanvasController::removeFrame(const QString &frameId)
         for (int f = 0; f < page.frames.size(); ++f) {
             if (page.frames.at(f).id == frameId) {
                 page.frames.removeAt(f);
+                repairDocument();
                 emit documentChanged(m_document);
                 return;
             }
@@ -519,6 +593,7 @@ void CanvasController::setPaper(int pageIndex, const PaperSpec &paper)
     if (pageIndex < 0 || pageIndex >= m_document.pages.size())
         return;
     m_document.pages[pageIndex].paper = paper;
+    repairDocument();
     emit documentChanged(m_document);
 }
 
@@ -536,6 +611,10 @@ void CanvasController::replaceSnapshot(const DocumentSnapshot &snapshot)
     if (m_document.currentPage < 0 || m_document.currentPage >= m_document.pages.size())
         m_document.currentPage = std::clamp(m_document.currentPage, 0,
                                             std::max(0, int(m_document.pages.size()) - 1));
+    // Undo and redo land here. Repairing rather than rotating is what keeps a
+    // slotted frame's angle at zero across a paper or orientation round trip: the
+    // geometry comes from the unit rectangle of the restored page.
+    repairDocument();
     emit documentChanged(m_document);
 }
 
@@ -544,6 +623,7 @@ void CanvasController::replacePage(int pageIndex, const Page &page)
     if (pageIndex < 0 || pageIndex >= m_document.pages.size())
         return;
     m_document.pages[pageIndex] = page;
+    repairDocument();
     emit documentChanged(m_document);
 }
 
@@ -562,26 +642,10 @@ void CanvasController::setPageLandscape(int pageIndex, bool landscape)
     Page &page = m_document.pages[pageIndex];
     if (page.landscape == landscape)
         return;
-    const QSizeF oldSize = pageSizeMm(page);
-    const bool forward = landscape; // portrait -> landscape turns clockwise
-    page.landscape = landscape;
-    for (Frame &frame : page.frames) {
-        const double oldX = frame.cx;
-        const double oldY = frame.cy;
-        if (forward) {
-            frame.cx = oldSize.height() - oldY;
-            frame.cy = oldX;
-            frame.angleDeg += 90.0;
-        } else {
-            frame.cx = oldY;
-            frame.cy = oldSize.width() - oldX;
-            frame.angleDeg -= 90.0;
-        }
-        while (frame.angleDeg > 180.0)
-            frame.angleDeg -= 360.0;
-        while (frame.angleDeg <= -180.0)
-            frame.angleDeg += 360.0;
-    }
+    // One rotation rule for the page and the project-wide setter: free frames
+    // turn, slotted frames are remapped from their unit rectangles.
+    rotatePageTo(page, landscape);
+    repairDocument();
     emit documentChanged(m_document);
 }
 
@@ -593,7 +657,25 @@ void CanvasController::insertFrameAt(int pageIndex, const Frame &frame)
         ? pageIndex
         : m_document.currentPage;
     m_document.pages[index].frames.append(frame);
+    repairDocument();
     emit documentChanged(m_document);
+}
+
+void CanvasController::repairDocument()
+{
+    const auto repaired = SlotLayoutEngine::repair(m_document);
+    if (!repaired)
+        return;
+    m_document = repaired.value();
+#ifndef QT_NO_DEBUG
+    // The invariant is asserted here and tested directly; a debug build stops at
+    // the first writer that broke it instead of painting a drifted page.
+    for (const Page &page : m_document.pages) {
+        const QSizeF sheet = pageSizeMm(page);
+        if (sheet.width() > 0.0 && sheet.height() > 0.0)
+            Q_ASSERT(SlotGeometry::layoutConsistent(page));
+    }
+#endif
 }
 
 } // namespace pp

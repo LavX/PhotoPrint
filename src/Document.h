@@ -1,9 +1,11 @@
 #pragma once
 
 #include <QByteArray>
+#include <QColor>
 #include <QColorSpace>
 #include <QList>
 #include <QPointF>
+#include <QRectF>
 #include <QSize>
 #include <QString>
 #include <QUuid>
@@ -59,8 +61,37 @@ struct Frame {
     /// when an effect is applied, so it is still 0 for every existing frame.
     int effectVersion = 0;
     bool upscale = false;                        ///< 2x Lanczos before print
+    /// Empty for a free frame. Otherwise the slot on the page that owns this
+    /// frame's rectangle: the slot's photo rectangle is the frame's geometry and
+    /// the frame angle stays zero. A dangling id (a slot that no longer exists)
+    /// is cleared by SlotLayoutEngine::repair, which turns the frame back into a
+    /// free one instead of leaving an unusable reference behind.
+    QString slotId;
 
     bool operator==(const Frame &) const = default;
+};
+
+/// One fixed area of a laid-out page. `unitRect` is the mapping source of truth:
+/// 0..1 of the page's content box, origin top-left, x right, y down, the same
+/// convention CollageSlot uses. The millimetre rectangle is a pure function of
+/// this and the page's paper, so a paper or orientation change re-maps without
+/// touching the stored layout.
+struct Slot {
+    QString id;                    ///< stable while the layout lives, unique per page
+    QRectF unitRect{0.0, 0.0, 1.0, 1.0};
+    bool operator==(const Slot &) const = default;
+};
+
+/// How a laid-out page is dressed. Every value has a neutral default, so a page
+/// that never chose a border stores nothing and keeps today's geometry: a zero
+/// margin and gutter mean "automatic", which is exactly the catalogue's margin.
+struct SlotStyle {
+    double marginMm = 0.0;      ///< 0 = automatic: 5 % of the short side, 4..10 mm
+    double gutterMm = 0.0;      ///< 0 = automatic: equal to the effective margin
+    double borderMm = 0.0;      ///< mat around each photograph, 0 = none
+    QColor borderColor{255, 255, 255}; ///< the mat's colour; white is the paper colour
+    double cornerRadiusMm = 0.0;       ///< rounded print, 0 = square
+    bool operator==(const SlotStyle &) const = default;
 };
 
 /// Bounds of the manual brightness offset, in EV. The slider and the colour
@@ -179,7 +210,19 @@ struct Page {
     QList<Frame> frames;
     CutGuides cutGuides = CutGuides::None;
     BorderlessOverride borderlessOverride = BorderlessOverride::Auto;
+    /// The slots of one laid-out page, in fill order. Empty means a free canvas:
+    /// every existing project, every batch sheet and every trial sheet lands
+    /// here, and a free-canvas page serialises exactly as it did before slots
+    /// existed. The field is not called `slots` because Qt reserves that word as
+    /// a macro in every translation unit that includes a QObject header.
+    QList<Slot> slotList;
+    SlotStyle slotStyle;
+    /// Catalogue id of the applied layout. A label only: it is never resolved
+    /// for rendering, so a renamed catalogue entry cannot break a project. Empty
+    /// for a hand-made layout.
+    QString layoutId;
 
+    bool hasLayout() const { return !slotList.isEmpty(); }
     bool operator==(const Page &) const = default;
 };
 

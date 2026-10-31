@@ -74,6 +74,9 @@ struct PageLayout {
     std::optional<QList<Frame>> frames;
     std::optional<CutGuides> cutGuides;
     std::optional<BorderlessOverride> borderlessOverride;
+    std::optional<QList<Slot>> slotList;
+    std::optional<SlotStyle> slotStyle;
+    std::optional<QString> layoutId;
 };
 
 /// A batch or align action, applied as one snapshot. The caller supplies the
@@ -158,6 +161,10 @@ private:
     void fitPageToPaper(int pageIndex);
     void replacePage(int pageIndex, const Page &page);
     void replaceSnapshot(const DocumentSnapshot &snapshot);
+    /// The single repair point. Every mutation below calls it before emitting,
+    /// so no other writer (an align, a paper setter, an undo) can leave a slotted
+    /// frame's geometry out of step with its slot.
+    void repairDocument();
 
     DocumentSnapshot m_document;
     QUndoStack *m_undo = nullptr;
