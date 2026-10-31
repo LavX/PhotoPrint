@@ -2,140 +2,424 @@
   "schema": "photoprint.effects/1",
   "version": 1,
   "categories": [
-    { "key": "basic",  "name": "Basics" },
-    { "key": "mono",   "name": "Black & white" },
-    { "key": "retro",  "name": "Retro" },
-    { "key": "color",  "name": "Colour" },
-    { "key": "blur",   "name": "Blur" },
-    { "key": "detail", "name": "Detail" },
-    { "key": "art",    "name": "Artistic" },
-    { "key": "warp",   "name": "Distort" },
-    { "key": "light",  "name": "Light" },
-    { "key": "grain",  "name": "Grain" },
-    { "key": "print",  "name": "Print" },
-    { "key": "glow",   "name": "Glow" }
+    {
+      "key": "basic",
+      "name": "Basics"
+    },
+    {
+      "key": "mono",
+      "name": "Black & white"
+    },
+    {
+      "key": "retro",
+      "name": "Retro"
+    },
+    {
+      "key": "color",
+      "name": "Colour"
+    },
+    {
+      "key": "blur",
+      "name": "Blur"
+    },
+    {
+      "key": "detail",
+      "name": "Detail"
+    },
+    {
+      "key": "art",
+      "name": "Artistic"
+    },
+    {
+      "key": "warp",
+      "name": "Distort"
+    },
+    {
+      "key": "light",
+      "name": "Light"
+    },
+    {
+      "key": "grain",
+      "name": "Grain"
+    },
+    {
+      "key": "print",
+      "name": "Print"
+    },
+    {
+      "key": "glow",
+      "name": "Glow"
+    }
   ],
   "recipes": [
     {
-      "key": "light.venice",
-      "category": "light",
+      "key": "basic.neutral",
+      "category": "basic",
       "version": 1,
-      "name": "Venice",
-      "description": "Late-afternoon stone, slate-blue shadows and a soft halation on the highlights.",
+      "name": "Neutral Fix",
+      "description": "A clean starting point: a touch of exposure and contrast, nothing else.",
       "stages": [
-        { "id": "whiteBalance", "temperature": 10, "tint": 2 },
-        { "id": "exposure", "ev": 0.12 },
-        { "id": "contrast", "amount": 14, "pivot": 0.45 },
-        { "id": "curves", "master": [[0, 0], [0.22, 0.205], [0.55, 0.575], [1, 1]] },
-        { "id": "splitTone", "shadow": "#2e3a4e", "shadowStrength": 0.40,
-          "highlight": "#e8c9a0", "highlightStrength": 0.38, "balance": 0.55 },
-        { "id": "vibrance", "amount": 14 },
-        { "id": "fade", "lift": 0.05, "toe": 0.65 },
-        { "id": "bloom", "threshold": 0.80, "radius": 44, "intensity": 0.30,
-          "tint": "#ffe6c0" },
-        { "id": "grain", "finish": true, "amount": 0.030, "size": 1, "seed": 7, "mono": true },
-        { "id": "vignette", "finish": true, "amount": 0.22, "midpoint": 0.62, "feather": 0.40 }
+        {
+          "id": "whiteBalance",
+          "temperature": 0,
+          "tint": 0
+        },
+        {
+          "id": "exposure",
+          "ev": 0.05
+        },
+        {
+          "id": "contrast",
+          "amount": 6
+        }
       ]
     },
     {
-      "key": "color.tealorange",
-      "category": "color",
+      "key": "basic.bright",
+      "category": "basic",
       "version": 1,
-      "name": "Teal & Orange",
-      "description": "Cinematic teal shadows against warm skin and amber highlights.",
+      "name": "Bright Lift",
+      "description": "Opens the frame up with a gentle lift and slightly softer contrast.",
       "stages": [
-        { "id": "whiteBalance", "temperature": 8, "tint": 0 },
-        { "id": "contrast", "amount": 16, "pivot": 0.45 },
-        { "id": "splitTone", "shadow": "#1e3c46", "shadowStrength": 0.45,
-          "highlight": "#f0a868", "highlightStrength": 0.42, "balance": 0.52 },
-        { "id": "vibrance", "amount": 18 },
-        { "id": "fade", "lift": 0.03, "toe": 0.6 },
-        { "id": "vignette", "amount": 0.20, "midpoint": 0.60, "feather": 0.40 }
+        {
+          "id": "exposure",
+          "ev": 0.35
+        },
+        {
+          "id": "contrast",
+          "amount": -4
+        },
+        {
+          "id": "fade",
+          "lift": 0.03
+        }
       ]
     },
     {
-      "key": "retro.fadedfilm",
-      "category": "retro",
+      "key": "basic.deep",
+      "category": "basic",
       "version": 1,
-      "name": "Faded Film",
-      "description": "Low contrast, lifted blacks and a cyan-brown crossover with fine grain.",
+      "name": "Deep Tone",
+      "description": "Darker, denser and more contrasty, with the midtones pulled down.",
       "stages": [
-        { "id": "whiteBalance", "temperature": 4, "tint": 1 },
-        { "id": "contrast", "amount": -18, "pivot": 0.45 },
-        { "id": "saturation", "amount": -16 },
-        { "id": "fade", "lift": 0.14, "toe": 0.5 },
-        { "id": "splitTone", "shadow": "#3b3a48", "shadowStrength": 0.18,
-          "highlight": "#e8d9b8", "highlightStrength": 0.22, "balance": 0.48 },
-        { "id": "grain", "finish": true, "amount": 0.045, "size": 1, "seed": 11, "mono": true },
-        { "id": "vignette", "finish": true, "amount": 0.12, "midpoint": 0.70, "feather": 0.35 }
+        {
+          "id": "exposure",
+          "ev": -0.12
+        },
+        {
+          "id": "contrast",
+          "amount": 22
+        },
+        {
+          "id": "curves",
+          "master": [
+            [
+              0,
+              0
+            ],
+            [
+              0.5,
+              0.47
+            ],
+            [
+              1,
+              1
+            ]
+          ]
+        }
       ]
     },
     {
-      "key": "light.nordic",
-      "category": "light",
+      "key": "basic.punch",
+      "category": "basic",
       "version": 1,
-      "name": "Nordic",
-      "description": "Cool, clean and high-key: blue shadows and near-neutral highlights.",
+      "name": "Punch",
+      "description": "Crisp, saturated and sharp, for a photo that needs to shout.",
       "stages": [
-        { "id": "whiteBalance", "temperature": -24, "tint": -5 },
-        { "id": "exposure", "ev": 0.08 },
-        { "id": "contrast", "amount": 12, "pivot": 0.45 },
-        { "id": "splitTone", "shadow": "#26384a", "shadowStrength": 0.30,
-          "highlight": "#dfe8ee", "highlightStrength": 0.20, "balance": 0.55 },
-        { "id": "vibrance", "amount": 6 },
-        { "id": "vignette", "amount": 0.18, "midpoint": 0.62, "feather": 0.40 }
+        {
+          "id": "contrast",
+          "amount": 18
+        },
+        {
+          "id": "vibrance",
+          "amount": 28
+        },
+        {
+          "id": "saturation",
+          "amount": 6
+        },
+        {
+          "id": "unsharp",
+          "radius": 1.6,
+          "amount": 0.7
+        }
       ]
     },
     {
-      "key": "light.goldenhour",
-      "category": "light",
+      "key": "basic.soft",
+      "category": "basic",
       "version": 1,
-      "name": "Golden Hour",
-      "description": "Warm late sun on the highlights without turning skin orange.",
+      "name": "Soft Touch",
+      "description": "Low contrast and a light diffusion: gentle without going hazy.",
       "stages": [
-        { "id": "whiteBalance", "temperature": 26, "tint": 6 },
-        { "id": "exposure", "ev": 0.15 },
-        { "id": "splitTone", "shadow": "#3a3020", "shadowStrength": 0.20,
-          "highlight": "#ffd9a0", "highlightStrength": 0.40, "balance": 0.58 },
-        { "id": "bloom", "threshold": 0.82, "radius": 46, "intensity": 0.35,
-          "tint": "#ffe8c8" },
-        { "id": "vignette", "amount": 0.16, "midpoint": 0.65, "feather": 0.40 }
+        {
+          "id": "contrast",
+          "amount": -12
+        },
+        {
+          "id": "fade",
+          "lift": 0.06
+        },
+        {
+          "id": "softFocus",
+          "radius": 3,
+          "amount": 0.15
+        }
       ]
     },
     {
-      "key": "glow.neonnight",
-      "category": "glow",
+      "key": "basic.warmbase",
+      "category": "basic",
       "version": 1,
-      "name": "Neon Night",
-      "description": "Deep shadows, blue midtones and magenta highlights with strong bloom.",
+      "name": "Warm Base",
+      "description": "A neutral frame with a warm white balance and a little extra colour.",
       "stages": [
-        { "id": "exposure", "ev": -0.25 },
-        { "id": "contrast", "amount": 22, "pivot": 0.45 },
-        { "id": "saturation", "amount": 45 },
-        { "id": "splitTone", "shadow": "#2038a0", "shadowStrength": 0.35,
-          "highlight": "#ff40a0", "highlightStrength": 0.38, "balance": 0.45 },
-        { "id": "bloom", "threshold": 0.80, "radius": 40, "intensity": 0.45,
-          "tint": "#ffd0f0" },
-        { "id": "grain", "finish": true, "amount": 0.05, "size": 1, "seed": 23, "mono": true },
-        { "id": "vignette", "finish": true, "amount": 0.35, "midpoint": 0.50, "feather": 0.45 }
+        {
+          "id": "whiteBalance",
+          "temperature": 14,
+          "tint": 2
+        },
+        {
+          "id": "vibrance",
+          "amount": 6
+        }
       ]
     },
     {
-      "key": "color.pastel",
-      "category": "color",
+      "key": "basic.coolbase",
+      "category": "basic",
       "version": 1,
-      "name": "Matte Pastel",
-      "description": "Pale, airy and low in contrast, with warm highlights and a little bloom.",
+      "name": "Cool Base",
+      "description": "A neutral frame cooled down, with a little more bite in the contrast.",
       "stages": [
-        { "id": "exposure", "ev": 0.18 },
-        { "id": "contrast", "amount": -20, "pivot": 0.45 },
-        { "id": "saturation", "amount": -24 },
-        { "id": "fade", "lift": 0.12, "toe": 0.8 },
-        { "id": "splitTone", "shadow": "#4a4a5e", "shadowStrength": 0.12,
-          "highlight": "#ffe4d0", "highlightStrength": 0.30, "balance": 0.62 },
-        { "id": "vibrance", "amount": 8 },
-        { "id": "bloom", "threshold": 0.88, "radius": 50, "intensity": 0.18,
-          "tint": "#fff0e0" }
+        {
+          "id": "whiteBalance",
+          "temperature": -16,
+          "tint": -2
+        },
+        {
+          "id": "contrast",
+          "amount": 6
+        }
+      ]
+    },
+    {
+      "key": "basic.clean",
+      "category": "basic",
+      "version": 1,
+      "name": "Clean",
+      "description": "Neutral, tidy and slightly sharpened: the everyday correction.",
+      "stages": [
+        {
+          "id": "whiteBalance",
+          "temperature": 3,
+          "tint": 1
+        },
+        {
+          "id": "contrast",
+          "amount": 8
+        },
+        {
+          "id": "vibrance",
+          "amount": 10
+        },
+        {
+          "id": "unsharp",
+          "radius": 1.2,
+          "amount": 0.5
+        }
+      ]
+    },
+    {
+      "key": "basic.matte",
+      "category": "basic",
+      "version": 1,
+      "name": "Matte Base",
+      "description": "Lifted blacks and quiet saturation for a matte print finish.",
+      "stages": [
+        {
+          "id": "contrast",
+          "amount": -8
+        },
+        {
+          "id": "fade",
+          "lift": 0.09,
+          "toe": 0.7
+        },
+        {
+          "id": "saturation",
+          "amount": -6
+        }
+      ]
+    },
+    {
+      "key": "basic.faithful",
+      "category": "basic",
+      "version": 1,
+      "name": "Faithful",
+      "description": "A gentle S-curve that leaves the colour and the white balance alone.",
+      "stages": [
+        {
+          "id": "curves",
+          "master": [
+            [
+              0,
+              0
+            ],
+            [
+              0.22,
+              0.26
+            ],
+            [
+              0.78,
+              0.74
+            ],
+            [
+              1,
+              1
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "key": "mono.classic",
+      "category": "mono",
+      "version": 1,
+      "name": "Classic Mono",
+      "description": "A neutral black and white with a small midtone lift.",
+      "stages": [
+        {
+          "id": "saturation",
+          "amount": -100
+        },
+        {
+          "id": "contrast",
+          "amount": 18
+        },
+        {
+          "id": "curves",
+          "master": [
+            [
+              0,
+              0
+            ],
+            [
+              0.5,
+              0.52
+            ],
+            [
+              1,
+              1
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "key": "mono.silver",
+      "category": "mono",
+      "version": 1,
+      "name": "Silver Print",
+      "description": "A weighted channel mix and a cool shadow tone, like a fibre silver print.",
+      "stages": [
+        {
+          "id": "colorMatrix",
+          "matrix": [
+            0.35,
+            0.45,
+            0.2,
+            0.28,
+            0.55,
+            0.17,
+            0.22,
+            0.42,
+            0.36
+          ]
+        },
+        {
+          "id": "contrast",
+          "amount": 12
+        },
+        {
+          "id": "splitTone",
+          "shadow": "#33405e",
+          "shadowStrength": 0.18,
+          "highlight": "#000000",
+          "highlightStrength": 0.0,
+          "balance": 0.5
+        }
+      ]
+    },
+    {
+      "key": "mono.highkey",
+      "category": "mono",
+      "version": 1,
+      "name": "High Key",
+      "description": "Pale, open and airy, with the highlights pushed and the blacks lifted.",
+      "stages": [
+        {
+          "id": "saturation",
+          "amount": -100
+        },
+        {
+          "id": "exposure",
+          "ev": 0.45
+        },
+        {
+          "id": "contrast",
+          "amount": -10
+        },
+        {
+          "id": "curves",
+          "master": [
+            [
+              0,
+              0.06
+            ],
+            [
+              1,
+              0.97
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "key": "mono.lowkey",
+      "category": "mono",
+      "version": 1,
+      "name": "Low Key",
+      "description": "Dark and heavy, with a deep vignette closing the frame in.",
+      "stages": [
+        {
+          "id": "saturation",
+          "amount": -100
+        },
+        {
+          "id": "exposure",
+          "ev": -0.38
+        },
+        {
+          "id": "contrast",
+          "amount": 34
+        },
+        {
+          "id": "vignette",
+          "amount": 0.3,
+          "midpoint": 0.55,
+          "feather": 0.45
+        }
       ]
     },
     {
@@ -145,30 +429,404 @@
       "name": "Hard Contrast",
       "description": "Near-black shadows, bright highlights and crisp micro-contrast.",
       "stages": [
-        { "id": "saturation", "amount": -100 },
-        { "id": "contrast", "amount": 52, "pivot": 0.45 },
-        { "id": "curves", "master": [[0, 0], [0.22, 0.10], [0.72, 0.90], [1, 1]] },
-        { "id": "localContrast", "radius": 10, "amount": 0.25 },
-        { "id": "grain", "finish": true, "amount": 0.035, "size": 1, "seed": 31, "mono": true }
+        {
+          "id": "saturation",
+          "amount": -100
+        },
+        {
+          "id": "contrast",
+          "amount": 52,
+          "pivot": 0.45
+        },
+        {
+          "id": "curves",
+          "master": [
+            [
+              0,
+              0
+            ],
+            [
+              0.22,
+              0.1
+            ],
+            [
+              0.72,
+              0.9
+            ],
+            [
+              1,
+              1
+            ]
+          ]
+        },
+        {
+          "id": "localContrast",
+          "radius": 10,
+          "amount": 0.25
+        },
+        {
+          "id": "grain",
+          "finish": true,
+          "amount": 0.035,
+          "size": 1,
+          "seed": 31,
+          "mono": true
+        }
       ]
     },
     {
-      "key": "print.sepia",
-      "category": "print",
+      "key": "mono.film",
+      "category": "mono",
       "version": 1,
-      "name": "Sepia Drama",
-      "description": "A three-stop sepia print on textured paper, with a heavy vignette and grain.",
+      "name": "Film Mono",
+      "description": "A softer, grainier monochrome with a lifted black.",
       "stages": [
-        { "id": "saturation", "amount": -100 },
-        { "id": "contrast", "amount": 28, "pivot": 0.45 },
-        { "id": "gradientMap", "stops": [
-          { "position": 0.0, "colour": "#241a12" },
-          { "position": 0.5, "colour": "#c8a070" },
-          { "position": 1.0, "colour": "#f6e8cc" }
-        ] },
-        { "id": "vignette", "amount": 0.45, "midpoint": 0.50, "feather": 0.45 },
-        { "id": "texture", "asset": "paper-fine", "opacity": 0.28, "blend": "multiply" },
-        { "id": "grain", "finish": true, "amount": 0.06, "size": 1, "seed": 41, "mono": true }
+        {
+          "id": "saturation",
+          "amount": -100
+        },
+        {
+          "id": "contrast",
+          "amount": 14
+        },
+        {
+          "id": "fade",
+          "lift": 0.05
+        },
+        {
+          "id": "grain",
+          "finish": true,
+          "amount": 0.055,
+          "size": 1,
+          "seed": 445
+        }
+      ]
+    },
+    {
+      "key": "mono.selenium",
+      "category": "mono",
+      "version": 1,
+      "name": "Selenium",
+      "description": "A violet-slate shadow tone over a quiet monochrome.",
+      "stages": [
+        {
+          "id": "saturation",
+          "amount": -100
+        },
+        {
+          "id": "contrast",
+          "amount": 10
+        },
+        {
+          "id": "splitTone",
+          "shadow": "#3a3348",
+          "shadowStrength": 0.25,
+          "highlight": "#e9dcc4",
+          "highlightStrength": 0.12,
+          "balance": 0.55
+        }
+      ]
+    },
+    {
+      "key": "mono.platinum",
+      "category": "mono",
+      "version": 1,
+      "name": "Platinum",
+      "description": "Cool, low contrast and slightly lifted: a platinum print on matte paper.",
+      "stages": [
+        {
+          "id": "saturation",
+          "amount": -100
+        },
+        {
+          "id": "contrast",
+          "amount": -6
+        },
+        {
+          "id": "splitTone",
+          "shadow": "#2d3540",
+          "shadowStrength": 0.22,
+          "highlight": "#f2e4c9",
+          "highlightStrength": 0.3,
+          "balance": 0.6
+        },
+        {
+          "id": "fade",
+          "lift": 0.04
+        }
+      ]
+    },
+    {
+      "key": "mono.infrared",
+      "category": "mono",
+      "version": 1,
+      "name": "Infrared",
+      "description": "Foliage goes white: a heavy red channel mix with glow and grain.",
+      "stages": [
+        {
+          "id": "colorMatrix",
+          "matrix": [
+            0.2,
+            0.75,
+            0.05,
+            0.2,
+            0.75,
+            0.05,
+            0.2,
+            0.75,
+            0.05
+          ]
+        },
+        {
+          "id": "contrast",
+          "amount": 14
+        },
+        {
+          "id": "bloom",
+          "threshold": 0.64,
+          "radius": 52,
+          "intensity": 0.45
+        },
+        {
+          "id": "vignette",
+          "amount": 0.2,
+          "midpoint": 0.6,
+          "feather": 0.4
+        },
+        {
+          "id": "grain",
+          "finish": true,
+          "amount": 0.045,
+          "size": 1,
+          "seed": 405
+        }
+      ]
+    },
+    {
+      "key": "mono.ink",
+      "category": "mono",
+      "version": 1,
+      "name": "Ink",
+      "description": "Hard contrast, strong structure and grain: ink on rough paper.",
+      "stages": [
+        {
+          "id": "saturation",
+          "amount": -100
+        },
+        {
+          "id": "contrast",
+          "amount": 30
+        },
+        {
+          "id": "localContrast",
+          "radius": 8,
+          "amount": 0.35
+        },
+        {
+          "id": "grain",
+          "finish": true,
+          "amount": 0.035,
+          "size": 1,
+          "seed": 722
+        }
+      ]
+    },
+    {
+      "key": "retro.warmfilm",
+      "category": "retro",
+      "version": 1,
+      "name": "Warm Film",
+      "description": "A warm, slightly green film stock with soft highlights and grain.",
+      "stages": [
+        {
+          "id": "splitTone",
+          "shadow": "#2f3a35",
+          "shadowStrength": 0.25,
+          "highlight": "#f0dcb4",
+          "highlightStrength": 0.3,
+          "balance": 0.55
+        },
+        {
+          "id": "contrast",
+          "amount": 8
+        },
+        {
+          "id": "fade",
+          "lift": 0.06
+        },
+        {
+          "id": "grain",
+          "finish": true,
+          "amount": 0.05,
+          "size": 1,
+          "seed": 359
+        }
+      ]
+    },
+    {
+      "key": "retro.fadedfilm",
+      "category": "retro",
+      "version": 1,
+      "name": "Faded Film",
+      "description": "Low contrast, lifted blacks and a cyan-brown crossover with fine grain.",
+      "stages": [
+        {
+          "id": "whiteBalance",
+          "temperature": 4,
+          "tint": 1
+        },
+        {
+          "id": "contrast",
+          "amount": -18,
+          "pivot": 0.45
+        },
+        {
+          "id": "saturation",
+          "amount": -16
+        },
+        {
+          "id": "fade",
+          "lift": 0.14,
+          "toe": 0.5
+        },
+        {
+          "id": "splitTone",
+          "shadow": "#3b3a48",
+          "shadowStrength": 0.18,
+          "highlight": "#e8d9b8",
+          "highlightStrength": 0.22,
+          "balance": 0.48
+        },
+        {
+          "id": "grain",
+          "finish": true,
+          "amount": 0.045,
+          "size": 1,
+          "seed": 11,
+          "mono": true
+        },
+        {
+          "id": "vignette",
+          "finish": true,
+          "amount": 0.12,
+          "midpoint": 0.7,
+          "feather": 0.35
+        }
+      ]
+    },
+    {
+      "key": "retro.instant",
+      "category": "retro",
+      "version": 1,
+      "name": "Instant",
+      "description": "Instant-camera colour: cyan shadows, cream highlights and a soft lens.",
+      "stages": [
+        {
+          "id": "whiteBalance",
+          "temperature": 6,
+          "tint": -4
+        },
+        {
+          "id": "splitTone",
+          "shadow": "#2b4a52",
+          "shadowStrength": 0.3,
+          "highlight": "#f4e0b0",
+          "highlightStrength": 0.22,
+          "balance": 0.5
+        },
+        {
+          "id": "fade",
+          "lift": 0.1
+        },
+        {
+          "id": "softFocus",
+          "radius": 4,
+          "amount": 0.2
+        },
+        {
+          "id": "vignette",
+          "amount": 0.18,
+          "midpoint": 0.7,
+          "feather": 0.35
+        }
+      ]
+    },
+    {
+      "key": "retro.slide",
+      "category": "retro",
+      "version": 1,
+      "name": "Slide Film",
+      "description": "Dense, saturated transparency film with a blue shadow cast.",
+      "stages": [
+        {
+          "id": "contrast",
+          "amount": 26
+        },
+        {
+          "id": "saturation",
+          "amount": 22
+        },
+        {
+          "id": "curves",
+          "b": [
+            [
+              0,
+              0
+            ],
+            [
+              0.5,
+              0.56
+            ],
+            [
+              1,
+              1
+            ]
+          ]
+        },
+        {
+          "id": "grain",
+          "finish": true,
+          "amount": 0.02,
+          "size": 1,
+          "seed": 3
+        }
+      ]
+    },
+    {
+      "key": "retro.seventies",
+      "category": "retro",
+      "version": 1,
+      "name": "Seventies",
+      "description": "Heavy amber cast, low contrast and coarse grain: a 1974 album cover.",
+      "stages": [
+        {
+          "id": "whiteBalance",
+          "temperature": 20,
+          "tint": 6
+        },
+        {
+          "id": "contrast",
+          "amount": -6
+        },
+        {
+          "id": "fade",
+          "lift": 0.11
+        },
+        {
+          "id": "splitTone",
+          "shadow": "#40361f",
+          "shadowStrength": 0.25,
+          "highlight": "#ffe0a8",
+          "highlightStrength": 0.25,
+          "balance": 0.55
+        },
+        {
+          "id": "grain",
+          "finish": true,
+          "amount": 0.06,
+          "size": 1,
+          "seed": 201
+        }
       ]
     },
     {
@@ -178,12 +836,2686 @@
       "name": "Cross Process",
       "description": "Independent red, green and blue curves: yellow-cyan cast, blown highlights, crushed shadows.",
       "stages": [
-        { "id": "curves", "r": [[0, 0.06], [1, 0.94]],
-          "g": [[0, 0], [0.5, 0.48], [1, 0.88]], "b": [[0, 0.22], [1, 1]] },
-        { "id": "contrast", "amount": 20, "pivot": 0.45 },
-        { "id": "saturation", "amount": 30 },
-        { "id": "fade", "lift": 0.06, "toe": 0.6 },
-        { "id": "vignette", "amount": 0.22, "midpoint": 0.55, "feather": 0.45 }
+        {
+          "id": "curves",
+          "r": [
+            [
+              0,
+              0.06
+            ],
+            [
+              1,
+              0.94
+            ]
+          ],
+          "g": [
+            [
+              0,
+              0
+            ],
+            [
+              0.5,
+              0.48
+            ],
+            [
+              1,
+              0.88
+            ]
+          ],
+          "b": [
+            [
+              0,
+              0.22
+            ],
+            [
+              1,
+              1
+            ]
+          ]
+        },
+        {
+          "id": "contrast",
+          "amount": 20,
+          "pivot": 0.45
+        },
+        {
+          "id": "saturation",
+          "amount": 30
+        },
+        {
+          "id": "fade",
+          "lift": 0.06,
+          "toe": 0.6
+        },
+        {
+          "id": "vignette",
+          "amount": 0.22,
+          "midpoint": 0.55,
+          "feather": 0.45
+        }
+      ]
+    },
+    {
+      "key": "retro.lomo",
+      "category": "retro",
+      "version": 1,
+      "name": "Lomo",
+      "description": "Hard vignette, hot colour and a glowy centre: the toy camera look.",
+      "stages": [
+        {
+          "id": "saturation",
+          "amount": 38
+        },
+        {
+          "id": "contrast",
+          "amount": 24
+        },
+        {
+          "id": "vignette",
+          "amount": 0.55,
+          "midpoint": 0.45,
+          "feather": 0.5
+        },
+        {
+          "id": "bloom",
+          "threshold": 0.82,
+          "radius": 30,
+          "intensity": 0.2
+        }
+      ]
+    },
+    {
+      "key": "retro.daguerre",
+      "category": "retro",
+      "version": 1,
+      "name": "Daguerreotype",
+      "description": "Brown-silver monochrome with a soft lens and a heavy plate vignette.",
+      "stages": [
+        {
+          "id": "saturation",
+          "amount": -100
+        },
+        {
+          "id": "splitTone",
+          "shadow": "#2a2018",
+          "shadowStrength": 0.45,
+          "highlight": "#d8c090",
+          "highlightStrength": 0.3,
+          "balance": 0.45
+        },
+        {
+          "id": "fade",
+          "lift": 0.08
+        },
+        {
+          "id": "softFocus",
+          "radius": 3,
+          "amount": 0.25
+        },
+        {
+          "id": "vignette",
+          "amount": 0.4,
+          "midpoint": 0.5,
+          "feather": 0.45
+        },
+        {
+          "id": "grain",
+          "finish": true,
+          "amount": 0.05,
+          "size": 1,
+          "seed": 247
+        }
+      ]
+    },
+    {
+      "key": "retro.sunbleach",
+      "category": "retro",
+      "version": 1,
+      "name": "Sun Bleached",
+      "description": "Faded by a summer on a windowsill: pale, warm and desaturated.",
+      "stages": [
+        {
+          "id": "exposure",
+          "ev": 0.2
+        },
+        {
+          "id": "contrast",
+          "amount": -16
+        },
+        {
+          "id": "saturation",
+          "amount": -28
+        },
+        {
+          "id": "splitTone",
+          "shadow": "#4a4a55",
+          "shadowStrength": 0.1,
+          "highlight": "#ffe8c0",
+          "highlightStrength": 0.45,
+          "balance": 0.62
+        },
+        {
+          "id": "fade",
+          "lift": 0.09
+        }
+      ]
+    },
+    {
+      "key": "retro.newsprint",
+      "category": "retro",
+      "version": 1,
+      "name": "Newsprint",
+      "description": "Coarse monochrome dots on cheap paper with a warm base.",
+      "stages": [
+        {
+          "id": "saturation",
+          "amount": -100
+        },
+        {
+          "id": "contrast",
+          "amount": 12
+        },
+        {
+          "id": "whiteBalance",
+          "temperature": 6,
+          "tint": 2
+        },
+        {
+          "id": "texture",
+          "asset": "paper-news",
+          "opacity": 0.35,
+          "blend": "multiply"
+        },
+        {
+          "id": "wand",
+          "pass": "halftone",
+          "map": "h8x8a"
+        }
+      ]
+    },
+    {
+      "key": "color.vivid",
+      "category": "color",
+      "version": 1,
+      "name": "Vivid",
+      "description": "Saturated, vibrant and a little more contrasty, without hue shifts.",
+      "stages": [
+        {
+          "id": "saturation",
+          "amount": 30
+        },
+        {
+          "id": "vibrance",
+          "amount": 26
+        },
+        {
+          "id": "contrast",
+          "amount": 12
+        }
+      ]
+    },
+    {
+      "key": "color.filmic",
+      "category": "color",
+      "version": 1,
+      "name": "Filmic",
+      "description": "A subtle camera matrix and a neutral split tone: filmic, not stylised.",
+      "stages": [
+        {
+          "id": "colorMatrix",
+          "matrix": [
+            1.04,
+            -0.02,
+            -0.01,
+            -0.01,
+            1.02,
+            0,
+            -0.01,
+            -0.02,
+            1.05
+          ]
+        },
+        {
+          "id": "contrast",
+          "amount": 14
+        },
+        {
+          "id": "splitTone",
+          "shadow": "#333d48",
+          "shadowStrength": 0.2,
+          "highlight": "#e9d6b8",
+          "highlightStrength": 0.2,
+          "balance": 0.5
+        }
+      ]
+    },
+    {
+      "key": "color.pastel",
+      "category": "color",
+      "version": 1,
+      "name": "Matte Pastel",
+      "description": "Pale, airy and low in contrast, with warm highlights and a little bloom.",
+      "stages": [
+        {
+          "id": "exposure",
+          "ev": 0.18
+        },
+        {
+          "id": "contrast",
+          "amount": -20,
+          "pivot": 0.45
+        },
+        {
+          "id": "saturation",
+          "amount": -24
+        },
+        {
+          "id": "fade",
+          "lift": 0.12,
+          "toe": 0.8
+        },
+        {
+          "id": "splitTone",
+          "shadow": "#4a4a5e",
+          "shadowStrength": 0.12,
+          "highlight": "#ffe4d0",
+          "highlightStrength": 0.3,
+          "balance": 0.62
+        },
+        {
+          "id": "vibrance",
+          "amount": 8
+        },
+        {
+          "id": "bloom",
+          "threshold": 0.88,
+          "radius": 50,
+          "intensity": 0.18,
+          "tint": "#fff0e0"
+        }
+      ]
+    },
+    {
+      "key": "color.tealorange",
+      "category": "color",
+      "version": 1,
+      "name": "Teal & Orange",
+      "description": "Cinematic teal shadows against warm skin and amber highlights.",
+      "stages": [
+        {
+          "id": "whiteBalance",
+          "temperature": 8,
+          "tint": 0
+        },
+        {
+          "id": "contrast",
+          "amount": 16,
+          "pivot": 0.45
+        },
+        {
+          "id": "splitTone",
+          "shadow": "#1e3c46",
+          "shadowStrength": 0.45,
+          "highlight": "#f0a868",
+          "highlightStrength": 0.42,
+          "balance": 0.52
+        },
+        {
+          "id": "vibrance",
+          "amount": 18
+        },
+        {
+          "id": "fade",
+          "lift": 0.03,
+          "toe": 0.6
+        },
+        {
+          "id": "vignette",
+          "amount": 0.2,
+          "midpoint": 0.6,
+          "feather": 0.4
+        }
+      ]
+    },
+    {
+      "key": "color.earth",
+      "category": "color",
+      "version": 1,
+      "name": "Earth Tones",
+      "description": "Hues pushed toward clay and moss, with the saturation held back.",
+      "stages": [
+        {
+          "id": "hueShift",
+          "degrees": -10
+        },
+        {
+          "id": "saturation",
+          "amount": -14
+        },
+        {
+          "id": "contrast",
+          "amount": 6
+        },
+        {
+          "id": "splitTone",
+          "shadow": "#3a3020",
+          "shadowStrength": 0.25,
+          "highlight": "#e0c090",
+          "highlightStrength": 0.25,
+          "balance": 0.5
+        }
+      ]
+    },
+    {
+      "key": "color.mint",
+      "category": "color",
+      "version": 1,
+      "name": "Mint",
+      "description": "A cool green cast in the shadows and pale highlights over clean colour.",
+      "stages": [
+        {
+          "id": "hueShift",
+          "degrees": 6
+        },
+        {
+          "id": "splitTone",
+          "shadow": "#2e4a44",
+          "shadowStrength": 0.25,
+          "highlight": "#e6f4e0",
+          "highlightStrength": 0.15,
+          "balance": 0.5
+        },
+        {
+          "id": "vibrance",
+          "amount": 12
+        }
+      ]
+    },
+    {
+      "key": "color.amber",
+      "category": "color",
+      "version": 1,
+      "name": "Amber",
+      "description": "Warm amber midtones with a rich, low-contrast shadow.",
+      "stages": [
+        {
+          "id": "whiteBalance",
+          "temperature": 22,
+          "tint": 4
+        },
+        {
+          "id": "contrast",
+          "amount": 10
+        },
+        {
+          "id": "vibrance",
+          "amount": 16
+        },
+        {
+          "id": "splitTone",
+          "shadow": "#4a3418",
+          "shadowStrength": 0.18,
+          "highlight": "#ffd890",
+          "highlightStrength": 0.28,
+          "balance": 0.55
+        }
+      ]
+    },
+    {
+      "key": "color.sapphire",
+      "category": "color",
+      "version": 1,
+      "name": "Sapphire",
+      "description": "Deep blue shadows against cool, clean highlights.",
+      "stages": [
+        {
+          "id": "whiteBalance",
+          "temperature": -14,
+          "tint": -4
+        },
+        {
+          "id": "splitTone",
+          "shadow": "#1e3050",
+          "shadowStrength": 0.3,
+          "highlight": "#cfe0f0",
+          "highlightStrength": 0.2,
+          "balance": 0.5
+        },
+        {
+          "id": "saturation",
+          "amount": 14
+        },
+        {
+          "id": "contrast",
+          "amount": 10
+        }
+      ]
+    },
+    {
+      "key": "color.neutralize",
+      "category": "color",
+      "version": 1,
+      "name": "Neutralize",
+      "description": "Removes a colour cast and leaves the frame straight and quiet.",
+      "stages": [
+        {
+          "id": "whiteBalance",
+          "temperature": -3,
+          "tint": 2
+        },
+        {
+          "id": "curves",
+          "master": [
+            [
+              0,
+              0
+            ],
+            [
+              0.5,
+              0.5
+            ],
+            [
+              1,
+              1
+            ]
+          ]
+        },
+        {
+          "id": "vibrance",
+          "amount": 8
+        },
+        {
+          "id": "contrast",
+          "amount": 4
+        }
+      ]
+    },
+    {
+      "key": "color.huepop",
+      "category": "color",
+      "version": 1,
+      "name": "Hue Pop",
+      "description": "Maximum colour energy: vibrance and saturation up, highlights glowing.",
+      "stages": [
+        {
+          "id": "hueShift",
+          "degrees": 10
+        },
+        {
+          "id": "vibrance",
+          "amount": 30
+        },
+        {
+          "id": "contrast",
+          "amount": 12
+        },
+        {
+          "id": "saturation",
+          "amount": 12
+        },
+        {
+          "id": "bloom",
+          "threshold": 0.85,
+          "radius": 36,
+          "intensity": 0.18
+        }
+      ]
+    },
+    {
+      "key": "blur.soft",
+      "category": "blur",
+      "version": 1,
+      "name": "Soft Blur",
+      "description": "A real, even blur at six pixels, with the blacks lifted a touch.",
+      "stages": [
+        {
+          "id": "blur",
+          "radius": 6,
+          "passes": 3
+        },
+        {
+          "id": "fade",
+          "lift": 0.02
+        }
+      ]
+    },
+    {
+      "key": "blur.dream",
+      "category": "blur",
+      "version": 1,
+      "name": "Dream Blur",
+      "description": "Soft focus and a broad warm bloom: a lens wide open in the evening.",
+      "stages": [
+        {
+          "id": "softFocus",
+          "radius": 12,
+          "amount": 0.35
+        },
+        {
+          "id": "bloom",
+          "threshold": 0.78,
+          "radius": 48,
+          "intensity": 0.4
+        },
+        {
+          "id": "fade",
+          "lift": 0.04
+        }
+      ]
+    },
+    {
+      "key": "blur.motion",
+      "category": "blur",
+      "version": 1,
+      "name": "Motion Blur",
+      "description": "A short horizontal smear: a moving subject at a slow shutter.",
+      "stages": [
+        {
+          "id": "wand",
+          "pass": "motionBlur",
+          "radius": 25,
+          "sigma": 6,
+          "angle": 0
+        }
+      ]
+    },
+    {
+      "key": "blur.zoom",
+      "category": "blur",
+      "version": 1,
+      "name": "Zoom Blur",
+      "description": "A small rotational smear that reads as a zoom pull toward the centre.",
+      "stages": [
+        {
+          "id": "wand",
+          "pass": "rotationalBlur",
+          "angle": 6
+        }
+      ]
+    },
+    {
+      "key": "blur.radial",
+      "category": "blur",
+      "version": 1,
+      "name": "Radial Spin",
+      "description": "A stronger arc smear with the corners pulled down: a slow pan shot.",
+      "stages": [
+        {
+          "id": "wand",
+          "pass": "rotationalBlur",
+          "angle": 14
+        },
+        {
+          "id": "vignette",
+          "amount": 0.18,
+          "midpoint": 0.6,
+          "feather": 0.4
+        }
+      ]
+    },
+    {
+      "key": "blur.tilt",
+      "category": "blur",
+      "version": 1,
+      "name": "Tilt Shift",
+      "description": "A horizontal band of focus with the rest of the frame thrown out.",
+      "stages": [
+        {
+          "id": "blur",
+          "radius": 7,
+          "passes": 3,
+          "mask": {
+            "kind": "linear",
+            "start": 0.42,
+            "end": 0.58,
+            "feather": 0.12
+          }
+        },
+        {
+          "id": "saturation",
+          "amount": 10
+        },
+        {
+          "id": "contrast",
+          "amount": 8
+        }
+      ]
+    },
+    {
+      "key": "blur.bokeh",
+      "category": "blur",
+      "version": 1,
+      "name": "Bokeh",
+      "description": "A radial blur away from the centre, with the highlights blooming.",
+      "stages": [
+        {
+          "id": "blur",
+          "radius": 9,
+          "passes": 3,
+          "mask": {
+            "kind": "radial",
+            "centre": [
+              0.5,
+              0.45
+            ],
+            "end": 0.55
+          }
+        },
+        {
+          "id": "bloom",
+          "threshold": 0.72,
+          "radius": 48,
+          "intensity": 0.5
+        },
+        {
+          "id": "splitTone",
+          "shadow": "#26343c",
+          "shadowStrength": 0.15,
+          "highlight": "#ffe0c0",
+          "highlightStrength": 0.3,
+          "balance": 0.55
+        },
+        {
+          "id": "vibrance",
+          "amount": 12
+        },
+        {
+          "id": "contrast",
+          "amount": 6
+        }
+      ]
+    },
+    {
+      "key": "blur.fog",
+      "category": "blur",
+      "version": 1,
+      "name": "Fog",
+      "description": "Soft, low contrast and cool: a morning where the detail disappears.",
+      "stages": [
+        {
+          "id": "blur",
+          "radius": 5
+        },
+        {
+          "id": "fade",
+          "lift": 0.12
+        },
+        {
+          "id": "contrast",
+          "amount": -18
+        },
+        {
+          "id": "splitTone",
+          "shadow": "#4a5060",
+          "shadowStrength": 0.15,
+          "highlight": "#e8ecf0",
+          "highlightStrength": 0.35,
+          "balance": 0.6
+        }
+      ]
+    },
+    {
+      "key": "blur.diffusion",
+      "category": "blur",
+      "version": 1,
+      "name": "Diffusion",
+      "description": "A pro-mist filter: the highlights bleed, the blacks stay, nothing goes soft.",
+      "stages": [
+        {
+          "id": "bloom",
+          "threshold": 0.9,
+          "radius": 30,
+          "intensity": 0.25
+        },
+        {
+          "id": "fade",
+          "lift": 0.08
+        },
+        {
+          "id": "contrast",
+          "amount": -12
+        },
+        {
+          "id": "saturation",
+          "amount": -4
+        }
+      ]
+    },
+    {
+      "key": "blur.glass",
+      "category": "blur",
+      "version": 1,
+      "name": "Frosted Glass",
+      "description": "A two-pixel blur with heavy grain: looking through rippled glass.",
+      "stages": [
+        {
+          "id": "blur",
+          "radius": 2
+        },
+        {
+          "id": "contrast",
+          "amount": 4
+        },
+        {
+          "id": "grain",
+          "finish": true,
+          "amount": 0.09,
+          "size": 1,
+          "seed": 224
+        }
+      ]
+    },
+    {
+      "key": "detail.crisp",
+      "category": "detail",
+      "version": 1,
+      "name": "Crisp",
+      "description": "A small-radius unsharp mask: edges get a clean bite.",
+      "stages": [
+        {
+          "id": "unsharp",
+          "radius": 1.0,
+          "amount": 1.2,
+          "threshold": 0.02
+        }
+      ]
+    },
+    {
+      "key": "detail.clarity",
+      "category": "detail",
+      "version": 1,
+      "name": "Clarity",
+      "description": "Midtone local contrast: presence without halos.",
+      "stages": [
+        {
+          "id": "localContrast",
+          "radius": 8,
+          "amount": 0.35
+        },
+        {
+          "id": "contrast",
+          "amount": 6
+        }
+      ]
+    },
+    {
+      "key": "detail.micro",
+      "category": "detail",
+      "version": 1,
+      "name": "Micro Detail",
+      "description": "Fine texture and grain-level structure, pushed hard at a tiny radius.",
+      "stages": [
+        {
+          "id": "unsharp",
+          "radius": 0.8,
+          "amount": 2.0,
+          "threshold": 0.04
+        },
+        {
+          "id": "contrast",
+          "amount": 8
+        }
+      ]
+    },
+    {
+      "key": "detail.structure",
+      "category": "detail",
+      "version": 1,
+      "name": "Structure",
+      "description": "Large-radius local contrast with the colour pulled back.",
+      "stages": [
+        {
+          "id": "localContrast",
+          "radius": 24,
+          "amount": 0.55
+        },
+        {
+          "id": "saturation",
+          "amount": -16
+        },
+        {
+          "id": "contrast",
+          "amount": 12
+        }
+      ]
+    },
+    {
+      "key": "detail.emboss",
+      "category": "detail",
+      "version": 1,
+      "name": "Emboss",
+      "description": "A relief map of the frame: grey, raised and quite strange.",
+      "stages": [
+        {
+          "id": "wand",
+          "pass": "emboss",
+          "sigma": 1
+        },
+        {
+          "id": "saturation",
+          "amount": -40
+        },
+        {
+          "id": "contrast",
+          "amount": 14
+        }
+      ]
+    },
+    {
+      "key": "detail.edge",
+      "category": "detail",
+      "version": 1,
+      "name": "Edge Line",
+      "description": "Edges only, dark and bright, on a near-black field.",
+      "stages": [
+        {
+          "id": "wand",
+          "pass": "edge",
+          "radius": 1
+        },
+        {
+          "id": "contrast",
+          "amount": 30
+        },
+        {
+          "id": "exposure",
+          "ev": -0.2
+        }
+      ]
+    },
+    {
+      "key": "detail.pencil",
+      "category": "detail",
+      "version": 1,
+      "name": "Pencil",
+      "description": "Soft graphite shading: pale, desaturated and lifted, with paper tooth.",
+      "stages": [
+        {
+          "id": "unsharp",
+          "radius": 0.7,
+          "amount": 1.8,
+          "threshold": 0.02
+        },
+        {
+          "id": "saturation",
+          "amount": -78
+        },
+        {
+          "id": "contrast",
+          "amount": 16
+        },
+        {
+          "id": "fade",
+          "lift": 0.05
+        },
+        {
+          "id": "grain",
+          "finish": true,
+          "amount": 0.02,
+          "size": 1,
+          "seed": 251
+        }
+      ]
+    },
+    {
+      "key": "detail.charcoal",
+      "category": "detail",
+      "version": 1,
+      "name": "Charcoal",
+      "description": "A smudged monochrome with heavy black: charcoal on rough stock.",
+      "stages": [
+        {
+          "id": "wand",
+          "pass": "charcoal",
+          "sigma": 2
+        }
+      ]
+    },
+    {
+      "key": "detail.etch",
+      "category": "detail",
+      "version": 1,
+      "name": "Etch",
+      "description": "Fine edges, inverted and posterised, like a plate ready for the press.",
+      "stages": [
+        {
+          "id": "wand",
+          "pass": "edge",
+          "radius": 2
+        },
+        {
+          "id": "saturation",
+          "amount": -100
+        },
+        {
+          "id": "posterize",
+          "levels": 4
+        },
+        {
+          "id": "contrast",
+          "amount": 22
+        }
+      ]
+    },
+    {
+      "key": "detail.drybrush",
+      "category": "detail",
+      "version": 1,
+      "name": "Dry Brush",
+      "description": "Oil paint over an emboss: texture you can almost feel.",
+      "stages": [
+        {
+          "id": "wand",
+          "pass": "oilPaint",
+          "radius": 3
+        },
+        {
+          "id": "wand",
+          "pass": "emboss",
+          "sigma": 1
+        },
+        {
+          "id": "contrast",
+          "amount": 8
+        }
+      ]
+    },
+    {
+      "key": "art.oil",
+      "category": "art",
+      "version": 1,
+      "name": "Oil Paint",
+      "description": "Thick, rounded brush strokes with the colour lifted.",
+      "stages": [
+        {
+          "id": "wand",
+          "pass": "oilPaint",
+          "radius": 4
+        },
+        {
+          "id": "vibrance",
+          "amount": 12
+        },
+        {
+          "id": "contrast",
+          "amount": 6
+        }
+      ]
+    },
+    {
+      "key": "art.chalk",
+      "category": "art",
+      "version": 1,
+      "name": "Chalk Pastel",
+      "description": "Soft pigment on textured paper: chalky, desaturated and lifted.",
+      "stages": [
+        {
+          "id": "wand",
+          "pass": "oilPaint",
+          "radius": 3
+        },
+        {
+          "id": "saturation",
+          "amount": -30
+        },
+        {
+          "id": "fade",
+          "lift": 0.1
+        },
+        {
+          "id": "texture",
+          "asset": "paper-soft",
+          "opacity": 0.25,
+          "blend": "multiply"
+        }
+      ]
+    },
+    {
+      "key": "art.watercolour",
+      "category": "art",
+      "version": 1,
+      "name": "Watercolour",
+      "description": "Washed shapes that bleed into the paper, with the whites glowing.",
+      "stages": [
+        {
+          "id": "wand",
+          "pass": "kuwahara",
+          "sigma": 5
+        },
+        {
+          "id": "bloom",
+          "threshold": 0.86,
+          "radius": 60,
+          "intensity": 0.3
+        },
+        {
+          "id": "fade",
+          "lift": 0.08
+        },
+        {
+          "id": "texture",
+          "asset": "paper-wash",
+          "opacity": 0.3,
+          "blend": "multiply"
+        }
+      ]
+    },
+    {
+      "key": "art.painterly",
+      "category": "art",
+      "version": 1,
+      "name": "Painterly",
+      "description": "Flat, poster-like brush regions with the colour pushed up.",
+      "stages": [
+        {
+          "id": "wand",
+          "pass": "kuwahara",
+          "sigma": 5
+        },
+        {
+          "id": "vibrance",
+          "amount": 18
+        },
+        {
+          "id": "contrast",
+          "amount": 8
+        }
+      ]
+    },
+    {
+      "key": "art.popart",
+      "category": "art",
+      "version": 1,
+      "name": "Pop Art",
+      "description": "Four flat inks printed with a hard register.",
+      "stages": [
+        {
+          "id": "posterize",
+          "levels": 4
+        },
+        {
+          "id": "saturation",
+          "amount": 50
+        },
+        {
+          "id": "contrast",
+          "amount": 20
+        }
+      ]
+    },
+    {
+      "key": "art.comic",
+      "category": "art",
+      "version": 1,
+      "name": "Comic",
+      "description": "Inked edges over flat, saturated colour.",
+      "stages": [
+        {
+          "id": "wand",
+          "pass": "edge",
+          "radius": 1
+        },
+        {
+          "id": "posterize",
+          "levels": 5
+        },
+        {
+          "id": "saturation",
+          "amount": 35
+        },
+        {
+          "id": "contrast",
+          "amount": 18
+        }
+      ]
+    },
+    {
+      "key": "art.inkwash",
+      "category": "art",
+      "version": 1,
+      "name": "Ink Wash",
+      "description": "Black ink diluted over wet paper, with the highlights bleeding.",
+      "stages": [
+        {
+          "id": "saturation",
+          "amount": -100
+        },
+        {
+          "id": "contrast",
+          "amount": 10
+        },
+        {
+          "id": "fade",
+          "lift": 0.06
+        },
+        {
+          "id": "bloom",
+          "threshold": 0.82,
+          "radius": 40,
+          "intensity": 0.25
+        },
+        {
+          "id": "texture",
+          "asset": "paper-wash",
+          "opacity": 0.35,
+          "blend": "multiply"
+        }
+      ]
+    },
+    {
+      "key": "art.mosaic",
+      "category": "art",
+      "version": 1,
+      "name": "Mosaic",
+      "description": "Square tesserae with a limited palette.",
+      "stages": [
+        {
+          "id": "wand",
+          "pass": "pixelate",
+          "size": 14
+        },
+        {
+          "id": "posterize",
+          "levels": 5
+        },
+        {
+          "id": "contrast",
+          "amount": 10
+        }
+      ]
+    },
+    {
+      "key": "art.impasto",
+      "category": "art",
+      "version": 1,
+      "name": "Impasto",
+      "description": "Raised paint: strokes plus relief, with the colour lifted.",
+      "stages": [
+        {
+          "id": "wand",
+          "pass": "oilPaint",
+          "radius": 3
+        },
+        {
+          "id": "wand",
+          "pass": "emboss",
+          "sigma": 1
+        },
+        {
+          "id": "vibrance",
+          "amount": 14
+        }
+      ]
+    },
+    {
+      "key": "art.stencil",
+      "category": "art",
+      "version": 1,
+      "name": "Stencil",
+      "description": "Three tone separations cut out of a single sheet.",
+      "stages": [
+        {
+          "id": "saturation",
+          "amount": -100
+        },
+        {
+          "id": "contrast",
+          "amount": 40
+        },
+        {
+          "id": "posterize",
+          "levels": 3
+        },
+        {
+          "id": "gradientMap",
+          "stops": [
+            {
+              "position": 0.0,
+              "colour": "#101418"
+            },
+            {
+              "position": 1.0,
+              "colour": "#f0ead8"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "key": "warp.swirl",
+      "category": "warp",
+      "version": 1,
+      "name": "Swirl",
+      "description": "A 45 degree twist around the centre, with the corners held down.",
+      "stages": [
+        {
+          "id": "wand",
+          "pass": "swirl",
+          "degrees": 45
+        },
+        {
+          "id": "vignette",
+          "amount": 0.15,
+          "midpoint": 0.6,
+          "feather": 0.4
+        }
+      ]
+    },
+    {
+      "key": "warp.vortex",
+      "category": "warp",
+      "version": 1,
+      "name": "Vortex",
+      "description": "A full whirl: a third of a turn, with the contrast pushed.",
+      "stages": [
+        {
+          "id": "wand",
+          "pass": "swirl",
+          "degrees": 120
+        },
+        {
+          "id": "contrast",
+          "amount": 8
+        }
+      ]
+    },
+    {
+      "key": "warp.implode",
+      "category": "warp",
+      "version": 1,
+      "name": "Implode",
+      "description": "The frame is pulled into its centre.",
+      "stages": [
+        {
+          "id": "wand",
+          "pass": "implode",
+          "amount": 0.5
+        }
+      ]
+    },
+    {
+      "key": "warp.explode",
+      "category": "warp",
+      "version": 1,
+      "name": "Explode",
+      "description": "The frame is pushed outward from the centre.",
+      "stages": [
+        {
+          "id": "wand",
+          "pass": "implode",
+          "amount": -0.4
+        },
+        {
+          "id": "vibrance",
+          "amount": 10
+        }
+      ]
+    },
+    {
+      "key": "warp.wave",
+      "category": "warp",
+      "version": 1,
+      "name": "Wave",
+      "description": "A long, gentle sine wave across the frame.",
+      "stages": [
+        {
+          "id": "wand",
+          "pass": "wave",
+          "amplitude": 12,
+          "length": 80
+        }
+      ]
+    },
+    {
+      "key": "warp.ripple",
+      "category": "warp",
+      "version": 1,
+      "name": "Ripple",
+      "description": "A short, tight ripple, like heat over a road.",
+      "stages": [
+        {
+          "id": "wand",
+          "pass": "wave",
+          "amplitude": 5,
+          "length": 26
+        },
+        {
+          "id": "vibrance",
+          "amount": 8
+        }
+      ]
+    },
+    {
+      "key": "warp.mirror",
+      "category": "warp",
+      "version": 1,
+      "name": "Mirror",
+      "description": "The left half flipped onto the right: one perfect axis of symmetry.",
+      "stages": [
+        {
+          "id": "wand",
+          "pass": "mirror"
+        },
+        {
+          "id": "contrast",
+          "amount": 6
+        }
+      ]
+    },
+    {
+      "key": "warp.kaleido",
+      "category": "warp",
+      "version": 1,
+      "name": "Kaleidoscope",
+      "description": "Six rotated copies overlaid: a mandala from one frame.",
+      "stages": [
+        {
+          "id": "wand",
+          "pass": "kaleido",
+          "segments": 6
+        },
+        {
+          "id": "vibrance",
+          "amount": 18
+        },
+        {
+          "id": "contrast",
+          "amount": 10
+        }
+      ]
+    },
+    {
+      "key": "warp.pinch",
+      "category": "warp",
+      "version": 1,
+      "name": "Pinch",
+      "description": "A small implosion with the corners pulled down to hold the eye in.",
+      "stages": [
+        {
+          "id": "wand",
+          "pass": "implode",
+          "amount": 0.22
+        },
+        {
+          "id": "vignette",
+          "amount": 0.3,
+          "midpoint": 0.55,
+          "feather": 0.45
+        }
+      ]
+    },
+    {
+      "key": "warp.stretch",
+      "category": "warp",
+      "version": 1,
+      "name": "Stretch",
+      "description": "A 12 percent horizontal stretch, cropped back to the frame.",
+      "stages": [
+        {
+          "id": "wand",
+          "pass": "stretch",
+          "factor": 1.12
+        },
+        {
+          "id": "blur",
+          "radius": 2
+        }
+      ]
+    },
+    {
+      "key": "light.goldenhour",
+      "category": "light",
+      "version": 1,
+      "name": "Golden Hour",
+      "description": "Warm late sun on the highlights without turning skin orange.",
+      "stages": [
+        {
+          "id": "whiteBalance",
+          "temperature": 26,
+          "tint": 6
+        },
+        {
+          "id": "exposure",
+          "ev": 0.15
+        },
+        {
+          "id": "splitTone",
+          "shadow": "#3a3020",
+          "shadowStrength": 0.2,
+          "highlight": "#ffd9a0",
+          "highlightStrength": 0.4,
+          "balance": 0.58
+        },
+        {
+          "id": "bloom",
+          "threshold": 0.82,
+          "radius": 46,
+          "intensity": 0.35,
+          "tint": "#ffe8c8"
+        },
+        {
+          "id": "vignette",
+          "amount": 0.16,
+          "midpoint": 0.65,
+          "feather": 0.4
+        }
+      ]
+    },
+    {
+      "key": "light.leak",
+      "category": "light",
+      "version": 1,
+      "name": "Light Leak",
+      "description": "A warm leak down the right edge, as if the back of the camera opened.",
+      "stages": [
+        {
+          "id": "lightLeak",
+          "colour": "#ffa860",
+          "centre": [
+            0.88,
+            0.12
+          ],
+          "radius": 0.65,
+          "intensity": 0.4,
+          "softness": 0.35
+        },
+        {
+          "id": "fade",
+          "lift": 0.05
+        },
+        {
+          "id": "vibrance",
+          "amount": 8
+        }
+      ]
+    },
+    {
+      "key": "light.haze",
+      "category": "light",
+      "version": 1,
+      "name": "Haze",
+      "description": "Flat, bright and cool: distance disappearing into the air.",
+      "stages": [
+        {
+          "id": "fade",
+          "lift": 0.14
+        },
+        {
+          "id": "contrast",
+          "amount": -20
+        },
+        {
+          "id": "splitTone",
+          "shadow": "#4a5560",
+          "shadowStrength": 0.12,
+          "highlight": "#eef0f0",
+          "highlightStrength": 0.4,
+          "balance": 0.6
+        },
+        {
+          "id": "bloom",
+          "threshold": 0.88,
+          "radius": 60,
+          "intensity": 0.25
+        }
+      ]
+    },
+    {
+      "key": "light.venice",
+      "category": "light",
+      "version": 1,
+      "name": "Venice",
+      "description": "Late-afternoon stone, slate-blue shadows and a soft halation on the highlights.",
+      "stages": [
+        {
+          "id": "whiteBalance",
+          "temperature": 10,
+          "tint": 2
+        },
+        {
+          "id": "exposure",
+          "ev": 0.12
+        },
+        {
+          "id": "contrast",
+          "amount": 14,
+          "pivot": 0.45
+        },
+        {
+          "id": "curves",
+          "master": [
+            [
+              0,
+              0
+            ],
+            [
+              0.22,
+              0.205
+            ],
+            [
+              0.55,
+              0.575
+            ],
+            [
+              1,
+              1
+            ]
+          ]
+        },
+        {
+          "id": "splitTone",
+          "shadow": "#2e3a4e",
+          "shadowStrength": 0.4,
+          "highlight": "#e8c9a0",
+          "highlightStrength": 0.38,
+          "balance": 0.55
+        },
+        {
+          "id": "vibrance",
+          "amount": 14
+        },
+        {
+          "id": "fade",
+          "lift": 0.05,
+          "toe": 0.65
+        },
+        {
+          "id": "bloom",
+          "threshold": 0.8,
+          "radius": 44,
+          "intensity": 0.3,
+          "tint": "#ffe6c0"
+        },
+        {
+          "id": "grain",
+          "finish": true,
+          "amount": 0.03,
+          "size": 1,
+          "seed": 7,
+          "mono": true
+        },
+        {
+          "id": "vignette",
+          "finish": true,
+          "amount": 0.22,
+          "midpoint": 0.62,
+          "feather": 0.4
+        }
+      ]
+    },
+    {
+      "key": "light.backlight",
+      "category": "light",
+      "version": 1,
+      "name": "Backlight",
+      "description": "The light comes from behind the subject and eats the highlights.",
+      "stages": [
+        {
+          "id": "bloom",
+          "threshold": 0.68,
+          "radius": 60,
+          "intensity": 0.5
+        },
+        {
+          "id": "fade",
+          "lift": 0.1
+        },
+        {
+          "id": "exposure",
+          "ev": -0.1
+        },
+        {
+          "id": "vignette",
+          "amount": 0.24,
+          "midpoint": 0.6,
+          "feather": 0.45
+        }
+      ]
+    },
+    {
+      "key": "light.window",
+      "category": "light",
+      "version": 1,
+      "name": "Window Light",
+      "description": "A soft key from the left, falling off across the frame.",
+      "stages": [
+        {
+          "id": "exposureMask",
+          "kind": "linear",
+          "centre": [
+            0.1,
+            0.4
+          ],
+          "size": 0.7,
+          "ev": 0.55,
+          "feather": 0.5
+        },
+        {
+          "id": "contrast",
+          "amount": 10
+        },
+        {
+          "id": "whiteBalance",
+          "temperature": 6,
+          "tint": 1
+        }
+      ]
+    },
+    {
+      "key": "light.dusk",
+      "category": "light",
+      "version": 1,
+      "name": "Dusk",
+      "description": "Cool blue evening light with a dusty pink highlight.",
+      "stages": [
+        {
+          "id": "whiteBalance",
+          "temperature": -22,
+          "tint": -6
+        },
+        {
+          "id": "exposure",
+          "ev": -0.15
+        },
+        {
+          "id": "splitTone",
+          "shadow": "#1e2a48",
+          "shadowStrength": 0.35,
+          "highlight": "#e0b8c8",
+          "highlightStrength": 0.18,
+          "balance": 0.5
+        },
+        {
+          "id": "vignette",
+          "amount": 0.28,
+          "midpoint": 0.55,
+          "feather": 0.45
+        }
+      ]
+    },
+    {
+      "key": "light.dawn",
+      "category": "light",
+      "version": 1,
+      "name": "Dawn",
+      "description": "Pale peach sun on a lavender shadow, still holding the morning air.",
+      "stages": [
+        {
+          "id": "whiteBalance",
+          "temperature": 12,
+          "tint": -4
+        },
+        {
+          "id": "splitTone",
+          "shadow": "#3a3048",
+          "shadowStrength": 0.2,
+          "highlight": "#ffd8c0",
+          "highlightStrength": 0.35,
+          "balance": 0.58
+        },
+        {
+          "id": "fade",
+          "lift": 0.06
+        },
+        {
+          "id": "bloom",
+          "threshold": 0.86,
+          "radius": 44,
+          "intensity": 0.22
+        }
+      ]
+    },
+    {
+      "key": "light.spot",
+      "category": "light",
+      "version": 1,
+      "name": "Spotlight",
+      "description": "A hard pool of light in the middle of a dark stage.",
+      "stages": [
+        {
+          "id": "exposureMask",
+          "kind": "radial",
+          "centre": [
+            0.5,
+            0.4
+          ],
+          "size": 0.55,
+          "ev": 0.7,
+          "feather": 0.55
+        },
+        {
+          "id": "contrast",
+          "amount": 14
+        },
+        {
+          "id": "vignette",
+          "amount": 0.45,
+          "midpoint": 0.5,
+          "feather": 0.5
+        }
+      ]
+    },
+    {
+      "key": "light.nordic",
+      "category": "light",
+      "version": 1,
+      "name": "Nordic",
+      "description": "Cool, clean and high-key: blue shadows and near-neutral highlights.",
+      "stages": [
+        {
+          "id": "whiteBalance",
+          "temperature": -24,
+          "tint": -5
+        },
+        {
+          "id": "exposure",
+          "ev": 0.08
+        },
+        {
+          "id": "contrast",
+          "amount": 12,
+          "pivot": 0.45
+        },
+        {
+          "id": "splitTone",
+          "shadow": "#26384a",
+          "shadowStrength": 0.3,
+          "highlight": "#dfe8ee",
+          "highlightStrength": 0.2,
+          "balance": 0.55
+        },
+        {
+          "id": "vibrance",
+          "amount": 6
+        },
+        {
+          "id": "vignette",
+          "amount": 0.18,
+          "midpoint": 0.62,
+          "feather": 0.4
+        }
+      ]
+    },
+    {
+      "key": "grain.fine",
+      "category": "grain",
+      "version": 1,
+      "name": "Fine Grain",
+      "description": "A light, even monochrome grain: modern stock, slightly pushed.",
+      "stages": [
+        {
+          "id": "grain",
+          "finish": true,
+          "amount": 0.03,
+          "size": 1,
+          "seed": 28
+        }
+      ]
+    },
+    {
+      "key": "grain.medium",
+      "category": "grain",
+      "version": 1,
+      "name": "Medium Grain",
+      "description": "More visible grain over a slightly desaturated, contrastier frame.",
+      "stages": [
+        {
+          "id": "saturation",
+          "amount": -10
+        },
+        {
+          "id": "contrast",
+          "amount": 6
+        },
+        {
+          "id": "grain",
+          "finish": true,
+          "amount": 0.06,
+          "size": 1,
+          "seed": 598
+        }
+      ]
+    },
+    {
+      "key": "grain.coarse",
+      "category": "grain",
+      "version": 1,
+      "name": "Coarse Grain",
+      "description": "Big, chunky grain with hard contrast and the corners pulled down.",
+      "stages": [
+        {
+          "id": "contrast",
+          "amount": 16
+        },
+        {
+          "id": "vignette",
+          "amount": 0.2,
+          "midpoint": 0.6,
+          "feather": 0.4
+        },
+        {
+          "id": "grain",
+          "finish": true,
+          "amount": 0.1,
+          "size": 2,
+          "seed": 570
+        }
+      ]
+    },
+    {
+      "key": "grain.push",
+      "category": "grain",
+      "version": 1,
+      "name": "Push Process",
+      "description": "Two stops pushed: bright, contrasty, saturated and grainy.",
+      "stages": [
+        {
+          "id": "exposure",
+          "ev": 0.2
+        },
+        {
+          "id": "contrast",
+          "amount": 26
+        },
+        {
+          "id": "saturation",
+          "amount": 18
+        },
+        {
+          "id": "grain",
+          "finish": true,
+          "amount": 0.075,
+          "size": 1,
+          "seed": 238
+        }
+      ]
+    },
+    {
+      "key": "grain.iso",
+      "category": "grain",
+      "version": 1,
+      "name": "ISO 1600",
+      "description": "High-speed film: grainy, slightly flat and vignetted.",
+      "stages": [
+        {
+          "id": "contrast",
+          "amount": 10
+        },
+        {
+          "id": "saturation",
+          "amount": -8
+        },
+        {
+          "id": "vignette",
+          "amount": 0.12,
+          "midpoint": 0.65,
+          "feather": 0.4
+        },
+        {
+          "id": "grain",
+          "finish": true,
+          "amount": 0.085,
+          "size": 1,
+          "seed": 410
+        }
+      ]
+    },
+    {
+      "key": "grain.dust",
+      "category": "grain",
+      "version": 1,
+      "name": "Dust & Scratches",
+      "description": "Grain plus a scatter of dust across a clean frame.",
+      "stages": [
+        {
+          "id": "texture",
+          "asset": "dust-fine",
+          "opacity": 0.2,
+          "blend": "multiply"
+        },
+        {
+          "id": "contrast",
+          "amount": 6
+        },
+        {
+          "id": "grain",
+          "finish": true,
+          "amount": 0.065,
+          "size": 1,
+          "seed": 238
+        }
+      ]
+    },
+    {
+      "key": "grain.paper",
+      "category": "grain",
+      "version": 1,
+      "name": "Paper Grain",
+      "description": "The tooth of a fine paper under a slightly warm frame.",
+      "stages": [
+        {
+          "id": "texture",
+          "asset": "paper-fine",
+          "opacity": 0.35,
+          "blend": "multiply"
+        },
+        {
+          "id": "whiteBalance",
+          "temperature": 5,
+          "tint": 1
+        },
+        {
+          "id": "grain",
+          "finish": true,
+          "amount": 0.04,
+          "size": 1,
+          "seed": 854
+        }
+      ]
+    },
+    {
+      "key": "grain.static",
+      "category": "grain",
+      "version": 1,
+      "name": "TV Static",
+      "description": "Heavy monochrome noise over a six level quantise: no signal.",
+      "stages": [
+        {
+          "id": "posterize",
+          "levels": 6
+        },
+        {
+          "id": "contrast",
+          "amount": 8
+        },
+        {
+          "id": "grain",
+          "finish": true,
+          "amount": 0.14,
+          "size": 1,
+          "seed": 647
+        }
+      ]
+    },
+    {
+      "key": "grain.snow",
+      "category": "grain",
+      "version": 1,
+      "name": "Snow",
+      "description": "Colour noise on an eight level screen: an untuned channel.",
+      "stages": [
+        {
+          "id": "posterize",
+          "levels": 8
+        },
+        {
+          "id": "contrast",
+          "amount": 6
+        },
+        {
+          "id": "grain",
+          "finish": true,
+          "amount": 0.15,
+          "size": 2,
+          "seed": 287,
+          "mono": false
+        }
+      ]
+    },
+    {
+      "key": "grain.base",
+      "category": "grain",
+      "version": 1,
+      "name": "Film Base",
+      "description": "Warm film base under even grain, with the blacks lifted.",
+      "stages": [
+        {
+          "id": "whiteBalance",
+          "temperature": 8,
+          "tint": 3
+        },
+        {
+          "id": "fade",
+          "lift": 0.07
+        },
+        {
+          "id": "splitTone",
+          "shadow": "#403a28",
+          "shadowStrength": 0.15,
+          "highlight": "#f0e0b8",
+          "highlightStrength": 0.2,
+          "balance": 0.55
+        },
+        {
+          "id": "grain",
+          "finish": true,
+          "amount": 0.05,
+          "size": 1,
+          "seed": 970
+        }
+      ]
+    },
+    {
+      "key": "print.halftone",
+      "category": "print",
+      "version": 1,
+      "name": "Halftone",
+      "description": "A classic angled dot screen over a neutral monochrome.",
+      "stages": [
+        {
+          "id": "saturation",
+          "amount": -100
+        },
+        {
+          "id": "contrast",
+          "amount": 14
+        },
+        {
+          "id": "wand",
+          "pass": "halftone",
+          "map": "h8x8a"
+        }
+      ]
+    },
+    {
+      "key": "print.riso",
+      "category": "print",
+      "version": 1,
+      "name": "Risograph",
+      "description": "Two ink riso: blue-black shadows and cream paper, dotted.",
+      "stages": [
+        {
+          "id": "gradientMap",
+          "stops": [
+            {
+              "position": 0.0,
+              "colour": "#12283a"
+            },
+            {
+              "position": 1.0,
+              "colour": "#f2e2c4"
+            }
+          ]
+        },
+        {
+          "id": "contrast",
+          "amount": 10
+        },
+        {
+          "id": "wand",
+          "pass": "halftone",
+          "map": "h6x6a"
+        }
+      ]
+    },
+    {
+      "key": "print.news",
+      "category": "print",
+      "version": 1,
+      "name": "Newsprint",
+      "description": "Cheap paper, coarse dots and a warm grey.",
+      "stages": [
+        {
+          "id": "saturation",
+          "amount": -100
+        },
+        {
+          "id": "contrast",
+          "amount": 20
+        },
+        {
+          "id": "whiteBalance",
+          "temperature": 8,
+          "tint": 3
+        },
+        {
+          "id": "texture",
+          "asset": "paper-news",
+          "opacity": 0.3,
+          "blend": "multiply"
+        },
+        {
+          "id": "wand",
+          "pass": "halftone",
+          "map": "o8x8"
+        }
+      ]
+    },
+    {
+      "key": "print.cyanotype",
+      "category": "print",
+      "version": 1,
+      "name": "Cyanotype",
+      "description": "Prussian blue and paper white, with the grain of the coating.",
+      "stages": [
+        {
+          "id": "saturation",
+          "amount": -100
+        },
+        {
+          "id": "gradientMap",
+          "stops": [
+            {
+              "position": 0.0,
+              "colour": "#0a1c33"
+            },
+            {
+              "position": 1.0,
+              "colour": "#dfeef7"
+            }
+          ]
+        },
+        {
+          "id": "contrast",
+          "amount": 16
+        },
+        {
+          "id": "grain",
+          "finish": true,
+          "amount": 0.045,
+          "size": 1,
+          "seed": 250
+        }
+      ]
+    },
+    {
+      "key": "print.screen",
+      "category": "print",
+      "version": 1,
+      "name": "Screen Print",
+      "description": "Four flat colours pulled through a mesh.",
+      "stages": [
+        {
+          "id": "posterize",
+          "levels": 4
+        },
+        {
+          "id": "saturation",
+          "amount": 30
+        },
+        {
+          "id": "contrast",
+          "amount": 14
+        }
+      ]
+    },
+    {
+      "key": "print.litho",
+      "category": "print",
+      "version": 1,
+      "name": "Lithograph",
+      "description": "Hard monochrome with grain and a heavy stone vignette.",
+      "stages": [
+        {
+          "id": "saturation",
+          "amount": -100
+        },
+        {
+          "id": "contrast",
+          "amount": 42
+        },
+        {
+          "id": "vignette",
+          "amount": 0.25,
+          "midpoint": 0.55,
+          "feather": 0.45
+        },
+        {
+          "id": "grain",
+          "finish": true,
+          "amount": 0.07,
+          "size": 1,
+          "seed": 115
+        }
+      ]
+    },
+    {
+      "key": "print.engrave",
+      "category": "print",
+      "version": 1,
+      "name": "Engraving",
+      "description": "A relief plate inked in black: fine lines, hard contrast.",
+      "stages": [
+        {
+          "id": "wand",
+          "pass": "emboss",
+          "sigma": 1
+        },
+        {
+          "id": "saturation",
+          "amount": -100
+        },
+        {
+          "id": "contrast",
+          "amount": 26
+        }
+      ]
+    },
+    {
+      "key": "print.stamp",
+      "category": "print",
+      "version": 1,
+      "name": "Rubber Stamp",
+      "description": "Two levels, two inks, and a hard edge.",
+      "stages": [
+        {
+          "id": "saturation",
+          "amount": -100
+        },
+        {
+          "id": "contrast",
+          "amount": 60
+        },
+        {
+          "id": "posterize",
+          "levels": 2
+        },
+        {
+          "id": "splitTone",
+          "shadow": "#2a1a1a",
+          "shadowStrength": 0.3,
+          "highlight": "#c8342a",
+          "highlightStrength": 0.5,
+          "balance": 0.5
+        }
+      ]
+    },
+    {
+      "key": "print.duotone",
+      "category": "print",
+      "version": 1,
+      "name": "Duotone",
+      "description": "A two colour map from deep navy to pale sand.",
+      "stages": [
+        {
+          "id": "saturation",
+          "amount": -100
+        },
+        {
+          "id": "gradientMap",
+          "stops": [
+            {
+              "position": 0.0,
+              "colour": "#14203a"
+            },
+            {
+              "position": 1.0,
+              "colour": "#f0c882"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "key": "print.sepia",
+      "category": "print",
+      "version": 1,
+      "name": "Sepia Drama",
+      "description": "A three-stop sepia print on textured paper, with a heavy vignette and grain.",
+      "stages": [
+        {
+          "id": "saturation",
+          "amount": -100
+        },
+        {
+          "id": "contrast",
+          "amount": 28,
+          "pivot": 0.45
+        },
+        {
+          "id": "gradientMap",
+          "stops": [
+            {
+              "position": 0.0,
+              "colour": "#241a12"
+            },
+            {
+              "position": 0.5,
+              "colour": "#c8a070"
+            },
+            {
+              "position": 1.0,
+              "colour": "#f6e8cc"
+            }
+          ]
+        },
+        {
+          "id": "vignette",
+          "amount": 0.45,
+          "midpoint": 0.5,
+          "feather": 0.45
+        },
+        {
+          "id": "texture",
+          "asset": "paper-fine",
+          "opacity": 0.28,
+          "blend": "multiply"
+        },
+        {
+          "id": "grain",
+          "finish": true,
+          "amount": 0.06,
+          "size": 1,
+          "seed": 41,
+          "mono": true
+        }
+      ]
+    },
+    {
+      "key": "glow.bloom",
+      "category": "glow",
+      "version": 1,
+      "name": "Bloom",
+      "description": "Highlights bloom gently, with the contrast pulled back to hold it.",
+      "stages": [
+        {
+          "id": "bloom",
+          "threshold": 0.62,
+          "radius": 64,
+          "intensity": 0.75
+        },
+        {
+          "id": "contrast",
+          "amount": -8
+        }
+      ]
+    },
+    {
+      "key": "glow.halo",
+      "category": "glow",
+      "version": 1,
+      "name": "Halo",
+      "description": "A wide glow plus a soft focus: light that spreads past its edges.",
+      "stages": [
+        {
+          "id": "bloom",
+          "threshold": 0.72,
+          "radius": 64,
+          "intensity": 0.6
+        },
+        {
+          "id": "softFocus",
+          "radius": 6,
+          "amount": 0.2
+        },
+        {
+          "id": "contrast",
+          "amount": -6
+        }
+      ]
+    },
+    {
+      "key": "glow.neonnight",
+      "category": "glow",
+      "version": 1,
+      "name": "Neon Night",
+      "description": "Deep shadows, blue midtones and magenta highlights with strong bloom.",
+      "stages": [
+        {
+          "id": "exposure",
+          "ev": -0.25
+        },
+        {
+          "id": "contrast",
+          "amount": 22,
+          "pivot": 0.45
+        },
+        {
+          "id": "saturation",
+          "amount": 45
+        },
+        {
+          "id": "splitTone",
+          "shadow": "#2038a0",
+          "shadowStrength": 0.35,
+          "highlight": "#ff40a0",
+          "highlightStrength": 0.38,
+          "balance": 0.45
+        },
+        {
+          "id": "bloom",
+          "threshold": 0.8,
+          "radius": 40,
+          "intensity": 0.45,
+          "tint": "#ffd0f0"
+        },
+        {
+          "id": "grain",
+          "finish": true,
+          "amount": 0.05,
+          "size": 1,
+          "seed": 23,
+          "mono": true
+        },
+        {
+          "id": "vignette",
+          "finish": true,
+          "amount": 0.35,
+          "midpoint": 0.5,
+          "feather": 0.45
+        }
+      ]
+    },
+    {
+      "key": "glow.twotone",
+      "category": "glow",
+      "version": 1,
+      "name": "Two Tone",
+      "description": "A violet to turquoise duotone with the highlights lifted.",
+      "stages": [
+        {
+          "id": "saturation",
+          "amount": -100
+        },
+        {
+          "id": "gradientMap",
+          "stops": [
+            {
+              "position": 0.0,
+              "colour": "#2a1040"
+            },
+            {
+              "position": 1.0,
+              "colour": "#40e0d0"
+            }
+          ]
+        },
+        {
+          "id": "bloom",
+          "threshold": 0.84,
+          "radius": 36,
+          "intensity": 0.25
+        }
+      ]
+    },
+    {
+      "key": "glow.pop",
+      "category": "glow",
+      "version": 1,
+      "name": "Pop",
+      "description": "Vivid, sharp and glowy: maximum colour with a crisp edge.",
+      "stages": [
+        {
+          "id": "vibrance",
+          "amount": 40
+        },
+        {
+          "id": "contrast",
+          "amount": 16
+        },
+        {
+          "id": "bloom",
+          "threshold": 0.82,
+          "radius": 38,
+          "intensity": 0.28
+        },
+        {
+          "id": "unsharp",
+          "radius": 1.2,
+          "amount": 0.6
+        }
+      ]
+    },
+    {
+      "key": "glow.daydream",
+      "category": "glow",
+      "version": 1,
+      "name": "Daydream",
+      "description": "Soft, warm and hazy, with a lavender shadow and a pink glow.",
+      "stages": [
+        {
+          "id": "softFocus",
+          "radius": 10,
+          "amount": 0.4
+        },
+        {
+          "id": "splitTone",
+          "shadow": "#4a3a5a",
+          "shadowStrength": 0.25,
+          "highlight": "#ffd8e0",
+          "highlightStrength": 0.35,
+          "balance": 0.55
+        },
+        {
+          "id": "fade",
+          "lift": 0.07
+        },
+        {
+          "id": "bloom",
+          "threshold": 0.8,
+          "radius": 50,
+          "intensity": 0.4
+        }
+      ]
+    },
+    {
+      "key": "glow.chrome",
+      "category": "glow",
+      "version": 1,
+      "name": "Chrome",
+      "description": "Cool, hard and metallic, with the highlights rolling to blue.",
+      "stages": [
+        {
+          "id": "contrast",
+          "amount": 34
+        },
+        {
+          "id": "whiteBalance",
+          "temperature": -12,
+          "tint": -3
+        },
+        {
+          "id": "splitTone",
+          "shadow": "#202838",
+          "shadowStrength": 0.25,
+          "highlight": "#dbe8ff",
+          "highlightStrength": 0.3,
+          "balance": 0.55
+        },
+        {
+          "id": "bloom",
+          "threshold": 0.8,
+          "radius": 44,
+          "intensity": 0.3
+        }
+      ]
+    },
+    {
+      "key": "glow.sunset",
+      "category": "glow",
+      "version": 1,
+      "name": "Sunset",
+      "description": "A three stop sunset map from violet through red to gold.",
+      "stages": [
+        {
+          "id": "gradientMap",
+          "stops": [
+            {
+              "position": 0.0,
+              "colour": "#2a1430"
+            },
+            {
+              "position": 0.5,
+              "colour": "#b04a48"
+            },
+            {
+              "position": 1.0,
+              "colour": "#ffd08a"
+            }
+          ]
+        },
+        {
+          "id": "vibrance",
+          "amount": 14
+        },
+        {
+          "id": "bloom",
+          "threshold": 0.8,
+          "radius": 56,
+          "intensity": 0.4
+        }
+      ]
+    },
+    {
+      "key": "glow.aurora",
+      "category": "glow",
+      "version": 1,
+      "name": "Aurora",
+      "description": "Green shadows and violet highlights, glowing and saturated.",
+      "stages": [
+        {
+          "id": "splitTone",
+          "shadow": "#103a44",
+          "shadowStrength": 0.35,
+          "highlight": "#8a50c0",
+          "highlightStrength": 0.3,
+          "balance": 0.52
+        },
+        {
+          "id": "vibrance",
+          "amount": 24
+        },
+        {
+          "id": "bloom",
+          "threshold": 0.82,
+          "radius": 48,
+          "intensity": 0.38
+        },
+        {
+          "id": "contrast",
+          "amount": 10
+        }
+      ]
+    },
+    {
+      "key": "glow.ember",
+      "category": "glow",
+      "version": 1,
+      "name": "Ember",
+      "description": "A dark frame with an orange glow in the highlights: coals, not fire.",
+      "stages": [
+        {
+          "id": "exposure",
+          "ev": -0.2
+        },
+        {
+          "id": "splitTone",
+          "shadow": "#100808",
+          "shadowStrength": 0.3,
+          "highlight": "#ff6a20",
+          "highlightStrength": 0.4,
+          "balance": 0.45
+        },
+        {
+          "id": "contrast",
+          "amount": 18
+        },
+        {
+          "id": "bloom",
+          "threshold": 0.76,
+          "radius": 44,
+          "intensity": 0.45
+        }
       ]
     }
   ]

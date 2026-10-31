@@ -60,6 +60,7 @@ add_library(photoprint_core STATIC
   src/EffectCatalogue.cpp
   src/EffectEngine.cpp
   src/EffectStages.cpp
+  src/WandStages.cpp
   src/MainWindow.cpp
   src/Translation.cpp
   src/AboutDialog.cpp

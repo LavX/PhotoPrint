@@ -1,5 +1,7 @@
 #include "EffectEngine.h"
 
+#include "WandStages.h"
+
 #include <QColorSpace>
 #include <QCoreApplication>
 #include <QDebug>
@@ -306,6 +308,40 @@ bool stepIsFinish(const EffectPlanStep &step)
     return !step.point && step.spatial.finish;
 }
 
+/// The 8-bit round trip a wand pass needs. Quantising to 8 bits is inherent:
+/// MagickWand operates on Quantum pixels, and the 16-bit path buys nothing a
+/// photograph can see at these amplitudes.
+QImage bufferToImage(const EffectRgbBuffer &buffer)
+{
+    QImage out(buffer.width, buffer.height, QImage::Format_RGB32);
+    if (out.isNull())
+        return {};
+    for (int y = 0; y < buffer.height; ++y) {
+        QRgb *line = reinterpret_cast<QRgb *>(out.scanLine(y));
+        const float *in = buffer.at(0, y);
+        for (int x = 0; x < buffer.width; ++x, in += 3) {
+            line[x] = qRgb(int(std::clamp(in[0], 0.0f, 1.0f) * 255.0f + 0.5f),
+                           int(std::clamp(in[1], 0.0f, 1.0f) * 255.0f + 0.5f),
+                           int(std::clamp(in[2], 0.0f, 1.0f) * 255.0f + 0.5f));
+        }
+    }
+    return out;
+}
+
+void imageToBuffer(const QImage &image, EffectRgbBuffer &buffer)
+{
+    buffer.resize(image.width(), image.height());
+    for (int y = 0; y < image.height(); ++y) {
+        const QRgb *line = reinterpret_cast<const QRgb *>(image.constScanLine(y));
+        float *out = buffer.at(0, y);
+        for (int x = 0; x < image.width(); ++x, out += 3) {
+            out[0] = qRed(line[x]) / 255.0f;
+            out[1] = qGreen(line[x]) / 255.0f;
+            out[2] = qBlue(line[x]) / 255.0f;
+        }
+    }
+}
+
 Result<void> runSteps(EffectRgbBuffer &buffer, const QList<EffectPlanStep> &steps, int longSide,
                       std::stop_token token)
 {
@@ -313,10 +349,19 @@ Result<void> runSteps(EffectRgbBuffer &buffer, const QList<EffectPlanStep> &step
         if (token.stop_requested())
             return error(QStringLiteral("cancelled"),
                          QStringLiteral("The effect render was cancelled."));
-        if (step.point)
+        if (step.point) {
             effectstages::applyPointStep(buffer, step);
-        else
+            continue;
+        }
+        if (step.spatial.id != StageId::Wand) {
             effectstages::applySpatialStage(buffer, step.spatial, longSide);
+            continue;
+        }
+        QImage image = bufferToImage(buffer);
+        const auto applied = applyWandPass(image, step.spatial, longSide);
+        if (!applied)
+            return applied;
+        imageToBuffer(image, buffer);
     }
     return {};
 }
@@ -328,6 +373,12 @@ Result<void> runFinishSteps(QImage &image, const QList<EffectPlanStep> &steps, i
         if (token.stop_requested())
             return error(QStringLiteral("cancelled"),
                          QStringLiteral("The effect render was cancelled."));
+        if (step.spatial.id == StageId::Wand) {
+            const auto applied = applyWandPass(image, step.spatial, longSide);
+            if (!applied)
+                return applied;
+            continue;
+        }
         effectstages::applyFinishStep(image, step.spatial, longSide);
     }
     return {};
@@ -379,6 +430,18 @@ Result<EffectPlan> EffectEngine::compile(const EffectRecipe &recipe)
             const auto cube = effectCube(stage.lut, &size);
             if (!cube)
                 return cube.error();
+        } else if (stage.id == StageId::Wand) {
+            // A pass the library cannot run disables the recipe with a reason,
+            // never a silent identity.
+            WandPass pass = WandPass::Swirl;
+            if (!wandPassFromName(stage.wandPass, &pass)) {
+                return error(QStringLiteral("effect-wand-unknown"),
+                             QStringLiteral("Unknown MagickWand pass '%1'.")
+                                 .arg(stage.wandPass));
+            }
+            const WandCapability capability = wandCapability(pass);
+            if (!capability.available)
+                return error(QStringLiteral("effect-unavailable"), capability.reason);
         }
     }
 
@@ -387,8 +450,23 @@ Result<EffectPlan> EffectEngine::compile(const EffectRecipe &recipe)
     QList<Stage> toneStages;
     bool segmentHasColour = false;
     bool seenFinish = false;
+    bool seenHalftone = false;
+
+    // A dot screen is a finish stage by construction, whatever a hand-built
+    // recipe says: rendered on the grade raster and upscaled it becomes grey
+    // mush. The loader already forces the flag; normalising here keeps the
+    // compiler safe for recipes that do not come from the JSON.
+    QList<Stage> stages = recipe.stages;
+    for (Stage &stage : stages) {
+        if (stage.id == StageId::Wand && stage.wandPass == QLatin1String("halftone"))
+            stage.finish = true;
+    }
 
     const auto finishAllowed = [](const Stage &stage) {
+        // A dot screen is a finish stage by definition: rendered at the grade
+        // raster and upscaled it becomes grey mush.
+        if (stage.id == StageId::Wand && stage.wandPass == QLatin1String("halftone"))
+            return true;
         if (stage.id == StageId::Grain || stage.id == StageId::Vignette
             || stage.id == StageId::LightLeak || stage.id == StageId::ExposureMask)
             return true;
@@ -411,6 +489,8 @@ Result<EffectPlan> EffectEngine::compile(const EffectRecipe &recipe)
         step.spatial = stage;
         plan.steps.append(step);
         plan.spatialSteps += 1;
+        if (stage.id == StageId::Wand)
+            plan.wandSteps += 1;
         if (stage.finish)
             plan.hasFinishStages = true;
     };
@@ -431,7 +511,7 @@ Result<EffectPlan> EffectEngine::compile(const EffectRecipe &recipe)
         segmentHasColour = false;
     };
 
-    for (const Stage &stage : recipe.stages) {
+    for (const Stage &stage : stages) {
         if (stage.finish) {
             seenFinish = true;
         } else if (seenFinish) {
@@ -439,6 +519,13 @@ Result<EffectPlan> EffectEngine::compile(const EffectRecipe &recipe)
                          QStringLiteral("Effect '%1' has a non-finish stage after a finish stage.")
                              .arg(recipe.identity()));
         }
+        if (seenHalftone) {
+            return error(QStringLiteral("effect-plan"),
+                         QStringLiteral("Effect '%1' has a stage after its halftone screen.")
+                             .arg(recipe.identity()));
+        }
+        if (stage.id == StageId::Wand && stage.wandPass == QLatin1String("halftone"))
+            seenHalftone = true;
 
         if (stage.id == StageId::Posterize) {
             // A LUT interpolates between its 1024 entries, which smears a
@@ -487,6 +574,15 @@ Result<EffectPlan> EffectEngine::compile(const EffectRecipe &recipe)
     if (plan.steps.isEmpty())
         return error(QStringLiteral("effect-plan"),
                      QStringLiteral("Effect '%1' compiles to no steps.").arg(recipe.identity()));
+    // Each wand pass costs an 8-bit round trip plus its own segment, so the
+    // budget is explicit rather than discovered at render time.
+    if (plan.wandSteps > 3) {
+        return error(QStringLiteral("effect-plan"),
+                     QStringLiteral("Effect '%1' uses %2 MagickWand passes; at most 3 are "
+                                    "allowed.")
+                         .arg(recipe.identity())
+                         .arg(plan.wandSteps));
+    }
     return plan;
 }
 

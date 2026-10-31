@@ -1,6 +1,7 @@
 #include "EffectCatalogue.h"
 #include "EffectEngine.h"
 #include "ImageSource.h"
+#include "WandStages.h"
 
 #include <QColor>
 #include <QFile>
@@ -10,6 +11,9 @@
 #include <QJsonObject>
 #include <QSet>
 #include <QtTest>
+
+#include <algorithm>
+#include <cmath>
 
 using namespace pp;
 
@@ -53,6 +57,45 @@ QJsonObject stage(const QString &id, const QJsonObject &extra = {})
     return object;
 }
 
+QJsonObject wand(const QString &pass, const QJsonObject &extra = {})
+{
+    QJsonObject object = extra;
+    object.insert(QStringLiteral("pass"), pass);
+    return stage(QStringLiteral("wand"), object);
+}
+
+/// Parses a single-recipe catalogue, the way the loader is exercised for the
+/// schema cases.
+Result<EffectCatalogue> catalogueFor(const QString &key, const QString &category,
+                                     const QJsonArray &stages)
+{
+    return EffectCatalogue::fromJson(
+        catalogueWith(QJsonArray{recipe(key, category, 1, stages)}));
+}
+
+/// Mean length of a run of equal grey values along every seventh row: a cheap
+/// and stable measure of how coarse a dot screen is.
+double meanRunLength(const QImage &image)
+{
+    long long runs = 0;
+    long long pixels = 0;
+    for (int y = 0; y < image.height(); y += 7) {
+        int run = 1;
+        for (int x = 1; x < image.width(); ++x) {
+            if (qGray(image.pixel(x, y)) == qGray(image.pixel(x - 1, y))) {
+                run += 1;
+            } else {
+                runs += 1;
+                pixels += run;
+                run = 1;
+            }
+        }
+        runs += 1;
+        pixels += run;
+    }
+    return double(pixels) / double(std::max<long long>(1, runs));
+}
+
 } // namespace
 
 class TestEffectCatalogue : public QObject
@@ -62,6 +105,7 @@ class TestEffectCatalogue : public QObject
 private slots:
     void embeddedCatalogueLoads();
     void categoriesAreTheTwelve();
+    void everyCategoryShipsTenLooks();
     void recipesCompile();
     void recipesUseSingleStringNames();
     void textureAssetsExist();
@@ -73,19 +117,29 @@ private slots:
     void zeroStopGradientIsRejected();
     void unsupportedBlendIsRejected();
     void legacyKeysStayFrozen();
+    void everyStageIdIsKnown();
+    void wandStageSchemaIsStrict();
+    void halftoneMustBeLast();
+    void everyWandPassIsPresentOrDisabled();
+    void halftoneFallbackIsDeterministic();
 };
 
 void TestEffectCatalogue::embeddedCatalogueLoads()
 {
     const EffectCatalogue &catalogue = EffectCatalogue::instance();
     QVERIFY(!catalogue.isEmpty());
-    QCOMPARE(catalogue.recipes().size(), 10);
+    QCOMPARE(catalogue.recipes().size(), 120);
+    QSet<QString> keys;
     for (const EffectRecipe &recipe : catalogue.recipes()) {
         QVERIFY(!recipe.key.isEmpty());
         QVERIFY(kCategories.contains(recipe.category));
-        QVERIFY(recipe.version >= 1);
+        QCOMPARE(recipe.version, 1);
         QVERIFY(recipe.key.startsWith(recipe.category + QLatin1Char('.')));
+        QVERIFY(!recipe.name.isEmpty());
+        QVERIFY(!keys.contains(recipe.key));
+        keys.insert(recipe.key);
     }
+    QCOMPARE(keys.size(), 120);
 }
 
 void TestEffectCatalogue::categoriesAreTheTwelve()
@@ -94,16 +148,41 @@ void TestEffectCatalogue::categoriesAreTheTwelve()
     QCOMPARE(catalogue.categoryKeys(), kCategories);
     for (const QString &key : kCategories)
         QVERIFY(!catalogue.categoryName(key).isEmpty());
+    QCOMPARE(catalogue.categoryName(QStringLiteral("basic")), QStringLiteral("Basics"));
+    QCOMPARE(catalogue.categoryName(QStringLiteral("mono")), QStringLiteral("Black & white"));
+}
+
+void TestEffectCatalogue::everyCategoryShipsTenLooks()
+{
+    const EffectCatalogue &catalogue = EffectCatalogue::instance();
+    QHash<QString, int> counts;
+    for (const EffectRecipe &recipe : catalogue.recipes()) {
+        counts[recipe.category] += 1;
+        // The key is the identity a project stores, so the category lead is
+        // part of the contract, not a naming habit.
+        QVERIFY(recipe.key.startsWith(recipe.category + QLatin1Char('.')));
+    }
+    for (const QString &category : kCategories) {
+        QVERIFY2(counts.value(category) == 10,
+                 qPrintable(QStringLiteral("%1 has %2 effects")
+                                .arg(category)
+                                .arg(counts.value(category))));
+    }
+    QCOMPARE(counts.size(), 12);
 }
 
 void TestEffectCatalogue::recipesCompile()
 {
     for (const EffectRecipe &recipe : EffectCatalogue::instance().recipes()) {
         const auto plan = EffectEngine::compile(recipe);
-        QVERIFY(plan.ok());
+        if (!plan.ok()) {
+            QFAIL(qPrintable(recipe.key + QStringLiteral(": ") + plan.error().message));
+        }
         QVERIFY(!plan.value().steps.isEmpty());
         QVERIFY(plan.value().pointSteps + plan.value().spatialSteps
                 == plan.value().steps.size());
+        QVERIFY(plan.value().wandSteps >= 0);
+        QVERIFY(plan.value().wandSteps <= 3);
         bool seenFinish = false;
         for (const EffectPlanStep &step : plan.value().steps) {
             if (step.point) {
@@ -123,7 +202,7 @@ void TestEffectCatalogue::recipesUseSingleStringNames()
     const QJsonDocument document = QJsonDocument::fromJson(file.readAll());
     QVERIFY(document.isObject());
     const QJsonArray recipes = document.object().value(QStringLiteral("recipes")).toArray();
-    QCOMPARE(recipes.size(), 10);
+    QCOMPARE(recipes.size(), 120);
     for (const QJsonValue &value : recipes) {
         const QJsonObject recipe = value.toObject();
         QVERIFY(recipe.value(QStringLiteral("name")).isString());
@@ -298,6 +377,205 @@ void TestEffectCatalogue::legacyKeysStayFrozen()
         QVERIFY(!EffectCatalogue::instance().resolve(key).ok());
     }
     QVERIFY(!isLegacyPresetKey(QStringLiteral("light.venice")));
+}
+
+void TestEffectCatalogue::everyStageIdIsKnown()
+{
+    const QStringList passes = wandPassNames();
+    QCOMPARE(passes.size(), 16);
+    for (const EffectRecipe &recipe : EffectCatalogue::instance().recipes()) {
+        for (int index = 0; index < recipe.stages.size(); ++index) {
+            const Stage &stage = recipe.stages.at(index);
+            StageId id = StageId::Exposure;
+            QVERIFY2(stageFromName(stage.idName, &id),
+                     qPrintable(recipe.key + QStringLiteral(": ") + stage.idName));
+            QCOMPARE(stage.id, id);
+            QCOMPARE(stageName(id), stage.idName);
+            const StagePhase phase = stagePhase(id);
+            QVERIFY(phase == StagePhase::PointTone || phase == StagePhase::PointColour
+                    || phase == StagePhase::Spatial || phase == StagePhase::Light
+                    || phase == StagePhase::Wand);
+
+            if (id == StageId::Wand) {
+                WandPass pass = WandPass::Swirl;
+                QVERIFY2(wandPassFromName(stage.wandPass, &pass),
+                         qPrintable(recipe.key + QStringLiteral(": ") + stage.wandPass));
+                QCOMPARE(phase, StagePhase::Wand);
+                // A wand halftone destroys the grade, so it is finish and last.
+                if (pass == WandPass::Halftone) {
+                    QVERIFY2(stage.finish, qPrintable(recipe.key));
+                    QCOMPARE(index, recipe.stages.size() - 1);
+                }
+                // Every pass carries at least one authored parameter, except
+                // mirror, which needs none.
+                if (pass != WandPass::Mirror && pass != WandPass::Halftone)
+                    QVERIFY2(!wandRequiredSymbols(pass).isEmpty(),
+                             qPrintable(recipe.key));
+            }
+            if (id == StageId::Grain)
+                QVERIFY2(stage.finish, qPrintable(recipe.key));
+        }
+    }
+}
+
+void TestEffectCatalogue::wandStageSchemaIsStrict()
+{
+    const auto parse = [](const QJsonArray &stages) {
+        return catalogueFor(QStringLiteral("warp.test"), QStringLiteral("warp"), stages);
+    };
+    // A pass the engine does not implement cannot be named.
+    QVERIFY(!parse(QJsonArray{wand(QStringLiteral("lensFlare"))}).ok());
+    // A field that belongs to another pass is a load error, not a default.
+    QVERIFY(!parse(QJsonArray{wand(QStringLiteral("swirl"),
+                                   {{QStringLiteral("radius"), 3.0}})}).ok());
+    QVERIFY(!parse(QJsonArray{wand(QStringLiteral("mirror"),
+                                   {{QStringLiteral("degrees"), 3.0}})}).ok());
+    // The magnitude of every pass is required explicitly.
+    QVERIFY(!parse(QJsonArray{wand(QStringLiteral("implode"))}).ok());
+    QVERIFY(!parse(QJsonArray{wand(QStringLiteral("wave"),
+                                   {{QStringLiteral("amplitude"), 12.0}})}).ok());
+    QVERIFY(!parse(QJsonArray{wand(QStringLiteral("oilPaint"))}).ok());
+    QVERIFY(!parse(QJsonArray{wand(QStringLiteral("pixelate"))}).ok());
+    // A threshold map outside the verified list is refused.
+    QVERIFY(!parse(QJsonArray{wand(QStringLiteral("halftone"),
+                                   {{QStringLiteral("map"), QStringLiteral("nope")}})}).ok());
+    QVERIFY(parse(QJsonArray{wand(QStringLiteral("halftone"),
+                                  {{QStringLiteral("map"), QStringLiteral("h8x8a")}})}).ok());
+    // Valid passes parse, and the values are clamped to their documented range.
+    const auto oil = parse(QJsonArray{wand(QStringLiteral("oilPaint"),
+                                           {{QStringLiteral("radius"), 400.0}})});
+    QVERIFY(oil.ok());
+    QCOMPARE(oil.value().recipes().first().stages.first().wandRadius, 100.0);
+    const auto mirror = parse(QJsonArray{wand(QStringLiteral("mirror"))});
+    QVERIFY(mirror.ok());
+    QCOMPARE(mirror.value().recipes().first().stages.first().wandPass,
+             QStringLiteral("mirror"));
+    // A halftone is finish whether the recipe says so or not.
+    const auto halftone = parse(QJsonArray{wand(QStringLiteral("halftone"))});
+    QVERIFY(halftone.ok());
+    QVERIFY(halftone.value().recipes().first().stages.first().finish);
+}
+
+void TestEffectCatalogue::halftoneMustBeLast()
+{
+    const auto parse = [](const QJsonArray &stages) {
+        return catalogueFor(QStringLiteral("print.test"), QStringLiteral("print"), stages);
+    };
+    QVERIFY(!parse(QJsonArray{wand(QStringLiteral("halftone")),
+                             stage(QStringLiteral("saturation"),
+                                   {{QStringLiteral("amount"), -100}})}).ok());
+    QVERIFY(parse(QJsonArray{stage(QStringLiteral("saturation"),
+                                   {{QStringLiteral("amount"), -100}}),
+                             wand(QStringLiteral("halftone"))}).ok());
+
+    // The compiler enforces the same rule for a hand-built recipe.
+    EffectRecipe recipe;
+    recipe.key = QStringLiteral("print.test");
+    recipe.category = QStringLiteral("print");
+    recipe.stages = {Stage{}, Stage{}};
+    recipe.stages[0].id = StageId::Wand;
+    recipe.stages[0].idName = QStringLiteral("wand");
+    recipe.stages[0].wandPass = QStringLiteral("halftone");
+    recipe.stages[0].finish = true;
+    recipe.stages[1].id = StageId::Grain;
+    recipe.stages[1].idName = QStringLiteral("grain");
+    recipe.stages[1].finish = true;
+    recipe.stages[1].amount = 0.02;
+    const auto plan = EffectEngine::compile(recipe);
+    QVERIFY(!plan.ok());
+    QCOMPARE(plan.error().code, QStringLiteral("effect-plan"));
+}
+
+void TestEffectCatalogue::everyWandPassIsPresentOrDisabled()
+{
+    // The probe reads the loaded library, not the header: ImageMagick 7
+    // declares functions it does not export, and a missing symbol must disable
+    // the recipes that need it with a reason rather than render an identity.
+    const EffectCatalogue &catalogue = EffectCatalogue::instance();
+    for (const QString &name : wandPassNames()) {
+        WandPass pass = WandPass::Swirl;
+        QVERIFY(wandPassFromName(name, &pass));
+        const WandCapability capability = wandCapability(pass);
+        // Halftone always works: the in-process screen is the fallback.
+        if (pass != WandPass::Halftone)
+            QVERIFY2(!wandRequiredSymbols(pass).isEmpty(), qPrintable(name));
+
+        for (const EffectRecipe &recipe : catalogue.recipes()) {
+            bool uses = false;
+            for (const Stage &stage : recipe.stages)
+                uses = uses || (stage.id == StageId::Wand && stage.wandPass == name);
+            if (!uses)
+                continue;
+            const auto plan = EffectEngine::compile(recipe);
+            if (capability.available) {
+                if (!plan.ok()) {
+                    QFAIL(qPrintable(name + QStringLiteral(": ") + recipe.key
+                                     + QStringLiteral(": ") + plan.error().message));
+                }
+            } else {
+                QVERIFY(!plan.ok());
+                QCOMPARE(plan.error().code, QStringLiteral("effect-unavailable"));
+                QVERIFY(!plan.error().message.isEmpty());
+                QVERIFY(plan.error().message.contains(name));
+            }
+        }
+    }
+    // A pass that is unavailable and unused cannot hide a broken catalogue:
+    // the shipped set must use only passes this build can run.
+    for (const QString &name : wandPassNames()) {
+        WandPass pass = WandPass::Swirl;
+        wandPassFromName(name, &pass);
+        const WandCapability capability = wandCapability(pass);
+        if (capability.available)
+            continue;
+        bool used = false;
+        for (const EffectRecipe &recipe : catalogue.recipes())
+            for (const Stage &stage : recipe.stages)
+                used = used || (stage.id == StageId::Wand && stage.wandPass == name);
+        QVERIFY2(!used, qPrintable(QStringLiteral("shipped recipes need the unavailable "
+                                                  "pass %1: %2")
+                                       .arg(name, capability.reason)));
+    }
+}
+
+void TestEffectCatalogue::halftoneFallbackIsDeterministic()
+{
+    // The threshold map is probed exactly once; the answer must not wobble.
+    const bool maps = wandThresholdMapsAvailable();
+    QCOMPARE(wandThresholdMapsAvailable(), maps);
+
+    QImage source(64, 64, QImage::Format_ARGB32);
+    for (int y = 0; y < 64; ++y) {
+        for (int x = 0; x < 64; ++x)
+            source.setPixel(x, y, qRgba(x * 4, 128, 64, (x * 3) & 0xff));
+    }
+
+    QImage first = source;
+    QImage second = source;
+    orderedDither8x8(first, 2.0);
+    orderedDither8x8(second, 2.0);
+    QCOMPARE(first, second);
+
+    // A screen is bilevel per channel and leaves alpha alone.
+    for (int y = 0; y < first.height(); ++y) {
+        for (int x = 0; x < first.width(); ++x) {
+            const QRgb pixel = first.pixel(x, y);
+            for (int channel : {qRed(pixel), qGreen(pixel), qBlue(pixel)})
+                QVERIFY(channel == 0 || channel == 255);
+            QCOMPARE(qAlpha(pixel), qAlpha(source.pixel(x, y)));
+        }
+    }
+
+    // The dot pitch follows the cell size, which is how the finish raster
+    // scales the screen.
+    QImage fine = source;
+    QImage coarse = source;
+    orderedDither8x8(fine, 2.0);
+    orderedDither8x8(coarse, 8.0);
+    QVERIFY2(meanRunLength(coarse) > meanRunLength(fine) * 1.5,
+             qPrintable(QStringLiteral("%1 vs %2")
+                            .arg(meanRunLength(fine))
+                            .arg(meanRunLength(coarse))));
 }
 
 QTEST_MAIN(TestEffectCatalogue)

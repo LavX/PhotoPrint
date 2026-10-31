@@ -36,7 +36,9 @@ struct EffectRgbBuffer {
 };
 
 /// One compiled segment. A point step is one 1D LUT pass plus its fused Phase B
-/// stages; a spatial step ends the segment and runs after it.
+/// stages; a spatial step ends the segment and runs after it. A Phase E step is
+/// a spatial step whose stage is StageId::Wand: it leaves the float buffer,
+/// runs through MagickWand on 8-bit RGB, and comes back.
 struct EffectPlanStep {
     bool point = true;
     bool hasCurve = false;
@@ -52,6 +54,7 @@ struct EffectPlan {
     QList<EffectPlanStep> steps;
     int pointSteps = 0;
     int spatialSteps = 0;
+    int wandSteps = 0; ///< the subset of spatial steps that run through MagickWand
     bool hasFinishStages = false;
 };
 
