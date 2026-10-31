@@ -138,20 +138,16 @@
       "stages": [
         {
           "id": "contrast",
-          "amount": 18
-        },
-        {
-          "id": "vibrance",
-          "amount": 28
+          "amount": 24
         },
         {
           "id": "saturation",
-          "amount": 6
+          "amount": 14
         },
         {
           "id": "unsharp",
-          "radius": 1.6,
-          "amount": 0.7
+          "radius": 1.8,
+          "amount": 0.9
         }
       ]
     },
@@ -249,16 +245,16 @@
       "stages": [
         {
           "id": "contrast",
-          "amount": -8
+          "amount": -14
         },
         {
           "id": "fade",
-          "lift": 0.09,
-          "toe": 0.7
+          "lift": 0.12,
+          "toe": 0.65
         },
         {
           "id": "saturation",
-          "amount": -6
+          "amount": -12
         }
       ]
     },
@@ -1005,7 +1001,7 @@
       "category": "retro",
       "version": 1,
       "name": "Newsprint",
-      "description": "Coarse monochrome dots on cheap paper with a warm base.",
+      "description": "Coarse monochrome dots on cheap paper: faded, soft and grainy.",
       "stages": [
         {
           "id": "saturation",
@@ -1013,23 +1009,22 @@
         },
         {
           "id": "contrast",
-          "amount": 12
+          "amount": 8
         },
         {
-          "id": "whiteBalance",
-          "temperature": 6,
-          "tint": 2
+          "id": "fade",
+          "lift": 0.1
         },
         {
           "id": "texture",
           "asset": "paper-news",
-          "opacity": 0.35,
+          "opacity": 0.4,
           "blend": "multiply"
         },
         {
           "id": "wand",
           "pass": "halftone",
-          "map": "h8x8a"
+          "size": 16
         }
       ]
     },
@@ -1522,6 +1517,12 @@
         {
           "id": "contrast",
           "amount": 6
+        },
+        {
+          "id": "vignette",
+          "amount": 0.16,
+          "midpoint": 0.6,
+          "feather": 0.4
         }
       ]
     },
@@ -1563,17 +1564,17 @@
       "stages": [
         {
           "id": "bloom",
-          "threshold": 0.9,
-          "radius": 30,
-          "intensity": 0.25
+          "threshold": 0.86,
+          "radius": 36,
+          "intensity": 0.38
         },
         {
           "id": "fade",
-          "lift": 0.08
+          "lift": 0.06
         },
         {
           "id": "contrast",
-          "amount": -12
+          "amount": -14
         },
         {
           "id": "saturation",
@@ -1687,13 +1688,13 @@
       "description": "A relief map of the frame: grey, raised and quite strange.",
       "stages": [
         {
+          "id": "saturation",
+          "amount": -100
+        },
+        {
           "id": "wand",
           "pass": "emboss",
           "sigma": 1
-        },
-        {
-          "id": "saturation",
-          "amount": -40
         },
         {
           "id": "contrast",
@@ -1728,21 +1729,23 @@
       "category": "detail",
       "version": 1,
       "name": "Pencil",
-      "description": "Soft graphite shading: pale, desaturated and lifted, with paper tooth.",
+      "description": "Graphite line work: soft edges inverted onto pale paper, with a light tooth.",
       "stages": [
         {
-          "id": "unsharp",
-          "radius": 0.7,
-          "amount": 1.8,
-          "threshold": 0.02
+          "id": "wand",
+          "pass": "edge",
+          "radius": 1
+        },
+        {
+          "id": "invert"
         },
         {
           "id": "saturation",
-          "amount": -78
+          "amount": -70
         },
         {
           "id": "contrast",
-          "amount": 16
+          "amount": 8
         },
         {
           "id": "fade",
@@ -1751,7 +1754,7 @@
         {
           "id": "grain",
           "finish": true,
-          "amount": 0.02,
+          "amount": 0.025,
           "size": 1,
           "seed": 251
         }
@@ -1815,8 +1818,18 @@
           "sigma": 1
         },
         {
+          "id": "saturation",
+          "amount": -30
+        },
+        {
           "id": "contrast",
-          "amount": 8
+          "amount": 12
+        },
+        {
+          "id": "texture",
+          "asset": "paper-soft",
+          "opacity": 0.22,
+          "blend": "multiply"
         }
       ]
     },
@@ -1874,8 +1887,8 @@
       "key": "art.watercolour",
       "category": "art",
       "version": 1,
-      "name": "Watercolour",
-      "description": "Washed shapes that bleed into the paper, with the whites glowing.",
+      "name": "Wash",
+      "description": "A pale, soft wash over textured paper, with the whites left glowing.",
       "stages": [
         {
           "id": "wand",
@@ -1886,11 +1899,15 @@
           "id": "bloom",
           "threshold": 0.86,
           "radius": 60,
-          "intensity": 0.3
+          "intensity": 0.35
         },
         {
           "id": "fade",
           "lift": 0.08
+        },
+        {
+          "id": "vibrance",
+          "amount": 12
         },
         {
           "id": "texture",
@@ -2034,16 +2051,20 @@
         {
           "id": "wand",
           "pass": "oilPaint",
-          "radius": 3
+          "radius": 4
         },
         {
           "id": "wand",
           "pass": "emboss",
-          "sigma": 1
+          "sigma": 2
         },
         {
           "id": "vibrance",
-          "amount": 14
+          "amount": 18
+        },
+        {
+          "id": "contrast",
+          "amount": 10
         }
       ]
     },
@@ -2913,7 +2934,7 @@
         {
           "id": "wand",
           "pass": "halftone",
-          "map": "h8x8a"
+          "size": 8
         }
       ]
     },
@@ -2944,7 +2965,7 @@
         {
           "id": "wand",
           "pass": "halftone",
-          "map": "h6x6a"
+          "size": 8
         }
       ]
     },
@@ -2952,8 +2973,8 @@
       "key": "print.news",
       "category": "print",
       "version": 1,
-      "name": "Newsprint",
-      "description": "Cheap paper, coarse dots and a warm grey.",
+      "name": "Rotary Press",
+      "description": "A rotary plate: hard dots, three ink densities, cheap paper.",
       "stages": [
         {
           "id": "saturation",
@@ -2961,23 +2982,22 @@
         },
         {
           "id": "contrast",
-          "amount": 20
+          "amount": 18
         },
         {
-          "id": "whiteBalance",
-          "temperature": 8,
-          "tint": 3
+          "id": "posterize",
+          "levels": 3
         },
         {
           "id": "texture",
           "asset": "paper-news",
-          "opacity": 0.3,
+          "opacity": 0.22,
           "blend": "multiply"
         },
         {
           "id": "wand",
           "pass": "halftone",
-          "map": "o8x8"
+          "size": 24
         }
       ]
     },
@@ -3079,7 +3099,10 @@
         {
           "id": "wand",
           "pass": "emboss",
-          "sigma": 1
+          "sigma": 2
+        },
+        {
+          "id": "invert"
         },
         {
           "id": "saturation",
@@ -3087,7 +3110,7 @@
         },
         {
           "id": "contrast",
-          "amount": 26
+          "amount": 30
         }
       ]
     },
@@ -3210,13 +3233,13 @@
       "stages": [
         {
           "id": "bloom",
-          "threshold": 0.62,
-          "radius": 64,
-          "intensity": 0.75
+          "threshold": 0.6,
+          "radius": 72,
+          "intensity": 0.9
         },
         {
           "id": "contrast",
-          "amount": -8
+          "amount": -10
         }
       ]
     },

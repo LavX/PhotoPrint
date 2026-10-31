@@ -121,34 +121,90 @@ void toLab(double r, double g, double b, double *l, double *a, double *bStar)
     *bStar = 200.0 * (f(y) - f(z));
 }
 
-/// Mean CIELAB distance between two frames. The catalogue gate is 1.8: below
-/// that two tiles in one category read as the same look at browser size.
+/// CIELAB samples for one frame, computed once: the catalogue gates compare
+/// thousands of pairs, and converting to Lab inside every comparison is the
+/// only thing that makes them slow.
+struct LabFrame {
+    int width = 0;
+    int height = 0;
+    std::vector<float> values; ///< 3 floats per pixel
+};
+
+LabFrame labFrame(const QImage &image)
+{
+    LabFrame frame;
+    const QImage argb = image.convertToFormat(QImage::Format_ARGB32);
+    frame.width = argb.width();
+    frame.height = argb.height();
+    frame.values.resize(static_cast<size_t>(frame.width) * frame.height * 3);
+    size_t out = 0;
+    for (int y = 0; y < argb.height(); ++y) {
+        const QRgb *line = reinterpret_cast<const QRgb *>(argb.constScanLine(y));
+        for (int x = 0; x < argb.width(); ++x) {
+            double l = 0.0, a = 0.0, b = 0.0;
+            toLab(qRed(line[x]) / 255.0, qGreen(line[x]) / 255.0, qBlue(line[x]) / 255.0,
+                  &l, &a, &b);
+            frame.values[out++] = float(l);
+            frame.values[out++] = float(a);
+            frame.values[out++] = float(b);
+        }
+    }
+    return frame;
+}
+
+/// Mean CIELAB distance between two frames, sampled every @p stride pixels.
+double meanLabDistance(const LabFrame &left, const LabFrame &right, int stride)
+{
+    if (left.width != right.width || left.height != right.height || left.width <= 0)
+        return 1e9;
+    double total = 0.0;
+    long long count = 0;
+    for (int y = 0; y < left.height; y += stride) {
+        for (int x = 0; x < left.width; x += stride) {
+            const size_t index = (static_cast<size_t>(y) * left.width + x) * 3;
+            const double dl = double(left.values[index]) - right.values[index];
+            const double da = double(left.values[index + 1]) - right.values[index + 1];
+            const double db = double(left.values[index + 2]) - right.values[index + 2];
+            total += std::sqrt(dl * dl + da * da + db * db);
+            count += 1;
+        }
+    }
+    return total / double(std::max<long long>(1, count));
+}
+
 double perceptualDistance(const QImage &left, const QImage &right)
 {
     if (left.size() != right.size() || left.isNull() || right.isNull())
         return 1e9;
-    const QImage a = left.convertToFormat(QImage::Format_ARGB32);
-    const QImage b = right.convertToFormat(QImage::Format_ARGB32);
-    double total = 0.0;
-    for (int y = 0; y < a.height(); ++y) {
-        const QRgb *lineA = reinterpret_cast<const QRgb *>(a.constScanLine(y));
-        const QRgb *lineB = reinterpret_cast<const QRgb *>(b.constScanLine(y));
-        for (int x = 0; x < a.width(); ++x) {
-            double l1 = 0.0, a1 = 0.0, b1 = 0.0, l2 = 0.0, a2 = 0.0, b2 = 0.0;
-            toLab(qRed(lineA[x]) / 255.0, qGreen(lineA[x]) / 255.0, qBlue(lineA[x]) / 255.0,
-                  &l1, &a1, &b1);
-            toLab(qRed(lineB[x]) / 255.0, qGreen(lineB[x]) / 255.0, qBlue(lineB[x]) / 255.0,
-                  &l2, &a2, &b2);
-            total += std::sqrt((l1 - l2) * (l1 - l2) + (a1 - a2) * (a1 - a2)
-                               + (b1 - b2) * (b1 - b2));
-        }
-    }
-    return total / (double(a.width()) * double(a.height()));
+    return meanLabDistance(labFrame(left), labFrame(right), 1);
 }
 
-/// The documented distinctness floor, in mean CIELAB distance across the frame
-/// at the 240 px browser raster.
-constexpr double kDistinctnessFloor = 1.8;
+/// The documented within-category floor, in mean CIELAB distance across the
+/// frame at the 240 px browser raster. The tightest shipped pair is
+/// basic.neutral vs basic.warmbase at 2.19, so a floor of 2.0 has margin.
+constexpr double kDistinctnessFloor = 2.0;
+
+/// The documented cross-category floor. Two looks in different categories are
+/// never offered as alternatives in one grid, so the floor is lower, but a
+/// near-clone is still a defect.
+constexpr double kCrossCategoryFloor = 1.8;
+/// The absolute floor: nothing in the catalogue may be within this distance of
+/// anything else, whatever the categories say.
+constexpr double kCloneFloor = 1.0;
+
+/// The one documented family allowed between kCloneFloor and
+/// kCrossCategoryFloor. These looks are corrections, not looks: each changes a
+/// neutral frame by one small thing (a cast, a lifted black, a little
+/// sharpening, the finest grain), so on a frame that has no cast and no
+/// softness they necessarily land within a couple of deltaE of the original, and
+/// of each other. They live in different categories and are never shown as
+/// alternatives for the same job. Every other cross-category pair must clear
+/// kCrossCategoryFloor.
+const QStringList kCorrectionFamily = {
+    QStringLiteral("basic.neutral"),    QStringLiteral("basic.clean"),
+    QStringLiteral("basic.coolbase"),   QStringLiteral("color.neutralize"),
+    QStringLiteral("detail.clarity"),   QStringLiteral("grain.fine"),
+};
 
 /// Mean length of a run of equal grey values: how coarse a dot screen is.
 double meanRunLength(const QImage &image)
@@ -274,10 +330,13 @@ private slots:
     void effectVersionRoundTrips();
     void rendersOffTheGuiThread();
     void catalogueDistinctnessGate();
+    void catalogueCrossCategoryGate();
     void catalogueRenderHashes();
     void renderCostStaysWithinBudget();
     void wandStagesSurviveThePrintPath();
     void halftoneDotPitchScalesWithFinishRaster();
+    void halftoneScreenIsStableAcrossRasters();
+    void mirrorReflectsTheLeftHalf();
     void alphaSurvivesAWandPass();
 };
 
@@ -1097,12 +1156,11 @@ void TestEffectEngine::catalogueDistinctnessGate()
 {
     // Every shipped look is rendered at the browser raster on the committed
     // sample and compared inside its own category. The metric is the mean
-    // CIELAB distance across the frame (see perceptualDistance); the floor is
-    // 1.8, which is the point where two tiles stop reading as the same look.
-    // The tightest pair in the shipped set is mono.classic vs mono.infrared at
-    // about 2.2, so the gate has margin, but a new look must still clear it.
+    // CIELAB distance across the frame (see meanLabDistance); the floor is 2.0.
+    // The tightest shipped pair is basic.neutral vs basic.warmbase at 2.19, so
+    // the gate has margin, but a new look must still clear it.
     const QImage source = scaledSample(QSize(240, 180));
-    QHash<QString, QList<QImage>> byCategory;
+    QHash<QString, QList<LabFrame>> byCategory;
     QHash<QString, QList<QString>> keysByCategory;
     for (const EffectRecipe &recipe : EffectCatalogue::instance().recipes()) {
         const auto result =
@@ -1110,25 +1168,102 @@ void TestEffectEngine::catalogueDistinctnessGate()
         if (!result.ok()) {
             QFAIL(qPrintable(recipe.key + QStringLiteral(": ") + result.error().message));
         }
-        byCategory[recipe.category].append(result.value());
+        byCategory[recipe.category].append(labFrame(result.value()));
         keysByCategory[recipe.category].append(recipe.key);
     }
+    double tightest = 1e9;
+    QString tightestPair;
     for (const QString &category : EffectCatalogue::instance().categoryKeys()) {
-        const QList<QImage> &looks = byCategory.value(category);
+        const QList<LabFrame> &looks = byCategory.value(category);
         const QList<QString> &keys = keysByCategory.value(category);
         QCOMPARE(looks.size(), 10);
         for (int i = 0; i < looks.size(); ++i) {
             for (int j = i + 1; j < looks.size(); ++j) {
-                const double distance = perceptualDistance(looks.at(i), looks.at(j));
+                const double distance = meanLabDistance(looks.at(i), looks.at(j), 1);
+                if (distance < tightest) {
+                    tightest = distance;
+                    tightestPair = QStringLiteral("%1 vs %2").arg(keys.at(i), keys.at(j));
+                }
                 QVERIFY2(distance >= kDistinctnessFloor,
-                         qPrintable(QStringLiteral("%1 vs %2: deltaE %3 < %4 in '%5'")
+                         qPrintable(QStringLiteral("%1 vs %2: deltaE %3 < %4 in '%5' "
+                                                   "(tightest so far: %6 at %7)")
                                         .arg(keys.at(i), keys.at(j))
                                         .arg(distance)
                                         .arg(kDistinctnessFloor)
-                                        .arg(category)));
+                                        .arg(category)
+                                        .arg(tightest)
+                                        .arg(tightestPair)));
             }
         }
     }
+    // The gate is only meaningful if the catalogue clears it with room; this is
+    // where the observed minimum is reported when it does not.
+    QVERIFY2(tightest >= kDistinctnessFloor,
+             qPrintable(QStringLiteral("tightest within-category pair %1 at deltaE %2, "
+                                       "floor %3")
+                            .arg(tightestPair)
+                            .arg(tightest)
+                            .arg(kDistinctnessFloor)));
+}
+
+void TestEffectEngine::catalogueCrossCategoryGate()
+{
+    // No two looks in the whole catalogue may be near-clones, even across
+    // categories: a user searching by name should not land on the same picture
+    // twice. Every pair must clear kCloneFloor, and every pair outside the
+    // documented correction family must clear kCrossCategoryFloor. The tightest
+    // offenders before this gate existed were basic.punch vs glow.pop at 0.70,
+    // detail.drybrush vs art.impasto at 1.29 and retro.newsprint vs print.news
+    // at 1.78; all three were retuned apart. The comparison samples every second
+    // pixel of the 240 px render, which is the same measurement at a quarter of
+    // the work.
+    constexpr int kStride = 2;
+    const QImage source = scaledSample(QSize(240, 180));
+    QList<LabFrame> looks;
+    QList<QString> keys;
+    QList<QString> categories;
+    for (const EffectRecipe &recipe : EffectCatalogue::instance().recipes()) {
+        const auto result =
+            EffectEngine::instance().render(source, recipe, 100, source.size(), false);
+        if (!result.ok()) {
+            QFAIL(qPrintable(recipe.key + QStringLiteral(": ") + result.error().message));
+        }
+        looks.append(labFrame(result.value()));
+        keys.append(recipe.key);
+        categories.append(recipe.category);
+    }
+    double tightest = 1e9;
+    QString tightestPair;
+    for (int i = 0; i < looks.size(); ++i) {
+        for (int j = i + 1; j < looks.size(); ++j) {
+            if (categories.at(i) == categories.at(j))
+                continue;
+            const double distance = meanLabDistance(looks.at(i), looks.at(j), kStride);
+            const bool family = kCorrectionFamily.contains(keys.at(i))
+                && kCorrectionFamily.contains(keys.at(j));
+            const double floor = family ? kCloneFloor : kCrossCategoryFloor;
+            if (distance < tightest) {
+                tightest = distance;
+                tightestPair = QStringLiteral("%1 vs %2").arg(keys.at(i), keys.at(j));
+            }
+            QVERIFY2(distance >= floor,
+                     qPrintable(QStringLiteral("%1 vs %2: deltaE %3 < %4%s "
+                                               "(tightest so far: %5 at %6)")
+                                    .arg(keys.at(i), keys.at(j))
+                                    .arg(distance)
+                                    .arg(floor)
+                                    .arg(family ? QStringLiteral(" (correction family)")
+                                                : QString())
+                                    .arg(tightest)
+                                    .arg(tightestPair)));
+        }
+    }
+    // The documented family is the only allowed slack, and it has to stay above
+    // the absolute clone floor with room.
+    QVERIFY2(tightest >= kCloneFloor + 0.1,
+             qPrintable(QStringLiteral("tightest cross-category pair %1 at deltaE %2")
+                            .arg(tightestPair)
+                            .arg(tightest)));
 }
 
 void TestEffectEngine::catalogueRenderHashes()
@@ -1149,7 +1284,7 @@ void TestEffectEngine::catalogueRenderHashes()
         {"basic.deep",
          "d1cf1105da9475e8b7ad7b519878149f06767e4959dd029cb433a8450bcac57d"},
         {"basic.punch",
-         "5d8d6c5b2917bfcc3d6652af1bdab1fda41b5746b44c685b8bde9933fe989948"},
+         "3c7b24e4c95a12316ce8f7bc0d9ea4baea06821c154503acf4f2d50ad0eeea92"},
         {"basic.soft",
          "ab4edb454acc016d5319beb66e640fdcc63973dfaeeb1094a111d2c766dd52b0"},
         {"basic.warmbase",
@@ -1159,7 +1294,7 @@ void TestEffectEngine::catalogueRenderHashes()
         {"basic.clean",
          "955dda053a7451a81cd49953c84c35805b2f75c0718227ec8edf45817772359e"},
         {"basic.matte",
-         "4ba66baba60df7b2cd79548ebff71a6ef36054a2d143c072f314e0c5cc8407c8"},
+         "fd325af2aca38f3d6a969b37eddc66326ac7d9421b940a759d9e8e55b73d392b"},
         {"basic.faithful",
          "ef4b5c0bf64588c3fbefded0144c5543613d0be21b78413aff0d1fe2eb5cb10d"},
         {"mono.classic",
@@ -1201,7 +1336,7 @@ void TestEffectEngine::catalogueRenderHashes()
         {"retro.sunbleach",
          "f5398082763a7c4a101c1cb401c37b8defb182b1164c4c1f9bcdeafc36833173"},
         {"retro.newsprint",
-         "a8ddf8d29e0bfa17f9c978bdc7bb5b5056315141f8d7133c0affa9f17e17a235"},
+         "fb7f01699cd03542175ae5d32bffb78017b64fe728b13cab2f5d31932526b66f"},
         {"color.vivid",
          "d7306840c9a9dc5541dd17c461e1c6974441203de20a3601ce90fdb64ff056eb"},
         {"color.filmic",
@@ -1235,11 +1370,11 @@ void TestEffectEngine::catalogueRenderHashes()
         {"blur.tilt",
          "ebfa26c5ce4754f4088bd2921e66656cb64cb449645920ac1be62d79d52366a0"},
         {"blur.bokeh",
-         "8fbcdaf952663f2a6da9b36f0f9c303143c275cc2c72791c95be192b5634872d"},
+         "6183b60f823bd5b3ec09f7a7eb7ef9350266beb64355d62aee87fab5f0f0b534"},
         {"blur.fog",
          "5bde8936032f0a8f2ae1eb232957765f469478ad1f90ae1f9ef6c3723f713f98"},
         {"blur.diffusion",
-         "16c9185a01cb450b68cedebd17064a81a3bbbfe7f178e4f178d73af94e6fd649"},
+         "22bfca4251aba20a63ea6af035bcd741ee43a4bf5410d1be5c92143334d90904"},
         {"blur.glass",
          "d47be585538290ad8f1f1b9a05bc45b59402e8c09baeac43979754ebcc68b57c"},
         {"detail.crisp",
@@ -1251,25 +1386,25 @@ void TestEffectEngine::catalogueRenderHashes()
         {"detail.structure",
          "4d0a5110322b52d8c417bfd22fc5464a2097da7e5fb20db9c85167a09cc2d692"},
         {"detail.emboss",
-         "7656684a2eca5d2116e57138c12f3d147255acc7eabc130aa41cffcd154fdce8"},
+         "b53328b68d347060df5df01131a94226e37a34ffcc19972de2e4378efcbcbc16"},
         {"detail.edge",
          "ba4ba28a5792b6a7ba6fbf7c504a5a8c54121490dda8ca84658e7cf93f376eb3"},
         {"detail.pencil",
-         "413bb225baef3c8bd000ed3a08310a99342751e23a1edffef94f73e29c08e69a"},
+         "5ad1cc185f7bdf75d7966a7599a0da5d047eba7728026f07b030dfe269aa8f39"},
         {"detail.charcoal",
          "08f68877e50dfccda96dbe078da91c47ddd60619e4025d24995aaae7b08f6b95"},
         {"detail.etch",
          "f563b758ea15826d6fe91760db54c3730d3e32419a44a27a9962254eeb3721e7"},
         {"detail.drybrush",
-         "c320e54d2b43453c96bf045ffd1520a3fdd3c7287eb2cc8058da7d5f644c3dff"},
+         "4f0ec6d4d02f89868bedc729a2662b0134792ded03a0469ab3a2419a66bb9a9f"},
         {"art.oil",
-         "ae79b7155ceab13d5f53d81a6ca25b9c38fcb48b9492758262dd5253740929cb"},
+         "4322bbbd7875c46dd1cb1ed9c6ab2e0d95313c4b18ebe5449c361eb4e6e7ecce"},
         {"art.chalk",
-         "3c4a71b51fccad308a44b98b5f19dd21bc04ea6687f1e49cae375e10d1e4c02b"},
+         "168bbac7ceddfc3a2e52ac53ce21df20474e6bcfeec7083d173864eeb0ddd338"},
         {"art.watercolour",
-         "e442c546c163ca599f6e998885830f31090accecf15b3c30e232c1f40a3a2b3f"},
+         "e295428b5678a90c3071d0ed9c0c0dcb2bdba69bc681f7fac3c9f78313b2443a"},
         {"art.painterly",
-         "2b9164f120548322823e6e85e51c50770d8ff84842347238f3d67761e3b37a5b"},
+         "891cf54208f899908edd86965f1921cd21743bd85654cb3ac247a4e55b0a1f2b"},
         {"art.popart",
          "7d4b9438326114a5a1f5673e86df6f8d694556402a7049fafb1704eca975531c"},
         {"art.comic",
@@ -1279,7 +1414,7 @@ void TestEffectEngine::catalogueRenderHashes()
         {"art.mosaic",
          "8edd76131abebe9a1dea52053dd76e6650d6c2018acd8bab76407474684e294e"},
         {"art.impasto",
-         "26b7d1d30dbb157dade3d30cde452a2f63d64814868eae046c421108dd206f1d"},
+         "a260830b1f4d41199d6d98d39cca89733ae2fe8a6f95a4f569d7495635372431"},
         {"art.stencil",
          "cb377dd3ec61ad86b65c2af5a3c77567be7ffde9b243c0be4b1376a354ededca"},
         {"warp.swirl",
@@ -1295,7 +1430,7 @@ void TestEffectEngine::catalogueRenderHashes()
         {"warp.ripple",
          "0ef7dc949fe6ba2026d68f52abdadefaa0af76fd620c781218b892d8253b5e48"},
         {"warp.mirror",
-         "c85f89ccb99a560f9cc4f117fb47e80c1ea58697d78d5591665815269114c574"},
+         "c8c848f6eb76804053c6b4fa3f7ba9363a1a9a5c39364e482f18fca11feb3ae2"},
         {"warp.kaleido",
          "3732217ff9cc75e3e403fa50731117c63aecbaf19af6806e78f7edf06a1e02cf"},
         {"warp.pinch",
@@ -1343,11 +1478,11 @@ void TestEffectEngine::catalogueRenderHashes()
         {"grain.base",
          "f88650d715decb7459ff2c0abb81a45ce37e50ef402207cbb67f67c115de9239"},
         {"print.halftone",
-         "281a1489437e2398f369e94b7aee60d2afc8915291adabbf17bcbe14bfc7f71f"},
+         "a59008a6b7d25d3a762ba28b73bdacf46c18686422d361baa346cb0e80656f2c"},
         {"print.riso",
-         "a548adb4e39ddd8d7f760d1c9afec8d0b3ba611d50800be1e39129b70edd8aaa"},
+         "22e43084218edb589fec74aef91f94409cd14adf0acd5f9ec68b3f1f489a13da"},
         {"print.news",
-         "d6fdc9ff0f0826f29dc10b0a6b13abcf16070c4e527b0953114c280f687f1563"},
+         "45f6ec02921111f32104f31ae812e8b237991fedac9ce5f206683963c0f14f11"},
         {"print.cyanotype",
          "c0356dadaa02a2636f2d6de2828cf03e3b511124c2c45042c188af5ee18e9d86"},
         {"print.screen",
@@ -1355,7 +1490,7 @@ void TestEffectEngine::catalogueRenderHashes()
         {"print.litho",
          "f64ce16e1f9a2ea472db4e0784f02433c3d73eda6490a54b3f1b15ba4269e04d"},
         {"print.engrave",
-         "4dcef24aa179e82f87512ab608fcd1bdfe6d39ce68a4ecba436b3b84b45a87d4"},
+         "ed21cbe05a02f6dc6110e8cd223452d08121e4809b670001a9e84c12ff90a352"},
         {"print.stamp",
          "2f14c2dec635d5c7ea36ca7b1e6e34256197df26fe8ac7a006ed53f3a8f1d27d"},
         {"print.duotone",
@@ -1363,7 +1498,7 @@ void TestEffectEngine::catalogueRenderHashes()
         {"print.sepia",
          "ccd7eb5eee714c0cbc47309c40340ab31240b87ca7aeb3ec34155461fc12c2a1"},
         {"glow.bloom",
-         "c1a7be389db8a69a4c60b2103d6f0ef11a951769e2817b33a2a544bb8b0c5673"},
+         "3af08fb174fd931330ef844a7aeb500b599f5842b366495efb0826e808869acc"},
         {"glow.halo",
          "f1745d260ea1c0472a7f4f91d6a207a92505aa0248567d89dd91380d74895809"},
         {"glow.neonnight",
@@ -1488,8 +1623,9 @@ void TestEffectEngine::wandStagesSurviveThePrintPath()
 void TestEffectEngine::halftoneDotPitchScalesWithFinishRaster()
 {
     // The dot screen is a finish stage, so it is rendered at the finish raster
-    // and the printed dot pitch follows that raster. Measured on a flat grey
-    // frame so the reading is the screen, not the picture in it.
+    // and the printed dot pitch follows that raster: 8 px at the 2400 reference,
+    // 12 px at 3600. Measured on flat frames so the reading is the screen, not
+    // the picture in it.
     const auto recipe = EffectCatalogue::instance().resolve(QStringLiteral("print.halftone"));
     QVERIFY(recipe.ok());
     const auto plan = EffectEngine::compile(recipe.value());
@@ -1501,25 +1637,22 @@ void TestEffectEngine::halftoneDotPitchScalesWithFinishRaster()
     QCOMPARE(halftone.spatial.wandPass, QStringLiteral("halftone"));
     QVERIFY(halftone.spatial.finish);
 
-    QImage grey(120, 90, QImage::Format_RGB32);
-    grey.fill(QColor(128, 128, 128));
     double previous = 0.0;
-    // 8 px at the 2400 reference is 2, 4 and 6 px at these rasters.
-    for (const int longSide : {600, 1200, 1800}) {
-        QImage frame = grey;
-        Stage stage = halftone.spatial;
-        const auto applied = applyWandPass(frame, stage, longSide);
-        QVERIFY2(applied.ok(), qPrintable(stage.wandPass));
+    for (const QSize &size : {QSize(2400, 1800), QSize(3600, 2700)}) {
+        QImage frame(size, QImage::Format_RGB32);
+        frame.fill(QColor(128, 128, 128));
+        const auto applied = applyWandPass(frame, halftone.spatial, size.width());
+        QVERIFY2(applied.ok(), qPrintable(halftone.spatial.wandPass));
         const double run = meanRunLength(frame);
         QVERIFY2(run > previous,
                  qPrintable(QStringLiteral("pitch at %1 px: run %2, previous %3")
-                                .arg(longSide)
+                                .arg(size.width())
                                 .arg(run)
                                 .arg(previous)));
         previous = run;
     }
 
-    // The same recipe printed larger keeps its finish size and stays bilevel.
+    // The same recipe printed keeps its finish size and stays bilevel.
     const QImage source = scaledSample(QSize(1200, 900));
     const auto printed = EffectEngine::instance().render(source, recipe.value(), 100,
                                                          QSize(1600, 1200), true);
@@ -1532,6 +1665,147 @@ void TestEffectEngine::halftoneDotPitchScalesWithFinishRaster()
                 QVERIFY(channel == 0 || channel == 255);
         }
     }
+}
+
+void TestEffectEngine::halftoneScreenIsStableAcrossRasters()
+{
+    // One screen, one algorithm. The pass is exactly the in-process 8x8 screen
+    // at the authored pitch rounded to whole device pixels, whatever the raster:
+    // the bug this pins is the old code choosing ImageMagick's threshold map
+    // only when the scaled pitch was within 0.05 px of a multiple of eight, so
+    // almost every print size silently used a different screen.
+    const auto shipped = EffectCatalogue::instance().resolve(QStringLiteral("print.halftone"));
+    QVERIFY(shipped.ok());
+    EffectRecipe withoutScreen = shipped.value();
+    QVERIFY(!withoutScreen.stages.isEmpty());
+    QCOMPARE(withoutScreen.stages.last().wandPass, QStringLiteral("halftone"));
+    withoutScreen.stages.removeLast();
+
+    QImage flat(1200, 900, QImage::Format_RGB32);
+    flat.fill(QColor(128, 128, 128));
+
+    QList<QImage> screens;
+    for (const int longSide : {2400, 2432, 2600}) {
+        const QSize size(longSide, longSide * 3 / 4);
+        // The graded frame the screen sees, from the same recipe with the screen
+        // removed.
+        const auto graded = EffectEngine::instance().render(flat, withoutScreen, 100, size, true);
+        QVERIFY(graded.ok());
+        const int period = std::clamp(int(std::lround(8.0 * double(longSide) / 2400.0)), 8, 512);
+        QImage expected = graded.value();
+        orderedDither8x8(expected, period);
+
+        const auto printed =
+            EffectEngine::instance().render(flat, shipped.value(), 100, size, true);
+        QVERIFY(printed.ok());
+        QCOMPARE(printed.value().size(), size);
+        QCOMPARE(hashImage(printed.value()), hashImage(expected));
+        screens.append(printed.value().convertToFormat(QImage::Format_ARGB32));
+
+        // The screen must repeat exactly with its pitch.
+        const QImage &screen = screens.last();
+        for (int y = 0; y < screen.height(); y += 11)
+            for (int x = 0; x + period < screen.width(); x += 13)
+                QCOMPARE(screen.pixel(x, y), screen.pixel(x + period, y));
+    }
+
+    // 2400 and 2432 both land on an 8 px cell, so the screens are bit-identical
+    // over the region they share.
+    QCOMPARE(screens.size(), 3);
+    int worst = 0;
+    for (int y = 0; y < 1800; ++y)
+        for (int x = 0; x < 2400; ++x) {
+            const QRgb a = screens.at(0).pixel(x, y);
+            const QRgb b = screens.at(1).pixel(x, y);
+            worst = std::max({worst, std::abs(qRed(a) - qRed(b)),
+                              std::abs(qGreen(a) - qGreen(b)),
+                              std::abs(qBlue(a) - qBlue(b))});
+        }
+    QCOMPARE(worst, 0);
+
+    // 2600 lands on 9 px: the same matrix one pixel coarser, and the coverage
+    // of a flat area must not move with the pitch.
+    auto coverage = [](const QImage &screen) {
+        long long on = 0;
+        long long total = 0;
+        for (int y = 0; y < screen.height(); y += 7)
+            for (int x = 0; x < screen.width(); x += 7) {
+                total += 1;
+                if (qGray(screen.pixel(x, y)) > 127)
+                    on += 1;
+            }
+        return double(on) / double(total);
+    };
+    const double base = coverage(screens.at(0));
+    const double coarse = coverage(screens.at(2));
+    QVERIFY2(std::abs(base - coarse) < 0.01,
+             qPrintable(QStringLiteral("coverage %1 at 8 px vs %2 at 9 px")
+                            .arg(base)
+                            .arg(coarse)));
+}
+
+void TestEffectEngine::mirrorReflectsTheLeftHalf()
+{
+    // The mirror is the left half reflected onto the right, so the frame is
+    // exactly symmetric about its centre axis and the axis itself is smooth.
+    // The bug this pins: flopping the frame and cropping the *left* half of the
+    // flopped copy produced [left | flipped right] with a hard seam.
+    Stage mirror;
+    mirror.id = StageId::Wand;
+    mirror.idName = QStringLiteral("wand");
+    mirror.wandPass = QStringLiteral("mirror");
+
+    QImage ramp(200, 100, QImage::Format_RGB32);
+    for (int y = 0; y < 100; ++y)
+        for (int x = 0; x < 200; ++x)
+            ramp.setPixel(x, y, qRgb(x, x, x));
+    QImage mirroredRamp = ramp;
+    QVERIFY(applyWandPass(mirroredRamp, mirror, 200).ok());
+
+    int worstAsymmetry = 0;
+    int leftChanged = 0;
+    int seam = 0;
+    for (int y = 0; y < mirroredRamp.height(); ++y) {
+        for (int x = 0; x < mirroredRamp.width(); ++x) {
+            const QRgb left = mirroredRamp.pixel(x, y);
+            const QRgb right = mirroredRamp.pixel(mirroredRamp.width() - 1 - x, y);
+            worstAsymmetry = std::max({worstAsymmetry, std::abs(qRed(left) - qRed(right)),
+                                       std::abs(qGreen(left) - qGreen(right)),
+                                       std::abs(qBlue(left) - qBlue(right))});
+            if (x < mirroredRamp.width() / 2) {
+                leftChanged = std::max(leftChanged,
+                                       std::abs(qGray(left) - qGray(ramp.pixel(x, y))));
+            }
+        }
+        const int axis = mirroredRamp.width() / 2;
+        seam = std::max(seam, std::abs(qGray(mirroredRamp.pixel(axis - 1, y))
+                                       - qGray(mirroredRamp.pixel(axis, y))));
+    }
+    QCOMPARE(worstAsymmetry, 0);
+    QCOMPARE(leftChanged, 0);
+    // The axis joins consecutive columns of the ramp, so it cannot step by more
+    // than one grey level. A seam shows up as a jump of half the ramp.
+    QVERIFY2(seam <= 1, qPrintable(QStringLiteral("axis step %1").arg(seam)));
+
+    // The shipped recipe adds a contrast stage; a per-pixel curve keeps the
+    // symmetry exact, so the sample frame must be symmetric too.
+    const auto recipe = EffectCatalogue::instance().resolve(QStringLiteral("warp.mirror"));
+    QVERIFY(recipe.ok());
+    const QImage sample = scaledSample(QSize(240, 180));
+    const auto rendered =
+        EffectEngine::instance().render(sample, recipe.value(), 100, sample.size(), false);
+    QVERIFY(rendered.ok());
+    int sampleAsymmetry = 0;
+    for (int y = 0; y < rendered.value().height(); ++y) {
+        for (int x = 0; x < rendered.value().width(); ++x) {
+            const QRgb left = rendered.value().pixel(x, y);
+            const QRgb right = rendered.value().pixel(rendered.value().width() - 1 - x, y);
+            sampleAsymmetry = std::max({sampleAsymmetry, std::abs(qRed(left) - qRed(right)),
+                                        std::abs(qGreen(left) - qGreen(right)),
+                                        std::abs(qBlue(left) - qBlue(right))});
+        }
+    }
+    QCOMPARE(sampleAsymmetry, 0);
 }
 
 void TestEffectEngine::alphaSurvivesAWandPass()

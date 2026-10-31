@@ -118,10 +118,11 @@ private slots:
     void unsupportedBlendIsRejected();
     void legacyKeysStayFrozen();
     void everyStageIdIsKnown();
+    void effectNamesAreUnique();
     void wandStageSchemaIsStrict();
     void halftoneMustBeLast();
     void everyWandPassIsPresentOrDisabled();
-    void halftoneFallbackIsDeterministic();
+    void halftoneScreenIsDeterministic();
 };
 
 void TestEffectCatalogue::embeddedCatalogueLoads()
@@ -418,6 +419,23 @@ void TestEffectCatalogue::everyStageIdIsKnown()
     }
 }
 
+void TestEffectCatalogue::effectNamesAreUnique()
+{
+    // One name per effect. Two effects sharing a name is two effects a user
+    // cannot tell apart in a list, which is how "Newsprint" ended up naming both
+    // a retro look and a print look.
+    QSet<QString> seen;
+    for (const EffectRecipe &recipe : EffectCatalogue::instance().recipes()) {
+        const QString folded = recipe.name.toCaseFolded().trimmed();
+        QVERIFY2(!folded.isEmpty(), qPrintable(recipe.key));
+        QVERIFY2(!seen.contains(folded),
+                 qPrintable(QStringLiteral("'%1' names both %2 and another effect")
+                                .arg(recipe.name, recipe.key)));
+        seen.insert(folded);
+    }
+    QCOMPARE(seen.size(), 120);
+}
+
 void TestEffectCatalogue::wandStageSchemaIsStrict()
 {
     const auto parse = [](const QJsonArray &stages) {
@@ -436,11 +454,12 @@ void TestEffectCatalogue::wandStageSchemaIsStrict()
                                    {{QStringLiteral("amplitude"), 12.0}})}).ok());
     QVERIFY(!parse(QJsonArray{wand(QStringLiteral("oilPaint"))}).ok());
     QVERIFY(!parse(QJsonArray{wand(QStringLiteral("pixelate"))}).ok());
-    // A threshold map outside the verified list is refused.
+    // The screen is in-process, so a threshold map name is not part of the
+    // schema at all: naming one is a load error like any other stray field.
     QVERIFY(!parse(QJsonArray{wand(QStringLiteral("halftone"),
-                                   {{QStringLiteral("map"), QStringLiteral("nope")}})}).ok());
+                                   {{QStringLiteral("map"), QStringLiteral("h8x8a")}})}).ok());
     QVERIFY(parse(QJsonArray{wand(QStringLiteral("halftone"),
-                                  {{QStringLiteral("map"), QStringLiteral("h8x8a")}})}).ok());
+                                  {{QStringLiteral("size"), 8.0}})}).ok());
     // Valid passes parse, and the values are clamped to their documented range.
     const auto oil = parse(QJsonArray{wand(QStringLiteral("oilPaint"),
                                            {{QStringLiteral("radius"), 400.0}})});
@@ -538,12 +557,8 @@ void TestEffectCatalogue::everyWandPassIsPresentOrDisabled()
     }
 }
 
-void TestEffectCatalogue::halftoneFallbackIsDeterministic()
+void TestEffectCatalogue::halftoneScreenIsDeterministic()
 {
-    // The threshold map is probed exactly once; the answer must not wobble.
-    const bool maps = wandThresholdMapsAvailable();
-    QCOMPARE(wandThresholdMapsAvailable(), maps);
-
     QImage source(64, 64, QImage::Format_ARGB32);
     for (int y = 0; y < 64; ++y) {
         for (int x = 0; x < 64; ++x)
@@ -552,8 +567,8 @@ void TestEffectCatalogue::halftoneFallbackIsDeterministic()
 
     QImage first = source;
     QImage second = source;
-    orderedDither8x8(first, 2.0);
-    orderedDither8x8(second, 2.0);
+    orderedDither8x8(first, 8);
+    orderedDither8x8(second, 8);
     QCOMPARE(first, second);
 
     // A screen is bilevel per channel and leaves alpha alone.
@@ -567,11 +582,12 @@ void TestEffectCatalogue::halftoneFallbackIsDeterministic()
     }
 
     // The dot pitch follows the cell size, which is how the finish raster
-    // scales the screen.
+    // scales the screen. Below eight pixels a cell cannot hold the matrix: it
+    // degenerates into a flat patch, which is why the pass floors the pitch.
     QImage fine = source;
     QImage coarse = source;
-    orderedDither8x8(fine, 2.0);
-    orderedDither8x8(coarse, 8.0);
+    orderedDither8x8(fine, 8);
+    orderedDither8x8(coarse, 16);
     QVERIFY2(meanRunLength(coarse) > meanRunLength(fine) * 1.5,
              qPrintable(QStringLiteral("%1 vs %2")
                             .arg(meanRunLength(fine))

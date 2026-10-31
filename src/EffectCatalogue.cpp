@@ -290,22 +290,6 @@ bool readMask(const QJsonObject &object, StageMask *mask, Error *err, const QStr
     return true;
 }
 
-/// The threshold maps this build may name. The list is the set the research
-/// verified against ImageMagick 7.1.2; a map outside it is a load error rather
-/// than a runtime surprise, and when no map can be loaded at all the halftone
-/// pass falls back to the in-process 8x8 screen.
-const QStringList &halftoneMaps()
-{
-    static const QStringList maps = {
-        QStringLiteral("h4x4a"),   QStringLiteral("h6x6a"),   QStringLiteral("h8x8a"),
-        QStringLiteral("h4x4o"),   QStringLiteral("h6x6o"),   QStringLiteral("h8x8o"),
-        QStringLiteral("h16x16o"), QStringLiteral("o2x2"),    QStringLiteral("o3x3"),
-        QStringLiteral("o4x4"),    QStringLiteral("o8x8"),    QStringLiteral("c5x5b"),
-        QStringLiteral("c6x6b"),   QStringLiteral("c7x7b"),   QStringLiteral("checks"),
-        QStringLiteral("threshold")};
-    return maps;
-}
-
 /// The numeric fields a single wand pass accepts, beyond `id`, `finish` and
 /// `pass`. A field that belongs to another pass is a load error, so a wrong
 /// parameter name cannot quietly become a default.
@@ -327,7 +311,7 @@ QSet<QString> wandFieldsForPass(const QString &pass)
         || pass == QLatin1String("emboss") || pass == QLatin1String("kuwahara"))
         return {QStringLiteral("sigma")};
     if (pass == QLatin1String("halftone"))
-        return {QStringLiteral("map"), QStringLiteral("size")};
+        return {QStringLiteral("size")};
     if (pass == QLatin1String("mirror"))
         return {};
     if (pass == QLatin1String("kaleido"))
@@ -738,10 +722,6 @@ Result<Stage> stageFromJson(const QJsonObject &object, const QString &where)
             if (!need(QStringLiteral("sigma"), 0.0, 100.0, &stage.wandSigma))
                 return err;
         } else if (stage.wandPass == QLatin1String("halftone")) {
-            stage.wandMap = object.value(QStringLiteral("map")).toString();
-            if (!stage.wandMap.isEmpty() && !halftoneMaps().contains(stage.wandMap))
-                return parseError(where, QStringLiteral("unknown halftone map '%1'")
-                                            .arg(stage.wandMap));
             stage.wandSize = clamped(object, QStringLiteral("size"), 8.0, 2.0, 64.0);
             // A dot screen rendered at the grade raster and upscaled becomes
             // grey mush, so the pass is a finish stage whatever the flag says.

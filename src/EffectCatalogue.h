@@ -161,7 +161,6 @@ struct Stage {
     double wandFactor = 1.0;
     double wandSize = 0.0; ///< halftone screen period / pixelate block
     int wandSegments = 6;  ///< kaleidoscope wedges
-    QString wandMap;       ///< halftone threshold map, empty for the built-in screen
 };
 
 /// One versioned look. `version` is part of the identity: a retune adds a new

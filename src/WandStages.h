@@ -49,11 +49,6 @@ struct WandCapability {
 /// assumption is a link error; this table is checked against the binary.
 WandCapability wandCapability(WandPass pass);
 
-/// True when `MagickOrderedDitherImage` and the shipped threshold maps both
-/// work. When this is false the halftone pass uses the in-process 8x8 screen
-/// instead, so no recipe depends on `/etc/ImageMagick-7/thresholds.xml`.
-bool wandThresholdMapsAvailable();
-
 /// The symbol names a pass needs. Exposed for diagnostics and tests.
 QStringList wandRequiredSymbols(WandPass pass);
 
@@ -64,13 +59,13 @@ QStringList wandRequiredSymbols(WandPass pass);
 /// smear the alpha plane and produce halos on a transparent frame.
 Result<void> applyWandPass(QImage &image, const Stage &stage, int longSide);
 
-/// The in-process 8x8 clustered-dot screen. The threshold matrix is stretched
-/// over one screen cell of @p period pixels, so the dot pitch is the authored
-/// pitch and follows the raster exactly. Used for the halftone pass whenever
-/// ImageMagick's threshold maps cannot express the requested pitch, and always
-/// when those maps are missing: the catalogue does not depend on
-/// `/etc/ImageMagick-7/thresholds.xml`. Deterministic, allocation free beyond
-/// the image itself.
-void orderedDither8x8(QImage &image, double period);
+/// The 8x8 clustered-dot screen. The threshold matrix is stretched over one
+/// screen cell of @p period whole pixels, so the dot pitch is the authored
+/// pitch, the screen is exactly periodic, and the raster scales it. This is the
+/// only screen the halftone pass uses: no recipe depends on
+/// `/etc/ImageMagick-7/thresholds.xml`, and the screen cannot change shape when
+/// the print size moves by a percent. Deterministic, allocation free beyond the
+/// image itself.
+void orderedDither8x8(QImage &image, int period);
 
 } // namespace pp

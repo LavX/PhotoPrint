@@ -202,6 +202,10 @@ int passRasterCap(WandPass pass)
         return 1600;
     case WandPass::Sketch:
         return 1200;
+    // Kuwahara is quadratic in sigma and its output is flat regions, so running
+    // it on a bounded raster and upscaling is invisible.
+    case WandPass::Kuwahara:
+        return 1600;
     default:
         return 0;
     }
@@ -237,11 +241,6 @@ QImage scaledTo(const QImage &image, const QSize &size, Qt::TransformationMode m
     if (image.size() == size)
         return image;
     return image.scaled(size, Qt::IgnoreAspectRatio, mode);
-}
-
-QSize divided(const QSize &size, int factor)
-{
-    return QSize(std::max(1, size.width() / factor), std::max(1, size.height() / factor));
 }
 
 // -- individual passes ------------------------------------------------------
@@ -349,7 +348,9 @@ bool runMotionBlur(QImage &image, const Stage &stage, double scale)
 
 bool runOilPaint(QImage &image, const Stage &stage, double scale)
 {
-    const double radius = std::max(1.0, std::round(stage.wandRadius * scale));
+    // A one-pixel median is a no-op: at a 240 px preview a 4 px stroke would
+    // round to 1, so the paint never appears in the tile that sells the effect.
+    const double radius = std::max(2.0, std::round(stage.wandRadius * scale));
     WandPtr wand = importRgb(image);
     if (!wand)
         return false;
@@ -419,7 +420,9 @@ bool runEmboss(QImage &image, const Stage &stage, double scale)
 
 bool runKuwahara(QImage &image, const Stage &stage, double scale)
 {
-    const double sigma = std::max(1.0, std::round(stage.wandSigma * scale));
+    // Same floor as oil paint: below two pixels the quadrant filter returns the
+    // frame it was given.
+    const double sigma = std::max(2.0, std::round(stage.wandSigma * scale));
     WandPtr wand = importRgb(image);
     if (!wand)
         return false;
@@ -445,12 +448,19 @@ bool runMirror(QImage &image, const Stage &, double)
         drainException(half.get());
         return false;
     }
-    if (MagickCropImage(half.get(), width / 2, height, 0, 0) == MagickFalse) {
+    // The flopped frame's *right* half is the mirror image of the original's
+    // left half, so copying it over the right half makes the frame symmetric
+    // about the centre axis. Taking the flopped frame's left half instead
+    // produces [left | flipped right] with a hard seam where the two halves
+    // meet; that was the original bug.
+    if (MagickCropImage(half.get(), width / 2, height,
+                        static_cast<ssize_t>(width - width / 2), 0)
+        == MagickFalse) {
         drainException(half.get());
         return false;
     }
     if (MagickCompositeImage(wand.get(), half.get(), CopyCompositeOp, MagickFalse,
-                             static_cast<ssize_t>(width / 2), 0)
+                             static_cast<ssize_t>(width - width / 2), 0)
         == MagickFalse) {
         drainException(wand.get());
         return false;
@@ -561,43 +571,27 @@ bool runPixelate(QImage &image, const Stage &stage, double scale)
 /// The dot screen. The 8x8 threshold matrix is stretched over one screen cell
 /// of @p period pixels, so the dot pitch follows the raster exactly: the
 /// authored period is a fraction of the reference raster and a preview needs a
-/// sub-8-pixel screen. ImageMagick's threshold map is an 8 px tile, so it is
-/// only interchangeable when the period is a whole multiple of 8; the compiled
-/// `W:halftone` pass picks whichever applies.
+/// sub-8-pixel screen. This is the only screen the pass has: ImageMagick's
+/// threshold maps are an 8 px tile, so using them meant switching algorithms
+/// whenever the scaled pitch was not a whole multiple of 8, and a 1.3 percent
+/// change of print size flipped the screen shape. The in-process screen also
+/// avoids a Q16 wand of the whole finish raster (594 MB at 7087 px) for what is
+/// a 40-line dither.
 bool runHalftone(QImage &image, const Stage &stage, double scale)
 {
-    const double period = std::clamp(stage.wandSize * scale, 2.0, 512.0);
+    // A pitch of 8.1 px cannot tile a pixel grid: the dot phase would drift by
+    // a pixel every ~76 px and leave a visible beat in a flat area. Rounding to
+    // whole pixels keeps the screen exactly periodic, which is what a real
+    // screen does; the pitch still scales with the raster over any real change
+    // of print size. Below 8 px the 8x8 matrix has too few addressable samples
+    // to form a dot at all (a 2 px cell degenerates into a striped quantise), so
+    // the cell is floored at the smallest screen that still reads as a screen:
+    // a 2400 px raster and anything above it gets exactly the authored pitch,
+    // a smaller one keeps an 8 px screen instead of a degenerate finer one.
+    const int period = std::clamp(static_cast<int>(std::lround(stage.wandSize * scale)),
+                                  8, 512);
     const QSize original = image.size();
-    const int multiple = static_cast<int>(std::lround(period / 8.0));
-    const bool exactTile = multiple >= 1
-        && std::abs(period - double(multiple) * 8.0) <= 0.05;
-
     QImage working = image;
-    if (exactTile && wandThresholdMapsAvailable()) {
-        // Dither at 1/multiple of the raster (where the tile is exactly 8 px)
-        // and expand with nearest sampling: the screen keeps its angled dot
-        // shape and still lands at the authored pitch.
-        const QSize small = divided(original, multiple);
-        QImage reduced = scaledTo(working, small, Qt::SmoothTransformation);
-        WandPtr wand = importRgb(reduced);
-        if (wand) {
-            const QByteArray map = (stage.wandMap.isEmpty() ? QStringLiteral("h8x8a")
-                                                           : stage.wandMap)
-                                       .toLatin1();
-            const MagickBooleanType ok = MagickOrderedDitherImage(wand.get(), map.constData());
-            drainException(wand.get());
-            if (ok != MagickFalse) {
-                const QImage dithered = exportRgb(wand.get());
-                if (!dithered.isNull()) {
-                    working = scaledTo(dithered, original, Qt::FastTransformation);
-                    if (working.isNull() || working.size() != original)
-                        return false;
-                    image = working;
-                    return true;
-                }
-            }
-        }
-    }
     orderedDither8x8(working, period);
     if (working.isNull() || working.size() != original)
         return false;
@@ -665,11 +659,8 @@ QStringList wandRequiredSymbols(WandPass pass)
     case WandPass::Edge: return {QStringLiteral("MagickEdgeImage")};
     case WandPass::Emboss: return {QStringLiteral("MagickEmbossImage")};
     case WandPass::Kuwahara: return {QStringLiteral("MagickKuwaharaImage")};
-    // The in-process screen is the fallback, so a halftone always works.
-    case WandPass::Halftone:
-        return wandThresholdMapsAvailable()
-            ? QStringList{QStringLiteral("MagickOrderedDitherImage")}
-            : QStringList{};
+    // The screen is in-process, so the halftone needs nothing from the library.
+    case WandPass::Halftone: return {};
     case WandPass::Mirror:
         return {QStringLiteral("CloneMagickWand"), QStringLiteral("MagickFlopImage"),
                 QStringLiteral("MagickCropImage"), QStringLiteral("MagickCompositeImage")};
@@ -682,33 +673,6 @@ QStringList wandRequiredSymbols(WandPass pass)
     case WandPass::Pixelate: return {QStringLiteral("MagickResizeImage")};
     }
     return {};
-}
-
-bool wandThresholdMapsAvailable()
-{
-    static const bool available = [] {
-        ensureMagick();
-        void *handle = magickHandle();
-        if (!handle || !dlsym(handle, "MagickOrderedDitherImage"))
-            return false;
-        WandPtr wand(NewMagickWand());
-        if (!wand)
-            return false;
-        unsigned char pixels[8 * 8 * 3];
-        for (size_t index = 0; index < sizeof(pixels); ++index)
-            pixels[index] = 128;
-        if (MagickConstituteImage(wand.get(), 8, 8, "RGB", CharPixel, pixels) == MagickFalse) {
-            drainException(wand.get());
-            return false;
-        }
-        const MagickBooleanType ok = MagickOrderedDitherImage(wand.get(), "h8x8a");
-        // The threshold map lives in /etc/ImageMagick-7/thresholds.xml on some
-        // installs and nowhere on others; a missing map is not fatal, it is the
-        // signal to use the in-process screen.
-        drainException(wand.get());
-        return ok != MagickFalse;
-    }();
-    return available;
 }
 
 WandCapability wandCapability(WandPass pass)
@@ -737,7 +701,7 @@ WandCapability wandCapability(WandPass pass)
     return table[static_cast<size_t>(pass)];
 }
 
-void orderedDither8x8(QImage &image, double period)
+void orderedDither8x8(QImage &image, int period)
 {
     if (image.isNull())
         return;
@@ -748,21 +712,61 @@ void orderedDither8x8(QImage &image, double period)
         image = converted;
     }
     image.detach();
-    // One screen cell is `period` pixels across and holds the whole 8 x 8
-    // threshold matrix, so the dot pitch is the authored pitch, not a multiple
-    // of eight. A sub-8-pixel cell simply has fewer addressable levels, which is
-    // what a small raster can show.
-    const double cell = std::clamp(period, 1.0, 1024.0);
+    // One screen cell is `period` whole pixels across and holds the whole 8x8
+    // threshold matrix, so the dot pitch is the authored pitch, the screen is
+    // exactly periodic, and the raster scales it. When the cell is a multiple of
+    // eight every matrix entry maps to a whole block of pixels and the sample is
+    // exact. Any other period is sampled from the same matrix as a continuous,
+    // wrapping field: a nearest sample would cover some ranks twice and shift
+    // the tone of a flat area by several percent, while the interpolated field
+    // keeps the mean of the screen.
+    const int cell = std::clamp(period, 1, 1024);
     const auto &matrix = clusteredDot();
+    const int block = cell % 8 == 0 ? cell / 8 : 0;
+
+    std::vector<int> columnLow(static_cast<size_t>(image.width()));
+    std::vector<int> columnHigh(static_cast<size_t>(image.width()));
+    std::vector<double> columnFraction(static_cast<size_t>(image.width()));
+    for (int x = 0; x < image.width(); ++x) {
+        double u = 0.0;
+        if (block > 0) {
+            u = double((x % cell) / block);
+        } else {
+            u = (double(x % cell) + 0.5) * 8.0 / double(cell) - 0.5;
+            u -= std::floor(u / 8.0) * 8.0;
+        }
+        const int low = std::clamp(static_cast<int>(u), 0, 7);
+        columnLow[static_cast<size_t>(x)] = low;
+        columnHigh[static_cast<size_t>(x)] = (low + 1) % 8;
+        columnFraction[static_cast<size_t>(x)] = u - double(low);
+    }
+
     for (int y = 0; y < image.height(); ++y) {
-        const double cellY = std::fmod(double(y) + 0.5, cell);
-        const int row = std::clamp(static_cast<int>(cellY * 8.0 / cell), 0, 7);
-        const auto &thresholds = matrix[static_cast<size_t>(row)];
+        double v = 0.0;
+        if (block > 0) {
+            v = double((y % cell) / block);
+        } else {
+            v = (double(y % cell) + 0.5) * 8.0 / double(cell) - 0.5;
+            v -= std::floor(v / 8.0) * 8.0;
+        }
+        const int rowLow = std::clamp(static_cast<int>(v), 0, 7);
+        const int rowHigh = (rowLow + 1) % 8;
+        const double fy = v - double(rowLow);
+        const auto &top = matrix[static_cast<size_t>(rowLow)];
+        const auto &bottom = matrix[static_cast<size_t>(rowHigh)];
         QRgb *line = reinterpret_cast<QRgb *>(image.scanLine(y));
         for (int x = 0; x < image.width(); ++x) {
-            const double cellX = std::fmod(double(x) + 0.5, cell);
-            const int column = std::clamp(static_cast<int>(cellX * 8.0 / cell), 0, 7);
-            const int threshold = ((thresholds[static_cast<size_t>(column)] + 1) * 256) / 65;
+            const int low = columnLow[static_cast<size_t>(x)];
+            const int high = columnHigh[static_cast<size_t>(x)];
+            const double fx = columnFraction[static_cast<size_t>(x)];
+            const double rank = (double(top[static_cast<size_t>(low)]) * (1.0 - fx)
+                                 + double(top[static_cast<size_t>(high)]) * fx)
+                    * (1.0 - fy)
+                + (double(bottom[static_cast<size_t>(low)]) * (1.0 - fx)
+                   + double(bottom[static_cast<size_t>(high)]) * fx)
+                    * fy;
+            const int threshold =
+                static_cast<int>(std::lround((rank + 1.0) * 256.0 / 65.0));
             const QRgb pixel = line[x];
             line[x] = qRgba(qRed(pixel) >= threshold ? 255 : 0,
                             qGreen(pixel) >= threshold ? 255 : 0,
