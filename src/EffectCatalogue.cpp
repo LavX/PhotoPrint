@@ -12,6 +12,7 @@
 #include <algorithm>
 #include <cmath>
 #include <mutex>
+#include <utility>
 
 // Defined at global scope: Q_INIT_RESOURCE declares the initialiser at the
 // scope of the call, and the generated symbol has no namespace. Keeping this
@@ -751,7 +752,8 @@ Result<EffectRecipe> recipeFromJson(const QJsonObject &object, const QString &wh
     if (hasUnknown(object,
                    {QStringLiteral("key"), QStringLiteral("category"),
                     QStringLiteral("version"), QStringLiteral("name"),
-                    QStringLiteral("description"), QStringLiteral("stages")},
+                    QStringLiteral("description"), QStringLiteral("slow"),
+                    QStringLiteral("approximate"), QStringLiteral("stages")},
                    &unknown)) {
         return parseError(where, QStringLiteral("unknown field '%1'").arg(unknown));
     }
@@ -766,6 +768,17 @@ Result<EffectRecipe> recipeFromJson(const QJsonObject &object, const QString &wh
         return parseError(where, QStringLiteral("'name' must be a single string"));
     recipe.name = name.toString();
     recipe.description = object.value(QStringLiteral("description")).toString();
+    // Strict bools: a string spelled "true" is a data bug, not a hint.
+    for (const auto &[field, target] :
+         {std::pair<QString, bool *>{QStringLiteral("slow"), &recipe.slow},
+          std::pair<QString, bool *>{QStringLiteral("approximate"), &recipe.approximate}}) {
+        const QJsonValue value = object.value(field);
+        if (value.isUndefined())
+            continue;
+        if (!value.isBool())
+            return parseError(where, QStringLiteral("'%1' must be a boolean").arg(field));
+        *target = value.toBool();
+    }
     if (recipe.key.isEmpty() || !recipe.key.contains(QLatin1Char('.')))
         return parseError(where, QStringLiteral("'key' must be category.effect"));
     if (!kCategoryKeys.contains(recipe.category))

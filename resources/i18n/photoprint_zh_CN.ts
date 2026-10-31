@@ -117,19 +117,19 @@
     </message>
     <message>
         <source>Képhangulat</source>
-        <translation>照片风格</translation>
+        <translation type="vanished">照片风格</translation>
     </message>
     <message>
         <source>Szűrő</source>
-        <translation>滤镜</translation>
+        <translation type="vanished">滤镜</translation>
     </message>
     <message>
         <source>Hatás</source>
-        <translation>效果</translation>
+        <translation type="vanished">效果</translation>
     </message>
     <message>
         <source>Hatás erőssége</source>
-        <translation>效果强度</translation>
+        <translation type="vanished">效果强度</translation>
     </message>
     <message>
         <source>Kép nagyítása 2×</source>
@@ -346,6 +346,106 @@
         <translation>这个尺寸下照片可能不够清晰。</translation>
     </message>
     <message>
+        <source>Effekt</source>
+        <translation>效果</translation>
+    </message>
+    <message>
+        <source>Effekt kiválasztása</source>
+        <translation>选择效果</translation>
+    </message>
+    <message>
+        <source>Alap</source>
+        <translation>基础</translation>
+    </message>
+    <message>
+        <source>Retró</source>
+        <translation>复古</translation>
+    </message>
+    <message>
+        <source>Elmosás</source>
+        <translation>模糊</translation>
+    </message>
+    <message>
+        <source>Élesség</source>
+        <translation>细节</translation>
+    </message>
+    <message>
+        <source>Művészi</source>
+        <translation>艺术</translation>
+    </message>
+    <message>
+        <source>Torzítás</source>
+        <translation>扭曲</translation>
+    </message>
+    <message>
+        <source>Fény</source>
+        <translation>光线</translation>
+    </message>
+    <message>
+        <source>Szemcse</source>
+        <translation>颗粒</translation>
+    </message>
+    <message>
+        <source>Nyomat</source>
+        <translation>印刷</translation>
+    </message>
+    <message>
+        <source>Ragyogás</source>
+        <translation>发光</translation>
+    </message>
+    <message>
+        <source>Korábbi megjelenés</source>
+        <translation>之前的外观</translation>
+    </message>
+    <message>
+        <source>Új effekt választása</source>
+        <translation>选择新效果</translation>
+    </message>
+    <message>
+        <source>Ez az effekt teljes erősséggel jelenik meg.</source>
+        <translation>此效果始终以全强度显示。</translation>
+    </message>
+    <message>
+        <source>Effektek</source>
+        <translation>效果</translation>
+    </message>
+    <message>
+        <source>Keresés név vagy kategória szerint</source>
+        <translation>按名称或类别搜索</translation>
+    </message>
+    <message>
+        <source>Keresés</source>
+        <translation>搜索</translation>
+    </message>
+    <message>
+        <source>Kategóriák</source>
+        <translation>类别</translation>
+    </message>
+    <message>
+        <source>Effekt erőssége</source>
+        <translation>效果强度</translation>
+    </message>
+    <message>
+        <source>Az előnézet hozzávetőleges</source>
+        <translation>预览为近似效果</translation>
+    </message>
+    <message>
+        <source>Alkalmaz</source>
+        <translation>应用</translation>
+    </message>
+    <message>
+        <source>Az eredeti kép effekt nélkül.</source>
+        <translation>未应用效果的照片。</translation>
+    </message>
+    <message>
+        <source>lassú</source>
+        <translation>慢</translation>
+    </message>
+    <message>
+        <source>Nincs találat.</source>
+        <translation>没有匹配项。</translation>
+    </message>
+    <message>
         <source>Egyedi papír</source>
         <translation>自定义纸张</translation>
     </message>
@@ -510,6 +610,10 @@
     <message>
         <source>Ezt a képet most nem tudjuk feldolgozni. Próbáld újra.</source>
         <translation>现在无法处理这张图片，请重试。</translation>
+    </message>
+    <message>
+        <source>Ehhez a nyomtatási mérethez a kép túl nagy. Csökkentsd a nyomtatási felbontást.</source>
+        <translation>照片对此打印尺寸来说太大。请降低打印分辨率。</translation>
     </message>
     <message>
         <source>A művelet megszakadt.</source>
@@ -806,6 +910,12 @@
     <message>
         <source>A naplóbejegyzést nem sikerült eltávolítani. A nyomtatás nem indult el, de a napló bizonytalan feladatot jelezhet, ezért a nyomtatási fájl megmarad.</source>
         <translation>无法删除打印日志记录。打印未开始，但日志可能显示为不确定的任务，因此保留打印文件。</translation>
+    </message>
+    <message numerus="yes">
+        <source>%n effekt</source>
+        <translation>
+            <numerusform>%n 个效果</numerusform>
+        </translation>
     </message>
 </context>
 </TS>

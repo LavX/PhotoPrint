@@ -1002,6 +1002,8 @@
       "version": 1,
       "name": "Newsprint",
       "description": "Coarse monochrome dots on cheap paper: faded, soft and grainy.",
+      "slow": true,
+      "approximate": true,
       "stages": [
         {
           "id": "saturation",
@@ -1404,6 +1406,7 @@
       "version": 1,
       "name": "Motion Blur",
       "description": "A short horizontal smear: a moving subject at a slow shutter.",
+      "slow": true,
       "stages": [
         {
           "id": "wand",
@@ -1686,6 +1689,7 @@
       "version": 1,
       "name": "Emboss",
       "description": "A relief map of the frame: grey, raised and quite strange.",
+      "slow": true,
       "stages": [
         {
           "id": "saturation",
@@ -1766,6 +1770,7 @@
       "version": 1,
       "name": "Charcoal",
       "description": "A smudged monochrome with heavy black: charcoal on rough stock.",
+      "slow": true,
       "stages": [
         {
           "id": "wand",
@@ -1806,6 +1811,8 @@
       "version": 1,
       "name": "Dry Brush",
       "description": "Oil paint over an emboss: texture you can almost feel.",
+      "slow": true,
+      "approximate": true,
       "stages": [
         {
           "id": "wand",
@@ -1839,6 +1846,7 @@
       "version": 1,
       "name": "Oil Paint",
       "description": "Thick, rounded brush strokes with the colour lifted.",
+      "slow": true,
       "stages": [
         {
           "id": "wand",
@@ -1861,6 +1869,8 @@
       "version": 1,
       "name": "Chalk Pastel",
       "description": "Soft pigment on textured paper: chalky, desaturated and lifted.",
+      "slow": true,
+      "approximate": true,
       "stages": [
         {
           "id": "wand",
@@ -1889,6 +1899,8 @@
       "version": 1,
       "name": "Wash",
       "description": "A pale, soft wash over textured paper, with the whites left glowing.",
+      "slow": true,
+      "approximate": true,
       "stages": [
         {
           "id": "wand",
@@ -1923,6 +1935,7 @@
       "version": 1,
       "name": "Painterly",
       "description": "Flat, poster-like brush regions with the colour pushed up.",
+      "slow": true,
       "stages": [
         {
           "id": "wand",
@@ -1992,6 +2005,8 @@
       "version": 1,
       "name": "Ink Wash",
       "description": "Black ink diluted over wet paper, with the highlights bleeding.",
+      "slow": true,
+      "approximate": true,
       "stages": [
         {
           "id": "saturation",
@@ -2047,6 +2062,7 @@
       "version": 1,
       "name": "Impasto",
       "description": "Raised paint: strokes plus relief, with the colour lifted.",
+      "slow": true,
       "stages": [
         {
           "id": "wand",
@@ -2229,6 +2245,7 @@
       "version": 1,
       "name": "Kaleidoscope",
       "description": "Six rotated copies overlaid: a mandala from one frame.",
+      "slow": true,
       "stages": [
         {
           "id": "wand",
@@ -2787,6 +2804,8 @@
       "version": 1,
       "name": "Dust & Scratches",
       "description": "Grain plus a scatter of dust across a clean frame.",
+      "slow": true,
+      "approximate": true,
       "stages": [
         {
           "id": "texture",
@@ -2813,6 +2832,8 @@
       "version": 1,
       "name": "Paper Grain",
       "description": "The tooth of a fine paper under a slightly warm frame.",
+      "slow": true,
+      "approximate": true,
       "stages": [
         {
           "id": "texture",
@@ -2922,6 +2943,8 @@
       "version": 1,
       "name": "Halftone",
       "description": "A classic angled dot screen over a neutral monochrome.",
+      "slow": true,
+      "approximate": true,
       "stages": [
         {
           "id": "saturation",
@@ -2944,6 +2967,8 @@
       "version": 1,
       "name": "Risograph",
       "description": "Two ink riso: blue-black shadows and cream paper, dotted.",
+      "slow": true,
+      "approximate": true,
       "stages": [
         {
           "id": "gradientMap",
@@ -2975,6 +3000,8 @@
       "version": 1,
       "name": "Rotary Press",
       "description": "A rotary plate: hard dots, three ink densities, cheap paper.",
+      "slow": true,
+      "approximate": true,
       "stages": [
         {
           "id": "saturation",
@@ -3095,6 +3122,7 @@
       "version": 1,
       "name": "Engraving",
       "description": "A relief plate inked in black: fine lines, hard contrast.",
+      "slow": true,
       "stages": [
         {
           "id": "wand",

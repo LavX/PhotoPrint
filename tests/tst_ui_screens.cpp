@@ -1,11 +1,14 @@
 #include "AboutDialog.h"
+#include "EffectBrowserDialog.h"
 #include "MainWindow.h"
 
+#include <QAbstractButton>
 #include <QComboBox>
 #include <QDir>
 #include <QImage>
 #include <QImageWriter>
 #include <QAbstractItemView>
+#include <QPointer>
 #include <QPushButton>
 #include <QScrollArea>
 #include <QScrollBar>
@@ -69,6 +72,19 @@ void TestUiScreens::captureStates()
                                       Q_ARG(QStringList, photos)));
     QTest::qWait(450);
     QVERIFY(window.grab().save(evidenceDir() + QStringLiteral("/ui-three-photos.png")));
+
+    // Evidence for the effect browser: categories, the Eredeti tile at the head
+    // and the rendered tiles of the current category.
+    auto *effectButton = window.findChild<QPushButton *>(QStringLiteral("effectButton"));
+    QVERIFY(effectButton);
+    effectButton->click();
+    QPointer<EffectBrowserDialog> browser = window.findChild<EffectBrowserDialog *>();
+    QVERIFY(browser);
+    QVERIFY(browser->waitForRendering(15000));
+    QTest::qWait(120);
+    QVERIFY(browser->grab().save(evidenceDir() + QStringLiteral("/ui-effect-browser.png")));
+    browser->close();
+    QTest::qWait(120);
 
     if (auto *scroll = window.findChild<QScrollArea *>()) {
         scroll->verticalScrollBar()->setValue(scroll->verticalScrollBar()->maximum());

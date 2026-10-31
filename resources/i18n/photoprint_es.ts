@@ -117,19 +117,19 @@
     </message>
     <message>
         <source>Képhangulat</source>
-        <translation>Aspecto</translation>
+        <translation type="vanished">Aspecto</translation>
     </message>
     <message>
         <source>Szűrő</source>
-        <translation>Filtro</translation>
+        <translation type="vanished">Filtro</translation>
     </message>
     <message>
         <source>Hatás</source>
-        <translation>Efecto</translation>
+        <translation type="vanished">Efecto</translation>
     </message>
     <message>
         <source>Hatás erőssége</source>
-        <translation>Intensidad del efecto</translation>
+        <translation type="vanished">Intensidad del efecto</translation>
     </message>
     <message>
         <source>Kép nagyítása 2×</source>
@@ -347,6 +347,106 @@
         <translation>A este tamaño la foto puede verse borrosa.</translation>
     </message>
     <message>
+        <source>Effekt</source>
+        <translation>Efecto</translation>
+    </message>
+    <message>
+        <source>Effekt kiválasztása</source>
+        <translation>Elegir un efecto</translation>
+    </message>
+    <message>
+        <source>Alap</source>
+        <translation>Básicos</translation>
+    </message>
+    <message>
+        <source>Retró</source>
+        <translation>Retro</translation>
+    </message>
+    <message>
+        <source>Elmosás</source>
+        <translation>Desenfoque</translation>
+    </message>
+    <message>
+        <source>Élesség</source>
+        <translation>Detalle</translation>
+    </message>
+    <message>
+        <source>Művészi</source>
+        <translation>Artístico</translation>
+    </message>
+    <message>
+        <source>Torzítás</source>
+        <translation>Distorsión</translation>
+    </message>
+    <message>
+        <source>Fény</source>
+        <translation>Luz</translation>
+    </message>
+    <message>
+        <source>Szemcse</source>
+        <translation>Grano</translation>
+    </message>
+    <message>
+        <source>Nyomat</source>
+        <translation>Impresión</translation>
+    </message>
+    <message>
+        <source>Ragyogás</source>
+        <translation>Brillo</translation>
+    </message>
+    <message>
+        <source>Korábbi megjelenés</source>
+        <translation>Aspecto anterior</translation>
+    </message>
+    <message>
+        <source>Új effekt választása</source>
+        <translation>Elegir un efecto nuevo</translation>
+    </message>
+    <message>
+        <source>Ez az effekt teljes erősséggel jelenik meg.</source>
+        <translation>Este efecto siempre aparece con toda su fuerza.</translation>
+    </message>
+    <message>
+        <source>Effektek</source>
+        <translation>Efectos</translation>
+    </message>
+    <message>
+        <source>Keresés név vagy kategória szerint</source>
+        <translation>Buscar por nombre o categoría</translation>
+    </message>
+    <message>
+        <source>Keresés</source>
+        <translation>Buscar</translation>
+    </message>
+    <message>
+        <source>Kategóriák</source>
+        <translation>Categorías</translation>
+    </message>
+    <message>
+        <source>Effekt erőssége</source>
+        <translation>Intensidad del efecto</translation>
+    </message>
+    <message>
+        <source>Az előnézet hozzávetőleges</source>
+        <translation>La vista previa es aproximada</translation>
+    </message>
+    <message>
+        <source>Alkalmaz</source>
+        <translation>Aplicar</translation>
+    </message>
+    <message>
+        <source>Az eredeti kép effekt nélkül.</source>
+        <translation>La foto sin efecto.</translation>
+    </message>
+    <message>
+        <source>lassú</source>
+        <translation>lento</translation>
+    </message>
+    <message>
+        <source>Nincs találat.</source>
+        <translation>No hay resultados.</translation>
+    </message>
+    <message>
         <source>Egyedi papír</source>
         <translation>Papel propio</translation>
     </message>
@@ -512,6 +612,10 @@
     <message>
         <source>Ezt a képet most nem tudjuk feldolgozni. Próbáld újra.</source>
         <translation>Ahora no podemos procesar esta imagen. Inténtalo de nuevo.</translation>
+    </message>
+    <message>
+        <source>Ehhez a nyomtatási mérethez a kép túl nagy. Csökkentsd a nyomtatási felbontást.</source>
+        <translation>La foto es demasiado grande para este tamaño de impresión. Reduce la resolución de impresión.</translation>
     </message>
     <message>
         <source>A művelet megszakadt.</source>
@@ -808,6 +912,13 @@
     <message>
         <source>A naplóbejegyzést nem sikerült eltávolítani. A nyomtatás nem indult el, de a napló bizonytalan feladatot jelezhet, ezért a nyomtatási fájl megmarad.</source>
         <translation>No se pudo eliminar la entrada del historial. La impresión no comenzó, pero el historial puede indicar un trabajo incierto, así que el archivo de impresión se conserva.</translation>
+    </message>
+    <message numerus="yes">
+        <source>%n effekt</source>
+        <translation>
+            <numerusform>%n efecto</numerusform>
+            <numerusform>%n efectos</numerusform>
+        </translation>
     </message>
 </context>
 </TS>

@@ -171,6 +171,11 @@ struct EffectRecipe {
     int version = 1;
     QString name;        ///< the single English product name
     QString description; ///< optional one-line tooltip text
+    /// Rendering hints for the browser, never for the engine. `slow` marks a
+    /// recipe whose full-resolution render is heavy; `approximate` marks a
+    /// dither or texture recipe whose preview cannot match the print exactly.
+    bool slow = false;
+    bool approximate = false;
     QList<Stage> stages;
 
     /// `key@version`, the stable identity used by caches and tests.
