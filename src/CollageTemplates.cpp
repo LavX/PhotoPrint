@@ -1,5 +1,6 @@
 #include "CollageTemplates.h"
 
+#include <QCoreApplication>
 #include <QFile>
 #include <QJsonArray>
 #include <QJsonDocument>
@@ -26,7 +27,6 @@ namespace {
 
 constexpr int kLattice = 1000;
 constexpr int kMinSlotMm = 15;
-constexpr int kExpectedTemplates = 55;
 constexpr int kTemplatesPerCount = 6;
 constexpr int kMaxPhotoCount = 10;
 
@@ -63,13 +63,14 @@ Error invalid(const QString &where, const QString &what)
 }
 
 /// One message for the whole 15 mm rule: it is the only reason a template is
-/// refused on a paper, and the person needs to know which paper.
+/// refused on a paper, and the person needs to know which paper. The sentence is
+/// translated, so it lives in the catalogues like every other user-facing text.
 Error tooSmall(const QString &paper)
 {
-    return error(QStringLiteral("template-too-small"),
-                 QStringLiteral("Ezen a papíron (%1) ez az elrendezés túl kicsi lenne. "
-                                "Válassz nagyobb papírt.")
-                     .arg(paper));
+    const QString text = QCoreApplication::translate(
+        "PhotoPrint",
+        "Ezen a papíron (%1) ez az elrendezés túl kicsi lenne. Válassz nagyobb papírt.");
+    return error(QStringLiteral("template-too-small"), text.arg(paper));
 }
 
 /// How the paper is named in a diagnostic: its everyday name, or the millimetre
@@ -223,7 +224,9 @@ bool parseSlot(const QJsonValue &value, int index, const QString &where, Collage
         return false;
     }
 
-    QString aspect = QStringLiteral("any");
+    // The data key is "aspect" for format compatibility; the field is called
+    // normalizedAspect so no caller mistakes it for the printed aspect.
+    QString normalizedAspect = QStringLiteral("any");
     const QJsonValue aspectValue = object.value(QStringLiteral("aspect"));
     if (!aspectValue.isUndefined()) {
         if (!aspectValue.isString() || !aspectKeys().contains(aspectValue.toString())) {
@@ -231,11 +234,12 @@ bool parseSlot(const QJsonValue &value, int index, const QString &where, Collage
                                                      "landscape or square"));
             return false;
         }
-        aspect = aspectValue.toString();
-        if (aspect != QLatin1String("any") && aspect != derivedAspect(rect)) {
+        normalizedAspect = aspectValue.toString();
+        if (normalizedAspect != QLatin1String("any")
+            && normalizedAspect != derivedAspect(rect)) {
             *err = invalid(slotWhere,
                            QStringLiteral("'aspect' is '%1' but the rectangle is %2")
-                               .arg(aspect, derivedAspect(rect)));
+                               .arg(normalizedAspect, derivedAspect(rect)));
             return false;
         }
     }
@@ -243,7 +247,7 @@ bool parseSlot(const QJsonValue &value, int index, const QString &where, Collage
     CollageSlot slot;
     slot.rect = QRectF(double(rect[0]) / kLattice, double(rect[1]) / kLattice,
                        double(rect[2]) / kLattice, double(rect[3]) / kLattice);
-    slot.aspect = aspect;
+    slot.normalizedAspect = normalizedAspect;
     *out = slot;
     *lattice = rect;
     return true;
@@ -306,6 +310,16 @@ bool parseTemplate(const QJsonValue &value, int index, CollageTemplate *out, Err
         return false;
     }
     t.photoCount = int(rawCount);
+    // The id carries the count in its first two digits. Requiring them to agree
+    // is a structural sentinel: a data edit that changes one and forgets the
+    // other fails here with a precise message, not somewhere down the pipeline.
+    const int idCount = id.mid(1, 2).toInt();
+    if (idCount != t.photoCount) {
+        *err = invalid(id, QStringLiteral("the id prefix n%1 contradicts photoCount %2")
+                               .arg(idCount, 2, 10, QLatin1Char('0'))
+                               .arg(t.photoCount));
+        return false;
+    }
 
     const QJsonValue familyValue = object.value(QStringLiteral("family"));
     if (!familyValue.isString() || !familyKeys().contains(familyValue.toString())) {
@@ -358,23 +372,46 @@ double collageMarginMm(const QSizeF &sheetMm)
     return std::max(4.0, std::min(10.0, 0.05 * shortSide));
 }
 
-const CollageTemplates &CollageTemplates::instance()
+namespace {
+
+/// The catalogue and the failure that produced it, so the two are read from one
+/// initialisation and a broken data file never looks like a product without
+/// templates.
+struct CatalogueLoad {
+    CollageTemplates catalogue;
+    QString error;
+};
+
+const CatalogueLoad &catalogueLoad()
 {
     ensureCollageResources();
-    static const CollageTemplates catalogue = [] {
+    static const CatalogueLoad load = [] {
         QFile file(QStringLiteral(":/templates/collage.json"));
         if (!file.open(QIODevice::ReadOnly)) {
             qCritical("CollageTemplates: embedded catalogue is missing");
-            return CollageTemplates{};
+            return CatalogueLoad{CollageTemplates{},
+                                 QStringLiteral("the embedded catalogue is missing")};
         }
         auto parsed = CollageTemplates::fromJson(file.readAll());
         if (!parsed) {
             qCritical("CollageTemplates: %s", qPrintable(parsed.error().message));
-            return CollageTemplates{};
+            return CatalogueLoad{CollageTemplates{}, parsed.error().message};
         }
-        return parsed.value();
+        return CatalogueLoad{parsed.value(), QString()};
     }();
-    return catalogue;
+    return load;
+}
+
+} // namespace
+
+const CollageTemplates &CollageTemplates::instance()
+{
+    return catalogueLoad().catalogue;
+}
+
+QString CollageTemplates::loadError()
+{
+    return catalogueLoad().error;
 }
 
 Result<CollageTemplates> CollageTemplates::fromJson(const QByteArray &json)
@@ -409,8 +446,12 @@ Result<CollageTemplates> CollageTemplates::fromJson(const QByteArray &json)
                        QStringLiteral("must be 'photoprint.collage/1'"));
     }
     const QJsonValue latticeValue = root.value(QStringLiteral("lattice"));
-    if (!latticeValue.isDouble() || latticeValue.toDouble() != double(kLattice))
-        return invalid(QStringLiteral("lattice"), QStringLiteral("must be 1000"));
+    const double latticeNumber = latticeValue.toDouble();
+    if (!latticeValue.isDouble() || !std::isfinite(latticeNumber)
+        || latticeNumber != std::floor(latticeNumber)
+        || latticeNumber != double(kLattice)) {
+        return invalid(QStringLiteral("lattice"), QStringLiteral("must be the integer 1000"));
+    }
 
     const QJsonValue templatesValue = root.value(QStringLiteral("templates"));
     if (!templatesValue.isArray())
@@ -430,12 +471,9 @@ Result<CollageTemplates> CollageTemplates::fromJson(const QByteArray &json)
         result.m_templates.append(t);
         perCount[t.photoCount] += 1;
     }
-    if (result.m_templates.size() != kExpectedTemplates) {
-        return invalid(QStringLiteral("templates"),
-                       QStringLiteral("must hold %1 templates, found %2")
-                           .arg(kExpectedTemplates)
-                           .arg(result.m_templates.size()));
-    }
+    // Per-count checks, not a total: a truncated file says exactly which photo
+    // count lost an entry instead of only "55 expected". The catalogue contract
+    // is one fallback for one photo and six layouts for every count up to ten.
     if (perCount[1] != 1) {
         return invalid(QStringLiteral("templates"),
                        QStringLiteral("photoCount 1 must hold exactly one template, found %1")
@@ -517,47 +555,91 @@ Result<QList<QRectF>> CollageTemplates::slotsMm(const CollageTemplate &t,
     return rects;
 }
 
-Result<QList<Frame>> CollageTemplates::apply(const CollageTemplate &t, const Page &page) const
+Result<QStringList> CollageTemplates::aspectsMm(const CollageTemplate &t, const PaperSpec &paper,
+                                                bool landscape) const
 {
-    return apply(t, page.paper, page.landscape, page.frames);
+    const auto rects = slotsMm(t, paper, landscape);
+    if (!rects)
+        return rects.error();
+    QStringList aspects;
+    aspects.reserve(rects.value().size());
+    for (const QRectF &rect : rects.value())
+        aspects.append(collageAspectMm(rect));
+    return aspects;
+}
+
+Result<QList<Frame>> CollageTemplates::apply(const CollageTemplate &t, const Page &page,
+                                             CollageApplyReport *report) const
+{
+    return apply(t, page.paper, page.landscape, page.frames, report);
 }
 
 Result<QList<Frame>> CollageTemplates::apply(const CollageTemplate &t, const PaperSpec &paper,
-                                             bool landscape, const QList<Frame> &frames) const
+                                             bool landscape, const QList<Frame> &frames,
+                                             CollageApplyReport *report) const
 {
-    if (frames.size() != t.photoCount) {
-        return error(QStringLiteral("template-count-mismatch"),
-                     QStringLiteral("Ehhez a sablonhoz %1 fotó kell, a lapon most %2 van.")
-                         .arg(t.photoCount)
-                         .arg(frames.size()));
+    if (report)
+        *report = CollageApplyReport{};
+
+    // A template built by hand can disagree with itself. Check the slot list
+    // against the declared count before anything is indexed, so a bad template
+    // is an error instead of a crash or a frame with garbage geometry.
+    if (t.slotList.isEmpty() || t.slotList.size() != t.photoCount) {
+        return error(QStringLiteral("template-invalid"),
+                     QStringLiteral("a template must have exactly one slot per photograph"));
+    }
+    if (frames.size() != t.slotList.size()) {
+        return error(
+            QStringLiteral("template-count-mismatch"),
+            QCoreApplication::translate("PhotoPrint",
+                                        "Ehhez a sablonhoz %1 fotó kell, a lapon most %2 van.")
+                .arg(t.photoCount)
+                .arg(frames.size()));
     }
     for (const Frame &frame : frames) {
         if (frame.sourcePath.isEmpty()) {
-            return error(QStringLiteral("template-missing-source"),
-                         QStringLiteral("Egy képnek nincs forrásfájlja, ezért a sablon nem "
-                                        "alkalmazható."));
+            return error(
+                QStringLiteral("template-missing-source"),
+                QCoreApplication::translate(
+                    "PhotoPrint",
+                    "Egy képnek nincs forrásfájlja, ezért a sablon nem alkalmazható."));
         }
     }
 
     const auto rects = slotsMm(t, paper, landscape);
     if (!rects)
         return rects.error();
+    if (rects.value().size() != t.slotList.size()) {
+        return error(QStringLiteral("template-invalid"),
+                     QStringLiteral("the mapper did not produce one slot per photograph"));
+    }
 
     // Copy first, then change only the geometry the template owns. Identity,
     // the source and its sha, the image rotation, the label, the paper and tone
     // fields and the effect all survive untouched.
     QList<Frame> result = frames;
     for (int i = 0; i < result.size(); ++i) {
+        if (i >= t.slotList.size() || i >= rects.value().size()) {
+            return error(QStringLiteral("template-invalid"),
+                         QStringLiteral("slot index %1 is outside the template").arg(i));
+        }
         Frame &frame = result[i];
         const QRectF &slot = rects.value().at(i);
         const double currentAspect = frame.height > 0.0 ? frame.width / frame.height : 0.0;
         const double slotAspect = slot.height() > 0.0 ? slot.width() / slot.height() : 0.0;
+        // Both aspects are compared relative to the larger one, so the rule is
+        // symmetric: 16 % wider than the frame keeps the crop, 18 % resets it.
+        const double largerAspect = std::max(slotAspect, currentAspect);
         const bool keepCrop = currentAspect > 0.0 && slotAspect > 0.0
-            && std::abs(slotAspect - currentAspect) <= 0.15 * currentAspect;
+            && std::abs(slotAspect - currentAspect) <= 0.15 * largerAspect;
         if (!keepCrop) {
             frame.cropCenter = QPointF(0.5, 0.5);
             frame.zoom = 1.0;
+            if (report)
+                report->cropResetIds.append(frame.id);
         }
+        if (frame.angleDeg != 0.0 && report)
+            report->rotationResetIds.append(frame.id);
         frame.cx = slot.center().x();
         frame.cy = slot.center().y();
         frame.width = slot.width();
@@ -571,14 +653,32 @@ Result<QList<Frame>> CollageTemplates::apply(const CollageTemplate &t, const Pap
     return result;
 }
 
+QString collageAspectMm(const QRectF &slotMm)
+{
+    if (!std::isfinite(slotMm.width()) || !std::isfinite(slotMm.height())
+        || slotMm.width() <= 0.0 || slotMm.height() <= 0.0) {
+        return {};
+    }
+    const double ratio = slotMm.width() / slotMm.height();
+    if (ratio >= 1.5)
+        return QStringLiteral("landscape");
+    if (ratio <= 0.667)
+        return QStringLiteral("portrait");
+    return QStringLiteral("square");
+}
+
 QString collageLabel(const CollageTemplate &t)
 {
-    return QStringLiteral("%1 · %2").arg(t.family).arg(t.photoCount);
+    if (!t.name.isEmpty())
+        return t.name;
+    if (!t.nameEn.isEmpty())
+        return t.nameEn;
+    return t.id;
 }
 
 QString collageReferenceName(const CollageTemplate &t)
 {
-    return t.name.isEmpty() ? t.id : t.name;
+    return collageLabel(t);
 }
 
 } // namespace pp

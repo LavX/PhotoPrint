@@ -925,5 +925,17 @@
             <numerusform>%n 個のエフェクト</numerusform>
         </translation>
     </message>
+    <message>
+        <source>Ezen a papíron (%1) ez az elrendezés túl kicsi lenne. Válassz nagyobb papírt.</source>
+        <translation>この用紙（%1）ではこのレイアウトが小さすぎます。大きい用紙を選んでください。</translation>
+    </message>
+    <message>
+        <source>Ehhez a sablonhoz %1 fotó kell, a lapon most %2 van.</source>
+        <translation>このテンプレートには%1枚の写真が必要ですが、ページには%2枚あります。</translation>
+    </message>
+    <message>
+        <source>Egy képnek nincs forrásfájlja, ezért a sablon nem alkalmazható.</source>
+        <translation>写真の元ファイルがないため、テンプレートを適用できません。</translation>
+    </message>
 </context>
 </TS>

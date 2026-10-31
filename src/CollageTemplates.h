@@ -10,6 +10,7 @@
 #include <QRectF>
 #include <QSizeF>
 #include <QString>
+#include <QStringList>
 
 namespace pp {
 
@@ -20,10 +21,13 @@ namespace pp {
 /// square without a gap of their own.
 struct CollageSlot {
     QRectF rect{0.0, 0.0, 1.0, 1.0};
-    /// Advisory hint, derived from the normalised rectangle: any, portrait,
-    /// landscape or square. The renderer ignores it; FitMode::Fill crops any
-    /// photograph into any slot, so the hint never constrains the print.
-    QString aspect = QStringLiteral("any");
+    /// The advisory aspect hint from the data, computed from the *normalised*
+    /// rectangle only. It is not the aspect a photograph will be printed at: a
+    /// square cell on a 10 × 15 cm sheet prints as 42.5 × 67.5 mm, because the
+    /// content box is not square. The picker must call collageAspectMm() on the
+    /// mapped millimetres instead. This field is kept only because the data
+    /// records it and the loader checks it against the rectangle.
+    QString normalizedAspect = QStringLiteral("any");
 };
 
 /// One entry of the shipped collage catalogue. Slot order is the fill order:
@@ -48,6 +52,24 @@ struct CollageTemplate {
 /// zero; the mapper then refuses the template instead of dividing by nothing.
 double collageMarginMm(const QSizeF &sheetMm);
 
+/// Physical aspect class of a mapped slot: landscape when the millimetre ratio
+/// is at least 1.5, portrait when at most 0.667, otherwise square. This is the
+/// hint the picker must use, because the normalised hint in the data says
+/// nothing about the sheet. Empty for a degenerate rectangle.
+QString collageAspectMm(const QRectF &slotMm);
+
+/// One apply() call's destructive side effects, so the dialog can warn honestly
+/// instead of guessing. The engine changes nothing else about a frame.
+struct CollageApplyReport {
+    /// Frames whose crop centre and zoom were reset because the slot aspect is
+    /// too far from the frame's current aspect.
+    QStringList cropResetIds;
+    /// Frames whose frame rotation (angleDeg) was non-zero and is set to zero.
+    QStringList rotationResetIds;
+
+    bool isEmpty() const { return cropResetIds.isEmpty() && rotationResetIds.isEmpty(); }
+};
+
 /// The shipped catalogue, loaded and validated from
 /// `:/templates/collage.json`. The data file is the single source: nothing here
 /// is generated into C++.
@@ -56,8 +78,15 @@ class CollageTemplates
 public:
     /// The embedded catalogue. A malformed catalogue is a bug in the shipped
     /// data, so instance() reports it loudly and returns an empty catalogue
-    /// rather than guessing at half a layout.
+    /// rather than guessing at half a layout. loadError() then carries the
+    /// reason, so a picker can tell broken data from a product without
+    /// templates instead of showing an innocent empty list.
     static const CollageTemplates &instance();
+
+    /// Empty when the embedded catalogue loaded, otherwise the failure the
+    /// instance logged. A malformed count is data corruption, not an empty
+    /// catalogue.
+    static QString loadError();
 
     /// Strict parser, used by instance() and by the tests. Every rule the
     /// format states is enforced: the format key, the lattice, the entry count,
@@ -95,37 +124,48 @@ public:
     Result<QList<QRectF>> slotsMm(const CollageTemplate &t, const PaperSpec &paper,
                                   bool landscape) const;
 
+    /// The physical aspect class of every slot, in fill order, on this paper.
+    /// Same failure as slotsMm().
+    Result<QStringList> aspectsMm(const CollageTemplate &t, const PaperSpec &paper,
+                                  bool landscape) const;
+
     /// The frame list a template produces from `page.frames`, or an error.
     /// Exactly one frame per slot, in the same order and with the same ids.
+    /// A template whose photoCount disagrees with its slot list is refused, so a
+    /// hand-built template can never index past its slots.
     /// Geometry comes from the slot; angle becomes zero, fit becomes Fill and
     /// autoPlaced becomes false so a later added photograph never reflows the
     /// layout. Every other field is copied unchanged, including the source, its
     /// sha, the image rotation, the tone and the effect.
     ///
     /// Crop policy: the crop center and zoom survive when the slot aspect is
-    /// within 15 % of the frame's current aspect, otherwise they reset to the
-    /// centre and 1. The engine never applies the edit itself; the caller
-    /// publishes the returned list as one SetFramesEdit, so one undo restores
-    /// the layout.
-    Result<QList<Frame>> apply(const CollageTemplate &t, const Page &page) const;
+    /// within 15 % of the frame's current aspect (relative to the larger of the
+    /// two), otherwise they reset to the centre and 1. What was reset is listed
+    /// in `report`, so the page can say so before the user commits. The engine
+    /// never applies the edit itself; the caller publishes the returned list as
+    /// one SetFramesEdit, so one undo restores the layout.
+    Result<QList<Frame>> apply(const CollageTemplate &t, const Page &page,
+                               CollageApplyReport *report = nullptr) const;
 
     /// Overload for a page that is not being edited yet.
     Result<QList<Frame>> apply(const CollageTemplate &t, const PaperSpec &paper,
-                               bool landscape, const QList<Frame> &frames) const;
+                               bool landscape, const QList<Frame> &frames,
+                               CollageApplyReport *report = nullptr) const;
 
 private:
     QList<CollageTemplate> m_templates;
     QHash<QString, int> m_indexById;
 };
 
-/// Short, language-free picker label: the family key and the count, e.g.
-/// "hero · 5". The UI translates the family and the counted pattern; the engine
-/// keeps both untranslated.
+/// The picker label: the template's own name in the source language. All 55
+/// names are unique, so two tiles never read the same and the picker translates
+/// one string per template. Falls back to the English name, then the id, for a
+/// template built by hand.
 QString collageLabel(const CollageTemplate &t);
 
-/// The template's reference name for accessibility and disambiguation: the
-/// source-language name from the catalogue, or the id for a template built by
-/// hand without one.
+/// The accessible name for the tile. The catalogue names are unique, so the
+/// label already identifies the template completely; this entry point exists so
+/// the accessibility contract is named separately from the visible label.
 QString collageReferenceName(const CollageTemplate &t);
 
 } // namespace pp

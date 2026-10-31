@@ -925,5 +925,17 @@
             <numerusform>%n 个效果</numerusform>
         </translation>
     </message>
+    <message>
+        <source>Ezen a papíron (%1) ez az elrendezés túl kicsi lenne. Válassz nagyobb papírt.</source>
+        <translation>此纸张（%1）上的这个布局会太小。请选择更大的纸张。</translation>
+    </message>
+    <message>
+        <source>Ehhez a sablonhoz %1 fotó kell, a lapon most %2 van.</source>
+        <translation>此模板需要 %1 张照片，页面上目前有 %2 张。</translation>
+    </message>
+    <message>
+        <source>Egy képnek nincs forrásfájlja, ezért a sablon nem alkalmazható.</source>
+        <translation>有一张照片没有源文件，因此无法应用模板。</translation>
+    </message>
 </context>
 </TS>

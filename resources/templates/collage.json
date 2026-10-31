@@ -54,8 +54,8 @@
       "photoCount": 2,
       "family": "hero",
       "slots": [
-        {"rect": [0.000, 0.000, 0.400, 1.000], "aspect": "portrait"},
-        {"rect": [0.400, 0.000, 0.600, 1.000], "aspect": "portrait"}
+        {"rect": [0.400, 0.000, 0.600, 1.000], "aspect": "portrait"},
+        {"rect": [0.000, 0.000, 0.400, 1.000], "aspect": "portrait"}
       ]
     },
     {
@@ -76,8 +76,8 @@
       "photoCount": 2,
       "family": "hero",
       "slots": [
-        {"rect": [0.000, 0.000, 1.000, 0.400], "aspect": "landscape"},
-        {"rect": [0.000, 0.400, 1.000, 0.600], "aspect": "landscape"}
+        {"rect": [0.000, 0.400, 1.000, 0.600], "aspect": "landscape"},
+        {"rect": [0.000, 0.000, 1.000, 0.400], "aspect": "landscape"}
       ]
     },
     {
@@ -147,9 +147,9 @@
       "photoCount": 3,
       "family": "hero",
       "slots": [
+        {"rect": [0.000, 0.400, 1.000, 0.600], "aspect": "landscape"},
         {"rect": [0.000, 0.000, 0.500, 0.400], "aspect": "square"},
-        {"rect": [0.500, 0.000, 0.500, 0.400], "aspect": "square"},
-        {"rect": [0.000, 0.400, 1.000, 0.600], "aspect": "landscape"}
+        {"rect": [0.500, 0.000, 0.500, 0.400], "aspect": "square"}
       ]
     },
     {

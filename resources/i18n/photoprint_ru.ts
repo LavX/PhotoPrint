@@ -931,5 +931,17 @@
             <numerusform>%n эффектов</numerusform>
         </translation>
     </message>
+    <message>
+        <source>Ezen a papíron (%1) ez az elrendezés túl kicsi lenne. Válassz nagyobb papírt.</source>
+        <translation>Этот макет будет слишком мал на этой бумаге (%1). Выберите бумагу большего размера.</translation>
+    </message>
+    <message>
+        <source>Ehhez a sablonhoz %1 fotó kell, a lapon most %2 van.</source>
+        <translation>Для этого шаблона нужно %1 фото, на странице сейчас %2.</translation>
+    </message>
+    <message>
+        <source>Egy képnek nincs forrásfájlja, ezért a sablon nem alkalmazható.</source>
+        <translation>У одной фотографии нет исходного файла, поэтому шаблон нельзя применить.</translation>
+    </message>
 </context>
 </TS>
