@@ -1006,5 +1006,105 @@
         <source>Kiválasztott</source>
         <translation>Selezionato</translation>
     </message>
+    <message>
+        <source>Érvénytelen papírméret.</source>
+        <translation>Dimensione carta non valida.</translation>
+    </message>
+    <message>
+        <source>Ezen a lapon nincs fotó.</source>
+        <translation>Non c'è nessuna foto su questa pagina.</translation>
+    </message>
+    <message>
+        <source>Ekkora margó mellett nem marad hely. Csökkentsd a margót.</source>
+        <translation>Con questo margine non resta spazio. Riduci il margine.</translation>
+    </message>
+    <message>
+        <source>A példány nagyobb, mint a lap. Válassz kisebb méretet, vagy nagyobb papírt.</source>
+        <translation>La copia è più grande del foglio. Scegli una dimensione più piccola o una carta più grande.</translation>
+    </message>
+    <message>
+        <source>Legnagyobb: %1 × %2 mm.</source>
+        <translation>La più grande: %1 × %2 mm.</translation>
+    </message>
+    <message>
+        <source>Egyszerre legfeljebb %1 példány készíthető.</source>
+        <translation>Si possono creare al massimo %1 copie alla volta.</translation>
+    </message>
+    <message>
+        <source>Ez %1 lap lenne. Egyszerre legfeljebb %2 lap készíthető. Csökkentsd a darabszámot.</source>
+        <translation>Sarebbero %1 pagine. Si possono creare al massimo %2 pagine alla volta. Riduci la quantità.</translation>
+    </message>
+    <message>
+        <source>Érvénytelen oszlopszám.</source>
+        <translation>Numero di colonne non valido.</translation>
+    </message>
+    <message>
+        <source>Ekkora oszlopszámmal a fotók nem férnek el olvasható méretben.</source>
+        <translation>Le foto non entrano a una dimensione leggibile con così tante colonne.</translation>
+    </message>
+    <message>
+        <source>Ezen a lapon legfeljebb %1 fotó fér el olvasható méretben. Most %2 van. Oszd el őket több lapra, vagy válassz nagyobb papírt.</source>
+        <translation>Questa pagina contiene al massimo %1 foto a una dimensione leggibile. Ora ce ne sono %2. Distribuiscile su più pagine o scegli una carta più grande.</translation>
+    </message>
+    <message>
+        <source>A %1. fotó el van forgatva, ezért nem lehet térközzel rendezni. Előbb állítsd egyenesbe.</source>
+        <translation>La foto %1 è ruotata, quindi gli spazi non possono essere equalizzati. Raddrizzala prima.</translation>
+    </message>
+    <message>
+        <source>A %1. fotó a lap másik irányában sem fér el. Kicsinyítsd, vagy használd a rácsot.</source>
+        <translation>La foto %1 non entra nemmeno nell'altra direzione. Rimpiccioliscila o usa la griglia.</translation>
+    </message>
+    <message>
+        <source>A fotók így nem férnek el a lapon. Kicsinyítsd őket, vagy használd a rácsot.</source>
+        <translation>Le foto non entrano così nella pagina. Rimpiccioliscile o usa la griglia.</translation>
+    </message>
+    <message>
+        <source>Érvénytelen lapsorszám.</source>
+        <translation>Numero di pagina non valido.</translation>
+    </message>
+    <message>
+        <source>Egy lap csak egyszer szerepelhet a módosításban.</source>
+        <translation>Una pagina può comparire una sola volta nella modifica.</translation>
+    </message>
+    <message>
+        <source>A lap azonosítója nem lehet üres.</source>
+        <translation>L'identificatore della pagina non può essere vuoto.</translation>
+    </message>
+    <message>
+        <source>Az új lap azonosítója már létezik.</source>
+        <translation>Un identificatore di pagina nuova esiste già.</translation>
+    </message>
+    <message>
+        <source>Két új lap azonosítója megegyezik.</source>
+        <translation>Due pagine nuove hanno lo stesso identificatore.</translation>
+    </message>
+    <message>
+        <source>Érvénytelen beszúrási hely.</source>
+        <translation>Posizione di inserimento non valida.</translation>
+    </message>
+    <message>
+        <source>Érvénytelen kiválasztott lap.</source>
+        <translation>Pagina selezionata non valida.</translation>
+    </message>
+    <message>
+        <source>35 × 45 mm (igazolványkép)</source>
+        <translation>35 × 45 mm (foto tessera)</translation>
+    </message>
+    <message>
+        <source>50 × 70 mm</source>
+        <translation>50 × 70 mm</translation>
+    </message>
+    <message>
+        <source>40 × 40 mm</source>
+        <translation>40 × 40 mm</translation>
+    </message>
+    <message>
+        <source>30 × 40 mm</source>
+        <translation>30 × 40 mm</translation>
+    </message>
+    <message>
+        <source>25 × 35 mm</source>
+        <translation>25 × 35 mm</translation>
+    </message>
 </context>
 </TS>

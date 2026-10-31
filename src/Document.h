@@ -157,14 +157,39 @@ struct PaperSpec {
     bool operator==(const PaperSpec &) const = default;
 };
 
+/// The cutting aid a page shows on its own frame edges. `None` is the default
+/// and the only state a fresh page or an opened 1.0.1 project can get without
+/// an explicit choice; a corrupt project also falls back to it, so a bad file
+/// never puts marks on the paper.
+enum class CutGuides {
+    None,   ///< nothing on the screen and nothing on the print
+    Screen, ///< a dashed overlay on the screen only
+    Print   ///< a thin grey line on the screen and on the print
+};
+
+/// Whether the page prints borderless, overriding the printer's own choice.
+/// `Auto` follows the printer and the paper; `Off` and `On` pin the decision
+/// per page, so a later printer default cannot change a saved composition.
+enum class BorderlessOverride { Auto, Off, On };
+
 struct Page {
     QString id;
     PaperSpec paper;
     bool landscape = false;
     QList<Frame> frames;
+    CutGuides cutGuides = CutGuides::None;
+    BorderlessOverride borderlessOverride = BorderlessOverride::Auto;
 
     bool operator==(const Page &) const = default;
 };
+
+/// Project keys for the two optional page fields. A missing or unrecognised key
+/// loads as the field's default, and the writer omits a default value, so an
+/// older build sees a page it already understands.
+QString cutGuidesKey(CutGuides value);
+CutGuides cutGuidesFromKey(const QString &key);
+QString borderlessOverrideKey(BorderlessOverride value);
+BorderlessOverride borderlessOverrideFromKey(const QString &key);
 
 /// Document-wide colour recipe. The image component is taken per frame from
 /// `effectiveTone`; the paper component is added once at export.

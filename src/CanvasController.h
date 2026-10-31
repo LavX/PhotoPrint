@@ -1,10 +1,12 @@
 #pragma once
 
 #include "Document.h"
+#include "Result.h"
 
 #include <QObject>
 #include <QUndoStack>
 
+#include <optional>
 #include <variant>
 
 namespace pp {
@@ -64,6 +66,36 @@ struct SetFramesEdit {
     QList<Frame> frames;
 };
 
+/// One layout action's change to one existing page. Every field is optional:
+/// a guide-only edit must not have to restate the frames, and an align edit
+/// must not silently reset the page's cut guide state.
+struct PageLayout {
+    int pageIndex = -1;
+    std::optional<QList<Frame>> frames;
+    std::optional<CutGuides> cutGuides;
+    std::optional<BorderlessOverride> borderlessOverride;
+};
+
+/// A batch or align action, applied as one snapshot. The caller supplies the
+/// finished pages; the controller never computes geometry. `insertIndex` is
+/// where the new page block goes (-1 appends), and `selectPage` is the page
+/// left current (-1 picks the first touched page). `actionText` is the undo
+/// text; empty falls back to "Elrendezés".
+struct ApplyLayoutEdit {
+    QList<PageLayout> pages;
+    QList<Page> newPages;
+    int insertIndex = -1;
+    int selectPage = -1;
+    QString actionText;
+};
+
+/// Checks an ApplyLayoutEdit against the document it will be applied to. The
+/// controller refuses a malformed edit as a whole, never half applies it: an
+/// unknown page index, a page changed twice, an empty or duplicate new page id,
+/// an insertion index outside the page list, and a selected page that will not
+/// exist. The dialog can call this before it commits its own state.
+Result<void> validateLayoutEdit(const DocumentSnapshot &document, const ApplyLayoutEdit &edit);
+
 struct SetRecipeEdit {
     ColorRecipe recipe;
 };
@@ -83,8 +115,8 @@ struct SetPrintQualityEdit {
 using DocumentEdit = std::variant<FrameChange, RemoveFrameEdit, AddFrameEdit, SetPaperEdit,
                                   RotatePageEdit, FitPageEdit, AddPageEdit, DuplicatePageEdit,
                                   RemovePageEdit, MovePageEdit, ReorderFrameEdit, SetFramesEdit,
-                                  SetRecipeEdit, SetProjectPaperEdit, SetProjectLandscapeEdit,
-                                  SetPrintQualityEdit>;
+                                  ApplyLayoutEdit, SetRecipeEdit, SetProjectPaperEdit,
+                                  SetProjectLandscapeEdit, SetPrintQualityEdit>;
 
 /// Owns the edited document and its undo history. Every user-visible edit goes
 /// through here; a long drag is committed once, not per mouse move.
