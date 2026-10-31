@@ -1101,5 +1101,61 @@
         <source>25 × 35 mm</source>
         <translation>25 × 35 mm</translation>
     </message>
+    <message>
+        <source>Egy lapon legfeljebb 12 hely lehet.</source>
+        <translation>1ページに配置できる枠は最大12個です。</translation>
+    </message>
+    <message>
+        <source>A sablonban minden fotóhoz pontosan egy helynek kell tartoznia.</source>
+        <translation>テンプレートには写真ごとにちょうど1つの枠が必要です。</translation>
+    </message>
+    <message>
+        <source>A sablon egyik helye érvénytelen.</source>
+        <translation>テンプレートの枠の1つが無効です。</translation>
+    </message>
+    <message>
+        <source>Ehhez a laphoz még nincs elrendezés.</source>
+        <translation>このページにはまだレイアウトがありません。</translation>
+    </message>
+    <message>
+        <source>Ehhez a laphoz másik elrendezés tartozik.</source>
+        <translation>このページには別のレイアウトが使われています。</translation>
+    </message>
+    <message>
+        <source>Ez a hely már nem létezik.</source>
+        <translation>その枠はもうありません。</translation>
+    </message>
+    <message>
+        <source>Egy fotó nem található ezen a lapon.</source>
+        <translation>このページの写真が見つかりません。</translation>
+    </message>
+    <message>
+        <source>A fotónak nincs forrásfájlja.</source>
+        <translation>写真に元のファイルがありません。</translation>
+    </message>
+    <message>
+        <source>Az elrendezés nem építhető fel ezen a lapon.</source>
+        <translation>このページにレイアウトを構築できません。</translation>
+    </message>
+    <message>
+        <source>A hely azonosítója üres vagy ismétlődik.</source>
+        <translation>枠の識別子が空か重複しています。</translation>
+    </message>
+    <message>
+        <source>A hely a lapon kívülre esik.</source>
+        <translation>枠がページの外にはみ出しています。</translation>
+    </message>
+    <message>
+        <source>Egy fotó olyan helyre hivatkozik, amely nem létezik.</source>
+        <translation>写真が存在しない枠を参照しています。</translation>
+    </message>
+    <message>
+        <source>Két fotó nem kerülhet ugyanabba a helybe.</source>
+        <translation>2枚の写真を同じ枠に置くことはできません。</translation>
+    </message>
+    <message>
+        <source>A margó, a hézag vagy a szegély értéke érvénytelen.</source>
+        <translation>余白、間隔、または枠線の値が無効です。</translation>
+    </message>
 </context>
 </TS>

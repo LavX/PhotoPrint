@@ -1106,5 +1106,61 @@
         <source>25 × 35 mm</source>
         <translation>25 × 35 mm</translation>
     </message>
+    <message>
+        <source>Egy lapon legfeljebb 12 hely lehet.</source>
+        <translation>Una página puede tener como máximo 12 posiciones.</translation>
+    </message>
+    <message>
+        <source>A sablonban minden fotóhoz pontosan egy helynek kell tartoznia.</source>
+        <translation>Una plantilla debe tener exactamente una posición por foto.</translation>
+    </message>
+    <message>
+        <source>A sablon egyik helye érvénytelen.</source>
+        <translation>Una de las posiciones de la plantilla no es válida.</translation>
+    </message>
+    <message>
+        <source>Ehhez a laphoz még nincs elrendezés.</source>
+        <translation>Esta página aún no tiene una composición.</translation>
+    </message>
+    <message>
+        <source>Ehhez a laphoz másik elrendezés tartozik.</source>
+        <translation>Esta página ya usa otra composición.</translation>
+    </message>
+    <message>
+        <source>Ez a hely már nem létezik.</source>
+        <translation>Esa posición ya no existe.</translation>
+    </message>
+    <message>
+        <source>Egy fotó nem található ezen a lapon.</source>
+        <translation>No se encuentra una foto de esta página.</translation>
+    </message>
+    <message>
+        <source>A fotónak nincs forrásfájlja.</source>
+        <translation>La foto no tiene archivo de origen.</translation>
+    </message>
+    <message>
+        <source>Az elrendezés nem építhető fel ezen a lapon.</source>
+        <translation>No se puede crear la composición en esta página.</translation>
+    </message>
+    <message>
+        <source>A hely azonosítója üres vagy ismétlődik.</source>
+        <translation>Un identificador de posición está vacío o repetido.</translation>
+    </message>
+    <message>
+        <source>A hely a lapon kívülre esik.</source>
+        <translation>Una posición queda fuera de la página.</translation>
+    </message>
+    <message>
+        <source>Egy fotó olyan helyre hivatkozik, amely nem létezik.</source>
+        <translation>Una foto hace referencia a una posición que no existe.</translation>
+    </message>
+    <message>
+        <source>Két fotó nem kerülhet ugyanabba a helybe.</source>
+        <translation>Dos fotos no pueden ocupar la misma posición.</translation>
+    </message>
+    <message>
+        <source>A margó, a hézag vagy a szegély értéke érvénytelen.</source>
+        <translation>El valor del margen, la separación o el borde no es válido.</translation>
+    </message>
 </context>
 </TS>

@@ -74,6 +74,9 @@ struct PageLayout {
     std::optional<QList<Frame>> frames;
     std::optional<CutGuides> cutGuides;
     std::optional<BorderlessOverride> borderlessOverride;
+    std::optional<QList<Slot>> slotList;
+    std::optional<SlotStyle> slotStyle;
+    std::optional<QString> layoutId;
 };
 
 /// A batch or align action, applied as one snapshot. The caller supplies the
@@ -131,7 +134,18 @@ public:
     int pageCount() const { return static_cast<int>(m_document.pages.size()); }
     void setDocument(const DocumentSnapshot &document);
     void setCurrentPage(int index);
-    void apply(const DocumentEdit &edit);
+    /// Applies one edit. Returns an error when the edit is malformed (a bad page
+    /// index, a slot list that disagrees with its frames, an invalid style), so
+    /// a caller never has to guess whether an edit landed. A guard that makes the
+    /// edit a no-op returns success without touching the undo stack.
+    Result<void> apply(const DocumentEdit &edit);
+
+    /// Publishes one finished page as a single undo step. The whole page is
+    /// supplied, so the frames, the slot list, the style and the layout label
+    /// cannot drift apart and a forgotten field cannot silently refuse the edit.
+    /// Returns the validation error instead of dropping it.
+    Result<void> publishPage(const Page &page,
+                             const QString &actionText = QString());
 
     QUndoStack *undoStack() const { return m_undo; }
     bool canUndo() const { return m_undo->canUndo(); }
@@ -158,6 +172,10 @@ private:
     void fitPageToPaper(int pageIndex);
     void replacePage(int pageIndex, const Page &page);
     void replaceSnapshot(const DocumentSnapshot &snapshot);
+    /// The single repair point. Every mutation below calls it before emitting,
+    /// so no other writer (an align, a paper setter, an undo) can leave a slotted
+    /// frame's geometry out of step with its slot.
+    void repairDocument();
 
     DocumentSnapshot m_document;
     QUndoStack *m_undo = nullptr;

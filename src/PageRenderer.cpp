@@ -3,6 +3,7 @@
 #include "ColorPipeline.h"
 #include "EffectEngine.h"
 #include "LayoutEngine.h"
+#include "SlotGeometry.h"
 
 #include <QCoreApplication>
 #include <QBuffer>
@@ -12,11 +13,14 @@
 #include <QImage>
 #include <QFont>
 #include <QPainter>
+#include <QPainterPath>
 #include <QSaveFile>
+#include <QSet>
 #include <QTransform>
 
 #include <zlib.h>
 
+#include <algorithm>
 #include <cmath>
 #include <vector>
 
@@ -293,6 +297,98 @@ private:
     }
 };
 
+/// sRGB border colour -> the page's working space. The canvas is linear
+/// Rec.2020 premultiplied, so writing the sRGB numbers into it directly would
+/// brighten every mat (128 grey would print around 188). One 1x1 conversion
+/// through the same pipeline the photographs use keeps the definition of the
+/// working space in one place.
+QColor workingBorderColor(const QColor &srgb)
+{
+    if (!srgb.isValid())
+        return QColor::fromRgba64(65535, 65535, 65535);
+    QImage probe(1, 1, QImage::Format_ARGB32);
+    // rgba(), not rgb(): rgb() forces the alpha byte to opaque and would drop a
+    // translucent mat's alpha here.
+    probe.setPixel(0, 0, srgb.rgba());
+    const QImage linear = ColorPipeline::srgbToLinear(probe);
+    if (linear.isNull())
+        return srgb;
+    const QRgba64 pixel = reinterpret_cast<const QRgba64 *>(linear.constScanLine(0))[0];
+    const quint16 alpha = pixel.alpha();
+    if (alpha == 0)
+        return QColor(0, 0, 0, 0);
+    // srgbToLinear returns premultiplied channels, QColor wants straight ones.
+    const auto straight = [alpha](quint16 channel) {
+        return static_cast<quint16>(std::min<quint32>(
+            65535, (static_cast<quint32>(channel) * 65535 + alpha / 2) / alpha));
+    };
+    return QColor::fromRgba64(straight(pixel.red()), straight(pixel.green()),
+                              straight(pixel.blue()), alpha);
+}
+
+/// Draws one photograph clipped to its frame rectangle, or to a rounded path
+/// when the slot asks for a corner radius. The clip is set in frame-local
+/// coordinates, before the image transform, so the crop and zoom gestures keep
+/// working exactly as they did.
+void drawFramePhoto(QPainter &painter, const Frame &frame, const QImage &image,
+                    const QTransform &pageTransform, double cornerRadiusMm)
+{
+    const QSize pixels = image.size();
+    const QTransform imageTransform = LayoutEngine::imageToPage(frame, pixels);
+
+    QTransform frameTransform;
+    frameTransform.translate(frame.cx, frame.cy);
+    frameTransform.rotate(frame.angleDeg);
+
+    const QRectF photo(-frame.width / 2.0, -frame.height / 2.0, frame.width, frame.height);
+
+    painter.save();
+    painter.setTransform(frameTransform * pageTransform);
+    if (cornerRadiusMm > 0.0) {
+        QPainterPath clip;
+        clip.addRoundedRect(photo, cornerRadiusMm, cornerRadiusMm);
+        painter.setClipPath(clip);
+    } else {
+        painter.setClipRect(photo);
+    }
+    painter.setTransform(imageTransform * pageTransform);
+    painter.drawImage(QRectF(0, 0, pixels.width(), pixels.height()), image);
+    painter.restore();
+}
+
+/// The mat is the cell minus the photograph rectangle, filled as a ring so it
+/// antialiases cleanly and prints identically. The outer radius is the slot's
+/// clamped radius; the inner one is concentric, so a rounded cell leaves an
+/// even band of mat.
+void paintSlotMat(QPainter &painter, const QRectF &cell, const QRectF &photo,
+                  double outerRadiusMm, const QColor &colour)
+{
+    if (cell.width() <= 0.0 || cell.height() <= 0.0 || photo.width() <= 0.0
+        || photo.height() <= 0.0) {
+        return;
+    }
+    const double border = std::min(cell.width() - photo.width(),
+                                   cell.height() - photo.height())
+        / 2.0;
+    if (!(border > SlotGeometry::kGeometryEpsilonMm))
+        return;
+
+    if (outerRadiusMm <= 0.0) {
+        QPainterPath ring;
+        ring.setFillRule(Qt::OddEvenFill);
+        ring.addRect(cell);
+        ring.addRect(photo);
+        painter.fillPath(ring, colour);
+        return;
+    }
+    const double innerRadius = std::max(0.0, outerRadiusMm - border);
+    QPainterPath ring;
+    ring.setFillRule(Qt::OddEvenFill);
+    ring.addRoundedRect(cell, outerRadiusMm, outerRadiusMm);
+    ring.addRoundedRect(photo, innerRadius, innerRadius);
+    painter.fillPath(ring, colour);
+}
+
 } // namespace
 
 PageRenderer::PageRenderer(ImageStore &store) : m_store(store) {}
@@ -326,26 +422,65 @@ void paintPageContent(QPainter &painter, const DocumentSnapshot &snapshot, int p
     const Page &page = snapshot.pages.at(pageIndex);
     const QTransform pageTransform = painter.transform();
 
+    // A page without slots keeps the exact code path it had before the feature
+    // existed, so a 1.0.1 project paints and prints byte-identically.
+    if (!page.hasLayout()) {
+        for (const Frame &frame : page.frames) {
+            const auto it = images.constFind(frame.id);
+            if (it == images.constEnd() || it->isNull())
+                continue;
+            if (!LayoutEngine::validFrame(frame))
+                continue;
+            drawFramePhoto(painter, frame, *it, pageTransform, 0.0);
+        }
+        return;
+    }
+
+    // A page with the default style pays nothing for mats: no colour
+    // conversion, no path, exactly the painting a layout-free page does.
+    const bool hasMats = SlotGeometry::sanitiseStyle(page.slotStyle).borderMm > 0.0;
+    const QColor matColour = hasMats ? workingBorderColor(page.slotStyle.borderColor)
+                                     : QColor();
+    QSet<QString> painted;
+    for (const Slot &slot : page.slotList) {
+        const QRectF cell = SlotGeometry::slotCellMm(page, slot);
+        const QRectF photoRect = SlotGeometry::slotPhotoRectMm(page, slot);
+        const double outerRadius = SlotGeometry::cornerRadiusMm(page.slotStyle, cell);
+        const double border = std::min(cell.width() - photoRect.width(),
+                                       cell.height() - photoRect.height())
+            / 2.0;
+        const double photoRadius = outerRadius > 0.0 ? std::max(0.0, outerRadius - border)
+                                                     : 0.0;
+
+        if (const Frame *frame = SlotGeometry::frameInSlot(page, slot.id)) {
+            painted.insert(frame->id);
+            const auto it = images.constFind(frame->id);
+            if (it != images.constEnd() && !it->isNull()
+                && LayoutEngine::validFrame(*frame)) {
+                // The photograph first, then the mat ring, so the ring covers the
+                // antialiased edge of the photograph instead of leaving a hairline.
+                drawFramePhoto(painter, *frame, *it, pageTransform, photoRadius);
+            }
+        }
+        // Every slot gets its mat, including an empty one. An empty cell prints
+        // the mat and nothing else: placeholders are painted by the canvas
+        // widget, never here, so they cannot reach a raster, a PDF or a printer.
+        if (hasMats)
+            paintSlotMat(painter, cell, photoRect, outerRadius, matColour);
+    }
+
+    // Free frames paint on top of the layout, exactly as they did before slots.
+    // A frame whose slot id dangles in a caller-built snapshot also lands here,
+    // at its stored geometry, instead of disappearing.
     for (const Frame &frame : page.frames) {
+        if (painted.contains(frame.id))
+            continue;
         const auto it = images.constFind(frame.id);
         if (it == images.constEnd() || it->isNull())
             continue;
         if (!LayoutEngine::validFrame(frame))
             continue;
-        const QSize pixels = it->size();
-        const QTransform imageTransform = LayoutEngine::imageToPage(frame, pixels);
-
-        QTransform frameTransform;
-        frameTransform.translate(frame.cx, frame.cy);
-        frameTransform.rotate(frame.angleDeg);
-
-        painter.save();
-        painter.setTransform(frameTransform * pageTransform);
-        painter.setClipRect(
-            QRectF(-frame.width / 2.0, -frame.height / 2.0, frame.width, frame.height));
-        painter.setTransform(imageTransform * pageTransform);
-        painter.drawImage(QRectF(0, 0, pixels.width(), pixels.height()), *it);
-        painter.restore();
+        drawFramePhoto(painter, frame, *it, pageTransform, 0.0);
     }
 }
 

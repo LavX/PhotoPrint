@@ -2614,7 +2614,8 @@ void MainWindow::openTemplateBrowser()
     if (m_templateDialog) {
         // The entry points are three doors to one picker; a second click brings
         // the open one forward with the page it shows up to date.
-        m_templateDialog->setPage(page.paper, page.landscape, page.frames, photos);
+        m_templateDialog->setPage(page.paper, page.landscape, page.frames, photos,
+                                  page.slotList);
         m_templateDialog->raise();
         m_templateDialog->activateWindow();
         return;
@@ -2624,6 +2625,7 @@ void MainWindow::openTemplateBrowser()
     request.paper = page.paper;
     request.landscape = page.landscape;
     request.frames = page.frames;
+    request.slotList = page.slotList;
     request.photos = photos;
 
     auto *dialog = new TemplateBrowserDialog(request, this);
