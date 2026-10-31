@@ -12,6 +12,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <optional>
 
 namespace pp {
 
@@ -83,12 +84,18 @@ struct Slot {
 };
 
 /// How a laid-out page is dressed. Every value has a neutral default, so a page
-/// that never chose a border stores nothing and keeps today's geometry: a zero
-/// margin and gutter mean "automatic", which is exactly the catalogue's margin.
+/// that never chose a border stores nothing and keeps today's geometry. A
+/// missing margin means "automatic" (the catalogue's 5 %, 4..10 mm), not zero:
+/// an explicit zero is a real choice the panel can make with automatic off.
 struct SlotStyle {
-    double marginMm = 0.0;      ///< 0 = automatic: 5 % of the short side, 4..10 mm
-    double gutterMm = 0.0;      ///< 0 = automatic: equal to the effective margin
-    double borderMm = 0.0;      ///< mat around each photograph, 0 = none
+    /// Missing means "automatic": 5 % of the short side, clamped 4..10 mm. An
+    /// explicit zero is a real zero margin, so the panel can turn the automatic
+    /// value off and still choose no margin at all.
+    std::optional<double> marginMm;
+    /// Missing means "equal to the effective margin"; an explicit zero lets two
+    /// cells touch.
+    std::optional<double> gutterMm;
+    double borderMm = 0.0;             ///< mat around each photograph, 0 = none
     QColor borderColor{255, 255, 255}; ///< the mat's colour; white is the paper colour
     double cornerRadiusMm = 0.0;       ///< rounded print, 0 = square
     bool operator==(const SlotStyle &) const = default;

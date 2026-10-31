@@ -37,9 +37,11 @@ constexpr int kMaxSlotsPerPage = 12;
 /// special case, so it must not move a micron.
 double automaticMarginMm(const QSizeF &sheetMm);
 
-/// Clamps every field to its range. A non-finite number becomes the neutral
-/// default rather than saturating, because an infinity here is corruption, not
-/// a direction a person chose. An invalid border colour becomes white.
+/// Clamps every field to its range. A non-finite margin or gutter becomes
+/// automatic again, because an infinity there is corruption rather than a
+/// direction a person chose; an explicit zero survives. Other non-finite
+/// numbers become the neutral default and an invalid border colour becomes
+/// white. Alpha is a colour choice and is preserved, not forced opaque.
 SlotStyle sanitiseStyle(SlotStyle style);
 
 /// Clamps a unit rectangle to 0..1 and to x + w <= 1, y + h <= 1. Returns false
@@ -53,12 +55,13 @@ bool sanitiseUnitRect(QRectF *rect);
 /// invariant applies to a stored slot, as opposed to the clamping loader.
 bool unitRectIsValid(const QRectF &rect);
 
-/// The margin actually used: the override when positive, the automatic value
+/// The margin actually used: the explicit value when set, the automatic value
 /// otherwise, and never more than half the short side minus 2 mm, so a content
-/// box always exists and a paper change can never produce a negative one.
+/// box always exists and a paper change can never produce a negative one. An
+/// explicit zero is honoured: a page may print edge to edge inside the sheet.
 double effectiveMarginMm(const SlotStyle &style, const QSizeF &sheetMm);
 
-/// The gutter actually used: the override when positive, the effective margin
+/// The gutter actually used: the explicit value when set, the effective margin
 /// otherwise. Same paper-aware clamp as the margin.
 double effectiveGutterMm(const SlotStyle &style, const QSizeF &sheetMm);
 
@@ -81,10 +84,19 @@ QRectF slotCellMm(const Page &page, const Slot &slot);
 QRectF slotPhotoRectMm(const Page &page, const Slot &slot);
 QList<QRectF> cellsMm(const Page &page); ///< in slot order
 
+/// True when a photograph keeps its crop and zoom across an assignment. The two
+/// aspects are compared relative to the larger one, so the rule is symmetric: a
+/// slot within 15 % of the frame's previous aspect keeps the crop, anything
+/// further resets it. The catalogue's template apply, the layout engine's
+/// placements and the picker all call this one function, so their warning and
+/// their effect cannot drift apart. A non-positive aspect is "not comparable"
+/// and resets.
+bool keepCropAcrossAspect(double fromWidth, double fromHeight, double toWidth,
+                          double toHeight);
+
 /// The corner radius a frame's slot asks for, clamped to the cell's shorter
 /// side divided by two. Zero for a frame without a slot, so free frames stay
 /// rectangular.
-double effectiveCornerRadiusMm(const Page &page, const Frame &frame);
 double cornerRadiusMm(const SlotStyle &style, const QRectF &cellMm);
 
 const Slot *slotById(const Page &page, const QString &slotId);

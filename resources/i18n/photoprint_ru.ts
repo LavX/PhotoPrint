@@ -1111,5 +1111,61 @@
         <source>25 × 35 mm</source>
         <translation>25 × 35 мм</translation>
     </message>
+    <message>
+        <source>Egy lapon legfeljebb 12 hely lehet.</source>
+        <translation>На странице может быть не более 12 мест.</translation>
+    </message>
+    <message>
+        <source>A sablonban minden fotóhoz pontosan egy helynek kell tartoznia.</source>
+        <translation>В шаблоне должно быть ровно одно место для каждой фотографии.</translation>
+    </message>
+    <message>
+        <source>A sablon egyik helye érvénytelen.</source>
+        <translation>Одно из мест шаблона недопустимо.</translation>
+    </message>
+    <message>
+        <source>Ehhez a laphoz még nincs elrendezés.</source>
+        <translation>У этой страницы ещё нет макета.</translation>
+    </message>
+    <message>
+        <source>Ehhez a laphoz másik elrendezés tartozik.</source>
+        <translation>На этой странице уже используется другой макет.</translation>
+    </message>
+    <message>
+        <source>Ez a hely már nem létezik.</source>
+        <translation>Этого места больше нет.</translation>
+    </message>
+    <message>
+        <source>Egy fotó nem található ezen a lapon.</source>
+        <translation>Не удалось найти фотографию на этой странице.</translation>
+    </message>
+    <message>
+        <source>A fotónak nincs forrásfájlja.</source>
+        <translation>У фотографии нет исходного файла.</translation>
+    </message>
+    <message>
+        <source>Az elrendezés nem építhető fel ezen a lapon.</source>
+        <translation>На этой странице нельзя создать макет.</translation>
+    </message>
+    <message>
+        <source>A hely azonosítója üres vagy ismétlődik.</source>
+        <translation>Идентификатор места пуст или повторяется.</translation>
+    </message>
+    <message>
+        <source>A hely a lapon kívülre esik.</source>
+        <translation>Место выходит за пределы страницы.</translation>
+    </message>
+    <message>
+        <source>Egy fotó olyan helyre hivatkozik, amely nem létezik.</source>
+        <translation>Фотография ссылается на несуществующее место.</translation>
+    </message>
+    <message>
+        <source>Két fotó nem kerülhet ugyanabba a helybe.</source>
+        <translation>Две фотографии не могут занимать одно место.</translation>
+    </message>
+    <message>
+        <source>A margó, a hézag vagy a szegély értéke érvénytelen.</source>
+        <translation>Значение поля, промежутка или рамки недопустимо.</translation>
+    </message>
 </context>
 </TS>

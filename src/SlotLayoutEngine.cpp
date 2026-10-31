@@ -19,31 +19,56 @@ Error translated(const QString &code, const char *source)
     return error(code, QCoreApplication::translate("PhotoPrint", source));
 }
 
-/// Frames that are photographs and can take a slot, in display order: slotted
-/// frames by slot index, then free frames in z-order. A frame without a source
-/// is not a photograph and never takes a slot, which is what keeps an empty
-/// placeholder frame from stealing one.
-QList<int> assignableFrameOrder(const Page &page)
+Error slotMissing()
 {
-    QList<int> order;
-    QSet<int> used;
-    for (const Slot &slot : page.slotList) {
-        for (int i = 0; i < page.frames.size(); ++i) {
-            if (used.contains(i))
-                continue;
-            if (page.frames.at(i).slotId != slot.id)
-                continue;
-            used.insert(i);
-            if (!page.frames.at(i).sourcePath.isEmpty())
-                order.append(i);
-            break;
-        }
-    }
+    return translated(QStringLiteral("slot-missing"), "Ez a hely már nem létezik.");
+}
+
+Error frameMissing()
+{
+    return translated(QStringLiteral("frame-missing"),
+                      "Egy fotó nem található ezen a lapon.");
+}
+
+Error slotInvalid()
+{
+    return translated(QStringLiteral("slot-invalid"),
+                      "Az elrendezés nem építhető fel ezen a lapon.");
+}
+
+/// A photograph is a frame with a source. A source-less frame is a placeholder
+/// with no pixels and must never take a slot.
+bool isPhotograph(const Frame &frame)
+{
+    return !frame.sourcePath.isEmpty();
+}
+
+int frameIndexById(const Page &page, const QString &frameId)
+{
     for (int i = 0; i < page.frames.size(); ++i) {
-        if (!used.contains(i) && !page.frames.at(i).sourcePath.isEmpty())
-            order.append(i);
+        if (page.frames.at(i).id == frameId)
+            return i;
     }
-    return order;
+    return -1;
+}
+
+int occupantIndex(const Page &page, const QString &slotId)
+{
+    for (int i = 0; i < page.frames.size(); ++i) {
+        if (page.frames.at(i).slotId == slotId)
+            return i;
+    }
+    return -1;
+}
+
+int emptySlotCount(const Page &page)
+{
+    int empty = 0;
+    for (const Slot &slot : page.slotList) {
+        if (!SlotGeometry::frameInSlot(page, slot.id))
+            ++empty;
+    }
+    return empty;
 }
 
 /// The catalogue id and the fill index make the id stable, so re-applying the
@@ -52,19 +77,6 @@ QString slotIdFor(const QString &layoutId, int index)
 {
     const QString stem = layoutId.isEmpty() ? QStringLiteral("layout") : layoutId;
     return QStringLiteral("slot-%1-%2").arg(stem).arg(index);
-}
-
-/// The crop survives when the two aspects are within 15 % of the larger one.
-/// This is the catalogue's rule, moved here so the engine and the picker cannot
-/// drift.
-bool keepCropAcrossAspect(double fromWidth, double fromHeight, double toWidth,
-                          double toHeight)
-{
-    const double current = fromHeight > 0.0 ? fromWidth / fromHeight : 0.0;
-    const double target = toHeight > 0.0 ? toWidth / toHeight : 0.0;
-    if (!(current > 0.0) || !(target > 0.0))
-        return false;
-    return std::abs(target - current) <= 0.15 * std::max(target, current);
 }
 
 int largestSlotIndex(const Page &page)
@@ -94,7 +106,145 @@ QString paperReference(const Page &page)
     return QStringLiteral("%1 × %2 mm").arg(sheet.width()).arg(sheet.height());
 }
 
+/// Writes one photograph into one slot, in place. The caller clears the report
+/// once and repairs once; this function only does the assignment.
+///
+/// Replace semantics: whichever frame currently names the slot and is not the
+/// payload itself is removed and reported. A payload whose id is already on the
+/// page is updated and moved; otherwise it is added to the page. A fresh payload
+/// takes Fill, a centred crop and zoom 1. An existing payload keeps its fit and
+/// its crop when the slot aspect is within 15 % of its previous aspect.
+Result<void> assignFrame(Page &page, const QString &slotId, Frame payload, bool forceFill,
+                         Report *report)
+{
+    const Slot *slot = SlotGeometry::slotById(page, slotId);
+    if (!slot)
+        return slotMissing();
+    const QRectF photo = SlotGeometry::slotPhotoRectMm(page, *slot);
+
+    const bool existing = frameIndexById(page, payload.id) >= 0;
+    if (!existing && payload.sourcePath.isEmpty()) {
+        return translated(QStringLiteral("frame-source"),
+                          "A fotónak nincs forrásfájlja.");
+    }
+
+    for (int i = page.frames.size() - 1; i >= 0; --i) {
+        if (page.frames.at(i).slotId != slotId)
+            continue;
+        if (page.frames.at(i).id == payload.id)
+            continue;
+        if (report)
+            report->removedFrameIds.append(page.frames.at(i).id);
+        page.frames.removeAt(i);
+    }
+
+    int index = frameIndexById(page, payload.id);
+    if (index < 0) {
+        page.frames.append(payload);
+        index = page.frames.size() - 1;
+    } else {
+        page.frames[index] = payload;
+    }
+    Frame &frame = page.frames[index];
+
+    if (existing) {
+        if (!SlotGeometry::keepCropAcrossAspect(frame.width, frame.height, photo.width(),
+                                                photo.height())) {
+            frame.cropCenter = QPointF(0.5, 0.5);
+            frame.zoom = 1.0;
+            if (report)
+                report->cropResetIds.append(frame.id);
+        }
+        if (frame.angleDeg != 0.0 && report)
+            report->rotationResetIds.append(frame.id);
+    } else {
+        // A fresh photograph has no crop worth keeping; the drop rule is the
+        // centre of the image at 1x.
+        frame.cropCenter = QPointF(0.5, 0.5);
+        frame.zoom = 1.0;
+    }
+    if (forceFill || !existing)
+        frame.fit = FitMode::Fill;
+    frame.slotId = slotId;
+    // A laid-out page is hand work as far as the first-use grid is concerned: a
+    // photograph added later must never reflow it.
+    frame.autoPlaced = false;
+    SlotGeometry::applySlotGeometry(page, *slot, frame);
+    return Result<void>();
+}
+
+/// Swaps everything image-side between two frames and leaves identity, geometry,
+/// frame rotation and assignment alone. This is what a library drag between two
+/// filled slots means: the photographs change places, the frames do not.
+void swapImageState(Frame &a, Frame &b)
+{
+    std::swap(a.sourcePath, b.sourcePath);
+    std::swap(a.sourceSha256, b.sourceSha256);
+    std::swap(a.imageRotationDeg, b.imageRotationDeg);
+    std::swap(a.zoom, b.zoom);
+    std::swap(a.cropCenter, b.cropCenter);
+    std::swap(a.fit, b.fit);
+    std::swap(a.tone, b.tone);
+    std::swap(a.autoTone, b.autoTone);
+    std::swap(a.brightness, b.brightness);
+    std::swap(a.paperOverride, b.paperOverride);
+    std::swap(a.paperEv, b.paperEv);
+    std::swap(a.label, b.label);
+    std::swap(a.filter, b.filter);
+    std::swap(a.filterStrength, b.filterStrength);
+    std::swap(a.effectVersion, b.effectVersion);
+    std::swap(a.upscale, b.upscale);
+}
+
+/// The last step of every placement: restore the invariant, count what is still
+/// empty and refuse a result the rest of the program could not trust.
+Result<Page> finish(Page page, Report *report)
+{
+    auto repaired = repair(std::move(page));
+    if (!repaired)
+        return repaired.error();
+    if (!SlotGeometry::layoutConsistent(repaired.value()))
+        return slotInvalid();
+    if (report)
+        report->emptySlotsAfter = emptySlotCount(repaired.value());
+    return repaired;
+}
+
 } // namespace
+
+QList<int> frameIndicesInDisplayOrder(const Page &page)
+{
+    QList<int> order;
+    QSet<int> used;
+    for (const Slot &slot : page.slotList) {
+        for (int i = 0; i < page.frames.size(); ++i) {
+            if (used.contains(i))
+                continue;
+            if (page.frames.at(i).slotId != slot.id)
+                continue;
+            order.append(i);
+            used.insert(i);
+            break;
+        }
+    }
+    // Free frames keep their z-order after the slots. A frame whose slot id is
+    // dangling is not used by any slot loop above, so it lands here too.
+    for (int i = 0; i < page.frames.size(); ++i) {
+        if (!used.contains(i))
+            order.append(i);
+    }
+    return order;
+}
+
+QList<Frame> photographsInDisplayOrder(const Page &page)
+{
+    QList<Frame> photos;
+    for (int index : frameIndicesInDisplayOrder(page)) {
+        if (isPhotograph(page.frames.at(index)))
+            photos.append(page.frames.at(index));
+    }
+    return photos;
+}
 
 Result<Page> applyTemplate(const Page &page, const CollageTemplate &t, Report *report)
 {
@@ -102,8 +252,8 @@ Result<Page> applyTemplate(const Page &page, const CollageTemplate &t, Report *r
         *report = Report{};
 
     if (t.slotList.isEmpty() || t.slotList.size() != t.photoCount)
-        return error(QStringLiteral("template-invalid"),
-                     QStringLiteral("a template must have exactly one slot per photograph"));
+        return translated(QStringLiteral("template-invalid"),
+                          "A sablonban minden fotóhoz pontosan egy helynek kell tartoznia.");
     if (t.slotList.size() > SlotGeometry::kMaxSlotsPerPage)
         return translated(QStringLiteral("slot-cap"),
                           "Egy lapon legfeljebb 12 hely lehet.");
@@ -117,8 +267,8 @@ Result<Page> applyTemplate(const Page &page, const CollageTemplate &t, Report *r
         slot.unitRect = t.slotList.at(i).rect;
         QRectF unit = slot.unitRect;
         if (!SlotGeometry::sanitiseUnitRect(&unit))
-            return error(QStringLiteral("template-invalid"),
-                         QStringLiteral("a template slot is not a usable unit rectangle"));
+            return translated(QStringLiteral("template-invalid"),
+                              "A sablon egyik helye érvénytelen.");
         slot.unitRect = unit;
         result.slotList.append(slot);
     }
@@ -131,47 +281,230 @@ Result<Page> applyTemplate(const Page &page, const CollageTemplate &t, Report *r
     for (Frame &frame : result.frames)
         frame.slotId.clear();
 
-    const QList<int> order = assignableFrameOrder(page);
-    const int assigned = std::min<int>(order.size(), result.slotList.size());
+    // The indices point into page.frames, and no frame is added or removed while
+    // every target slot is empty, so they stay valid in `result` as well.
+    const QList<int> order = frameIndicesInDisplayOrder(page);
+    QList<int> photos;
+    photos.reserve(order.size());
+    for (int index : order) {
+        if (isPhotograph(page.frames.at(index)))
+            photos.append(index);
+    }
+
+    const int assigned = std::min<int>(photos.size(), result.slotList.size());
     for (int i = 0; i < assigned; ++i) {
-        Frame &frame = result.frames[order.at(i)];
         const Slot &slot = result.slotList.at(i);
-        const QRectF photo = SlotGeometry::slotPhotoRectMm(result, slot);
-
-        if (!keepCropAcrossAspect(frame.width, frame.height, photo.width(), photo.height())) {
-            frame.cropCenter = QPointF(0.5, 0.5);
-            frame.zoom = 1.0;
-            if (report)
-                report->cropResetIds.append(frame.id);
-        }
-        if (frame.angleDeg != 0.0 && report)
-            report->rotationResetIds.append(frame.id);
-
-        frame.slotId = slot.id;
-        frame.fit = FitMode::Fill;
-        // A laid-out page is hand work as far as the first-use grid is
-        // concerned: a photograph added later must never reflow it.
-        frame.autoPlaced = false;
-        SlotGeometry::applySlotGeometry(result, slot, frame);
+        auto placed = assignFrame(result, slot.id, result.frames.at(photos.at(i)), true,
+                                  report);
+        if (!placed)
+            return placed.error();
     }
-    for (int i = assigned; i < order.size(); ++i) {
+    for (int i = assigned; i < photos.size(); ++i) {
         if (report)
-            report->leftFreeIds.append(result.frames.at(order.at(i)).id);
+            report->leftFreeIds.append(result.frames.at(photos.at(i)).id);
     }
 
-    if (report) {
-        int empty = 0;
-        for (const Slot &slot : result.slotList) {
-            if (!SlotGeometry::frameInSlot(result, slot.id))
-                ++empty;
-        }
-        report->emptySlotsAfter = empty;
-    }
+    if (report)
+        report->emptySlotsAfter = emptySlotCount(result);
 
     if (!SlotGeometry::layoutConsistent(result))
-        return error(QStringLiteral("slot-invalid"),
-                     QStringLiteral("the layout engine produced an inconsistent page"));
+        return slotInvalid();
     return result;
+}
+
+Result<Page> applyTemplateKeeping(const Page &page, const CollageTemplate &t, Report *report)
+{
+    if (!page.hasLayout())
+        return applyTemplate(page, t, report);
+    if (!page.layoutId.isEmpty() && page.layoutId != t.id) {
+        return translated(QStringLiteral("layout-mismatch"),
+                          "Ehhez a laphoz másik elrendezés tartozik.");
+    }
+    return fillEmptySlots(page, report);
+}
+
+Result<Page> fillEmptySlots(Page page, Report *report)
+{
+    if (report)
+        *report = Report{};
+    if (!page.hasLayout())
+        return page;
+
+    // The free photographs are captured before the first assignment, so a frame
+    // moved into a slot cannot be picked up a second time.
+    QList<QString> freeIds;
+    for (int index : frameIndicesInDisplayOrder(page)) {
+        if (page.frames.at(index).slotId.isEmpty()
+            && isPhotograph(page.frames.at(index))) {
+            freeIds.append(page.frames.at(index).id);
+        }
+    }
+
+    int next = 0;
+    for (const Slot &slot : page.slotList) {
+        if (SlotGeometry::frameInSlot(page, slot.id))
+            continue;
+        if (next >= freeIds.size())
+            break;
+        const int index = frameIndexById(page, freeIds.at(next));
+        if (index < 0)
+            continue;
+        auto placed = assignFrame(page, slot.id, page.frames.at(index), false, report);
+        if (!placed)
+            return placed.error();
+        ++next;
+    }
+    for (int i = next; i < freeIds.size(); ++i) {
+        if (report)
+            report->leftFreeIds.append(freeIds.at(i));
+    }
+    return finish(std::move(page), report);
+}
+
+Result<Page> placePhoto(Page page, const QString &slotId, Frame frame, Report *report)
+{
+    if (report)
+        *report = Report{};
+    if (!SlotGeometry::slotById(page, slotId))
+        return slotMissing();
+    if (frame.id.isEmpty())
+        return error(QStringLiteral("frame-id"),
+                     QStringLiteral("a placed frame must have an id"));
+    auto placed = assignFrame(page, slotId, std::move(frame), false, report);
+    if (!placed)
+        return placed.error();
+    return finish(std::move(page), report);
+}
+
+Result<Page> placePhotos(Page page, const QString &slotId, const QList<Frame> &frames,
+                         Report *report)
+{
+    if (report)
+        *report = Report{};
+    if (frames.isEmpty())
+        return finish(std::move(page), report);
+    if (!slotId.isEmpty() && !SlotGeometry::slotById(page, slotId))
+        return slotMissing();
+
+    QSet<QString> ids;
+    for (const Frame &frame : frames) {
+        if (frame.id.isEmpty() || ids.contains(frame.id)) {
+            return error(QStringLiteral("frame-id"),
+                         QStringLiteral("a placement list needs unique, non-empty frame ids"));
+        }
+        ids.insert(frame.id);
+    }
+
+    // The stated slot first (or the first empty one), then the slots that were
+    // empty before the drop, in fill order. Slots occupied at the start never
+    // take a second photograph, even if an earlier payload moves out of one.
+    QList<QString> targets;
+    if (!slotId.isEmpty()) {
+        targets.append(slotId);
+    } else if (const Slot *first = SlotGeometry::firstEmptySlot(page)) {
+        targets.append(first->id);
+    }
+    for (const Slot &slot : page.slotList) {
+        if (targets.contains(slot.id))
+            continue;
+        if (!SlotGeometry::frameInSlot(page, slot.id))
+            targets.append(slot.id);
+    }
+
+    int placed = 0;
+    for (const Frame &frame : frames) {
+        if (placed >= targets.size()) {
+            if (report)
+                report->leftFreeIds.append(frame.id);
+            continue;
+        }
+        auto assigned = assignFrame(page, targets.at(placed), frame, false, report);
+        if (!assigned)
+            return assigned.error();
+        ++placed;
+    }
+    return finish(std::move(page), report);
+}
+
+Result<Page> movePhoto(Page page, const QString &frameId, const QString &slotId,
+                       Report *report)
+{
+    if (report)
+        *report = Report{};
+    if (!SlotGeometry::slotById(page, slotId))
+        return slotMissing();
+    const int index = frameIndexById(page, frameId);
+    if (index < 0)
+        return frameMissing();
+    auto assigned = assignFrame(page, slotId, page.frames.at(index), false, report);
+    if (!assigned)
+        return assigned.error();
+    return finish(std::move(page), report);
+}
+
+Result<Page> swapPhotos(Page page, const QString &frameId, const QString &slotId,
+                        Report *report)
+{
+    if (report)
+        *report = Report{};
+    if (!SlotGeometry::slotById(page, slotId))
+        return slotMissing();
+    const int sourceIndex = frameIndexById(page, frameId);
+    if (sourceIndex < 0)
+        return frameMissing();
+    const int targetIndex = occupantIndex(page, slotId);
+    if (targetIndex < 0 || page.frames.at(targetIndex).id == frameId)
+        return movePhoto(std::move(page), frameId, slotId, report);
+
+    Frame &source = page.frames[sourceIndex];
+    Frame &target = page.frames[targetIndex];
+    // Each photograph's crop was tuned for the aspect of the frame it came from;
+    // compare that with the frame it lands in before the payload swaps, because
+    // the geometry does not change.
+    const bool keepForSource =
+        SlotGeometry::keepCropAcrossAspect(target.width, target.height, source.width,
+                                           source.height);
+    const bool keepForTarget =
+        SlotGeometry::keepCropAcrossAspect(source.width, source.height, target.width,
+                                           target.height);
+    swapImageState(source, target);
+
+    if (!keepForSource) {
+        source.cropCenter = QPointF(0.5, 0.5);
+        source.zoom = 1.0;
+        if (report)
+            report->cropResetIds.append(source.id);
+    }
+    if (!keepForTarget) {
+        target.cropCenter = QPointF(0.5, 0.5);
+        target.zoom = 1.0;
+        if (report)
+            report->cropResetIds.append(target.id);
+    }
+    // Both frames keep their own cell; re-deriving is a no-op for a slotted
+    // frame and makes a swap involving a free, drifted frame safe.
+    if (const Slot *slot = SlotGeometry::slotById(page, target.slotId))
+        SlotGeometry::applySlotGeometry(page, *slot, target);
+    if (const Slot *slot = SlotGeometry::slotById(page, source.slotId))
+        SlotGeometry::applySlotGeometry(page, *slot, source);
+
+    return finish(std::move(page), report);
+}
+
+Result<Page> emptySlot(Page page, const QString &slotId, Report *report)
+{
+    if (report)
+        *report = Report{};
+    if (!SlotGeometry::slotById(page, slotId))
+        return slotMissing();
+    for (int i = page.frames.size() - 1; i >= 0; --i) {
+        if (page.frames.at(i).slotId != slotId)
+            continue;
+        if (report)
+            report->removedFrameIds.append(page.frames.at(i).id);
+        page.frames.removeAt(i);
+    }
+    return finish(std::move(page), report);
 }
 
 Page dissolve(const Page &page)
@@ -256,8 +589,7 @@ Result<Page> removeSlot(Page page, const QString &slotId)
 {
     const int index = SlotGeometry::slotIndexOf(page, slotId);
     if (index < 0)
-        return translated(QStringLiteral("slot-missing"),
-                          "Ez a hely már nem létezik.");
+        return slotMissing();
 
     page.slotList.removeAt(index);
     // The photograph goes with its cell: a photo landing as a free frame on top
@@ -266,15 +598,10 @@ Result<Page> removeSlot(Page page, const QString &slotId)
         if (page.frames.at(i).slotId == slotId)
             page.frames.removeAt(i);
     }
-
-    if (page.slotList.isEmpty()) {
-        // No slots left: there is nothing to style, and a style without slots is
-        // dropped by the loader anyway, so the in-memory page matches a reload.
-        page.slotStyle = SlotStyle{};
-        page.layoutId.clear();
-        return page;
-    }
-    return repair(std::move(page));
+    // Even the last slot goes through the repair point: another frame may still
+    // name the slot that has just disappeared, and a style without slots is
+    // dropped here exactly as the loader would drop it.
+    return finish(std::move(page), nullptr);
 }
 
 Result<Page> remap(Page page)
@@ -297,7 +624,12 @@ Result<Page> remap(Page page)
 
 Result<Page> repair(Page page)
 {
-    // Slots first: a dropped or truncated slot must not keep a frame pointing at
+    // Style first: ranges, finiteness and colour validity are model rules, and a
+    // caller that filled the struct directly must not be able to print a
+    // negative margin or a NaN border.
+    page.slotStyle = SlotGeometry::sanitiseStyle(page.slotStyle);
+
+    // Slots next: a dropped or truncated slot must not keep a frame pointing at
     // it. The order is deliberate, because clearing assignments before the slot
     // list is final would leave a dangling id behind.
     QList<Slot> keptSlots;

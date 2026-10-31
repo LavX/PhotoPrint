@@ -1101,5 +1101,61 @@
         <source>25 × 35 mm</source>
         <translation>25 × 35 mm</translation>
     </message>
+    <message>
+        <source>Egy lapon legfeljebb 12 hely lehet.</source>
+        <translation>一页最多只能有 12 个位置。</translation>
+    </message>
+    <message>
+        <source>A sablonban minden fotóhoz pontosan egy helynek kell tartoznia.</source>
+        <translation>模板中每张照片必须正好对应一个位置。</translation>
+    </message>
+    <message>
+        <source>A sablon egyik helye érvénytelen.</source>
+        <translation>模板中有一个位置无效。</translation>
+    </message>
+    <message>
+        <source>Ehhez a laphoz még nincs elrendezés.</source>
+        <translation>此页面还没有布局。</translation>
+    </message>
+    <message>
+        <source>Ehhez a laphoz másik elrendezés tartozik.</source>
+        <translation>此页面已使用其他布局。</translation>
+    </message>
+    <message>
+        <source>Ez a hely már nem létezik.</source>
+        <translation>该位置已不存在。</translation>
+    </message>
+    <message>
+        <source>Egy fotó nem található ezen a lapon.</source>
+        <translation>找不到此页面上的一张照片。</translation>
+    </message>
+    <message>
+        <source>A fotónak nincs forrásfájlja.</source>
+        <translation>照片没有源文件。</translation>
+    </message>
+    <message>
+        <source>Az elrendezés nem építhető fel ezen a lapon.</source>
+        <translation>无法在此页面上创建布局。</translation>
+    </message>
+    <message>
+        <source>A hely azonosítója üres vagy ismétlődik.</source>
+        <translation>位置标识为空或重复。</translation>
+    </message>
+    <message>
+        <source>A hely a lapon kívülre esik.</source>
+        <translation>位置超出页面范围。</translation>
+    </message>
+    <message>
+        <source>Egy fotó olyan helyre hivatkozik, amely nem létezik.</source>
+        <translation>照片指向的位置不存在。</translation>
+    </message>
+    <message>
+        <source>Két fotó nem kerülhet ugyanabba a helybe.</source>
+        <translation>两张照片不能占用同一个位置。</translation>
+    </message>
+    <message>
+        <source>A margó, a hézag vagy a szegély értéke érvénytelen.</source>
+        <translation>边距、间距或边框的值无效。</translation>
+    </message>
 </context>
 </TS>

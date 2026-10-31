@@ -2,6 +2,7 @@
 
 #include "PaperCatalog.h"
 #include "PaperGeometry.h"
+#include "SlotLayoutEngine.h"
 
 #include <QAbstractButton>
 #include <QAbstractItemView>
@@ -109,6 +110,7 @@ TemplateBrowserDialog::TemplateBrowserDialog(const TemplateBrowserRequest &reque
 
     if (m_request.photos.size() < m_request.frames.size())
         m_request.photos.resize(m_request.frames.size());
+    orderByDisplay();
 
     m_syncTimer = new QTimer(this);
     m_syncTimer->setSingleShot(true);
@@ -393,14 +395,17 @@ bool TemplateBrowserDialog::waitForPendingSync(int timeoutMs)
 }
 
 void TemplateBrowserDialog::setPage(const PaperSpec &paper, bool landscape,
-                                    const QList<Frame> &frames, const QList<QImage> &photos)
+                                    const QList<Frame> &frames, const QList<QImage> &photos,
+                                    const QList<Slot> &slotList)
 {
     m_request.paper = paper;
     m_request.landscape = landscape;
     m_request.frames = frames;
+    m_request.slotList = slotList;
     m_request.photos = photos;
     if (m_request.photos.size() < m_request.frames.size())
         m_request.photos.resize(m_request.frames.size());
+    orderByDisplay();
 
     // Follow the page: the chip is the page's photo count, clamped to the
     // catalogue. A count the page cannot have is not offered as if it were
@@ -413,6 +418,37 @@ void TemplateBrowserDialog::setPage(const PaperSpec &paper, bool landscape,
         m_building = false;
     }
     scheduleSync();
+}
+
+void TemplateBrowserDialog::orderByDisplay()
+{
+    if (!m_request.frames.isEmpty() && m_request.photos.size() < m_request.frames.size())
+        m_request.photos.resize(m_request.frames.size());
+    if (m_request.frames.size() < 2 || m_request.slotList.isEmpty())
+        return;
+
+    // The page's own fill order, not the z-order the frames happen to be stored
+    // in: a slotted page lists its photographs by slot index first. Both lists
+    // are parallel, so they are reordered with the same indices.
+    Page page;
+    page.paper = m_request.paper;
+    page.landscape = m_request.landscape;
+    page.frames = m_request.frames;
+    page.slotList = m_request.slotList;
+    const QList<int> order = SlotLayoutEngine::frameIndicesInDisplayOrder(page);
+    if (order.size() != m_request.frames.size())
+        return;
+
+    QList<Frame> frames;
+    QList<QImage> photos;
+    frames.reserve(order.size());
+    photos.reserve(order.size());
+    for (int index : order) {
+        frames.append(m_request.frames.at(index));
+        photos.append(m_request.photos.value(index));
+    }
+    m_request.frames = frames;
+    m_request.photos = photos;
 }
 
 void TemplateBrowserDialog::rebuildTiles()

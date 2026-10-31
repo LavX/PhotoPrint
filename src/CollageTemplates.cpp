@@ -1,5 +1,7 @@
 #include "CollageTemplates.h"
 
+#include "SlotGeometry.h"
+
 #include <QCoreApplication>
 #include <QFile>
 #include <QJsonArray>
@@ -366,10 +368,9 @@ bool parseTemplate(const QJsonValue &value, int index, CollageTemplate *out, Err
 
 double collageMarginMm(const QSizeF &sheetMm)
 {
-    const double shortSide = std::min(sheetMm.width(), sheetMm.height());
-    if (!std::isfinite(shortSide) || shortSide <= 0.0)
-        return 0.0;
-    return std::max(4.0, std::min(10.0, 0.05 * shortSide));
+    // One constant lives in SlotGeometry: the catalogue's margin and a page's
+    // automatic slot margin must never drift apart.
+    return SlotGeometry::automaticMarginMm(sheetMm);
 }
 
 namespace {
@@ -625,13 +626,9 @@ Result<QList<Frame>> CollageTemplates::apply(const CollageTemplate &t, const Pap
         }
         Frame &frame = result[i];
         const QRectF &slot = rects.value().at(i);
-        const double currentAspect = frame.height > 0.0 ? frame.width / frame.height : 0.0;
-        const double slotAspect = slot.height() > 0.0 ? slot.width() / slot.height() : 0.0;
-        // Both aspects are compared relative to the larger one, so the rule is
-        // symmetric: 16 % wider than the frame keeps the crop, 18 % resets it.
-        const double largerAspect = std::max(slotAspect, currentAspect);
-        const bool keepCrop = currentAspect > 0.0 && slotAspect > 0.0
-            && std::abs(slotAspect - currentAspect) <= 0.15 * largerAspect;
+        // One rule for the picker, the engine and the drop handler.
+        const bool keepCrop = SlotGeometry::keepCropAcrossAspect(
+            frame.width, frame.height, slot.width(), slot.height());
         if (!keepCrop) {
             frame.cropCenter = QPointF(0.5, 0.5);
             frame.zoom = 1.0;

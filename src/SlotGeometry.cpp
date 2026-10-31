@@ -77,8 +77,19 @@ SlotStyle sanitiseStyle(SlotStyle style)
     const auto clampValue = [](double value, double maximum) {
         return finite(value) ? std::clamp(value, 0.0, maximum) : 0.0;
     };
-    style.marginMm = clampValue(style.marginMm, kMaxMarginMm);
-    style.gutterMm = clampValue(style.gutterMm, kMaxGutterMm);
+    // A non-finite margin or gutter becomes automatic again, because an infinity
+    // there is corruption rather than a direction a person chose. An explicit
+    // zero survives: it is a real "no margin" choice.
+    const auto clampOptional = [](std::optional<double> value,
+                                  double maximum) -> std::optional<double> {
+        if (!value)
+            return std::nullopt;
+        if (!finite(*value))
+            return std::nullopt;
+        return std::clamp(*value, 0.0, maximum);
+    };
+    style.marginMm = clampOptional(style.marginMm, kMaxMarginMm);
+    style.gutterMm = clampOptional(style.gutterMm, kMaxGutterMm);
     style.borderMm = clampValue(style.borderMm, kMaxBorderMm);
     style.cornerRadiusMm = clampValue(style.cornerRadiusMm, kMaxCornerRadiusMm);
     if (!style.borderColor.isValid())
@@ -114,8 +125,8 @@ double effectiveMarginMm(const SlotStyle &style, const QSizeF &sheetMm)
     if (!positiveSize(sheetMm))
         return 0.0;
     const double shortSide = std::min(sheetMm.width(), sheetMm.height());
-    const double requested = finite(style.marginMm) && style.marginMm > 0.0
-        ? style.marginMm
+    const double requested = style.marginMm && finite(*style.marginMm)
+        ? *style.marginMm
         : automaticMarginMm(sheetMm);
     const double limit = std::max(0.0, shortSide / 2.0 - 2.0);
     return std::clamp(requested, 0.0, std::min(kMaxMarginMm, limit));
@@ -126,8 +137,8 @@ double effectiveGutterMm(const SlotStyle &style, const QSizeF &sheetMm)
     if (!positiveSize(sheetMm))
         return 0.0;
     const double shortSide = std::min(sheetMm.width(), sheetMm.height());
-    const double requested = finite(style.gutterMm) && style.gutterMm > 0.0
-        ? style.gutterMm
+    const double requested = style.gutterMm && finite(*style.gutterMm)
+        ? *style.gutterMm
         : effectiveMarginMm(style, sheetMm);
     const double limit = std::max(0.0, shortSide / 2.0 - 2.0);
     return std::clamp(requested, 0.0, std::min(kMaxGutterMm, limit));
@@ -202,14 +213,14 @@ double cornerRadiusMm(const SlotStyle &style, const QRectF &cellMm)
                     std::min(cellMm.width(), cellMm.height()) / 2.0);
 }
 
-double effectiveCornerRadiusMm(const Page &page, const Frame &frame)
+bool keepCropAcrossAspect(double fromWidth, double fromHeight, double toWidth,
+                          double toHeight)
 {
-    if (frame.slotId.isEmpty())
-        return 0.0;
-    const Slot *slot = slotById(page, frame.slotId);
-    if (!slot)
-        return 0.0;
-    return cornerRadiusMm(page.slotStyle, slotCellMm(page, *slot));
+    const double current = fromHeight > 0.0 ? fromWidth / fromHeight : 0.0;
+    const double target = toHeight > 0.0 ? toWidth / toHeight : 0.0;
+    if (!(current > 0.0) || !(target > 0.0))
+        return false;
+    return std::abs(target - current) <= 0.15 * std::max(target, current);
 }
 
 const Slot *slotById(const Page &page, const QString &slotId)

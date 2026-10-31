@@ -307,7 +307,9 @@ QColor workingBorderColor(const QColor &srgb)
     if (!srgb.isValid())
         return QColor::fromRgba64(65535, 65535, 65535);
     QImage probe(1, 1, QImage::Format_ARGB32);
-    probe.setPixel(0, 0, srgb.rgb());
+    // rgba(), not rgb(): rgb() forces the alpha byte to opaque and would drop a
+    // translucent mat's alpha here.
+    probe.setPixel(0, 0, srgb.rgba());
     const QImage linear = ColorPipeline::srgbToLinear(probe);
     if (linear.isNull())
         return srgb;

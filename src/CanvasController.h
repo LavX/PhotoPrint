@@ -134,7 +134,18 @@ public:
     int pageCount() const { return static_cast<int>(m_document.pages.size()); }
     void setDocument(const DocumentSnapshot &document);
     void setCurrentPage(int index);
-    void apply(const DocumentEdit &edit);
+    /// Applies one edit. Returns an error when the edit is malformed (a bad page
+    /// index, a slot list that disagrees with its frames, an invalid style), so
+    /// a caller never has to guess whether an edit landed. A guard that makes the
+    /// edit a no-op returns success without touching the undo stack.
+    Result<void> apply(const DocumentEdit &edit);
+
+    /// Publishes one finished page as a single undo step. The whole page is
+    /// supplied, so the frames, the slot list, the style and the layout label
+    /// cannot drift apart and a forgotten field cannot silently refuse the edit.
+    /// Returns the validation error instead of dropping it.
+    Result<void> publishPage(const Page &page,
+                             const QString &actionText = QString());
 
     QUndoStack *undoStack() const { return m_undo; }
     bool canUndo() const { return m_undo->canUndo(); }

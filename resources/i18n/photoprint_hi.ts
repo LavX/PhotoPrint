@@ -1106,5 +1106,61 @@
         <source>25 × 35 mm</source>
         <translation>25 × 35 मिमी</translation>
     </message>
+    <message>
+        <source>Egy lapon legfeljebb 12 hely lehet.</source>
+        <translation>एक पृष्ठ पर अधिकतम 12 स्थान हो सकते हैं।</translation>
+    </message>
+    <message>
+        <source>A sablonban minden fotóhoz pontosan egy helynek kell tartoznia.</source>
+        <translation>टेम्पलेट में हर फ़ोटो के लिए ठीक एक स्थान होना चाहिए।</translation>
+    </message>
+    <message>
+        <source>A sablon egyik helye érvénytelen.</source>
+        <translation>टेम्पलेट का एक स्थान अमान्य है।</translation>
+    </message>
+    <message>
+        <source>Ehhez a laphoz még nincs elrendezés.</source>
+        <translation>इस पृष्ठ पर अभी कोई लेआउट नहीं है।</translation>
+    </message>
+    <message>
+        <source>Ehhez a laphoz másik elrendezés tartozik.</source>
+        <translation>यह पृष्ठ पहले से किसी दूसरे लेआउट का उपयोग करता है।</translation>
+    </message>
+    <message>
+        <source>Ez a hely már nem létezik.</source>
+        <translation>यह स्थान अब मौजूद नहीं है।</translation>
+    </message>
+    <message>
+        <source>Egy fotó nem található ezen a lapon.</source>
+        <translation>इस पृष्ठ की एक फ़ोटो नहीं मिल रही है।</translation>
+    </message>
+    <message>
+        <source>A fotónak nincs forrásfájlja.</source>
+        <translation>फ़ोटो में कोई स्रोत फ़ाइल नहीं है।</translation>
+    </message>
+    <message>
+        <source>Az elrendezés nem építhető fel ezen a lapon.</source>
+        <translation>इस पृष्ठ पर लेआउट नहीं बनाया जा सकता।</translation>
+    </message>
+    <message>
+        <source>A hely azonosítója üres vagy ismétlődik.</source>
+        <translation>किसी स्थान का पहचानकर्ता खाली या दोहराया गया है।</translation>
+    </message>
+    <message>
+        <source>A hely a lapon kívülre esik.</source>
+        <translation>एक स्थान पृष्ठ के बाहर है।</translation>
+    </message>
+    <message>
+        <source>Egy fotó olyan helyre hivatkozik, amely nem létezik.</source>
+        <translation>एक फ़ोटो ऐसे स्थान को संदर्भित करती है जो मौजूद नहीं है।</translation>
+    </message>
+    <message>
+        <source>Két fotó nem kerülhet ugyanabba a helybe.</source>
+        <translation>दो फ़ोटो एक ही स्थान पर नहीं हो सकतीं।</translation>
+    </message>
+    <message>
+        <source>A margó, a hézag vagy a szegély értéke érvénytelen.</source>
+        <translation>मार्जिन, गैप या बॉर्डर का मान अमान्य है।</translation>
+    </message>
 </context>
 </TS>

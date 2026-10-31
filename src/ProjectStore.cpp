@@ -262,8 +262,13 @@ QJsonObject slotStyleToJson(const SlotStyle &stored)
 {
     const SlotStyle style = SlotGeometry::sanitiseStyle(stored);
     QJsonObject object;
-    object.insert(QStringLiteral("marginMm"), style.marginMm);
-    object.insert(QStringLiteral("gutterMm"), style.gutterMm);
+    // An unset margin or gutter means automatic, so the key is omitted and an
+    // older build keeps its own default. An explicit zero is written: it is a
+    // real choice, not the absence of one.
+    if (style.marginMm)
+        object.insert(QStringLiteral("marginMm"), *style.marginMm);
+    if (style.gutterMm)
+        object.insert(QStringLiteral("gutterMm"), *style.gutterMm);
     object.insert(QStringLiteral("borderMm"), style.borderMm);
     object.insert(QStringLiteral("borderColor"), colourToJson(style.borderColor));
     object.insert(QStringLiteral("cornerRadiusMm"), style.cornerRadiusMm);
@@ -328,8 +333,14 @@ ParsedLayout layoutFromJson(const QJsonValue &value)
     if (styleValue.isObject()) {
         const QJsonObject styleObject = styleValue.toObject();
         SlotStyle style;
-        style.marginMm = styleObject.value(QStringLiteral("marginMm")).toDouble(0.0);
-        style.gutterMm = styleObject.value(QStringLiteral("gutterMm")).toDouble(0.0);
+        // A missing key keeps the field unset, which is "automatic"; a present
+        // number, including zero, is an explicit choice.
+        const QJsonValue marginValue = styleObject.value(QStringLiteral("marginMm"));
+        if (marginValue.isDouble())
+            style.marginMm = marginValue.toDouble();
+        const QJsonValue gutterValue = styleObject.value(QStringLiteral("gutterMm"));
+        if (gutterValue.isDouble())
+            style.gutterMm = gutterValue.toDouble();
         style.borderMm = styleObject.value(QStringLiteral("borderMm")).toDouble(0.0);
         style.cornerRadiusMm =
             styleObject.value(QStringLiteral("cornerRadiusMm")).toDouble(0.0);

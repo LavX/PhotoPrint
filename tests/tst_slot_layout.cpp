@@ -10,6 +10,7 @@
 #include "SheetLayout.h"
 #include "SlotGeometry.h"
 #include "SlotLayoutEngine.h"
+#include "TemplateBrowserDialog.h"
 
 #include <QColor>
 #include <QDir>
@@ -148,6 +149,31 @@ Frame frameFor(const QString &path, const QString &id)
     return frame;
 }
 
+Frame sourceFrame(const QString &id, const QString &path)
+{
+    Frame frame;
+    frame.id = id;
+    frame.sourcePath = path;
+    frame.sourceSha256 = path.isEmpty() ? QByteArray() : fileSha256(path);
+    frame.fit = FitMode::Fill;
+    frame.cropCenter = QPointF(0.5, 0.5);
+    frame.autoPlaced = false;
+    frame.cx = 40.0;
+    frame.cy = 50.0;
+    frame.width = 120.0;
+    frame.height = 80.0;
+    return frame;
+}
+
+const Frame *frameById(const Page &page, const QString &id)
+{
+    for (const Frame &frame : page.frames) {
+        if (frame.id == id)
+            return &frame;
+    }
+    return nullptr;
+}
+
 QRgb pixelAtMm(const QImage &page, double ppi, double xMm, double yMm)
 {
     const int x = std::clamp(qRound(xMm / 25.4 * ppi), 0, page.width() - 1);
@@ -169,6 +195,11 @@ bool isNear(QRgb pixel, int r, int g, int b, int tolerance)
 bool isBluish(QRgb pixel)
 {
     return qBlue(pixel) > 180 && qRed(pixel) < 90 && qGreen(pixel) < 90;
+}
+
+bool isReddish(QRgb pixel)
+{
+    return qRed(pixel) > 180 && qGreen(pixel) < 90 && qBlue(pixel) < 90;
 }
 
 QJsonObject minimalFrameJson(const QString &id)
@@ -271,6 +302,36 @@ private slots:
     void emptySlotMatRenders();
     void borderColourIsLinearNotSrgb();
     void roundedCornersClipThePhoto();
+
+    void placePhotoOnEmptySlot();
+    void placePhotoReplacesOccupant();
+    void placementKeepsOrResetsTheCrop();
+    void movePhotoToAnotherSlot();
+    void swapPhotosExchangesPayloads();
+    void emptySlotRemovesThePhoto();
+    void placePhotosMultiDrop();
+    void placementErrors();
+
+    void topUpKeepsExistingPhotos();
+    void fillEmptySlotsWithoutATemplate();
+
+    void publishPageStyleOnly();
+    void publishPageFramesAndSlots();
+    void staleGeometryDoesNotPushAnUndoStep();
+    void validatorErrorCodes();
+
+    void zeroMarginIsNotAutomatic();
+    void displayOrderPutsSlotsFirst();
+    void pickerPreviewMapsPhotosToSlots();
+
+    void repairSanitisesTheStyle();
+    void removeLastSlotClearsDanglingIds();
+    void translucentBorderBlendsWithPaper();
+    void layoutPageWithoutFramesPrintsMats();
+    void layoutFreeSaveBytesAreStable();
+    void nanUnitRectIsDropped();
+    void twelveSlotsRoundTrip();
+    void slotAtAndFirstEmptySlot();
 };
 
 void TestSlotLayout::initTestCase()
@@ -419,8 +480,8 @@ void TestSlotLayout::styleAndGeometryClamps()
     style.cornerRadiusMm = 500.0;
     style.borderColor = QColor(); // invalid
     const SlotStyle sane = SlotGeometry::sanitiseStyle(style);
-    QCOMPARE(sane.marginMm, SlotGeometry::kMaxMarginMm);
-    QCOMPARE(sane.gutterMm, SlotGeometry::kMaxGutterMm);
+    QCOMPARE(sane.marginMm.value_or(-1.0), SlotGeometry::kMaxMarginMm);
+    QCOMPARE(sane.gutterMm.value_or(-1.0), SlotGeometry::kMaxGutterMm);
     QCOMPARE(sane.borderMm, SlotGeometry::kMaxBorderMm);
     QCOMPARE(sane.cornerRadiusMm, SlotGeometry::kMaxCornerRadiusMm);
     QCOMPARE(sane.borderColor, QColor(255, 255, 255));
@@ -431,8 +492,8 @@ void TestSlotLayout::styleAndGeometryClamps()
     broken.borderMm = -std::numeric_limits<double>::infinity();
     broken.cornerRadiusMm = std::numeric_limits<double>::quiet_NaN();
     const SlotStyle defaults = SlotGeometry::sanitiseStyle(broken);
-    QCOMPARE(defaults.marginMm, 0.0);
-    QCOMPARE(defaults.gutterMm, 0.0);
+    QVERIFY(!defaults.marginMm.has_value());
+    QVERIFY(!defaults.gutterMm.has_value());
     QCOMPARE(defaults.borderMm, 0.0);
     QCOMPARE(defaults.cornerRadiusMm, 0.0);
 
@@ -978,8 +1039,8 @@ void TestSlotLayout::persistenceRoundTrip()
     QVERIFY(restoredLaidOut.hasLayout());
     QCOMPARE(restoredLaidOut.slotList.size(), 4);
     QCOMPARE(restoredLaidOut.layoutId, QStringLiteral("n04-grid-2x2"));
-    QCOMPARE(restoredLaidOut.slotStyle.marginMm, 8.0);
-    QCOMPARE(restoredLaidOut.slotStyle.gutterMm, 4.0);
+    QCOMPARE(restoredLaidOut.slotStyle.marginMm.value_or(-1.0), 8.0);
+    QCOMPARE(restoredLaidOut.slotStyle.gutterMm.value_or(-1.0), 4.0);
     QCOMPARE(restoredLaidOut.slotStyle.borderMm, 3.5);
     QCOMPARE(restoredLaidOut.slotStyle.borderColor, QColor(51, 102, 153));
     QCOMPARE(restoredLaidOut.slotStyle.cornerRadiusMm, 2.0);
@@ -1407,6 +1468,984 @@ void TestSlotLayout::roundedCornersClipThePhoto()
     QVERIFY(isWhite(pixelAtMm(image, 150.0, cell.left() + 2.0, cell.top() + 2.0)));
     QVERIFY(isBluish(pixelAtMm(image, 150.0, cell.left() + 9.0, cell.top() + 9.0)));
     QVERIFY(isBluish(pixelAtMm(image, 150.0, cell.center().x(), cell.center().y())));
+}
+
+void TestSlotLayout::placePhotoOnEmptySlot()
+{
+    Page page = layoutPage(templateNamed(QStringLiteral("n04-grid-2x2")), a4Paper(), false, 0);
+    const QString target = page.slotList.at(1).id;
+    Frame photo = sourceFrame(QStringLiteral("frame-new"), QStringLiteral("/photos/new.png"));
+
+    SlotLayoutEngine::Report report;
+    const auto placed = SlotLayoutEngine::placePhoto(page, target, photo, &report);
+    if (!placed.ok())
+        QFAIL(qPrintable(placed.error().message));
+    const Page &result = placed.value();
+    QCOMPARE(result.frames.size(), 1);
+    const Frame *landed = frameById(result, photo.id);
+    QVERIFY(landed);
+    QCOMPARE(landed->slotId, target);
+    QVERIFY(SlotGeometry::slotGeometryMatches(result, *landed));
+    QVERIFY(landed->fit == FitMode::Fill);
+    QVERIFY(!landed->autoPlaced);
+    QVERIFY(near(landed->cropCenter.x(), 0.5));
+    QVERIFY(near(landed->cropCenter.y(), 0.5));
+    QCOMPARE(landed->zoom, 1.0);
+    QCOMPARE(report.emptySlotsAfter, 3);
+    QVERIFY(report.removedFrameIds.isEmpty());
+    QVERIFY(report.cropResetIds.isEmpty());
+    QVERIFY(SlotGeometry::layoutConsistent(result));
+}
+
+void TestSlotLayout::placePhotoReplacesOccupant()
+{
+    Page page = layoutPage(templateNamed(QStringLiteral("n04-grid-2x2")), a4Paper(), false, 2);
+    const QString target = page.slotList.at(0).id;
+    const QString replaced = page.frames.at(0).id;
+    Frame replacement =
+        sourceFrame(QStringLiteral("frame-replacement"), QStringLiteral("/photos/replacement.png"));
+
+    SlotLayoutEngine::Report report;
+    const auto placed = SlotLayoutEngine::placePhoto(page, target, replacement, &report);
+    QVERIFY(placed.ok());
+    const Page &result = placed.value();
+    QCOMPARE(report.removedFrameIds, QStringList{replaced});
+    QCOMPARE(result.frames.size(), 2);
+    QVERIFY(!frameById(result, replaced));
+    const Frame *landed = frameById(result, replacement.id);
+    QVERIFY(landed);
+    QCOMPARE(landed->slotId, target);
+    QVERIFY(SlotGeometry::slotGeometryMatches(result, *landed));
+    // The untouched photograph is still in its own slot.
+    QCOMPARE(frameById(result, page.frames.at(1).id)->slotId, page.slotList.at(1).id);
+    QVERIFY(SlotGeometry::layoutConsistent(result));
+}
+
+void TestSlotLayout::placementKeepsOrResetsTheCrop()
+{
+    Page page = layoutPage(templateNamed(QStringLiteral("n04-grid-2x2")), a4Paper(), false, 0);
+    const Slot &slot0 = page.slotList.at(0);
+    const QRectF cell = SlotGeometry::slotPhotoRectMm(page, slot0);
+
+    Frame keep = sourceFrame(QStringLiteral("frame-keep"), QStringLiteral("/photos/keep.png"));
+    keep.width = cell.width();
+    keep.height = cell.height();
+    keep.cropCenter = QPointF(0.3, 0.7);
+    keep.zoom = 2.5;
+    keep.angleDeg = 15.0;
+    // The crop rule applies to a photograph that is already on the page; a brand
+    // new drop starts centred at 1x by definition.
+    Page keepPage = page;
+    keepPage.frames.append(keep);
+    SlotLayoutEngine::Report kept;
+    const auto keptResult = SlotLayoutEngine::placePhoto(keepPage, slot0.id, keep, &kept);
+    QVERIFY(keptResult.ok());
+    const Frame *keptFrame = frameById(keptResult.value(), keep.id);
+    QVERIFY(keptFrame);
+    QVERIFY(near(keptFrame->cropCenter.x(), 0.3));
+    QVERIFY(near(keptFrame->cropCenter.y(), 0.7));
+    QVERIFY(near(keptFrame->zoom, 2.5));
+    QCOMPARE(keptFrame->angleDeg, 0.0);
+    QCOMPARE(kept.rotationResetIds, QStringList{keep.id});
+    QVERIFY(kept.cropResetIds.isEmpty());
+
+    Frame reset = sourceFrame(QStringLiteral("frame-reset"), QStringLiteral("/photos/reset.png"));
+    reset.width = 150.0;
+    reset.height = 20.0;
+    reset.cropCenter = QPointF(0.2, 0.8);
+    reset.zoom = 4.0;
+    Page resetPage = page;
+    resetPage.frames.append(reset);
+    SlotLayoutEngine::Report resetReport;
+    const auto resetResult = SlotLayoutEngine::placePhoto(resetPage, slot0.id, reset, &resetReport);
+    QVERIFY(resetResult.ok());
+    const Frame *resetFrame = frameById(resetResult.value(), reset.id);
+    QVERIFY(resetFrame);
+    QVERIFY(near(resetFrame->cropCenter.x(), 0.5));
+    QVERIFY(near(resetFrame->cropCenter.y(), 0.5));
+    QCOMPARE(resetFrame->zoom, 1.0);
+    QCOMPARE(resetReport.cropResetIds, QStringList{reset.id});
+}
+
+void TestSlotLayout::movePhotoToAnotherSlot()
+{
+    Page page = layoutPage(templateNamed(QStringLiteral("n04-grid-2x2")), a4Paper(), false, 4);
+    const QString movedId = page.frames.at(0).id;
+    const QString removedId = page.frames.at(2).id;
+    const QString target = page.slotList.at(2).id;
+
+    SlotLayoutEngine::Report report;
+    const auto moved = SlotLayoutEngine::movePhoto(page, movedId, target, &report);
+    QVERIFY(moved.ok());
+    const Page &result = moved.value();
+    QCOMPARE(report.removedFrameIds, QStringList{removedId});
+    QCOMPARE(result.frames.size(), 3);
+    const Frame *landed = frameById(result, movedId);
+    QVERIFY(landed);
+    QCOMPARE(landed->slotId, target);
+    QVERIFY(SlotGeometry::slotGeometryMatches(result, *landed));
+    QVERIFY(!frameById(result, removedId));
+    QVERIFY(!SlotGeometry::frameInSlot(result, page.slotList.at(0).id));
+    // The four-cell grid has one cell aspect, so the crop survives the move.
+    QVERIFY(report.cropResetIds.isEmpty());
+    QVERIFY(SlotGeometry::layoutConsistent(result));
+}
+
+void TestSlotLayout::swapPhotosExchangesPayloads()
+{
+    Page page = layoutPage(templateNamed(QStringLiteral("n04-grid-2x2")), a4Paper(), false, 4);
+    page.frames[0].cropCenter = QPointF(0.2, 0.3);
+    page.frames[0].zoom = 3.0;
+    page.frames[2].cropCenter = QPointF(0.7, 0.8);
+    page.frames[2].zoom = 1.7;
+    const QString sourceId = page.frames.at(0).id;
+    const QString targetId = page.frames.at(2).id;
+    const QString targetSlot = page.slotList.at(2).id;
+    const double sourceCx = page.frames.at(0).cx;
+    const double sourceCy = page.frames.at(0).cy;
+    const double targetCx = page.frames.at(2).cx;
+    const double targetCy = page.frames.at(2).cy;
+
+    SlotLayoutEngine::Report report;
+    const auto swapped = SlotLayoutEngine::swapPhotos(page, sourceId, targetSlot, &report);
+    QVERIFY(swapped.ok());
+    const Page &result = swapped.value();
+    QCOMPARE(result.frames.size(), 4);
+    const Frame *source = frameById(result, sourceId);
+    const Frame *target = frameById(result, targetId);
+    QVERIFY(source);
+    QVERIFY(target);
+    // Payload exchanged, identity and assignment intact.
+    QCOMPARE(source->sourcePath, QStringLiteral("/photos/photo-2.jpg"));
+    QCOMPARE(target->sourcePath, QStringLiteral("/photos/photo-0.jpg"));
+    QCOMPARE(source->id, sourceId);
+    QCOMPARE(target->id, targetId);
+    QCOMPARE(source->slotId, page.slotList.at(0).id);
+    QCOMPARE(target->slotId, targetSlot);
+    QVERIFY(near(source->cropCenter.x(), 0.7));
+    QVERIFY(near(source->cropCenter.y(), 0.8));
+    QVERIFY(near(source->zoom, 1.7));
+    QVERIFY(near(target->cropCenter.x(), 0.2));
+    QVERIFY(near(target->cropCenter.y(), 0.3));
+    QVERIFY(near(target->zoom, 3.0));
+    QVERIFY(report.cropResetIds.isEmpty());
+    QCOMPARE(source->cx, sourceCx);
+    QCOMPARE(source->cy, sourceCy);
+    QCOMPARE(target->cx, targetCx);
+    QCOMPARE(target->cy, targetCy);
+    QVERIFY(SlotGeometry::layoutConsistent(result));
+
+    // A swap with an empty target is a move.
+    Page one = layoutPage(templateNamed(QStringLiteral("n04-grid-2x2")), a4Paper(), false, 1);
+    const auto toEmpty = SlotLayoutEngine::swapPhotos(one, one.frames.at(0).id,
+                                                      one.slotList.at(2).id);
+    QVERIFY(toEmpty.ok());
+    QCOMPARE(frameById(toEmpty.value(), one.frames.at(0).id)->slotId, one.slotList.at(2).id);
+}
+
+void TestSlotLayout::emptySlotRemovesThePhoto()
+{
+    Page page = layoutPage(templateNamed(QStringLiteral("n04-grid-2x2")), a4Paper(), false, 2);
+    const QString filled = page.slotList.at(0).id;
+    const QString emptied = page.frames.at(0).id;
+    SlotLayoutEngine::Report report;
+    const auto emptiedResult = SlotLayoutEngine::emptySlot(page, filled, &report);
+    QVERIFY(emptiedResult.ok());
+    QCOMPARE(report.removedFrameIds, QStringList{emptied});
+    QCOMPARE(emptiedResult.value().frames.size(), 1);
+    QVERIFY(!SlotGeometry::frameInSlot(emptiedResult.value(), filled));
+    QVERIFY(SlotGeometry::layoutConsistent(emptiedResult.value()));
+
+    // Emptying an empty slot is a no-op, not an error.
+    const auto again = SlotLayoutEngine::emptySlot(emptiedResult.value(), filled);
+    QVERIFY(again.ok());
+    QCOMPARE(again.value().frames.size(), 1);
+
+    const auto unknown = SlotLayoutEngine::emptySlot(page, QStringLiteral("slot-missing"));
+    QVERIFY(!unknown.ok());
+    QCOMPARE(unknown.error().code, QStringLiteral("slot-missing"));
+}
+
+void TestSlotLayout::placePhotosMultiDrop()
+{
+    Page page = layoutPage(templateNamed(QStringLiteral("n06-grid-3x2")), a4Paper(), false, 2);
+    QCOMPARE(page.frames.size(), 2);
+    const QString target = page.slotList.at(4).id;
+
+    QList<Frame> drop;
+    for (int i = 0; i < 6; ++i) {
+        drop.append(sourceFrame(QStringLiteral("drop-%1").arg(i),
+                                QStringLiteral("/photos/drop-%1.png").arg(i)));
+    }
+    SlotLayoutEngine::Report report;
+    const auto placed = SlotLayoutEngine::placePhotos(page, target, drop, &report);
+    if (!placed.ok())
+        QFAIL(qPrintable(placed.error().message));
+    const Page &result = placed.value();
+    // Two existing photographs plus four placed; five empty slots were free at
+    // the start, so one dropped photograph has no slot and stays out of the page.
+    QCOMPARE(result.frames.size(), 6);
+    QCOMPARE(report.leftFreeIds.size(), 2);
+    QCOMPARE(report.leftFreeIds.at(0), QStringLiteral("drop-4"));
+    QCOMPARE(report.leftFreeIds.at(1), QStringLiteral("drop-5"));
+    QCOMPARE(report.emptySlotsAfter, 0);
+    QCOMPARE(frameById(result, QStringLiteral("drop-0"))->slotId, target);
+    // Then the empty slots in fill order, skipping the stated slot.
+    QCOMPARE(frameById(result, QStringLiteral("drop-1"))->slotId, page.slotList.at(2).id);
+    QCOMPARE(frameById(result, QStringLiteral("drop-2"))->slotId, page.slotList.at(3).id);
+    QCOMPARE(frameById(result, QStringLiteral("drop-3"))->slotId, page.slotList.at(5).id);
+    QVERIFY(!frameById(result, QStringLiteral("drop-4")));
+    QVERIFY(SlotGeometry::layoutConsistent(result));
+
+    // A drop that finds no slot leaves every payload free.
+    Page full = layoutPage(templateNamed(QStringLiteral("n02-equal-side")), a4Paper(), false, 2);
+    QList<Frame> extra = {sourceFrame(QStringLiteral("extra-0"), QStringLiteral("/photos/e0.png")),
+                          sourceFrame(QStringLiteral("extra-1"), QStringLiteral("/photos/e1.png"))};
+    SlotLayoutEngine::Report fullReport;
+    const auto refused = SlotLayoutEngine::placePhotos(full, QString(), extra, &fullReport);
+    QVERIFY(refused.ok());
+    QCOMPARE(refused.value().frames.size(), 2);
+    const QStringList leftover = {QStringLiteral("extra-0"), QStringLiteral("extra-1")};
+    QCOMPARE(fullReport.leftFreeIds, leftover);
+}
+
+void TestSlotLayout::placementErrors()
+{
+    Page page = layoutPage(templateNamed(QStringLiteral("n04-grid-2x2")), a4Paper(), false, 2);
+    const Frame photo = sourceFrame(QStringLiteral("frame-photo"), QStringLiteral("/photos/p.png"));
+
+    const auto missingSlot =
+        SlotLayoutEngine::placePhoto(page, QStringLiteral("missing"), photo);
+    QVERIFY(!missingSlot.ok());
+    QCOMPARE(missingSlot.error().code, QStringLiteral("slot-missing"));
+
+    const auto missingFrame = SlotLayoutEngine::movePhoto(
+        page, QStringLiteral("missing"), page.slotList.at(2).id);
+    QVERIFY(!missingFrame.ok());
+    QCOMPARE(missingFrame.error().code, QStringLiteral("frame-missing"));
+
+    const auto missingSwap = SlotLayoutEngine::swapPhotos(
+        page, QStringLiteral("missing"), page.slotList.at(2).id);
+    QVERIFY(!missingSwap.ok());
+    QCOMPARE(missingSwap.error().code, QStringLiteral("frame-missing"));
+
+    Frame sourceLess = photo;
+    sourceLess.id = QStringLiteral("frame-no-source");
+    sourceLess.sourcePath.clear();
+    const auto noSource =
+        SlotLayoutEngine::placePhoto(page, page.slotList.at(2).id, sourceLess);
+    QVERIFY(!noSource.ok());
+    QCOMPARE(noSource.error().code, QStringLiteral("frame-source"));
+
+    const QList<Frame> duplicate = {photo, photo};
+    const auto duplicated =
+        SlotLayoutEngine::placePhotos(page, page.slotList.at(2).id, duplicate);
+    QVERIFY(!duplicated.ok());
+    QCOMPARE(duplicated.error().code, QStringLiteral("frame-id"));
+
+    const auto badTarget =
+        SlotLayoutEngine::placePhotos(page, QStringLiteral("missing"), {photo});
+    QVERIFY(!badTarget.ok());
+    QCOMPARE(badTarget.error().code, QStringLiteral("slot-missing"));
+}
+
+void TestSlotLayout::topUpKeepsExistingPhotos()
+{
+    const CollageTemplate &t = templateNamed(QStringLiteral("n06-grid-3x2"));
+    Page page = layoutPage(t, a4Paper(), false, 4);
+    const QStringList slotIds = {page.slotList.at(0).id, page.slotList.at(1).id,
+                                 page.slotList.at(2).id, page.slotList.at(3).id};
+    const QStringList assignedIds = {page.frames.at(0).id, page.frames.at(1).id,
+                                     page.frames.at(2).id, page.frames.at(3).id};
+    page.frames.append(sourceFrame(QStringLiteral("free-0"), QStringLiteral("/photos/f0.png")));
+    page.frames.append(sourceFrame(QStringLiteral("free-1"), QStringLiteral("/photos/f1.png")));
+
+    SlotLayoutEngine::Report report;
+    const auto topped = SlotLayoutEngine::applyTemplateKeeping(page, t, &report);
+    if (!topped.ok())
+        QFAIL(qPrintable(topped.error().message));
+    const Page &result = topped.value();
+    QCOMPARE(result.slotList.size(), 6);
+    // The layout was not rebuilt: every slot id survived.
+    for (int i = 0; i < 6; ++i)
+        QCOMPARE(result.slotList.at(i).id, page.slotList.at(i).id);
+    // Existing photographs did not move.
+    for (int i = 0; i < 4; ++i) {
+        QCOMPARE(result.slotList.at(i).id, slotIds.at(i));
+        QCOMPARE(frameById(result, assignedIds.at(i))->slotId, slotIds.at(i));
+    }
+    QCOMPARE(frameById(result, QStringLiteral("free-0"))->slotId, page.slotList.at(4).id);
+    QCOMPARE(frameById(result, QStringLiteral("free-1"))->slotId, page.slotList.at(5).id);
+    QCOMPARE(report.emptySlotsAfter, 0);
+    QVERIFY(SlotGeometry::layoutConsistent(result));
+
+    // A different template is refused rather than overwriting the page.
+    const auto mismatch = SlotLayoutEngine::applyTemplateKeeping(
+        page, templateNamed(QStringLiteral("n04-grid-2x2")));
+    QVERIFY(!mismatch.ok());
+    QCOMPARE(mismatch.error().code, QStringLiteral("layout-mismatch"));
+
+    // A page without a layout is laid out, exactly as applyTemplate would.
+    Page empty = pageWith(a4Paper(), false);
+    const auto built = SlotLayoutEngine::applyTemplateKeeping(empty, t);
+    QVERIFY(built.ok());
+    QVERIFY(built.value().hasLayout());
+    QCOMPARE(built.value().slotList.size(), 6);
+}
+
+void TestSlotLayout::fillEmptySlotsWithoutATemplate()
+{
+    Page free = pageWith(a4Paper(), false);
+    free.frames.append(sourceFrame(QStringLiteral("free-0"), QStringLiteral("/photos/f0.png")));
+    const auto untouched = SlotLayoutEngine::fillEmptySlots(free);
+    QVERIFY(untouched.ok());
+    QVERIFY(!untouched.value().hasLayout());
+    QCOMPARE(untouched.value().frames.size(), 1);
+
+    Page page = layoutPage(templateNamed(QStringLiteral("n04-grid-2x2")), a4Paper(), false, 0);
+    page.frames.append(sourceFrame(QStringLiteral("free-0"), QStringLiteral("/photos/f0.png")));
+    page.frames.append(sourceFrame(QStringLiteral("free-1"), QStringLiteral("/photos/f1.png")));
+    SlotLayoutEngine::Report report;
+    const auto filled = SlotLayoutEngine::fillEmptySlots(page, &report);
+    QVERIFY(filled.ok());
+    QCOMPARE(filled.value().frames.size(), 2);
+    QCOMPARE(report.emptySlotsAfter, 2);
+    QCOMPARE(frameById(filled.value(), QStringLiteral("free-0"))->slotId,
+             page.slotList.at(0).id);
+    QCOMPARE(frameById(filled.value(), QStringLiteral("free-1"))->slotId,
+             page.slotList.at(1).id);
+    QVERIFY(SlotGeometry::layoutConsistent(filled.value()));
+}
+
+void TestSlotLayout::publishPageStyleOnly()
+{
+    DocumentSnapshot document;
+    Page page = layoutPage(templateNamed(QStringLiteral("n04-grid-2x2")), a4Paper(), false, 2);
+    document.pages.append(page);
+    CanvasController controller;
+    controller.setDocument(document);
+    QCOMPARE(controller.undoStack()->count(), 0);
+
+    Page styled = controller.document().pages.at(0);
+    styled.slotStyle.borderMm = 4.0;
+    styled.slotStyle.borderColor = QColor(10, 20, 30);
+    const auto published = controller.publishPage(styled, QStringLiteral("Szegély beállítása"));
+    if (!published.ok())
+        QFAIL(qPrintable(published.error().message));
+    QCOMPARE(controller.undoStack()->count(), 1);
+    const Page &after = controller.document().pages.at(0);
+    QCOMPARE(after.slotList.size(), 4);
+    QCOMPARE(after.frames.size(), 2);
+    QCOMPARE(after.slotStyle.borderMm, 4.0);
+    QVERIFY(SlotGeometry::layoutConsistent(after));
+    // The border changed the photograph rectangle, so repair re-derived it.
+    for (const Frame &frame : after.frames) {
+        QVERIFY(SlotGeometry::slotGeometryMatches(after, frame));
+        QVERIFY(frame.width < 97.5);
+    }
+
+    // Publishing the same finished page again is not an edit.
+    QVERIFY(controller.publishPage(after).ok());
+    QCOMPARE(controller.undoStack()->count(), 1);
+
+    controller.undoStack()->undo();
+    QVERIFY(controller.document() == document);
+}
+
+void TestSlotLayout::publishPageFramesAndSlots()
+{
+    DocumentSnapshot document;
+    document.pages.append(pageWith(a4Paper(), false));
+    CanvasController controller;
+    controller.setDocument(document);
+
+    Page page = controller.document().pages.at(0);
+    const auto applied =
+        SlotLayoutEngine::applyTemplate(page, templateNamed(QStringLiteral("n04-grid-2x2")));
+    QVERIFY(applied.ok());
+    page = applied.value();
+    const auto placed = SlotLayoutEngine::placePhoto(
+        page, page.slotList.at(2).id,
+        sourceFrame(QStringLiteral("frame-drop"), QStringLiteral("/photos/drop.png")));
+    QVERIFY(placed.ok());
+    page = placed.value();
+
+    const auto published = controller.publishPage(page, QStringLiteral("Sablon alkalmazása"));
+    QVERIFY(published.ok());
+    QCOMPARE(controller.undoStack()->count(), 1);
+    QVERIFY(controller.document().pages.at(0) == page);
+    controller.undoStack()->undo();
+    QVERIFY(controller.document() == document);
+}
+
+void TestSlotLayout::staleGeometryDoesNotPushAnUndoStep()
+{
+    DocumentSnapshot document;
+    Page page = layoutPage(templateNamed(QStringLiteral("n04-grid-2x2")), a4Paper(), false, 2);
+    document.pages.append(page);
+    CanvasController controller;
+    controller.setDocument(document);
+
+    // A frames edit that only drifts slotted geometry repairs back to the same
+    // page; it must not leave an undo step behind.
+    QList<Frame> drifted = controller.document().pages.at(0).frames;
+    drifted[0].cx += 25.0;
+    drifted[1].angleDeg = 30.0;
+    const auto framesEdit = controller.apply(SetFramesEdit{0, drifted});
+    QVERIFY(framesEdit.ok());
+    QCOMPARE(controller.undoStack()->count(), 0);
+    QVERIFY(SlotGeometry::layoutConsistent(controller.document().pages.at(0)));
+
+    Frame moved = drifted.at(0);
+    moved.cx += 10.0;
+    const auto frameEdit = controller.apply(FrameChange{moved.id, moved});
+    QVERIFY(frameEdit.ok());
+    QCOMPARE(controller.undoStack()->count(), 0);
+
+    // The same through the publish API: a page whose only difference is stale
+    // slotted geometry is not an edit after repair.
+    Page driftedPage = controller.document().pages.at(0);
+    driftedPage.frames[1].cx += 40.0;
+    const auto publishEdit = controller.publishPage(driftedPage);
+    QVERIFY(publishEdit.ok());
+    QCOMPARE(controller.undoStack()->count(), 0);
+
+    // A real crop edit still pushes exactly one step.
+    Frame cropped = controller.document().pages.at(0).frames.at(0);
+    cropped.cropCenter = QPointF(0.2, 0.3);
+    QVERIFY(controller.apply(FrameChange{cropped.id, cropped}).ok());
+    QCOMPARE(controller.undoStack()->count(), 1);
+    controller.undoStack()->undo();
+    QVERIFY(controller.document() == document);
+}
+
+void TestSlotLayout::validatorErrorCodes()
+{
+    DocumentSnapshot document;
+    Page page = pageWith(a4Paper(), false);
+    Slot slot;
+    slot.id = QStringLiteral("slot-a");
+    slot.unitRect = QRectF(0.0, 0.0, 1.0, 1.0);
+    page.slotList.append(slot);
+    page.frames.append(photoFrame(0));
+    page.frames[0].slotId = slot.id;
+    SlotGeometry::applySlotGeometry(page, slot, page.frames[0]);
+    document.pages.append(page);
+
+    auto codeOf = [&document](const QList<Slot> &slotValues, const QList<Frame> &frames,
+                              const std::optional<SlotStyle> &style = std::nullopt,
+                              int pageIndex = 0) {
+        ApplyLayoutEdit edit;
+        PageLayout change;
+        change.pageIndex = pageIndex;
+        change.slotList = slotValues;
+        change.frames = frames;
+        if (style)
+            change.slotStyle = *style;
+        edit.pages.append(change);
+        const auto valid = validateLayoutEdit(document, edit);
+        return valid.ok() ? QString() : valid.error().code;
+    };
+
+    QCOMPARE(codeOf(page.slotList, page.frames), QString());
+    QList<Slot> duplicate = page.slotList;
+    duplicate.append(slot);
+    QCOMPARE(codeOf(duplicate, page.frames), QStringLiteral("layout-slot-id"));
+    QList<Slot> emptyId = page.slotList;
+    emptyId[0].id.clear();
+    QCOMPARE(codeOf(emptyId, page.frames), QStringLiteral("layout-slot-id"));
+    QList<Slot> outside = page.slotList;
+    outside[0].unitRect = QRectF(-0.5, 0.0, 1.0, 1.0);
+    QCOMPARE(codeOf(outside, page.frames), QStringLiteral("layout-slot-unit"));
+    QList<Frame> dangling = page.frames;
+    dangling[0].slotId = QStringLiteral("missing");
+    QCOMPARE(codeOf(page.slotList, dangling), QStringLiteral("layout-slot-dangling"));
+    QList<Frame> doubled = page.frames;
+    doubled.append(photoFrame(1));
+    doubled[1].slotId = slot.id;
+    QCOMPARE(codeOf(page.slotList, doubled), QStringLiteral("layout-slot-duplicate"));
+
+    QList<Slot> many;
+    for (int i = 0; i < SlotGeometry::kMaxSlotsPerPage + 1; ++i) {
+        Slot extra;
+        extra.id = QStringLiteral("slot-%1").arg(i);
+        extra.unitRect = QRectF(0.0, 0.0, 0.1, 0.1);
+        many.append(extra);
+    }
+    QCOMPARE(codeOf(many, {}), QStringLiteral("layout-slot-cap"));
+
+    SlotStyle big;
+    big.marginMm = 500.0;
+    QCOMPARE(codeOf(page.slotList, page.frames, big), QStringLiteral("layout-slot-style"));
+    SlotStyle nan;
+    nan.borderMm = std::numeric_limits<double>::quiet_NaN();
+    QCOMPARE(codeOf(page.slotList, page.frames, nan), QStringLiteral("layout-slot-style"));
+
+    ApplyLayoutEdit badIndex;
+    PageLayout change;
+    change.pageIndex = 3;
+    badIndex.pages.append(change);
+    QCOMPARE(validateLayoutEdit(document, badIndex).error().code,
+             QStringLiteral("layout-page-index"));
+}
+
+void TestSlotLayout::zeroMarginIsNotAutomatic()
+{
+    Page page = pageWith(a4Paper(), false);
+    Slot slot;
+    slot.id = QStringLiteral("slot-only");
+    slot.unitRect = QRectF(0.0, 0.0, 1.0, 1.0);
+    page.slotList.append(slot);
+
+    // Auto: A4's 5 % is 10.5 mm, capped at 10 mm.
+    const QRectF automatic = SlotGeometry::slotCellMm(page, slot);
+    QVERIFY(near(automatic.left(), 10.0));
+    QVERIFY(near(automatic.width(), 190.0));
+
+    // An explicit zero is a real zero, not "automatic".
+    page.slotStyle.marginMm = 0.0;
+    page.slotStyle.gutterMm = 0.0;
+    QCOMPARE(SlotGeometry::effectiveMarginMm(page.slotStyle, pageSizeMm(page)), 0.0);
+    const QRectF flush = SlotGeometry::slotCellMm(page, slot);
+    QVERIFY(nearRect(flush, QRectF(0.0, 0.0, 210.0, 297.0)));
+
+    DocumentSnapshot explicitDoc;
+    explicitDoc.pages.append(page);
+    const QByteArray explicitJson = ProjectStore::serialize(explicitDoc, QString());
+    const QJsonObject explicitRoot = QJsonDocument::fromJson(explicitJson).object();
+    const QJsonObject explicitStyle = explicitRoot.value(QStringLiteral("pages"))
+                                          .toArray()
+                                          .at(0)
+                                          .toObject()
+                                          .value(QStringLiteral("layout"))
+                                          .toObject()
+                                          .value(QStringLiteral("style"))
+                                          .toObject();
+    QVERIFY(explicitStyle.contains(QStringLiteral("marginMm")));
+    QCOMPARE(explicitStyle.value(QStringLiteral("marginMm")).toDouble(), 0.0);
+    const auto reparsedExplicit = ProjectStore::deserialize(explicitJson);
+    QVERIFY(reparsedExplicit.ok());
+    const SlotStyle loaded = reparsedExplicit.value().pages.at(0).slotStyle;
+    QVERIFY(loaded.marginMm.has_value());
+    QCOMPARE(*loaded.marginMm, 0.0);
+    QVERIFY(loaded.gutterMm.has_value());
+    QCOMPARE(*loaded.gutterMm, 0.0);
+    QVERIFY(nearRect(SlotGeometry::slotCellMm(reparsedExplicit.value().pages.at(0),
+                                              reparsedExplicit.value().pages.at(0).slotList.at(0)),
+                     flush));
+
+    // Auto persists as absent keys, even when the style object exists for a
+    // border, and loads back as automatic.
+    Page autoPage = pageWith(a4Paper(), false);
+    autoPage.slotList.append(slot);
+    autoPage.slotStyle.borderMm = 2.0;
+    DocumentSnapshot autoDoc;
+    autoDoc.pages.append(autoPage);
+    const QByteArray autoJson = ProjectStore::serialize(autoDoc, QString());
+    const QJsonObject autoStyle = QJsonDocument::fromJson(autoJson)
+                                      .object()
+                                      .value(QStringLiteral("pages"))
+                                      .toArray()
+                                      .at(0)
+                                      .toObject()
+                                      .value(QStringLiteral("layout"))
+                                      .toObject()
+                                      .value(QStringLiteral("style"))
+                                      .toObject();
+    QVERIFY(!autoStyle.contains(QStringLiteral("marginMm")));
+    QVERIFY(!autoStyle.contains(QStringLiteral("gutterMm")));
+    const auto reparsedAuto = ProjectStore::deserialize(autoJson);
+    QVERIFY(reparsedAuto.ok());
+    QVERIFY(!reparsedAuto.value().pages.at(0).slotStyle.marginMm.has_value());
+    QVERIFY(near(SlotGeometry::slotCellMm(reparsedAuto.value().pages.at(0),
+                                          reparsedAuto.value().pages.at(0).slotList.at(0))
+                     .left(),
+                 10.0));
+}
+
+void TestSlotLayout::displayOrderPutsSlotsFirst()
+{
+    Page page = pageWith(a4Paper(), false);
+    Slot first;
+    first.id = QStringLiteral("slot-0");
+    first.unitRect = QRectF(0.0, 0.0, 0.5, 1.0);
+    Slot second;
+    second.id = QStringLiteral("slot-1");
+    second.unitRect = QRectF(0.5, 0.0, 0.5, 1.0);
+    page.slotList = {first, second};
+
+    Frame freeFront = sourceFrame(QStringLiteral("free-front"), QStringLiteral("/photos/a.png"));
+    Frame inSecond = sourceFrame(QStringLiteral("in-second"), QStringLiteral("/photos/b.png"));
+    inSecond.slotId = second.id;
+    Frame inFirst = sourceFrame(QStringLiteral("in-first"), QStringLiteral("/photos/c.png"));
+    inFirst.slotId = first.id;
+    Frame noSource = sourceFrame(QStringLiteral("no-source"), QString());
+    page.frames = {freeFront, inSecond, inFirst, noSource};
+
+    const QList<int> order = SlotLayoutEngine::frameIndicesInDisplayOrder(page);
+    QCOMPARE(order, QList<int>({2, 1, 0, 3}));
+
+    const QList<Frame> photos = SlotLayoutEngine::photographsInDisplayOrder(page);
+    QCOMPARE(int(photos.size()), 3);
+    QCOMPARE(photos.at(0).id, QStringLiteral("in-first"));
+    QCOMPARE(photos.at(1).id, QStringLiteral("in-second"));
+    QCOMPARE(photos.at(2).id, QStringLiteral("free-front"));
+
+    // A page without slots keeps z-order, which is the old behaviour.
+    Page freePage = pageWith(a4Paper(), false);
+    freePage.frames = {freeFront, inSecond, inFirst};
+    QCOMPARE(SlotLayoutEngine::frameIndicesInDisplayOrder(freePage), QList<int>({0, 1, 2}));
+}
+
+void TestSlotLayout::pickerPreviewMapsPhotosToSlots()
+{
+    const CollageTemplate &t = templateNamed(QStringLiteral("n02-equal-side"));
+    Page page = pageWith(a4Paper(), false);
+    for (int i = 0; i < 2; ++i) {
+        Slot slot;
+        slot.id = QStringLiteral("slot-%1").arg(i);
+        slot.unitRect = t.slotList.at(i).rect;
+        page.slotList.append(slot);
+    }
+    // The page stores the blue frame first (z-order), but slot 0 holds red.
+    Frame blue = sourceFrame(QStringLiteral("frame-blue"), QStringLiteral("/photos/blue.png"));
+    blue.slotId = page.slotList.at(1).id;
+    Frame red = sourceFrame(QStringLiteral("frame-red"), QStringLiteral("/photos/red.png"));
+    red.slotId = page.slotList.at(0).id;
+    page.frames = {blue, red};
+    const auto repaired = SlotLayoutEngine::repair(page);
+    QVERIFY(repaired.ok());
+    page = repaired.value();
+    QVERIFY(SlotGeometry::layoutConsistent(page));
+
+    QImage redThumb(80, 60, QImage::Format_RGB32);
+    redThumb.fill(QColor(220, 30, 30));
+    QImage blueThumb(80, 60, QImage::Format_RGB32);
+    blueThumb.fill(QColor(30, 30, 220));
+
+    TemplateBrowserRequest request;
+    request.paper = page.paper;
+    request.landscape = page.landscape;
+    request.frames = page.frames;
+    request.slotList = page.slotList;
+    request.photos = {blueThumb, redThumb};
+    TemplateBrowserDialog dialog(request);
+
+    const QImage tile = dialog.templateTileImage(t.id);
+    QVERIFY(!tile.isNull());
+    const qreal dpr = std::max<qreal>(1.0, tile.devicePixelRatio());
+    const double logicalWidth = tile.width() / dpr;
+    const double logicalHeight = tile.height() / dpr;
+    const QRectF sheet(0.5, 0.5, logicalWidth - 1.0, logicalHeight - 1.0);
+    const QSizeF mm = pageSizeMm(page);
+    const double scaleX = sheet.width() / mm.width();
+    const double scaleY = sheet.height() / mm.height();
+    const auto mapping = CollageTemplates::instance().slotsMm(t, page.paper, page.landscape);
+    QVERIFY(mapping.ok());
+    for (int i = 0; i < 2; ++i) {
+        const QRectF &slot = mapping.value().at(i);
+        const double x = (sheet.left() + (slot.x() + slot.width() / 2.0) * scaleX) * dpr;
+        const double y = (sheet.top() + (slot.y() + slot.height() / 2.0) * scaleY) * dpr;
+        const QRgb pixel = tile.pixel(std::clamp(int(std::lround(x)), 0, tile.width() - 1),
+                                      std::clamp(int(std::lround(y)), 0, tile.height() - 1));
+        if (i == 0)
+            QVERIFY2(isReddish(pixel), "the red photo belongs in the first slot");
+        else
+            QVERIFY2(isBluish(pixel), "the blue photo belongs in the second slot");
+    }
+}
+
+void TestSlotLayout::repairSanitisesTheStyle()
+{
+    Page page = pageWith(a4Paper(), false);
+    Slot slot;
+    slot.id = QStringLiteral("slot-only");
+    slot.unitRect = QRectF(0.0, 0.0, 1.0, 1.0);
+    page.slotList.append(slot);
+    Frame frame = sourceFrame(QStringLiteral("frame-0"), QStringLiteral("/photos/0.png"));
+    frame.slotId = slot.id;
+    page.frames.append(frame);
+
+    page.slotStyle.marginMm = 500.0;
+    page.slotStyle.gutterMm = -4.0;
+    page.slotStyle.borderMm = std::numeric_limits<double>::quiet_NaN();
+    page.slotStyle.cornerRadiusMm = 100.0;
+    page.slotStyle.borderColor = QColor();
+    const auto repaired = SlotLayoutEngine::repair(page);
+    QVERIFY(repaired.ok());
+    const Page &result = repaired.value();
+    QCOMPARE(result.slotStyle.marginMm.value_or(-1.0), SlotGeometry::kMaxMarginMm);
+    QCOMPARE(result.slotStyle.gutterMm.value_or(-1.0), 0.0);
+    QCOMPARE(result.slotStyle.borderMm, 0.0);
+    QCOMPARE(result.slotStyle.cornerRadiusMm, SlotGeometry::kMaxCornerRadiusMm);
+    QCOMPARE(result.slotStyle.borderColor, QColor(255, 255, 255));
+    QVERIFY(SlotGeometry::layoutConsistent(result));
+
+    // Alpha is a colour choice, not corruption: a translucent border survives.
+    page.slotStyle = SlotStyle{};
+    page.slotStyle.borderColor = QColor(0, 0, 0, 128);
+    const auto alpha = SlotLayoutEngine::repair(page);
+    QVERIFY(alpha.ok());
+    QCOMPARE(alpha.value().slotStyle.borderColor.alpha(), 128);
+}
+
+void TestSlotLayout::removeLastSlotClearsDanglingIds()
+{
+    Page page = pageWith(a4Paper(), false);
+    Slot slot;
+    slot.id = QStringLiteral("slot-a");
+    slot.unitRect = QRectF(0.0, 0.0, 1.0, 1.0);
+    page.slotList.append(slot);
+    Frame assigned = sourceFrame(QStringLiteral("frame-assigned"), QStringLiteral("/photos/a.png"));
+    assigned.slotId = slot.id;
+    page.frames.append(assigned);
+    // A frame naming a slot that never existed is dangling input. Removing the
+    // last real slot must still clear it, not leave it pointing at nothing.
+    Frame ghost = sourceFrame(QStringLiteral("frame-ghost"), QStringLiteral("/photos/b.png"));
+    ghost.slotId = QStringLiteral("slot-ghost");
+    page.frames.append(ghost);
+
+    const auto removed = SlotLayoutEngine::removeSlot(page, slot.id);
+    QVERIFY(removed.ok());
+    const Page &result = removed.value();
+    QVERIFY(!result.hasLayout());
+    QCOMPARE(result.frames.size(), 1);
+    QCOMPARE(result.frames.at(0).id, QStringLiteral("frame-ghost"));
+    QVERIFY(result.frames.at(0).slotId.isEmpty());
+    QCOMPARE(result.slotStyle, SlotStyle{});
+    QVERIFY(result.layoutId.isEmpty());
+    QVERIFY(SlotGeometry::layoutConsistent(result));
+}
+
+void TestSlotLayout::translucentBorderBlendsWithPaper()
+{
+    Page page = pageWith(a4Paper(), false);
+    Slot slot;
+    slot.id = QStringLiteral("slot-only");
+    slot.unitRect = QRectF(0.0, 0.0, 1.0, 1.0);
+    page.slotList.append(slot);
+    page.layoutId = QStringLiteral("hand");
+    SlotStyle style;
+    style.borderMm = 6.0;
+    style.borderColor = QColor(0, 0, 0, 128);
+    page.slotStyle = style;
+    QVERIFY(SlotGeometry::layoutConsistent(page));
+
+    DocumentSnapshot document;
+    document.pages.append(page);
+    ImageStore store;
+    PageRenderer renderer(store);
+    const auto rendered = renderer.renderPage(document, 0, 150.0);
+    if (!rendered.ok())
+        QFAIL(qPrintable(rendered.error().message));
+    const QImage image = rendered.value();
+    const QRectF cell = SlotGeometry::slotCellMm(page, slot);
+    const QRgb mat = pixelAtMm(image, 150.0, cell.left() + 3.0, cell.center().y());
+    // Black at half alpha over white paper, blended in the linear working space,
+    // comes back near 188, not 0 (opaque) and not 255 (alpha dropped).
+    QVERIFY2(std::abs(qRed(mat) - 188) <= 6,
+             qPrintable(QStringLiteral("translucent mat printed as %1").arg(qRed(mat))));
+    QVERIFY(qRed(mat) > 100);
+    QVERIFY(qGreen(mat) < 230);
+
+    // The alpha survives the project round trip.
+    const QByteArray json = ProjectStore::serialize(document, QString());
+    const QJsonObject styleObject = QJsonDocument::fromJson(json)
+                                        .object()
+                                        .value(QStringLiteral("pages"))
+                                        .toArray()
+                                        .at(0)
+                                        .toObject()
+                                        .value(QStringLiteral("layout"))
+                                        .toObject()
+                                        .value(QStringLiteral("style"))
+                                        .toObject();
+    QCOMPARE(styleObject.value(QStringLiteral("borderColor")).toString(),
+             QStringLiteral("#80000000"));
+    const auto reparsed = ProjectStore::deserialize(json);
+    QVERIFY(reparsed.ok());
+    QCOMPARE(reparsed.value().pages.at(0).slotStyle.borderColor.alpha(), 128);
+}
+
+void TestSlotLayout::layoutPageWithoutFramesPrintsMats()
+{
+    Page page = layoutPage(templateNamed(QStringLiteral("n04-grid-2x2")), a4Paper(), false, 0);
+    SlotStyle style;
+    style.borderMm = 3.0;
+    style.borderColor = QColor(0, 0, 0);
+    const auto styled = SlotLayoutEngine::setStyle(page, style);
+    QVERIFY(styled.ok());
+    page = styled.value();
+    QVERIFY(page.frames.isEmpty());
+
+    DocumentSnapshot document;
+    document.pages.append(page);
+    ImageStore store;
+    PageRenderer renderer(store);
+    const auto rendered = renderer.renderPage(document, 0, 150.0);
+    if (!rendered.ok())
+        QFAIL(qPrintable(rendered.error().message));
+    const QImage image = rendered.value();
+    for (const QRectF &cell : SlotGeometry::cellsMm(page)) {
+        QVERIFY(isNear(pixelAtMm(image, 150.0, cell.left() + 1.0, cell.center().y()), 0, 0, 0,
+                       12));
+        QVERIFY(isWhite(pixelAtMm(image, 150.0, cell.center().x(), cell.center().y())));
+    }
+}
+
+void TestSlotLayout::layoutFreeSaveBytesAreStable()
+{
+    QTemporaryDir dir;
+    QVERIFY(dir.isValid());
+    const QString first = writePhoto(dir, QStringLiteral("one.png"), QColor(90, 90, 90));
+    const QString second = writePhoto(dir, QStringLiteral("two.png"), QColor(30, 60, 90));
+    QVERIFY(!first.isEmpty());
+    QVERIFY(!second.isEmpty());
+
+    DocumentSnapshot document;
+    Page page = pageWith(a4Paper(), false);
+    page.frames.append(frameFor(first, QStringLiteral("frame-one")));
+    page.frames.append(frameFor(second, QStringLiteral("frame-two")));
+    document.pages.append(page);
+
+    const QString path = dir.filePath(QStringLiteral("project.ppj"));
+    ProjectStore store;
+    QVERIFY(store.save(path, document, SaveMode::Normal).ok());
+    const auto loaded = store.load(path);
+    if (!loaded.ok())
+        QFAIL(qPrintable(loaded.error().message));
+
+    const QByteArray firstBytes = ProjectStore::serialize(document, dir.path());
+    const QByteArray secondBytes =
+        ProjectStore::serialize(loaded.value().document, dir.path());
+    // A layout-free project has no new keys and re-serialises byte for byte.
+    QCOMPARE(firstBytes, secondBytes);
+    QVERIFY(!firstBytes.contains("\"layout\""));
+    QVERIFY(!firstBytes.contains("\"slotId\""));
+    QVERIFY(!firstBytes.contains("\"marginMm\""));
+}
+
+void TestSlotLayout::nanUnitRectIsDropped()
+{
+    Page page = pageWith(a4Paper(), false);
+    Slot slot;
+    slot.id = QStringLiteral("slot-nan");
+    slot.unitRect = QRectF(0.0, 0.0, std::numeric_limits<double>::quiet_NaN(), 1.0);
+    page.slotList.append(slot);
+    page.layoutId = QStringLiteral("broken");
+    Frame frame = sourceFrame(QStringLiteral("frame-0"), QStringLiteral("/photos/0.png"));
+    frame.slotId = slot.id;
+    page.frames.append(frame);
+
+    const auto repaired = SlotLayoutEngine::repair(page);
+    QVERIFY(repaired.ok());
+    const Page &result = repaired.value();
+    QVERIFY(!result.hasLayout());
+    QVERIFY(result.frames.at(0).slotId.isEmpty());
+    QVERIFY(result.layoutId.isEmpty());
+    QVERIFY(SlotGeometry::layoutConsistent(result));
+
+    // The strict validator and the clamps agree that this rectangle is unusable.
+    QRectF nanRect = slot.unitRect;
+    QVERIFY(!SlotGeometry::sanitiseUnitRect(&nanRect));
+    QVERIFY(!SlotGeometry::unitRectIsValid(slot.unitRect));
+    QVERIFY(SlotGeometry::cellFromUnitRect(slot.unitRect, QSizeF(210.0, 297.0), 10.0, 10.0)
+                .isEmpty());
+}
+
+void TestSlotLayout::twelveSlotsRoundTrip()
+{
+    Page page = pageWith(a4Paper(), false);
+    for (int i = 0; i < SlotGeometry::kMaxSlotsPerPage; ++i) {
+        Slot slot;
+        slot.id = QStringLiteral("slot-%1").arg(i);
+        slot.unitRect = QRectF((i % 4) * 0.25, (i / 4) * (1.0 / 3.0), 0.25, 1.0 / 3.0);
+        page.slotList.append(slot);
+        Frame frame = sourceFrame(QStringLiteral("frame-%1").arg(i),
+                                  QStringLiteral("/photos/%1.png").arg(i));
+        frame.slotId = slot.id;
+        page.frames.append(frame);
+    }
+    const auto repaired = SlotLayoutEngine::repair(page);
+    QVERIFY(repaired.ok());
+    page = repaired.value();
+    QCOMPARE(page.slotList.size(), 12);
+    QCOMPARE(page.frames.size(), 12);
+    QVERIFY(SlotGeometry::layoutConsistent(page));
+    for (const Slot &slot : page.slotList) {
+        QVERIFY(SlotGeometry::slotCellMm(page, slot).width() >= 1.0);
+        QVERIFY(SlotGeometry::slotCellMm(page, slot).height() >= 1.0);
+    }
+    const auto refused = SlotLayoutEngine::addSlot(page, QString());
+    QVERIFY(!refused.ok());
+    QCOMPARE(refused.error().code, QStringLiteral("slot-cap"));
+
+    DocumentSnapshot document;
+    document.pages.append(page);
+    const QByteArray json = ProjectStore::serialize(document, QString());
+    const auto reparsed = ProjectStore::deserialize(json);
+    QVERIFY(reparsed.ok());
+    const Page &loaded = reparsed.value().pages.at(0);
+    QCOMPARE(loaded.slotList.size(), 12);
+    QCOMPARE(loaded.frames.size(), 12);
+    for (int i = 0; i < 12; ++i) {
+        QCOMPARE(loaded.slotList.at(i).id, page.slotList.at(i).id);
+        QVERIFY(nearRect(loaded.slotList.at(i).unitRect, page.slotList.at(i).unitRect, 1e-9));
+        QCOMPARE(loaded.frames.at(i).slotId, page.frames.at(i).slotId);
+        QVERIFY(SlotGeometry::slotGeometryMatches(loaded, loaded.frames.at(i)));
+    }
+    QVERIFY(SlotGeometry::layoutConsistent(loaded));
+
+    const auto removed = SlotLayoutEngine::removeSlot(page, page.slotList.at(0).id);
+    QVERIFY(removed.ok());
+    QCOMPARE(removed.value().slotList.size(), 11);
+    QCOMPARE(removed.value().frames.size(), 11);
+    QVERIFY(SlotGeometry::layoutConsistent(removed.value()));
+}
+
+void TestSlotLayout::slotAtAndFirstEmptySlot()
+{
+    Page page = pageWith(a4Paper(), false);
+    Slot left;
+    left.id = QStringLiteral("slot-left");
+    left.unitRect = QRectF(0.0, 0.0, 0.5, 1.0);
+    Slot topRight;
+    topRight.id = QStringLiteral("slot-top-right");
+    topRight.unitRect = QRectF(0.5, 0.0, 0.5, 0.5);
+    Slot bottomRight;
+    bottomRight.id = QStringLiteral("slot-bottom-right");
+    bottomRight.unitRect = QRectF(0.5, 0.5, 0.5, 0.5);
+    page.slotList = {left, topRight, bottomRight};
+    Frame inLeft = sourceFrame(QStringLiteral("frame-left"), QStringLiteral("/photos/l.png"));
+    inLeft.slotId = left.id;
+    page.frames.append(inLeft);
+    const auto repaired = SlotLayoutEngine::repair(page);
+    QVERIFY(repaired.ok());
+    page = repaired.value();
+
+    QCOMPARE(SlotGeometry::firstEmptySlot(page)->id, topRight.id);
+    const QRectF leftCell = SlotGeometry::slotCellMm(page, left);
+    QCOMPARE(SlotGeometry::slotAt(page, leftCell.center())->id, left.id);
+    const QRectF topCell = SlotGeometry::slotCellMm(page, topRight);
+    QCOMPARE(SlotGeometry::slotAt(page, topCell.center())->id, topRight.id);
+    // The paper margin is not part of any slot.
+    QVERIFY(!SlotGeometry::slotAt(page, QPointF(0.5, 0.5)));
+
+    // A later slot wins where two overlap.
+    Slot cover;
+    cover.id = QStringLiteral("slot-cover");
+    cover.unitRect = QRectF(0.0, 0.0, 1.0, 1.0);
+    Page overlapping = page;
+    overlapping.slotList.append(cover);
+    QCOMPARE(SlotGeometry::slotAt(overlapping, leftCell.center())->id, cover.id);
+
+    Frame inTop = sourceFrame(QStringLiteral("frame-top"), QStringLiteral("/photos/t.png"));
+    inTop.slotId = topRight.id;
+    Page twoFilled = page;
+    twoFilled.frames.append(inTop);
+    const auto repairedTwo = SlotLayoutEngine::repair(twoFilled);
+    QVERIFY(repairedTwo.ok());
+    QCOMPARE(SlotGeometry::firstEmptySlot(repairedTwo.value())->id, bottomRight.id);
 }
 
 QTEST_MAIN(TestSlotLayout)

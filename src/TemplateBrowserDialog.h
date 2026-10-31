@@ -26,9 +26,12 @@ namespace pp {
 struct TemplateBrowserRequest {
     PaperSpec paper;
     bool landscape = false;
-    QList<Frame> frames;  ///< the page's frames, in fill order
+    QList<Frame> frames;  ///< the page's frames; reordered to display order on intake
+    /// The page's slots, so a slotted page maps its photographs to the right
+    /// preview cells instead of to their z-order.
+    QList<Slot> slotList;
     /// Optional, one entry per frame (a null image is fine). Slot i shows
-    /// photos.at(i), which is the order a template fills.
+    /// photos.at(i) after both lists are reordered into display order.
     QList<QImage> photos;
     /// Logical width of one template preview. The page aspect decides the
     /// height, and the raster is capped at kMaxPreviewPx device pixels.
@@ -73,7 +76,7 @@ public:
     /// page's photo count, and the tiles and the guidance are updated once the
     /// burst of edits is over, so a nudge does not rebuild six previews.
     void setPage(const PaperSpec &paper, bool landscape, const QList<Frame> &frames,
-                 const QList<QImage> &photos = {});
+                 const QList<QImage> &photos = {}, const QList<Slot> &slotList = {});
     /// The reason the last Apply was refused, shown inside the dialog.
     void reportApplyFailure(const QString &message);
     /// Processes events until a scheduled page sync has run.
@@ -126,6 +129,11 @@ private:
     void refreshSelection();
     void refreshStatus();
     void chooseSelected();
+    /// Reorders `frames` and their parallel `photos` into the page's display
+    /// order (slotted photographs by slot index, then free ones in z-order).
+    /// Slot i is then the i-th photograph a template fills, which is what the
+    /// preview draws.
+    void orderByDisplay();
     /// Moves the count selection by @p delta from the keyboard and keeps the
     /// focus on the chip that is now checked.
     void stepCount(int delta);

@@ -116,6 +116,8 @@ private slots:
     void everyCatalogueTranslatesTheEffectBrowser();
     void everyCatalogueTranslatesThePhotoIndex_data();
     void everyCatalogueTranslatesThePhotoIndex();
+    void everyCatalogueTranslatesTheLayoutMessages_data();
+    void everyCatalogueTranslatesTheLayoutMessages();
     void hungarianSourceSubstitutesTheCount();
     void repeatedLanguageSwitchingLeavesTranslatorsUnparented();
 
@@ -504,6 +506,47 @@ void TestI18n::everyCatalogueTranslatesThePhotoIndex()
              qPrintable(where + QStringLiteral(" lost the index")));
     QVERIFY2(!text.contains(QStringLiteral("%1")),
              qPrintable(where + QStringLiteral(" left the %1 placeholder in the text")));
+}
+
+void TestI18n::everyCatalogueTranslatesTheLayoutMessages_data()
+{
+    QTest::addColumn<QString>("code");
+    for (const QString &code : i18n::targetCodes())
+        QTest::newRow(qPrintable(code)) << code;
+}
+
+void TestI18n::everyCatalogueTranslatesTheLayoutMessages()
+{
+    QFETCH(QString, code);
+
+    InstalledCatalogue catalogue(code);
+    QVERIFY2(catalogue.loaded(), qPrintable(code));
+
+    // Every slot-layout sentence a person can read, including the errors the
+    // picker or the canvas can show. Internal codes and diagnostics are English
+    // and are not in this list.
+    for (const QString &source : {
+             QStringLiteral("Egy lapon legfeljebb 12 hely lehet."),
+             QStringLiteral("A sablonban minden fotóhoz pontosan egy helynek kell tartoznia."),
+             QStringLiteral("A sablon egyik helye érvénytelen."),
+             QStringLiteral("Ehhez a laphoz még nincs elrendezés."),
+             QStringLiteral("Ehhez a laphoz másik elrendezés tartozik."),
+             QStringLiteral("Ez a hely már nem létezik."),
+             QStringLiteral("Egy fotó nem található ezen a lapon."),
+             QStringLiteral("A fotónak nincs forrásfájlja."),
+             QStringLiteral("Az elrendezés nem építhető fel ezen a lapon."),
+             QStringLiteral("A hely azonosítója üres vagy ismétlődik."),
+             QStringLiteral("A hely a lapon kívülre esik."),
+             QStringLiteral("Egy fotó olyan helyre hivatkozik, amely nem létezik."),
+             QStringLiteral("Két fotó nem kerülhet ugyanabba a helybe."),
+             QStringLiteral("A margó, a hézag vagy a szegély értéke érvénytelen."),
+         }) {
+        const QString text = translated("PhotoPrint", source);
+        const QString where = QStringLiteral("%1: %2").arg(code, source);
+        QVERIFY2(!text.isEmpty(), qPrintable(where + QStringLiteral(" is empty")));
+        QVERIFY2(text != source,
+                 qPrintable(where + QStringLiteral(" is still the Hungarian source")));
+    }
 }
 
 void TestI18n::hungarianSourceSubstitutesTheCount()
