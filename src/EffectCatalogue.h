@@ -47,7 +47,10 @@ enum class StageId {
     Vignette,
     LightLeak,
     ExposureMask,
-    Texture
+    Texture,
+    // Phase E, MagickWand. One id, the pass is named by `wandPass`, because the
+    // sixteen passes share a compiler treatment and differ only in parameters.
+    Wand
 };
 
 enum class StagePhase {
@@ -55,7 +58,7 @@ enum class StagePhase {
     PointColour, ///< Phase B, fused into one pass per segment.
     Spatial,     ///< Phase C, ends a segment.
     Light,       ///< Phase D, ends a segment.
-    Wand         ///< Phase E, reserved for MagickWand passes.
+    Wand         ///< Phase E, a MagickWand pass.
 };
 
 /// How a stage is allowed to end a segment. Dithered posterize is deliberately
@@ -144,6 +147,20 @@ struct Stage {
     double opacity = 0.0;
     double scale = 1.0;
     double maskSize = 0.5;
+
+    // Phase E: the MagickWand pass and its parameters. Every spatial value is
+    // authored at the 2400 px reference and scaled by the render raster.
+    QString wandPass; ///< swirl, implode, wave, oilPaint, halftone, ...
+    double wandDegrees = 0.0;
+    double wandAmount = 0.0;
+    double wandAmplitude = 0.0;
+    double wandLength = 0.0;
+    double wandAngle = 0.0;
+    double wandRadius = 0.0;
+    double wandSigma = 0.0;
+    double wandFactor = 1.0;
+    double wandSize = 0.0; ///< halftone screen period / pixelate block
+    int wandSegments = 6;  ///< kaleidoscope wedges
 };
 
 /// One versioned look. `version` is part of the identity: a retune adds a new

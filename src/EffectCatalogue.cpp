@@ -1,5 +1,7 @@
 #include "EffectCatalogue.h"
 
+#include "WandStages.h"
+
 #include <QFile>
 #include <QJsonArray>
 #include <QJsonDocument>
@@ -55,6 +57,8 @@ StagePhase stagePhase(StageId id)
     case StageId::ExposureMask:
     case StageId::Texture:
         return StagePhase::Light;
+    case StageId::Wand:
+        return StagePhase::Wand;
     }
     return StagePhase::PointTone;
 }
@@ -88,6 +92,7 @@ QString stageName(StageId id)
     case StageId::LightLeak: return QStringLiteral("lightLeak");
     case StageId::ExposureMask: return QStringLiteral("exposureMask");
     case StageId::Texture: return QStringLiteral("texture");
+    case StageId::Wand: return QStringLiteral("wand");
     }
     return {};
 }
@@ -96,7 +101,7 @@ bool stageFromName(const QString &name, StageId *id)
 {
     static const QHash<QString, StageId> table = [] {
         QHash<QString, StageId> map;
-        for (int i = 0; i <= static_cast<int>(StageId::Texture); ++i) {
+        for (int i = 0; i <= static_cast<int>(StageId::Wand); ++i) {
             const auto value = static_cast<StageId>(i);
             map.insert(stageName(value), value);
         }
@@ -285,6 +290,60 @@ bool readMask(const QJsonObject &object, StageMask *mask, Error *err, const QStr
     return true;
 }
 
+/// The numeric fields a single wand pass accepts, beyond `id`, `finish` and
+/// `pass`. A field that belongs to another pass is a load error, so a wrong
+/// parameter name cannot quietly become a default.
+QSet<QString> wandFieldsForPass(const QString &pass)
+{
+    if (pass == QLatin1String("swirl"))
+        return {QStringLiteral("degrees")};
+    if (pass == QLatin1String("implode"))
+        return {QStringLiteral("amount")};
+    if (pass == QLatin1String("wave"))
+        return {QStringLiteral("amplitude"), QStringLiteral("length")};
+    if (pass == QLatin1String("rotationalBlur"))
+        return {QStringLiteral("angle")};
+    if (pass == QLatin1String("motionBlur"))
+        return {QStringLiteral("radius"), QStringLiteral("sigma"), QStringLiteral("angle")};
+    if (pass == QLatin1String("oilPaint") || pass == QLatin1String("edge"))
+        return {QStringLiteral("radius")};
+    if (pass == QLatin1String("sketch") || pass == QLatin1String("charcoal")
+        || pass == QLatin1String("emboss") || pass == QLatin1String("kuwahara"))
+        return {QStringLiteral("sigma")};
+    if (pass == QLatin1String("halftone"))
+        return {QStringLiteral("size")};
+    if (pass == QLatin1String("mirror"))
+        return {};
+    if (pass == QLatin1String("kaleido"))
+        return {QStringLiteral("segments")};
+    if (pass == QLatin1String("stretch"))
+        return {QStringLiteral("factor")};
+    if (pass == QLatin1String("pixelate"))
+        return {QStringLiteral("size")};
+    return {};
+}
+
+/// Reads a required numeric field. A missing parameter is a load error: a wand
+/// pass with a silent default would render a different look than the recipe
+/// reads.
+bool requiredNumber(const QJsonObject &object, const QString &field, double low, double high,
+                    double *out, Error *err, const QString &where)
+{
+    const QJsonValue value = object.value(field);
+    if (!value.isDouble()) {
+        *err = parseError(where, QStringLiteral("'%1' is required and must be a number")
+                                    .arg(field));
+        return false;
+    }
+    const double raw = value.toDouble();
+    if (!std::isfinite(raw)) {
+        *err = parseError(where, QStringLiteral("'%1' must be finite").arg(field));
+        return false;
+    }
+    *out = std::clamp(raw, low, high);
+    return true;
+}
+
 bool blendIsAllowed(BlendMode mode, std::initializer_list<BlendMode> allowed)
 {
     for (BlendMode candidate : allowed) {
@@ -410,6 +469,9 @@ QSet<QString> allowedFields(StageId id)
         fields += {QStringLiteral("asset"), QStringLiteral("opacity"), QStringLiteral("blend"),
                    QStringLiteral("scale")};
         break;
+    case StageId::Wand:
+        fields += {QStringLiteral("pass")};
+        break;
     }
     return fields;
 }
@@ -420,8 +482,15 @@ Result<Stage> stageFromJson(const QJsonObject &object, const QString &where)
     StageId stageId = StageId::Exposure;
     if (!stageFromName(id, &stageId))
         return parseError(where, QStringLiteral("unknown stage id '%1'").arg(id));
+    QSet<QString> fields = allowedFields(stageId);
+    if (stageId == StageId::Wand) {
+        const QString pass = object.value(QStringLiteral("pass")).toString();
+        if (!wandPassFromName(pass, nullptr))
+            return parseError(where, QStringLiteral("unknown MagickWand pass '%1'").arg(pass));
+        fields += wandFieldsForPass(pass);
+    }
     QString unknown;
-    if (hasUnknown(object, allowedFields(stageId), &unknown))
+    if (hasUnknown(object, fields, &unknown))
         return parseError(where, QStringLiteral("unknown field '%1' for '%2'")
                                     .arg(unknown, id));
 
@@ -618,6 +687,60 @@ Result<Stage> stageFromJson(const QJsonObject &object, const QString &where)
                         BlendMode::Screen}))
             return parseError(where, QStringLiteral("unknown or unsupported texture blend"));
         break;
+    case StageId::Wand: {
+        stage.wandPass = object.value(QStringLiteral("pass")).toString();
+        Error err;
+        const auto need = [&](const QString &field, double low, double high, double *out) {
+            return requiredNumber(object, field, low, high, out, &err, where);
+        };
+        if (stage.wandPass == QLatin1String("swirl")) {
+            if (!need(QStringLiteral("degrees"), -360.0, 360.0, &stage.wandDegrees))
+                return err;
+        } else if (stage.wandPass == QLatin1String("implode")) {
+            if (!need(QStringLiteral("amount"), -1.0, 1.0, &stage.wandAmount))
+                return err;
+        } else if (stage.wandPass == QLatin1String("wave")) {
+            if (!need(QStringLiteral("amplitude"), 0.0, 200.0, &stage.wandAmplitude)
+                || !need(QStringLiteral("length"), 2.0, 1000.0, &stage.wandLength))
+                return err;
+        } else if (stage.wandPass == QLatin1String("rotationalBlur")) {
+            if (!need(QStringLiteral("angle"), -180.0, 180.0, &stage.wandAngle))
+                return err;
+        } else if (stage.wandPass == QLatin1String("motionBlur")) {
+            if (!need(QStringLiteral("radius"), 0.0, 200.0, &stage.wandRadius)
+                || !need(QStringLiteral("sigma"), 0.0, 100.0, &stage.wandSigma))
+                return err;
+            stage.wandAngle = clamped(object, QStringLiteral("angle"), 0.0, -180.0, 180.0);
+        } else if (stage.wandPass == QLatin1String("oilPaint")
+                   || stage.wandPass == QLatin1String("edge")) {
+            if (!need(QStringLiteral("radius"), 0.0, 100.0, &stage.wandRadius))
+                return err;
+        } else if (stage.wandPass == QLatin1String("sketch")
+                   || stage.wandPass == QLatin1String("charcoal")
+                   || stage.wandPass == QLatin1String("emboss")
+                   || stage.wandPass == QLatin1String("kuwahara")) {
+            if (!need(QStringLiteral("sigma"), 0.0, 100.0, &stage.wandSigma))
+                return err;
+        } else if (stage.wandPass == QLatin1String("halftone")) {
+            stage.wandSize = clamped(object, QStringLiteral("size"), 8.0, 2.0, 64.0);
+            // A dot screen rendered at the grade raster and upscaled becomes
+            // grey mush, so the pass is a finish stage whatever the flag says.
+            stage.finish = true;
+        } else if (stage.wandPass == QLatin1String("kaleido")) {
+            const double segments =
+                clamped(object, QStringLiteral("segments"), 6.0, 2.0, 12.0);
+            stage.wandSegments = int(std::lround(segments));
+        } else if (stage.wandPass == QLatin1String("stretch")) {
+            // Below 1 the pass would have to pad the frame to crop back to it,
+            // so a squeeze is refused rather than silently padded.
+            if (!need(QStringLiteral("factor"), 1.0, 2.0, &stage.wandFactor))
+                return err;
+        } else if (stage.wandPass == QLatin1String("pixelate")) {
+            if (!need(QStringLiteral("size"), 2.0, 100.0, &stage.wandSize))
+                return err;
+        }
+        break;
+    }
     }
     return stage;
 }
@@ -666,6 +789,13 @@ Result<EffectRecipe> recipeFromJson(const QJsonObject &object, const QString &wh
         if (!stage)
             return stage.error();
         recipe.stages.append(stage.value());
+    }
+    // A dot screen destroys the grade, so nothing may follow it. This is a data
+    // rule, not a compiler accident: the loader refuses the recipe outright.
+    for (int i = 0; i + 1 < recipe.stages.size(); ++i) {
+        const Stage &stage = recipe.stages.at(i);
+        if (stage.id == StageId::Wand && stage.wandPass == QLatin1String("halftone"))
+            return parseError(where, QStringLiteral("'halftone' must be the last stage"));
     }
     return recipe;
 }
