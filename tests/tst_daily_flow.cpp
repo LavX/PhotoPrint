@@ -436,6 +436,9 @@ void TestDailyFlow::pressAndHoldOriginalBypassesTheEffect()
 
     QTest::mousePress(originalButton, Qt::LeftButton);
     QVERIFY(window.showingOriginal());
+    // The untouched layer is prepared on the worker the first time; the page
+    // switches to it when the result arrives, not by blocking the press.
+    QVERIFY(window.waitForOriginalPreview(15000));
     const QImage shownOriginal = view->composedImage();
     QVERIFY(!shownOriginal.isNull());
     const QRgb originalCentre =

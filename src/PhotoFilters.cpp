@@ -3,7 +3,6 @@
 #include <MagickWand/MagickWand.h>
 
 #include <QColorSpace>
-#include <QCoreApplication>
 #include <QDebug>
 
 #include <algorithm>
@@ -12,29 +11,6 @@
 #include <vector>
 
 namespace pp {
-
-QString filterKey(FilterPreset preset)
-{
-    switch (preset) {
-    case FilterPreset::Vivid:
-        return QStringLiteral("vivid");
-    case FilterPreset::Warm:
-        return QStringLiteral("warm");
-    case FilterPreset::Cool:
-        return QStringLiteral("cool");
-    case FilterPreset::Sepia:
-        return QStringLiteral("sepia");
-    case FilterPreset::BlackWhite:
-        return QStringLiteral("blackwhite");
-    case FilterPreset::Vintage:
-        return QStringLiteral("vintage");
-    case FilterPreset::Crisp:
-        return QStringLiteral("crisp");
-    case FilterPreset::Original:
-        break;
-    }
-    return QStringLiteral("original");
-}
 
 FilterPreset filterFromKey(const QString &key)
 {
@@ -53,29 +29,6 @@ FilterPreset filterFromKey(const QString &key)
     if (key == QLatin1String("crisp"))
         return FilterPreset::Crisp;
     return FilterPreset::Original;
-}
-
-QString filterLabel(FilterPreset preset)
-{
-    switch (preset) {
-    case FilterPreset::Vivid:
-        return QCoreApplication::translate("PhotoPrint", "Élénk");
-    case FilterPreset::Warm:
-        return QCoreApplication::translate("PhotoPrint", "Meleg");
-    case FilterPreset::Cool:
-        return QCoreApplication::translate("PhotoPrint", "Hűvös");
-    case FilterPreset::Sepia:
-        return QCoreApplication::translate("PhotoPrint", "Szépia");
-    case FilterPreset::BlackWhite:
-        return QCoreApplication::translate("PhotoPrint", "Fekete-fehér");
-    case FilterPreset::Vintage:
-        return QCoreApplication::translate("PhotoPrint", "Vintage");
-    case FilterPreset::Crisp:
-        return QCoreApplication::translate("PhotoPrint", "Éles");
-    case FilterPreset::Original:
-        break;
-    }
-    return QCoreApplication::translate("PhotoPrint", "Eredeti");
 }
 
 namespace {

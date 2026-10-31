@@ -28,6 +28,14 @@
         <translation>添加或删除自定义纸张尺寸。</translation>
     </message>
     <message>
+        <source>Feldolgozás…</source>
+        <translation>正在处理…</translation>
+    </message>
+    <message>
+        <source>Mégsem</source>
+        <translation>取消</translation>
+    </message>
+    <message>
         <source>Tájolás:</source>
         <translation>方向：</translation>
     </message>
@@ -809,19 +817,19 @@
     </message>
     <message>
         <source>Élénk</source>
-        <translation>鲜艳</translation>
+        <translation type="vanished">鲜艳</translation>
     </message>
     <message>
         <source>Meleg</source>
-        <translation>暖色</translation>
+        <translation type="vanished">暖色</translation>
     </message>
     <message>
         <source>Hűvös</source>
-        <translation>冷色</translation>
+        <translation type="vanished">冷色</translation>
     </message>
     <message>
         <source>Szépia</source>
-        <translation>棕褐</translation>
+        <translation type="vanished">棕褐</translation>
     </message>
     <message>
         <source>Fekete-fehér</source>
@@ -829,7 +837,7 @@
     </message>
     <message>
         <source>Éles</source>
-        <translation>清晰</translation>
+        <translation type="vanished">清晰</translation>
     </message>
     <message>
         <source>Fényes</source>
@@ -893,7 +901,7 @@
     </message>
     <message>
         <source>Vintage</source>
-        <translation>复古</translation>
+        <translation type="vanished">复古</translation>
     </message>
     <message>
         <source>A napló jelenleg használatban van.</source>

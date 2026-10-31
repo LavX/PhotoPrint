@@ -27,6 +27,10 @@ const QString kAbout = QStringLiteral("Névjegy");
 const QString kPages = QStringLiteral("%n oldal nyomtatása");
 const QString kPageTooltip = QStringLiteral("%1 · %n fotó");
 
+/// The browser's result counter. It is counted as well, so every catalogue
+/// needs a numerus entry for it.
+const QString kEffectCount = QStringLiteral("%n effekt");
+
 /// The position of a photo on the page. It is an index, not a count, so it
 /// carries a plain %1 and has no plural forms.
 const QString kPhotoIndex = QStringLiteral("%1. fotó");
@@ -108,6 +112,8 @@ private slots:
     void pageTooltipKeepsThePaperAndPluralises();
     void everyCatalogueTranslatesCountedMessages_data();
     void everyCatalogueTranslatesCountedMessages();
+    void everyCatalogueTranslatesTheEffectBrowser_data();
+    void everyCatalogueTranslatesTheEffectBrowser();
     void everyCatalogueTranslatesThePhotoIndex_data();
     void everyCatalogueTranslatesThePhotoIndex();
     void hungarianSourceSubstitutesTheCount();
@@ -398,7 +404,7 @@ void TestI18n::everyCatalogueTranslatesCountedMessages()
     // Hungarian fallback, or one without the number in it, would mean the
     // entry was never converted. A leftover %n cannot be observed from here:
     // QCoreApplication::translate substitutes it before the text comes back.
-    for (const QString &source : {kPages, kPageTooltip}) {
+    for (const QString &source : {kPages, kPageTooltip, kEffectCount}) {
         for (const int count : {1, 2, 5, 22}) {
             const QString text = translatedWithCount("PhotoPrint", source, count);
             const QString where = QStringLiteral("%1, count %2, %3").arg(code).arg(count).arg(source);
@@ -415,6 +421,61 @@ void TestI18n::everyCatalogueTranslatesCountedMessages()
             // when the source has it.
             QCOMPARE(text.contains(QStringLiteral("%1")), source.contains(QStringLiteral("%1")));
         }
+    }
+}
+
+void TestI18n::everyCatalogueTranslatesTheEffectBrowser_data()
+{
+    QTest::addColumn<QString>("code");
+    for (const QString &code : i18n::targetCodes())
+        QTest::newRow(qPrintable(code)) << code;
+}
+
+void TestI18n::everyCatalogueTranslatesTheEffectBrowser()
+{
+    QFETCH(QString, code);
+
+    InstalledCatalogue catalogue(code);
+    QVERIFY2(catalogue.loaded(), qPrintable(code));
+
+    // Every new browser and busy-overlay string, plus the category labels.
+    // Retró is deliberately absent: "Retro" is the same word in several target
+    // languages, so it cannot be told apart from the source fallback. Every
+    // string here has a genuinely different translation in all ten catalogues.
+    for (const QString &source : {
+             QStringLiteral("Effekt kiválasztása"),
+             QStringLiteral("Új effekt választása"),
+             QStringLiteral("Effekt erőssége"),
+             QStringLiteral("Effektek"),
+             QStringLiteral("Keresés név vagy kategória szerint"),
+             QStringLiteral("Keresés"),
+             QStringLiteral("Kategóriák"),
+             QStringLiteral("Az előnézet hozzávetőleges"),
+             QStringLiteral("lassú"),
+             QStringLiteral("Nincs találat."),
+             QStringLiteral("Alkalmaz"),
+             QStringLiteral("Korábbi megjelenés"),
+             QStringLiteral("Ez az effekt teljes erősséggel jelenik meg."),
+             QStringLiteral("Az eredeti kép effekt nélkül."),
+             QStringLiteral("Feldolgozás…"),
+             QStringLiteral("Mégsem"),
+             QStringLiteral("Alap"),
+             QStringLiteral("Fekete-fehér"),
+             QStringLiteral("Szín"),
+             QStringLiteral("Elmosás"),
+             QStringLiteral("Élesség"),
+             QStringLiteral("Művészi"),
+             QStringLiteral("Torzítás"),
+             QStringLiteral("Fény"),
+             QStringLiteral("Szemcse"),
+             QStringLiteral("Nyomat"),
+             QStringLiteral("Ragyogás"),
+         }) {
+        const QString text = translated("PhotoPrint", source);
+        const QString where = QStringLiteral("%1: %2").arg(code, source);
+        QVERIFY2(!text.isEmpty(), qPrintable(where + QStringLiteral(" is empty")));
+        QVERIFY2(text != source,
+                 qPrintable(where + QStringLiteral(" is still the Hungarian source")));
     }
 }
 

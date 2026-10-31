@@ -28,6 +28,14 @@
         <translation>Aggiungi o rimuovi un formato carta personalizzato.</translation>
     </message>
     <message>
+        <source>Feldolgozás…</source>
+        <translation>Elaborazione…</translation>
+    </message>
+    <message>
+        <source>Mégsem</source>
+        <translation>Annulla</translation>
+    </message>
+    <message>
         <source>Tájolás:</source>
         <translation>Orientamento:</translation>
     </message>
@@ -811,19 +819,19 @@
     </message>
     <message>
         <source>Élénk</source>
-        <translation>Vivace</translation>
+        <translation type="vanished">Vivace</translation>
     </message>
     <message>
         <source>Meleg</source>
-        <translation>Caldo</translation>
+        <translation type="vanished">Caldo</translation>
     </message>
     <message>
         <source>Hűvös</source>
-        <translation>Freddo</translation>
+        <translation type="vanished">Freddo</translation>
     </message>
     <message>
         <source>Szépia</source>
-        <translation>Seppia</translation>
+        <translation type="vanished">Seppia</translation>
     </message>
     <message>
         <source>Fekete-fehér</source>
@@ -831,7 +839,7 @@
     </message>
     <message>
         <source>Éles</source>
-        <translation>Nitido</translation>
+        <translation type="vanished">Nitido</translation>
     </message>
     <message>
         <source>Fényes</source>
@@ -895,7 +903,7 @@
     </message>
     <message>
         <source>Vintage</source>
-        <translation>Vintage</translation>
+        <translation type="vanished">Vintage</translation>
     </message>
     <message>
         <source>A napló jelenleg használatban van.</source>

@@ -28,6 +28,14 @@
         <translation>用紙サイズを追加または削除します。</translation>
     </message>
     <message>
+        <source>Feldolgozás…</source>
+        <translation>処理中…</translation>
+    </message>
+    <message>
+        <source>Mégsem</source>
+        <translation>キャンセル</translation>
+    </message>
+    <message>
         <source>Tájolás:</source>
         <translation>向き:</translation>
     </message>
@@ -809,19 +817,19 @@
     </message>
     <message>
         <source>Élénk</source>
-        <translation>ビビッド</translation>
+        <translation type="vanished">ビビッド</translation>
     </message>
     <message>
         <source>Meleg</source>
-        <translation>ウォーム</translation>
+        <translation type="vanished">ウォーム</translation>
     </message>
     <message>
         <source>Hűvös</source>
-        <translation>クール</translation>
+        <translation type="vanished">クール</translation>
     </message>
     <message>
         <source>Szépia</source>
-        <translation>セピア</translation>
+        <translation type="vanished">セピア</translation>
     </message>
     <message>
         <source>Fekete-fehér</source>
@@ -829,7 +837,7 @@
     </message>
     <message>
         <source>Éles</source>
-        <translation>シャープ</translation>
+        <translation type="vanished">シャープ</translation>
     </message>
     <message>
         <source>Fényes</source>
@@ -893,7 +901,7 @@
     </message>
     <message>
         <source>Vintage</source>
-        <translation>ヴィンテージ</translation>
+        <translation type="vanished">ヴィンテージ</translation>
     </message>
     <message>
         <source>A napló jelenleg használatban van.</source>
@@ -914,7 +922,6 @@
     <message numerus="yes">
         <source>%n effekt</source>
         <translation>
-            <numerusform>%n 個のエフェクト</numerusform>
             <numerusform>%n 個のエフェクト</numerusform>
         </translation>
     </message>

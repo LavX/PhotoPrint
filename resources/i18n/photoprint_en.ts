@@ -28,6 +28,14 @@
         <translation>Add or remove a custom paper size.</translation>
     </message>
     <message>
+        <source>Feldolgozás…</source>
+        <translation>Processing…</translation>
+    </message>
+    <message>
+        <source>Mégsem</source>
+        <translation>Cancel</translation>
+    </message>
+    <message>
         <source>Tájolás:</source>
         <translation>Orientation:</translation>
     </message>
@@ -811,19 +819,19 @@
     </message>
     <message>
         <source>Élénk</source>
-        <translation>Vivid</translation>
+        <translation type="vanished">Vivid</translation>
     </message>
     <message>
         <source>Meleg</source>
-        <translation>Warm</translation>
+        <translation type="vanished">Warm</translation>
     </message>
     <message>
         <source>Hűvös</source>
-        <translation>Cool</translation>
+        <translation type="vanished">Cool</translation>
     </message>
     <message>
         <source>Szépia</source>
-        <translation>Sepia</translation>
+        <translation type="vanished">Sepia</translation>
     </message>
     <message>
         <source>Fekete-fehér</source>
@@ -831,7 +839,7 @@
     </message>
     <message>
         <source>Éles</source>
-        <translation>Crisp</translation>
+        <translation type="vanished">Crisp</translation>
     </message>
     <message>
         <source>Fényes</source>
@@ -895,7 +903,7 @@
     </message>
     <message>
         <source>Vintage</source>
-        <translation>Vintage</translation>
+        <translation type="vanished">Vintage</translation>
     </message>
     <message>
         <source>A napló jelenleg használatban van.</source>

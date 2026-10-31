@@ -917,25 +917,25 @@ void TestEffectEngine::goldensArePinned()
         const char *render;
     };
     static const Golden goldens[] = {
-        {"light.venice", "53725ad6865b92d0d397d78249268c2fc961891b3c17d5a43848140fb685197e",
+        {"light.venice", "5e6f69552960590105347d42214fb4ecb085c75c047dc58cf6b02028bf4696ce",
          "0f67c2224c93add5edee64d161c767bf47c70f237e957e6d0adb6c1eba2a3bf9"},
-        {"color.tealorange", "e2b8894fdedbb446586accd5d5023711008adee7a927167f8221d5f8b8286068",
+        {"color.tealorange", "17be50b87b382dff13c97c3db6e49df7bfd6632630355311fecba19f0dc2d5a1",
          "c0a9d1568d1066730747011280bfbad1ddf1657fc2a3b906ddb9ae18b7565a44"},
-        {"retro.fadedfilm", "8182c08be20e2933f4b88a20d8381a52b534c8267b842f594062e996db2d28c4",
+        {"retro.fadedfilm", "772069b04fe2a93d54420feadfd32c818e598b50c0db82dcb158facef4e32f55",
          "3735379541f0011019afd876fc6261fc221b3653e20a48aba75d2bb49176c5c1"},
-        {"light.nordic", "f2234c7eb120c7ab8d9420fe900f754e72256a6b7d3d23eec8f78aafbcea4f4d",
+        {"light.nordic", "47576ea6dcae70300542e660affafa0d5dcb385a789faaa6969654fccb2c0ddc",
          "e4b22e0c57d8160c2ed51c16b485c131daf74812c4ac2410eb8c5dc854fc4832"},
-        {"light.goldenhour", "8e1a03c15866341efb059a91391e0860350b6b8740ef97a9c7cef6edf8bf509c",
+        {"light.goldenhour", "b6dff4f9b803f383771322f0036a43cd96a17ccfbba05c5bad1bacbc8e6a88c8",
          "ac72d3e53e8e470b80f0fb788dc475988aad6a2d88ad1961e5e8cd96c3bec6ac"},
-        {"glow.neonnight", "33ca7ccc102b8572f2d937e5eda62f9553d6087fd050215b1c04d9cc7e740279",
+        {"glow.neonnight", "d80c2ed8f880878551c350d4a552d93f444dd656da7c3f85c0aacc359c799e48",
          "6e544c18664028b54b28e34742ac8532d643e27e2831ed7536940b364bef528a"},
-        {"color.pastel", "2c582137ff133d15d0108a9659c489eda4d490a9815f467de7745254b6ecb315",
+        {"color.pastel", "bac8c9a05c893ce8b8713e4d66700f81194ef3cc9d797d2a3e63fef7e85ea21b",
          "2901cb5d98c0a444c5e513423ffc68f19f5f839ad59953b60eab2998a8c73a64"},
-        {"mono.contrast", "c405bdc601b8ec6032b683a8b6ccb2ccfc4ca02eaef054ae890ba43108800eb4",
+        {"mono.contrast", "a82d44d04bea62ca333f679b34af0de0d03ebe1cfcd996a26f218a4267ea505a",
          "c9027d626f6605c718b4b7fe86a5ba0f2947a1db4443231c7bf49ce261710e08"},
-        {"print.sepia", "baf3b83b48295c42cfac6b5773da7c2170322e8516ff6931bc2553509e1f7388",
+        {"print.sepia", "b06a6d029f4bdbd30074cf6e3e36a99de58bd7165a629da3dd689244ac7aa9ff",
          "33bdf56d9adb728434e40126cd9edf7ac20e2e56ec2da0d0688c611358223240"},
-        {"retro.crossprocess", "7dc09d9dd7141edff905ad7260ea150e7d111631f21e7b9066cd6eb7eb25e446",
+        {"retro.crossprocess", "f117c076c2d6b72fdcb6d8a049430b49889c00a59bda6a0284e650a440f0a950",
          "3f81ff66b5d4501a4a2ffc5eb9a327883a5fb87daf595257d647ee7e351a9cd2"},
     };
 
@@ -943,20 +943,24 @@ void TestEffectEngine::goldensArePinned()
     QVERIFY(sourceFile.open(QIODevice::ReadOnly));
     const QJsonArray rawRecipes = QJsonDocument::fromJson(sourceFile.readAll())
                                      .object().value(QStringLiteral("recipes")).toArray();
+    // Hash the stages, not the whole recipe object. Browser-only fields such
+    // as slow, approximate and description must be changeable without a false
+    // re-baseline; a look changes only when a stage or its parameters do.
     QHash<QString, QString> parameters;
     for (const QJsonValue &value : rawRecipes) {
         const QJsonObject object = value.toObject();
         parameters.insert(object.value(QStringLiteral("key")).toString(),
                           QString::fromLatin1(QCryptographicHash::hash(
-                              QJsonDocument(object).toJson(QJsonDocument::Compact),
+                              QJsonDocument(object.value(QStringLiteral("stages")).toArray())
+                                  .toJson(QJsonDocument::Compact),
                               QCryptographicHash::Sha256).toHex()));
     }
 
     const QImage source = scaledSample(QSize(240, 180));
     int checked = 0;
-    // The ten signature looks are pinned by key. The Phase E work did not touch
-    // their parameters, so no golden was re-baselined; a change here is a change
-    // of look and must be argued for, not regenerated.
+    // The ten signature looks are pinned by key. The stage hash changes only
+    // when a stage or its parameters change, so a change here is a change of
+    // look and must be argued for, not regenerated.
     for (const Golden &golden : goldens) {
         const auto recipe = EffectCatalogue::instance().resolve(QString::fromLatin1(golden.key));
         QVERIFY2(recipe.ok(), golden.key);

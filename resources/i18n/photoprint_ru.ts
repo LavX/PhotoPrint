@@ -28,6 +28,14 @@
         <translation>Добавить или удалить свой размер бумаги.</translation>
     </message>
     <message>
+        <source>Feldolgozás…</source>
+        <translation>Обработка…</translation>
+    </message>
+    <message>
+        <source>Mégsem</source>
+        <translation>Отмена</translation>
+    </message>
+    <message>
         <source>Tájolás:</source>
         <translation>Ориентация:</translation>
     </message>
@@ -813,19 +821,19 @@
     </message>
     <message>
         <source>Élénk</source>
-        <translation>Яркий</translation>
+        <translation type="vanished">Яркий</translation>
     </message>
     <message>
         <source>Meleg</source>
-        <translation>Тёплый</translation>
+        <translation type="vanished">Тёплый</translation>
     </message>
     <message>
         <source>Hűvös</source>
-        <translation>Холодный</translation>
+        <translation type="vanished">Холодный</translation>
     </message>
     <message>
         <source>Szépia</source>
-        <translation>Сепия</translation>
+        <translation type="vanished">Сепия</translation>
     </message>
     <message>
         <source>Fekete-fehér</source>
@@ -833,7 +841,7 @@
     </message>
     <message>
         <source>Éles</source>
-        <translation>Резкий</translation>
+        <translation type="vanished">Резкий</translation>
     </message>
     <message>
         <source>Fényes</source>
@@ -897,7 +905,7 @@
     </message>
     <message>
         <source>Vintage</source>
-        <translation>Винтаж</translation>
+        <translation type="vanished">Винтаж</translation>
     </message>
     <message>
         <source>A napló jelenleg használatban van.</source>

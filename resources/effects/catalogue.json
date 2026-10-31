@@ -1002,7 +1002,6 @@
       "version": 1,
       "name": "Newsprint",
       "description": "Coarse monochrome dots on cheap paper: faded, soft and grainy.",
-      "slow": true,
       "approximate": true,
       "stages": [
         {
@@ -1423,6 +1422,7 @@
       "version": 1,
       "name": "Zoom Blur",
       "description": "A small rotational smear that reads as a zoom pull toward the centre.",
+      "slow": true,
       "stages": [
         {
           "id": "wand",
@@ -1437,6 +1437,7 @@
       "version": 1,
       "name": "Radial Spin",
       "description": "A stronger arc smear with the corners pulled down: a slow pan shot.",
+      "slow": true,
       "stages": [
         {
           "id": "wand",
@@ -1712,6 +1713,7 @@
       "version": 1,
       "name": "Edge Line",
       "description": "Edges only, dark and bright, on a near-black field.",
+      "slow": true,
       "stages": [
         {
           "id": "wand",
@@ -1785,6 +1787,7 @@
       "version": 1,
       "name": "Etch",
       "description": "Fine edges, inverted and posterised, like a plate ready for the press.",
+      "slow": true,
       "stages": [
         {
           "id": "wand",
@@ -1979,6 +1982,7 @@
       "version": 1,
       "name": "Comic",
       "description": "Inked edges over flat, saturated colour.",
+      "slow": true,
       "stages": [
         {
           "id": "wand",
@@ -2005,7 +2009,6 @@
       "version": 1,
       "name": "Ink Wash",
       "description": "Black ink diluted over wet paper, with the highlights bleeding.",
-      "slow": true,
       "approximate": true,
       "stages": [
         {
@@ -2680,6 +2683,7 @@
       "version": 1,
       "name": "Fine Grain",
       "description": "A light, even monochrome grain: modern stock, slightly pushed.",
+      "approximate": true,
       "stages": [
         {
           "id": "grain",
@@ -2696,6 +2700,7 @@
       "version": 1,
       "name": "Medium Grain",
       "description": "More visible grain over a slightly desaturated, contrastier frame.",
+      "approximate": true,
       "stages": [
         {
           "id": "saturation",
@@ -2720,6 +2725,7 @@
       "version": 1,
       "name": "Coarse Grain",
       "description": "Big, chunky grain with hard contrast and the corners pulled down.",
+      "approximate": true,
       "stages": [
         {
           "id": "contrast",
@@ -2746,6 +2752,7 @@
       "version": 1,
       "name": "Push Process",
       "description": "Two stops pushed: bright, contrasty, saturated and grainy.",
+      "approximate": true,
       "stages": [
         {
           "id": "exposure",
@@ -2774,6 +2781,7 @@
       "version": 1,
       "name": "ISO 1600",
       "description": "High-speed film: grainy, slightly flat and vignetted.",
+      "approximate": true,
       "stages": [
         {
           "id": "contrast",
@@ -2804,7 +2812,6 @@
       "version": 1,
       "name": "Dust & Scratches",
       "description": "Grain plus a scatter of dust across a clean frame.",
-      "slow": true,
       "approximate": true,
       "stages": [
         {
@@ -2832,7 +2839,6 @@
       "version": 1,
       "name": "Paper Grain",
       "description": "The tooth of a fine paper under a slightly warm frame.",
-      "slow": true,
       "approximate": true,
       "stages": [
         {
@@ -2861,6 +2867,7 @@
       "version": 1,
       "name": "TV Static",
       "description": "Heavy monochrome noise over a six level quantise: no signal.",
+      "approximate": true,
       "stages": [
         {
           "id": "posterize",
@@ -2885,6 +2892,7 @@
       "version": 1,
       "name": "Snow",
       "description": "Colour noise on an eight level screen: an untuned channel.",
+      "approximate": true,
       "stages": [
         {
           "id": "posterize",
@@ -2910,6 +2918,7 @@
       "version": 1,
       "name": "Film Base",
       "description": "Warm film base under even grain, with the blacks lifted.",
+      "approximate": true,
       "stages": [
         {
           "id": "whiteBalance",
@@ -2943,7 +2952,6 @@
       "version": 1,
       "name": "Halftone",
       "description": "A classic angled dot screen over a neutral monochrome.",
-      "slow": true,
       "approximate": true,
       "stages": [
         {
@@ -2967,7 +2975,6 @@
       "version": 1,
       "name": "Risograph",
       "description": "Two ink riso: blue-black shadows and cream paper, dotted.",
-      "slow": true,
       "approximate": true,
       "stages": [
         {
@@ -3000,7 +3007,6 @@
       "version": 1,
       "name": "Rotary Press",
       "description": "A rotary plate: hard dots, three ink densities, cheap paper.",
-      "slow": true,
       "approximate": true,
       "stages": [
         {
@@ -3203,6 +3209,7 @@
       "version": 1,
       "name": "Sepia Drama",
       "description": "A three-stop sepia print on textured paper, with a heavy vignette and grain.",
+      "approximate": true,
       "stages": [
         {
           "id": "saturation",

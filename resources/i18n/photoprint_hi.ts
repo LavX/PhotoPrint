@@ -28,6 +28,14 @@
         <translation>अपना कागज़ आकार जोड़ें या हटाएँ।</translation>
     </message>
     <message>
+        <source>Feldolgozás…</source>
+        <translation>प्रोसेस हो रहा है…</translation>
+    </message>
+    <message>
+        <source>Mégsem</source>
+        <translation>रद्द करें</translation>
+    </message>
+    <message>
         <source>Tájolás:</source>
         <translation>ओरिएंटेशन:</translation>
     </message>
@@ -811,19 +819,19 @@
     </message>
     <message>
         <source>Élénk</source>
-        <translation>जीवंत</translation>
+        <translation type="vanished">जीवंत</translation>
     </message>
     <message>
         <source>Meleg</source>
-        <translation>गर्म</translation>
+        <translation type="vanished">गर्म</translation>
     </message>
     <message>
         <source>Hűvös</source>
-        <translation>ठंडा</translation>
+        <translation type="vanished">ठंडा</translation>
     </message>
     <message>
         <source>Szépia</source>
-        <translation>सेपिया</translation>
+        <translation type="vanished">सेपिया</translation>
     </message>
     <message>
         <source>Fekete-fehér</source>
@@ -831,7 +839,7 @@
     </message>
     <message>
         <source>Éles</source>
-        <translation>तेज़</translation>
+        <translation type="vanished">तेज़</translation>
     </message>
     <message>
         <source>Fényes</source>
@@ -895,7 +903,7 @@
     </message>
     <message>
         <source>Vintage</source>
-        <translation>विंटेज</translation>
+        <translation type="vanished">विंटेज</translation>
     </message>
     <message>
         <source>A napló jelenleg használatban van.</source>

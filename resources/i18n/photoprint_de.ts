@@ -28,6 +28,14 @@
         <translation>Eigenes Papierformat hinzufügen oder entfernen.</translation>
     </message>
     <message>
+        <source>Feldolgozás…</source>
+        <translation>Wird verarbeitet…</translation>
+    </message>
+    <message>
+        <source>Mégsem</source>
+        <translation>Abbrechen</translation>
+    </message>
+    <message>
         <source>Tájolás:</source>
         <translation>Ausrichtung:</translation>
     </message>
@@ -811,19 +819,19 @@
     </message>
     <message>
         <source>Élénk</source>
-        <translation>Kräftig</translation>
+        <translation type="vanished">Kräftig</translation>
     </message>
     <message>
         <source>Meleg</source>
-        <translation>Warm</translation>
+        <translation type="vanished">Warm</translation>
     </message>
     <message>
         <source>Hűvös</source>
-        <translation>Kühl</translation>
+        <translation type="vanished">Kühl</translation>
     </message>
     <message>
         <source>Szépia</source>
-        <translation>Sepia</translation>
+        <translation type="vanished">Sepia</translation>
     </message>
     <message>
         <source>Fekete-fehér</source>
@@ -831,7 +839,7 @@
     </message>
     <message>
         <source>Éles</source>
-        <translation>Scharf</translation>
+        <translation type="vanished">Scharf</translation>
     </message>
     <message>
         <source>Fényes</source>
@@ -895,7 +903,7 @@
     </message>
     <message>
         <source>Vintage</source>
-        <translation>Vintage</translation>
+        <translation type="vanished">Vintage</translation>
     </message>
     <message>
         <source>A napló jelenleg használatban van.</source>

@@ -909,6 +909,29 @@ Result<EffectRecipe> EffectCatalogue::resolve(const QString &keyWithVersion, int
     return versions->last();
 }
 
+bool effectIgnoresStrength(const QString &key)
+{
+    if (key.isEmpty() || key == QLatin1String("original"))
+        return false;
+    const auto recipe = EffectCatalogue::instance().resolve(key, 0);
+    if (!recipe)
+        return false;
+    for (const Stage &stage : recipe.value().stages) {
+        if (stage.id == StageId::Wand && stage.wandPass == QLatin1String("halftone"))
+            return true;
+        if (stage.id == StageId::Posterize && stage.dither)
+            return true;
+    }
+    return false;
+}
+
+int effectiveEffectStrength(const QString &key, int strength)
+{
+    if (effectIgnoresStrength(key))
+        return 100;
+    return std::clamp(strength, 0, 100);
+}
+
 const EffectCatalogue &EffectCatalogue::instance()
 {
     ensureEffectResources();

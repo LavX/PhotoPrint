@@ -1,6 +1,7 @@
 #include "Document.h"
 #include "EffectBrowserDialog.h"
 #include "EffectCatalogue.h"
+#include "ImageSource.h"
 #include "MainWindow.h"
 #include "ProjectStore.h"
 
@@ -18,6 +19,7 @@
 #include <QPushButton>
 #include <QSlider>
 #include <QTemporaryDir>
+#include <QThreadPool>
 #include <QTranslator>
 #include <QtTest>
 
@@ -72,8 +74,19 @@ EffectBrowserRequest requestWith(const QString &key, int strength = 100)
     return request;
 }
 
-QListWidget *categoryList(EffectBrowserDialog &dialog)
+SourceImage memorySource(const QImage &image)
 {
+    SourceImage source;
+    source.path = QStringLiteral("memory");
+    source.sha256 = QByteArrayLiteral("memory");
+    source.pixels = image;
+    source.sourceSpace = QColorSpace(QColorSpace::SRgb);
+    source.hasEmbeddedProfile = true;
+    source.profileValid = true;
+    return source;
+}
+
+QListWidget *categoryList(EffectBrowserDialog &dialog){
     return dialog.findChild<QListWidget *>(QStringLiteral("categoryList"));
 }
 
@@ -141,8 +154,13 @@ private slots:
     void ditherRecipesDisableStrength();
     void slowAndApproximateFlagsAreSet();
     void applyWritesKeyVersionAndStrengthInOneUndo();
-    void browserStrengthEditsTheFrameLive();
+    void strengthPreviewStaysInTheDialog();
     void ditherEffectDisablesTheSideStrength();
+    void ditherStrengthIsNormalisedAtTheRenderBoundary();
+    void pinnedEffectKeepsItsVersion();
+    void previewPoolIsBounded();
+    void originalLayerIsPreparedOncePerSource();
+    void busyOverlayShowsAndCancels();
     void countedResultLabelUsesPluralForms();
     void legacyKeysKeepTheirPreviousLookLabel();
     void legacyProjectShowsPreviousLookInThePanel();
@@ -160,6 +178,12 @@ void TestEffectBrowser::categoriesHaveTenTilesAndOriginal()
     // The applied effect carries the check mark and the bold name.
     QVERIFY(dialog.tileMarkedCurrent(QStringLiteral("basic.neutral")));
     QVERIFY(!dialog.tileMarkedCurrent(QStringLiteral("basic.punch")));
+    // The only description a tile exposes is the translated category; the
+    // English recipe prose never reaches the Hungarian UI.
+    QAbstractButton *neutral = tile(dialog, QStringLiteral("basic.neutral"));
+    QVERIFY(neutral);
+    QCOMPARE(neutral->accessibleDescription(), QStringLiteral("Alap"));
+    QVERIFY(neutral->toolTip().isEmpty());
     const QStringList labels = {QStringLiteral("Alap"),       QStringLiteral("Fekete-fehér"),
                                 QStringLiteral("Retró"),      QStringLiteral("Szín"),
                                 QStringLiteral("Elmosás"),    QStringLiteral("Élesség"),
@@ -199,27 +223,90 @@ void TestEffectBrowser::searchFindsNameAndCategory()
 
     search->setText(QStringLiteral("Venice"));
     QTest::qWait(10);
-    QCOMPARE(dialog.visibleTileKeys(), QStringList{QStringLiteral("light.venice")});
+    QCOMPARE(dialog.visibleTileKeys(),
+             (QStringList{QStringLiteral("original"), QStringLiteral("light.venice")}));
 
     // The translated category name searches its whole group, accents omitted.
     search->setText(QStringLiteral("fekete"));
     QTest::qWait(10);
-    QCOMPARE(dialog.visibleTileKeys().size(), 10);
-    for (const QString &key : dialog.visibleTileKeys())
-        QVERIFY(key.startsWith(QStringLiteral("mono.")));
+    QCOMPARE(dialog.visibleTileKeys().size(), 11);
+    QCOMPARE(dialog.visibleTileKeys().first(), QStringLiteral("original"));
+    for (int i = 1; i < dialog.visibleTileKeys().size(); ++i)
+        QVERIFY(dialog.visibleTileKeys().at(i).startsWith(QStringLiteral("mono.")));
 
     search->setText(QStringLiteral("muveszi"));
     QTest::qWait(10);
-    QCOMPARE(dialog.visibleTileKeys().size(), 10);
-    for (const QString &key : dialog.visibleTileKeys())
-        QVERIFY(key.startsWith(QStringLiteral("art.")));
+    QCOMPARE(dialog.visibleTileKeys().size(), 11);
+    for (int i = 1; i < dialog.visibleTileKeys().size(); ++i)
+        QVERIFY(dialog.visibleTileKeys().at(i).startsWith(QStringLiteral("art.")));
 
+    // A search with no effect match still keeps Eredeti in the grid.
     search->setText(QStringLiteral("zzzz"));
     QTest::qWait(10);
-    QCOMPARE(dialog.visibleTileKeys().size(), 0);
+    QCOMPARE(dialog.visibleTileKeys(), QStringList{QStringLiteral("original")});
     auto *count = dialog.findChild<QLabel *>(QStringLiteral("resultCount"));
     QVERIFY(count);
     QCOMPARE(count->text(), QStringLiteral("Nincs találat."));
+
+    // Return applies the first real match, not the Eredeti tile that is always
+    // present as the way back.
+    search->setText(QStringLiteral("Venice"));
+    QTest::qWait(10);
+    QSignalSpy applied(&dialog, &EffectBrowserDialog::effectChosen);
+    QTest::keyClick(search, Qt::Key_Return);
+    QCOMPARE(applied.count(), 1);
+    QCOMPARE(applied.first().at(0).toString(), QStringLiteral("light.venice"));
+
+    // A category click during a search clears it and opens that category.
+    EffectBrowserDialog second(requestWith(QStringLiteral("basic.neutral")));
+    second.show();
+    QVERIFY(second.waitForRendering());
+    auto *secondSearch = second.findChild<QLineEdit *>(QStringLiteral("searchField"));
+    auto *list = categoryList(second);
+    QVERIFY(secondSearch);
+    QVERIFY(list);
+    secondSearch->setText(QStringLiteral("zzzz"));
+    QTest::qWait(10);
+    QCOMPARE(second.visibleTileKeys(), QStringList{QStringLiteral("original")});
+    for (int row = 0; row < list->count(); ++row) {
+        if (list->item(row)->data(Qt::UserRole).toString() == QStringLiteral("retro")) {
+            const QRect itemRect = list->visualItemRect(list->item(row));
+            QTest::mouseClick(list->viewport(), Qt::LeftButton, Qt::NoModifier,
+                              itemRect.center());
+        }
+    }
+    QTest::qWait(20);
+    QCOMPARE(secondSearch->text(), QString());
+    QCOMPARE(second.visibleTileCount(), 11);
+    for (int i = 1; i < second.visibleTileKeys().size(); ++i)
+        QVERIFY(second.visibleTileKeys().at(i).startsWith(QStringLiteral("retro.")));
+
+    // Clicking the category that is already current must also clear the
+    // search; this is the case a row-change-only handler missed.
+    secondSearch->setText(QStringLiteral("zzzz"));
+    QTest::qWait(10);
+    QCOMPARE(second.visibleTileKeys(), QStringList{QStringLiteral("original")});
+    const int currentRow = list->currentRow();
+    QVERIFY(currentRow >= 0);
+    QTest::mouseClick(list->viewport(), Qt::LeftButton, Qt::NoModifier,
+                      list->visualItemRect(list->item(currentRow)).center());
+    QTest::qWait(20);
+    QCOMPARE(secondSearch->text(), QString());
+    QCOMPARE(second.visibleTileCount(), 11);
+
+    // Return with no effect match does nothing; it never applies Eredeti by
+    // accident because the tile is always present as the way back.
+    EffectBrowserDialog third(requestWith(QStringLiteral("basic.neutral")));
+    third.show();
+    QVERIFY(third.waitForRendering());
+    auto *thirdSearch = third.findChild<QLineEdit *>(QStringLiteral("searchField"));
+    QVERIFY(thirdSearch);
+    thirdSearch->setText(QStringLiteral("zzzz"));
+    QTest::qWait(10);
+    QSignalSpy noApply(&third, &EffectBrowserDialog::effectChosen);
+    QTest::keyClick(thirdSearch, Qt::Key_Return);
+    QCOMPARE(noApply.count(), 0);
+    QVERIFY(third.isVisible());
 
     search->clear();
     QTest::qWait(10);
@@ -345,17 +432,25 @@ void TestEffectBrowser::ditherRecipesDisableStrength()
 void TestEffectBrowser::slowAndApproximateFlagsAreSet()
 {
     const EffectCatalogue &catalogue = EffectCatalogue::instance();
+    // Slow follows the measured full-resolution cost table: the H class, not
+    // an effect that merely produces dots. Halftone is 45 ms there.
     for (const QString &key :
          {QStringLiteral("art.impasto"), QStringLiteral("detail.drybrush"),
-          QStringLiteral("blur.motion"), QStringLiteral("warp.kaleido"),
-          QStringLiteral("print.halftone"), QStringLiteral("grain.dust")}) {
+          QStringLiteral("blur.motion"), QStringLiteral("blur.radial"),
+          QStringLiteral("warp.kaleido"), QStringLiteral("print.engrave")}) {
         const auto recipe = catalogue.resolve(key);
         QVERIFY2(recipe.ok(), qPrintable(key));
         QVERIFY2(recipe.value().slow, qPrintable(key));
     }
+    const auto halftoneRecipe = catalogue.resolve(QStringLiteral("print.halftone"));
+    QVERIFY(halftoneRecipe.ok());
+    QVERIFY(!halftoneRecipe.value().slow);
+    QVERIFY(halftoneRecipe.value().approximate);
+
     for (const QString &key :
          {QStringLiteral("print.halftone"), QStringLiteral("print.riso"),
           QStringLiteral("print.news"), QStringLiteral("retro.newsprint"),
+          QStringLiteral("print.sepia"), QStringLiteral("grain.fine"),
           QStringLiteral("grain.dust"), QStringLiteral("grain.paper")}) {
         const auto recipe = catalogue.resolve(key);
         QVERIFY2(recipe.ok(), qPrintable(key));
@@ -386,6 +481,7 @@ void TestEffectBrowser::slowAndApproximateFlagsAreSet()
     QTest::mouseClick(halftone, Qt::LeftButton, Qt::NoModifier, halftone->rect().center());
     QTest::qWait(10);
     QCOMPARE(dialog.adjacentHintText(), QStringLiteral("Az előnézet hozzávetőleges"));
+    QVERIFY(!halftone->property("slow").toBool());
 }
 
 void TestEffectBrowser::applyWritesKeyVersionAndStrengthInOneUndo()
@@ -452,7 +548,7 @@ void TestEffectBrowser::applyWritesKeyVersionAndStrengthInOneUndo()
     QCOMPARE(button->text(), QStringLiteral("Eredeti"));
 }
 
-void TestEffectBrowser::browserStrengthEditsTheFrameLive()
+void TestEffectBrowser::strengthPreviewStaysInTheDialog()
 {
     QTemporaryDir dir;
     QVERIFY(dir.isValid());
@@ -469,7 +565,7 @@ void TestEffectBrowser::browserStrengthEditsTheFrameLive()
     auto *button = window.findChild<QPushButton *>(QStringLiteral("effectButton"));
     QVERIFY(button);
 
-    // Apply one effect first: the strength slider only edits a real effect.
+    // Start from a real effect so the reopened dialog highlights it.
     button->click();
     QPointer<EffectBrowserDialog> dialog = window.findChild<EffectBrowserDialog *>();
     QVERIFY(dialog && dialog->waitForRendering());
@@ -480,27 +576,59 @@ void TestEffectBrowser::browserStrengthEditsTheFrameLive()
     QTRY_VERIFY(!dialog);
     QVERIFY(window.waitForPreview(15000));
 
+    auto *view = window.findChild<PageView *>();
+    QVERIFY(view);
+    const auto frameStrength = [&window, view] {
+        const DocumentSnapshot snapshot = window.document();
+        const Frame *frame = findFrame(snapshot, view->selectedFrame());
+        return frame ? frame->filterStrength : -1;
+    };
+    QCOMPARE(frameStrength(), 100);
+
     button->click();
     dialog = window.findChild<EffectBrowserDialog *>();
     QVERIFY(dialog && dialog->waitForRendering());
+    QCOMPARE(dialog->selectedKey(), QStringLiteral("basic.punch"));
     QVERIFY(dialog->strengthEnabled());
     auto *slider = dialog->findChild<QSlider *>(QStringLiteral("strengthSlider"));
     QVERIFY(slider);
+    QCOMPARE(slider->value(), 100);
+    const QImage before = dialog->tileImage(QStringLiteral("basic.punch"));
+    QVERIFY(!before.isNull());
+
     slider->setValue(35);
-    QTest::qWait(80);
-    auto *view = window.findChild<PageView *>();
-    QVERIFY(view);
-    {
-        const DocumentSnapshot snapshot = window.document();
-        const Frame *frame = findFrame(snapshot, view->selectedFrame());
-        QVERIFY(frame);
-        QCOMPARE(frame->filter, QStringLiteral("basic.punch"));
-        QCOMPARE(frame->filterStrength, 35);
-    }
-    // Closing the browser without Apply keeps the live strength edit.
+    QVERIFY(dialog->waitForSelectedRender(15000));
+    const QImage after = dialog->tileImage(QStringLiteral("basic.punch"));
+    QVERIFY(!after.isNull());
+    QVERIFY2(after != before, "the highlighted tile must preview the chosen strength");
+    // The document is untouched while the dialog is open.
+    QCOMPARE(frameStrength(), 100);
+
     dialog->close();
     QTRY_VERIFY(!dialog);
     QVERIFY(window.waitForPreview(15000));
+    QCOMPARE(frameStrength(), 100);
+
+    // Apply is the only path that writes the strength.
+    button->click();
+    dialog = window.findChild<EffectBrowserDialog *>();
+    QVERIFY(dialog && dialog->waitForRendering());
+    QCOMPARE(dialog->strengthValue(), 100);
+    dialog->findChild<QSlider *>(QStringLiteral("strengthSlider"))->setValue(35);
+    QVERIFY(dialog->waitForSelectedRender(15000));
+    dialog->findChild<QPushButton *>(QStringLiteral("applyButton"))->click();
+    QTRY_VERIFY(!dialog);
+    QVERIFY(window.waitForPreview(15000));
+    QCOMPARE(frameStrength(), 35);
+
+    // Reopening reflects the frame's own strength on the current tile.
+    button->click();
+    dialog = window.findChild<EffectBrowserDialog *>();
+    QVERIFY(dialog && dialog->waitForRendering());
+    QCOMPARE(dialog->selectedKey(), QStringLiteral("basic.punch"));
+    QCOMPARE(dialog->strengthValue(), 35);
+    dialog->close();
+    QTRY_VERIFY(!dialog);
 }
 
 void TestEffectBrowser::ditherEffectDisablesTheSideStrength()
@@ -550,6 +678,156 @@ void TestEffectBrowser::ditherEffectDisablesTheSideStrength()
     QCOMPARE(hint->text(), QStringLiteral("Ez az effekt teljes erősséggel jelenik meg."));
 }
 
+void TestEffectBrowser::ditherStrengthIsNormalisedAtTheRenderBoundary()
+{
+    // The panel and the browser show 100 for a dither recipe; the render
+    // boundary has to agree even when a project file stored 50.
+    QCOMPARE(effectiveEffectStrength(QStringLiteral("print.halftone"), 50), 100);
+    QCOMPARE(effectiveEffectStrength(QStringLiteral("print.halftone"), 0), 100);
+    QCOMPARE(effectiveEffectStrength(QStringLiteral("basic.punch"), 50), 50);
+    QCOMPARE(effectiveEffectStrength(QStringLiteral("basic.punch"), 150), 100);
+
+    ImageStore store;
+    const SourceImage source = memorySource(sampleImage().scaled(240, 160));
+    const auto fifty = store.preparedLinear(source, ColorRecipe{},
+                                            QStringLiteral("print.halftone"), 50, false, 0, {},
+                                            EffectRenderTarget{});
+    const auto hundred = store.preparedLinear(source, ColorRecipe{},
+                                              QStringLiteral("print.halftone"), 100, false, 0, {},
+                                              EffectRenderTarget{});
+    QVERIFY2(fifty.ok(), "halftone at 50 failed");
+    QVERIFY2(hundred.ok(), "halftone at 100 failed");
+    QCOMPARE(fifty.value(), hundred.value());
+
+    // A continuous recipe still changes with strength, so the normalisation
+    // above is specific to the screen recipes.
+    const auto punchFifty = store.preparedLinear(source, ColorRecipe{},
+                                                 QStringLiteral("basic.punch"), 50, false, 0, {},
+                                                 EffectRenderTarget{});
+    const auto punchHundred = store.preparedLinear(source, ColorRecipe{},
+                                                   QStringLiteral("basic.punch"), 100, false, 0, {},
+                                                   EffectRenderTarget{});
+    QVERIFY(punchFifty.ok());
+    QVERIFY(punchHundred.ok());
+    QVERIFY(punchFifty.value() != punchHundred.value());
+}
+
+void TestEffectBrowser::pinnedEffectKeepsItsVersion()
+{
+    // Re-applying the effect a pinned frame already uses keeps that version.
+    QCOMPARE(appliedEffectVersion(QStringLiteral("basic.punch"), 1,
+                                  QStringLiteral("basic.punch"), 1),
+             1);
+    QCOMPARE(appliedEffectVersion(QStringLiteral("basic.punch"), 2,
+                                  QStringLiteral("basic.punch"), 1),
+             1);
+    // A different tile is a new choice and takes its own recipe version.
+    QCOMPARE(appliedEffectVersion(QStringLiteral("basic.bright"), 2,
+                                  QStringLiteral("basic.punch"), 1),
+             2);
+    // An unpinned frame records the version of the tile it applied.
+    QCOMPARE(appliedEffectVersion(QStringLiteral("basic.punch"), 1,
+                                  QStringLiteral("basic.punch"), 0),
+             1);
+    QCOMPARE(appliedEffectVersion(QStringLiteral("original"), 0,
+                                  QStringLiteral("basic.punch"), 3),
+             0);
+}
+
+void TestEffectBrowser::previewPoolIsBounded()
+{
+    QThreadPool *pool = effectPreviewPool();
+    QVERIFY(pool);
+    QVERIFY2(pool != QThreadPool::globalInstance(),
+             "effect previews must not use the unbounded global pool");
+    QVERIFY(pool->maxThreadCount() >= 1);
+    QVERIFY2(pool->maxThreadCount() <= 2,
+             qPrintable(QStringLiteral("preview pool has %1 threads")
+                            .arg(pool->maxThreadCount())));
+}
+
+void TestEffectBrowser::originalLayerIsPreparedOncePerSource()
+{
+    QTemporaryDir dir;
+    QVERIFY(dir.isValid());
+    const QStringList photos = makePhotos(dir.path());
+
+    MainWindow window;
+    window.resize(1280, 800);
+    window.show();
+    QTest::qWait(80);
+    // The same file twice: two frames, one source identity.
+    const QStringList samePhoto{photos.at(0), photos.at(0)};
+    QVERIFY(QMetaObject::invokeMethod(&window, "addDroppedFiles", Qt::DirectConnection,
+                                      Q_ARG(QStringList, samePhoto)));
+    QVERIFY(window.waitForPreview(15000));
+    const DocumentSnapshot document = window.document();
+    QCOMPARE(document.pages.first().frames.size(), 2);
+    const QString first = document.pages.first().frames.at(0).id;
+    const QString second = document.pages.first().frames.at(1).id;
+
+    // The preview batch prepares no untouched layers; they are lazy.
+    QCOMPARE(window.originalRenderCountForTest(), 0);
+
+    auto *originalButton = window.findChild<QPushButton *>(QStringLiteral("originalButton"));
+    QVERIFY(originalButton);
+    QVERIFY(QMetaObject::invokeMethod(&window, "selectFrame", Qt::DirectConnection,
+                                      Q_ARG(QString, first), Q_ARG(bool, true)));
+
+    // The first press must not render on the GUI thread: it starts a worker
+    // and returns immediately.
+    QElapsedTimer timer;
+    timer.start();
+    QTest::mousePress(originalButton, Qt::LeftButton);
+    const qint64 pressMs = timer.elapsed();
+    QVERIFY2(pressMs < 50,
+             qPrintable(QStringLiteral("Eredeti blocked the GUI for %1 ms").arg(pressMs)));
+    QTest::mouseRelease(originalButton, Qt::LeftButton);
+    QVERIFY(window.waitForOriginalPreview(15000));
+    QCOMPARE(window.originalRenderCountForTest(), 1);
+
+    // The second frame shares the cached untouched layer: no new render.
+    QVERIFY(QMetaObject::invokeMethod(&window, "selectFrame", Qt::DirectConnection,
+                                      Q_ARG(QString, second), Q_ARG(bool, true)));
+    timer.restart();
+    QTest::mousePress(originalButton, Qt::LeftButton);
+    const qint64 cachedPressMs = timer.elapsed();
+    QVERIFY(!window.originalPreviewPending());
+    QCOMPARE(window.originalRenderCountForTest(), 1);
+    QVERIFY2(cachedPressMs < 50,
+             qPrintable(QStringLiteral("cached Eredeti took %1 ms").arg(cachedPressMs)));
+    QTest::mouseRelease(originalButton, Qt::LeftButton);
+    writeTiming(QStringLiteral("original-first-press"), pressMs);
+    writeTiming(QStringLiteral("original-cached-press"), cachedPressMs);
+}
+
+void TestEffectBrowser::busyOverlayShowsAndCancels()
+{
+    QTemporaryDir dir;
+    QVERIFY(dir.isValid());
+    const QStringList photos = makePhotos(dir.path());
+
+    MainWindow window;
+    window.resize(1280, 800);
+    window.show();
+    QTest::qWait(80);
+    QVERIFY(QMetaObject::invokeMethod(&window, "addDroppedFiles", Qt::DirectConnection,
+                                      Q_ARG(QStringList, photos)));
+    auto *view = window.findChild<PageView *>();
+    QVERIFY(view);
+    QVERIFY(window.previewPending());
+    QVERIFY(view->busyOverlayVisible());
+
+    auto *cancel = view->findChild<QPushButton *>(QStringLiteral("busyCancelButton"));
+    QVERIFY(cancel);
+    cancel->click();
+    QVERIFY(!window.previewPending());
+    QVERIFY(!view->busyOverlayVisible());
+    // The previous raster stays on screen; the cancelled generation cannot
+    // replace it later.
+    QVERIFY(window.waitForPreview(1000));
+}
+
 void TestEffectBrowser::countedResultLabelUsesPluralForms()
 {
     // The dialog's result counter is the new counted string. Every catalogue
@@ -587,7 +865,8 @@ void TestEffectBrowser::legacyKeysKeepTheirPreviousLookLabel()
     QCOMPARE(newEffectAffordance(), QStringLiteral("Új effekt választása"));
 
     // A project opened from 1.0.x has a legacy key; the browser must not claim
-    // the frame is untouched and must not mark a catalogue tile as current.
+    // the frame is untouched, must not mark a catalogue tile as current, and
+    // must not preselect anything: Apply stays disabled until a real choice.
     EffectBrowserDialog dialog(requestWith(QStringLiteral("sepia")));
     dialog.show();
     QVERIFY(dialog.waitForRendering());
@@ -595,6 +874,12 @@ void TestEffectBrowser::legacyKeysKeepTheirPreviousLookLabel()
     QCOMPARE(dialog.visibleTileCount(), 11);
     for (const QString &key : dialog.visibleTileKeys())
         QVERIFY(!dialog.tileMarkedCurrent(key));
+    QCOMPARE(dialog.selectedKey(), QString());
+    QVERIFY(!dialog.applyEnabled());
+    QVERIFY(dialog.hasLegacyMarker());
+    QCOMPARE(dialog.legacyMarkerText(), QStringLiteral("Korábbi megjelenés"));
+    QVERIFY(!dialog.strengthEnabled());
+    QCOMPARE(dialog.strengthValue(), 100);
 }
 
 void TestEffectBrowser::legacyProjectShowsPreviousLookInThePanel()
@@ -651,6 +936,10 @@ void TestEffectBrowser::legacyProjectShowsPreviousLookInThePanel()
     QCOMPARE(dialog->currentKey(), QStringLiteral("sepia"));
     for (const QString &key : dialog->visibleTileKeys())
         QVERIFY(!dialog->tileMarkedCurrent(key));
+    QCOMPARE(dialog->selectedKey(), QString());
+    QVERIFY(!dialog->applyEnabled());
+    QVERIFY(dialog->hasLegacyMarker());
+    QCOMPARE(dialog->legacyMarkerText(), QStringLiteral("Korábbi megjelenés"));
     dialog->close();
     QTRY_VERIFY(!dialog);
     const DocumentSnapshot unchanged = window.document();
@@ -702,11 +991,15 @@ void TestEffectBrowser::pagePreviewNoLongerBlocksTheGui()
                                       Q_ARG(QStringList, photos)));
     const qint64 addMs = timer.elapsed();
     QVERIFY(window.previewPending());
+    auto *view = window.findChild<PageView *>();
+    QVERIFY(view);
+    QVERIFY(view->busyOverlayVisible());
     QVERIFY2(addMs < 600, qPrintable(QStringLiteral("adding photos blocked %1 ms").arg(addMs)));
 
     timer.restart();
     QVERIFY(window.waitForPreview(15000));
     const qint64 firstPreviewMs = timer.elapsed();
+    QVERIFY(!view->busyOverlayVisible());
     writeTiming(QStringLiteral("page-preview-add-three"), addMs);
     writeTiming(QStringLiteral("page-preview-first-settle"), firstPreviewMs);
 
@@ -732,7 +1025,9 @@ void TestEffectBrowser::pagePreviewNoLongerBlocksTheGui()
     QVERIFY2(applyMs < 200,
              qPrintable(QStringLiteral("effect apply blocked the GUI for %1 ms").arg(applyMs)));
     QVERIFY(window.previewPending());
+    QVERIFY(view->busyOverlayVisible());
     QVERIFY(window.waitForPreview(15000));
+    QVERIFY(!view->busyOverlayVisible());
     writeTiming(QStringLiteral("page-preview-effect-apply"), applyMs);
 }
 

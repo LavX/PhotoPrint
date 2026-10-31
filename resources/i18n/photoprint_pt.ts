@@ -28,6 +28,14 @@
         <translation>Adicionar ou remover um tamanho de papel personalizado.</translation>
     </message>
     <message>
+        <source>Feldolgozás…</source>
+        <translation>A processar…</translation>
+    </message>
+    <message>
+        <source>Mégsem</source>
+        <translation>Cancelar</translation>
+    </message>
+    <message>
         <source>Tájolás:</source>
         <translation>Orientação:</translation>
     </message>
@@ -811,19 +819,19 @@
     </message>
     <message>
         <source>Élénk</source>
-        <translation>Vívido</translation>
+        <translation type="vanished">Vívido</translation>
     </message>
     <message>
         <source>Meleg</source>
-        <translation>Quente</translation>
+        <translation type="vanished">Quente</translation>
     </message>
     <message>
         <source>Hűvös</source>
-        <translation>Frio</translation>
+        <translation type="vanished">Frio</translation>
     </message>
     <message>
         <source>Szépia</source>
-        <translation>Sépia</translation>
+        <translation type="vanished">Sépia</translation>
     </message>
     <message>
         <source>Fekete-fehér</source>
@@ -831,7 +839,7 @@
     </message>
     <message>
         <source>Éles</source>
-        <translation>Nítido</translation>
+        <translation type="vanished">Nítido</translation>
     </message>
     <message>
         <source>Fényes</source>
@@ -895,7 +903,7 @@
     </message>
     <message>
         <source>Vintage</source>
-        <translation>Vintage</translation>
+        <translation type="vanished">Vintage</translation>
     </message>
     <message>
         <source>A napló jelenleg használatban van.</source>

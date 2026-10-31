@@ -19,9 +19,12 @@
 #include <QPainter>
 #include <QPainterPath>
 #include <QPushButton>
+#include <QResizeEvent>
 #include <QScrollArea>
 #include <QSignalBlocker>
 #include <QSlider>
+#include <QThreadPool>
+#include <QTimer>
 #include <QVBoxLayout>
 #include <QtConcurrent>
 
@@ -34,35 +37,35 @@ namespace {
 
 constexpr int kTileBorderReserve = 30; // label strip below the picture
 constexpr int kSlowBadgeHeight = 16;
+constexpr int kStrengthDebounceMs = 70;
 
 QString categoryLabel(const QString &key)
 {
     // The twelve labels are navigation, so they are translated. The effect
-    // names themselves are product names and stay single.
-    if (key == QLatin1String("basic"))
-        return QCoreApplication::translate("PhotoPrint", "Alap");
-    if (key == QLatin1String("mono"))
-        return QCoreApplication::translate("PhotoPrint", "Fekete-fehér");
-    if (key == QLatin1String("retro"))
-        return QCoreApplication::translate("PhotoPrint", "Retró");
-    if (key == QLatin1String("color"))
-        return QCoreApplication::translate("PhotoPrint", "Szín");
-    if (key == QLatin1String("blur"))
-        return QCoreApplication::translate("PhotoPrint", "Elmosás");
-    if (key == QLatin1String("detail"))
-        return QCoreApplication::translate("PhotoPrint", "Élesség");
-    if (key == QLatin1String("art"))
-        return QCoreApplication::translate("PhotoPrint", "Művészi");
-    if (key == QLatin1String("warp"))
-        return QCoreApplication::translate("PhotoPrint", "Torzítás");
-    if (key == QLatin1String("light"))
-        return QCoreApplication::translate("PhotoPrint", "Fény");
-    if (key == QLatin1String("grain"))
-        return QCoreApplication::translate("PhotoPrint", "Szemcse");
-    if (key == QLatin1String("print"))
-        return QCoreApplication::translate("PhotoPrint", "Nyomat");
-    if (key == QLatin1String("glow"))
-        return QCoreApplication::translate("PhotoPrint", "Ragyogás");
+    // names themselves are product names and stay single. The table keeps the
+    // source strings in one place; QT_TRANSLATE_NOOP is what lupdate reads.
+    struct Entry {
+        const char *key;
+        const char *source;
+    };
+    static constexpr Entry entries[] = {
+        {"basic", QT_TRANSLATE_NOOP("PhotoPrint", "Alap")},
+        {"mono", QT_TRANSLATE_NOOP("PhotoPrint", "Fekete-fehér")},
+        {"retro", QT_TRANSLATE_NOOP("PhotoPrint", "Retró")},
+        {"color", QT_TRANSLATE_NOOP("PhotoPrint", "Szín")},
+        {"blur", QT_TRANSLATE_NOOP("PhotoPrint", "Elmosás")},
+        {"detail", QT_TRANSLATE_NOOP("PhotoPrint", "Élesség")},
+        {"art", QT_TRANSLATE_NOOP("PhotoPrint", "Művészi")},
+        {"warp", QT_TRANSLATE_NOOP("PhotoPrint", "Torzítás")},
+        {"light", QT_TRANSLATE_NOOP("PhotoPrint", "Fény")},
+        {"grain", QT_TRANSLATE_NOOP("PhotoPrint", "Szemcse")},
+        {"print", QT_TRANSLATE_NOOP("PhotoPrint", "Nyomat")},
+        {"glow", QT_TRANSLATE_NOOP("PhotoPrint", "Ragyogás")},
+    };
+    for (const Entry &entry : entries) {
+        if (key == QLatin1String(entry.key))
+            return QCoreApplication::translate("PhotoPrint", entry.source);
+    }
     return key;
 }
 
@@ -106,25 +109,35 @@ QString newEffectAffordance()
     return QCoreApplication::translate("PhotoPrint", "Új effekt választása");
 }
 
-bool effectIgnoresStrength(const QString &key)
-{
-    if (key.isEmpty() || isLegacyPresetKey(key))
-        return false;
-    const auto recipe = EffectCatalogue::instance().resolve(key, 0);
-    if (!recipe)
-        return false;
-    for (const Stage &stage : recipe.value().stages) {
-        if (stage.id == StageId::Wand && stage.wandPass == QLatin1String("halftone"))
-            return true;
-        if (stage.id == StageId::Posterize && stage.dither)
-            return true;
-    }
-    return false;
-}
-
 QString effectStrengthReason()
 {
     return QCoreApplication::translate("PhotoPrint", "Ez az effekt teljes erősséggel jelenik meg.");
+}
+
+int appliedEffectVersion(const QString &key, int tileVersion, const QString &currentKey,
+                         int currentVersion)
+{
+    if (key.isEmpty() || key == QLatin1String("original"))
+        return 0;
+    // Re-applying the effect a pinned frame already uses keeps that version;
+    // only a different tile is a new choice and may take its recipe version.
+    if (key == currentKey && currentVersion > 0)
+        return currentVersion;
+    return tileVersion;
+}
+
+QThreadPool *effectPreviewPool()
+{
+    static QThreadPool *pool = [] {
+        auto *created = new QThreadPool;
+        created->setObjectName(QStringLiteral("effects-preview"));
+        // Plan 5.4 bounds preview work at one to two threads. The engine keeps
+        // its wand passes atomic and has no per-stage OpenMP, so two jobs are
+        // the ceiling, not a starting point to raise.
+        created->setMaxThreadCount(2);
+        return created;
+    }();
+    return pool;
 }
 
 /// One grid tile. It is a plain QAbstractButton so it is focusable, clickable
@@ -149,11 +162,7 @@ public:
         setAccessibleName(label);
     }
 
-    void setDescriptionText(const QString &description)
-    {
-        setAccessibleDescription(description);
-        setToolTip(description);
-    }
+    void setContextText(const QString &text) { setAccessibleDescription(text); }
 
     void setEffectImage(const QImage &image)
     {
@@ -161,6 +170,7 @@ public:
         update();
     }
     bool hasEffectImage() const { return !m_image.isNull(); }
+    QImage effectImage() const { return m_image; }
 
     void setSlow(bool slow, const QString &badge)
     {
@@ -349,11 +359,14 @@ EffectBrowserDialog::EffectBrowserDialog(const EffectBrowserRequest &request, QW
     m_tileSize = m_sample.size().scaled(m_rasterPx, m_rasterPx, Qt::KeepAspectRatio);
 
     m_currentKey = request.currentKey;
-    m_strengthMemory = std::clamp(request.currentStrength, 0, 100);
+    m_currentStrength = std::clamp(request.currentStrength, 0, 100);
 
     m_watcher = new QFutureWatcher<RenderResult>(this);
     connect(m_watcher, &QFutureWatcher<RenderResult>::finished, this,
             &EffectBrowserDialog::handleRenderFinished);
+    m_selectedWatcher = new QFutureWatcher<RenderResult>(this);
+    connect(m_selectedWatcher, &QFutureWatcher<RenderResult>::finished, this,
+            &EffectBrowserDialog::handleSelectedRenderFinished);
 
     buildUi();
     fillCategories();
@@ -374,8 +387,6 @@ EffectBrowserDialog::EffectBrowserDialog(const EffectBrowserRequest &request, QW
             break;
         }
     }
-
-    m_currentKey = request.currentKey;
     rebuildGrid();
 }
 
@@ -383,8 +394,12 @@ EffectBrowserDialog::~EffectBrowserDialog()
 {
     if (m_activeJob && m_activeJob->stop)
         m_activeJob->stop->request_stop();
+    if (m_selectedJob && m_selectedJob->stop)
+        m_selectedJob->stop->request_stop();
     if (m_watcher && m_watcher->isRunning())
         m_watcher->waitForFinished();
+    if (m_selectedWatcher && m_selectedWatcher->isRunning())
+        m_selectedWatcher->waitForFinished();
 }
 
 int EffectBrowserDialog::categoryCount() const
@@ -406,6 +421,12 @@ QString EffectBrowserDialog::tileLabelFor(const QString &key) const
 {
     const auto tile = m_tiles.constFind(key);
     return tile == m_tiles.constEnd() ? QString() : (*tile)->text();
+}
+
+QImage EffectBrowserDialog::tileImage(const QString &key) const
+{
+    const auto tile = m_tiles.constFind(key);
+    return tile == m_tiles.constEnd() ? QImage() : (*tile)->effectImage();
 }
 
 bool EffectBrowserDialog::tileHasImage(const QString &key) const
@@ -455,6 +476,21 @@ bool EffectBrowserDialog::tileMarkedCurrent(const QString &key) const
     return tile != m_tiles.constEnd() && (*tile)->property("current").toBool();
 }
 
+bool EffectBrowserDialog::applyEnabled() const
+{
+    return m_applyButton && m_applyButton->isEnabled();
+}
+
+bool EffectBrowserDialog::hasLegacyMarker() const
+{
+    return m_legacyLabel && m_legacyLabel->isVisible();
+}
+
+QString EffectBrowserDialog::legacyMarkerText() const
+{
+    return m_legacyLabel ? m_legacyLabel->text() : QString();
+}
+
 int EffectBrowserDialog::strengthValue() const
 {
     return m_strength ? m_strength->value() : 100;
@@ -470,13 +506,35 @@ bool EffectBrowserDialog::waitForRendering(int timeoutMs)
     timer.start();
     while (timer.elapsed() < timeoutMs) {
         QCoreApplication::processEvents(QEventLoop::AllEvents, 20);
-        if (!m_rendering && renderedTileCount() == visibleTileCount())
-            return true;
-        if (!m_rendering && !m_activeJob)
-            return renderedTileCount() == visibleTileCount();
+        if (!m_rendering) {
+            bool complete = true;
+            for (const QString &key : m_visibleKeys) {
+                if (!cachedImage(key, 100).isNull()) {
+                    continue;
+                }
+                complete = false;
+                break;
+            }
+            if (complete)
+                return true;
+        }
     }
-    QCoreApplication::processEvents(QEventLoop::AllEvents, 20);
-    return !m_rendering && renderedTileCount() == visibleTileCount();
+    return false;
+}
+
+bool EffectBrowserDialog::waitForSelectedRender(int timeoutMs)
+{
+    if (m_selectedKey.isEmpty())
+        return true;
+    QElapsedTimer timer;
+    timer.start();
+    const int strength = selectedStrength();
+    while (timer.elapsed() < timeoutMs) {
+        QCoreApplication::processEvents(QEventLoop::AllEvents, 20);
+        if (!cachedImage(m_selectedKey, strength).isNull() && !m_selectedRendering)
+            return true;
+    }
+    return false;
 }
 
 void EffectBrowserDialog::showEvent(QShowEvent *event)
@@ -486,6 +544,7 @@ void EffectBrowserDialog::showEvent(QShowEvent *event)
     if (!m_started) {
         m_started = true;
         scheduleRender();
+        scheduleSelectedRender();
     }
 }
 
@@ -533,7 +592,8 @@ void EffectBrowserDialog::buildUi()
     auto *searchRow = new QHBoxLayout;
     m_search = new QLineEdit(this);
     m_search->setObjectName(QStringLiteral("searchField"));
-    m_search->setPlaceholderText(QCoreApplication::translate("PhotoPrint", "Keresés név vagy kategória szerint"));
+    m_search->setPlaceholderText(
+        QCoreApplication::translate("PhotoPrint", "Keresés név vagy kategória szerint"));
     m_search->setAccessibleName(QCoreApplication::translate("PhotoPrint", "Keresés"));
     m_search->setClearButtonEnabled(true);
     searchRow->addWidget(m_search, 1);
@@ -545,6 +605,12 @@ void EffectBrowserDialog::buildUi()
     m_countLabel->setPalette(countPalette);
     searchRow->addWidget(m_countLabel);
     outer->addLayout(searchRow);
+
+    m_legacyLabel = new QLabel(legacyEffectLabel(), this);
+    m_legacyLabel->setObjectName(QStringLiteral("legacyMarker"));
+    m_legacyLabel->setPalette(countPalette);
+    m_legacyLabel->setVisible(false);
+    outer->addWidget(m_legacyLabel);
 
     auto *body = new QHBoxLayout;
     body->setSpacing(12);
@@ -574,15 +640,16 @@ void EffectBrowserDialog::buildUi()
     outer->addLayout(body, 1);
 
     auto *strengthRow = new QHBoxLayout;
-    m_strengthLabel = new QLabel(QCoreApplication::translate("PhotoPrint", "Effekt erőssége"), this);
+    m_strengthLabel =
+        new QLabel(QCoreApplication::translate("PhotoPrint", "Effekt erőssége"), this);
     m_strengthLabel->setObjectName(QStringLiteral("strengthLabel"));
     strengthRow->addWidget(m_strengthLabel);
     m_strength = new QSlider(Qt::Horizontal, this);
     m_strength->setObjectName(QStringLiteral("strengthSlider"));
     m_strength->setAccessibleName(QCoreApplication::translate("PhotoPrint", "Effekt erőssége"));
     m_strength->setRange(0, 100);
-    m_strength->setValue(m_strengthMemory);
-    m_strength->setTracking(false);
+    m_strength->setValue(m_currentStrength);
+    m_strength->setTracking(true);
     strengthRow->addWidget(m_strength, 1);
     m_strengthValue = new QLabel(QStringLiteral("%1%").arg(m_strength->value()), this);
     m_strengthValue->setObjectName(QStringLiteral("strengthValue"));
@@ -600,7 +667,8 @@ void EffectBrowserDialog::buildUi()
     m_strengthHint->setVisible(false);
     outer->addWidget(m_strengthHint);
 
-    m_adjacentHint = new QLabel(QCoreApplication::translate("PhotoPrint", "Az előnézet hozzávetőleges"), this);
+    m_adjacentHint = new QLabel(
+        QCoreApplication::translate("PhotoPrint", "Az előnézet hozzávetőleges"), this);
     m_adjacentHint->setObjectName(QStringLiteral("approximateHint"));
     m_adjacentHint->setWordWrap(true);
     m_adjacentHint->setPalette(hintPalette);
@@ -619,24 +687,24 @@ void EffectBrowserDialog::buildUi()
     buttonRow->addWidget(m_closeButton);
     outer->addLayout(buttonRow);
 
+    m_strengthTimer = new QTimer(this);
+    m_strengthTimer->setSingleShot(true);
+    m_strengthTimer->setInterval(kStrengthDebounceMs);
+    connect(m_strengthTimer, &QTimer::timeout, this,
+            &EffectBrowserDialog::scheduleSelectedRender);
+
     connect(m_closeButton, &QPushButton::clicked, this, &QDialog::reject);
     connect(m_applyButton, &QPushButton::clicked, this, &EffectBrowserDialog::activateCurrent);
     connect(m_search, &QLineEdit::textChanged, this, [this] { rebuildGrid(); });
-    connect(m_categories, &QListWidget::currentRowChanged, this, [this](int) {
-        // A category is a direct navigation: leave the search and show the
-        // ten effects of the clicked category.
-        if (m_search && !m_search->text().isEmpty()) {
-            const QSignalBlocker blocker(m_search);
-            m_search->clear();
-        }
-        rebuildGrid();
-    });
+    connect(m_search, &QLineEdit::returnPressed, this, &EffectBrowserDialog::applyFirstMatch);
+    connect(m_categories, &QListWidget::currentRowChanged, this,
+            [this](int) { categoryActivated(); });
+    connect(m_categories, &QListWidget::itemClicked, this,
+            [this](QListWidgetItem *) { categoryActivated(); });
     connect(m_strength, &QSlider::valueChanged, this, [this](int value) {
         m_strengthValue->setText(QStringLiteral("%1%").arg(value));
         if (m_strength->isEnabled())
-            m_strengthMemory = value;
-        if (m_strength->isEnabled())
-            emit strengthEdited(value);
+            m_strengthTimer->start();
     });
 }
 
@@ -650,21 +718,60 @@ void EffectBrowserDialog::fillCategories()
     }
 }
 
+void EffectBrowserDialog::categoryActivated()
+{
+    // A category is a direct navigation: leave the search and show the ten
+    // effects of the clicked category. The itemClicked path makes this work
+    // even when the clicked row was already current.
+    if (m_search && !m_search->text().isEmpty()) {
+        const QSignalBlocker blocker(m_search);
+        m_search->clear();
+    }
+    rebuildGrid();
+}
+
 QString EffectBrowserDialog::scaledSampleHash() const
 {
     return m_request.sampleHash.isEmpty() ? QStringLiteral("bundled-sample")
                                           : m_request.sampleHash;
 }
 
-QString EffectBrowserDialog::cacheKeyFor(const QString &key) const
+EffectRecipe EffectBrowserDialog::recipeForKey(const QString &key) const
 {
-    // Strength previews stay at 100: the slider edits the page preview live and
-    // re-rendering ten tiles on every release would make the browser feel slow
-    // for no gain.
-    return QStringLiteral("%1|%2|%3|%4")
-        .arg(key, scaledSampleHash())
-        .arg(100)
+    // A pinned frame shows the recipe it was saved with. Only a new choice
+    // renders the newest one.
+    if (key == m_currentKey && m_request.currentVersion > 0) {
+        if (const auto pinned =
+                EffectCatalogue::instance().resolve(key, m_request.currentVersion)) {
+            return pinned.value();
+        }
+    }
+    return m_byKey.value(key);
+}
+
+QString EffectBrowserDialog::cacheKeyFor(const QString &key, int strength) const
+{
+    const EffectRecipe recipe = recipeForKey(key);
+    return QStringLiteral("%1|%2|%3|%4|%5")
+        .arg(key)
+        .arg(recipe.version)
+        .arg(scaledSampleHash())
+        .arg(strength)
         .arg(m_rasterPx);
+}
+
+QImage EffectBrowserDialog::cachedImage(const QString &key, int strength) const
+{
+    return m_images.value(cacheKeyFor(key, strength));
+}
+
+void EffectBrowserDialog::storeImage(const QString &key, int strength, const QImage &image)
+{
+    m_images.insert(cacheKeyFor(key, strength), image);
+    // One complete 120-effect set at 240 px is about 8 MB. A generous cap
+    // keeps a strength sweep bounded without evicting the current category.
+    if (m_images.size() > 480)
+        m_images.clear();
 }
 
 void EffectBrowserDialog::rebuildGrid()
@@ -687,25 +794,28 @@ void EffectBrowserDialog::rebuildGrid()
         currentCategory = m_categories->currentItem()->data(Qt::UserRole).toString();
     const QString query = m_search ? folded(m_search->text().trimmed()) : QString();
 
-    const bool originalMatches =
-        query.isEmpty() || folded(QCoreApplication::translate("PhotoPrint", "Eredeti")).contains(query)
-        || QStringLiteral("original").contains(query);
-    if (originalMatches) {
+    const bool legacyCurrent = !m_currentKey.isEmpty()
+        && m_currentKey != QLatin1String("original")
+        && !m_byKey.contains(m_currentKey);
+    m_legacyLabel->setVisible(legacyCurrent);
+
+    // Eredeti is always available, even when the search matches nothing: it is
+    // the way back and it must never disappear from the grid.
+    {
         auto *tile = new EffectTile(m_gridHost);
         tile->setProperty("tileSide", m_request.tileLogicalPx);
         tile->setObjectName(QStringLiteral("effectTile_original"));
         tile->setProperty("effectKey", QStringLiteral("original"));
         tile->setEffectKey(QStringLiteral("original"));
-        tile->setAccessibleName(QCoreApplication::translate("PhotoPrint", "Eredeti"));
-        tile->setDescriptionText(QCoreApplication::translate("PhotoPrint", "Az eredeti kép effekt nélkül."));
         tile->setLabel(QCoreApplication::translate("PhotoPrint", "Eredeti"));
-        tile->setProperty("slow", false);
-        const QImage original =
-            m_sample.scaled(m_tileSize, Qt::KeepAspectRatioByExpanding,
-                            Qt::SmoothTransformation);
-        m_images.insert(cacheKeyFor(QStringLiteral("original")), original);
+        tile->setContextText(
+            QCoreApplication::translate("PhotoPrint", "Az eredeti kép effekt nélkül."));
+        const QImage original = m_sample.scaled(m_tileSize, Qt::KeepAspectRatioByExpanding,
+                                                 Qt::SmoothTransformation);
+        storeImage(QStringLiteral("original"), 100, original);
         tile->setEffectImage(original);
-        connect(tile, &QAbstractButton::clicked, this, [this] { selectTile(QStringLiteral("original")); });
+        connect(tile, &QAbstractButton::clicked, this,
+                [this] { selectTile(QStringLiteral("original")); });
         tile->onActivate = [this, key = QStringLiteral("original")] {
             selectTile(key);
             activateCurrent();
@@ -732,13 +842,14 @@ void EffectBrowserDialog::rebuildGrid()
         tile->setProperty("effectKey", recipe.key);
         tile->setEffectKey(recipe.key);
         tile->setLabel(recipe.name);
-        tile->setDescriptionText(recipe.description);
+        // The effect name is a product name and stays single; the accessible
+        // description is the translated navigation label, never English prose.
+        tile->setContextText(categoryLabel(recipe.category));
         tile->setSlow(recipe.slow, QCoreApplication::translate("PhotoPrint", "lassú"));
-        if (const auto image = m_images.constFind(cacheKeyFor(recipe.key));
-            image != m_images.constEnd()) {
-            tile->setEffectImage(image.value());
-        }
-        connect(tile, &QAbstractButton::clicked, this, [this, key = recipe.key] { selectTile(key); });
+        if (const QImage image = cachedImage(recipe.key, 100); !image.isNull())
+            tile->setEffectImage(image);
+        connect(tile, &QAbstractButton::clicked, this,
+                [this, key = recipe.key] { selectTile(key); });
         tile->onActivate = [this, key = recipe.key] {
             selectTile(key);
             activateCurrent();
@@ -769,30 +880,28 @@ void EffectBrowserDialog::rebuildGrid()
     setTabOrder(m_strength, m_applyButton);
     setTabOrder(m_applyButton, m_closeButton);
 
+    // Only the effect the frame already uses is preselected. A legacy or
+    // unknown key leaves the grid empty: Apply must never silently replace the
+    // frozen look. The same rule applies when browsing a category that does
+    // not contain the current effect.
     if (m_selectedKey.isEmpty() || !m_tiles.contains(m_selectedKey)) {
-        // Keep the applied effect highlighted when it is visible, otherwise
-        // fall back to the first real effect of the category, never to Eredeti
-        // by accident.
-        QString candidate = m_tiles.contains(m_currentKey) ? m_currentKey : QString();
-        if (candidate.isEmpty()) {
-            for (const QString &key : m_visibleKeys) {
-                if (key != QLatin1String("original")) {
-                    candidate = key;
-                    break;
-                }
-            }
-        }
-        if (candidate.isEmpty() && !m_visibleKeys.isEmpty())
-            candidate = m_visibleKeys.first();
-        m_selectedKey = candidate;
-        if (EffectTile *tile = m_tiles.value(m_selectedKey))
-            tile->setMarkedSelected(true);
+        m_selectedKey = m_tiles.contains(m_currentKey) ? m_currentKey : QString();
+    }
+    if (EffectTile *tile = m_tiles.value(m_selectedKey)) {
+        tile->setMarkedSelected(true);
+        resetStrengthForSelection();
+    } else {
+        m_selectedKey.clear();
+        const QSignalBlocker blocker(m_strength);
+        m_strength->setValue(m_currentStrength);
+        m_strengthValue->setText(QStringLiteral("%1%").arg(m_currentStrength));
     }
 
     updateCountLabel();
     syncStrengthUi();
     m_applyButton->setEnabled(!m_selectedKey.isEmpty());
     scheduleRender();
+    scheduleSelectedRender();
 }
 
 void EffectBrowserDialog::updateCountLabel()
@@ -802,44 +911,43 @@ void EffectBrowserDialog::updateCountLabel()
         if (key != QLatin1String("original"))
             ++count;
     }
-    if (m_search && !m_search->text().trimmed().isEmpty()) {
-        m_countLabel->setText(count == 0
-                                  ? QCoreApplication::translate("PhotoPrint", "Nincs találat.")
-                                  : QCoreApplication::translate("PhotoPrint", "%n effekt", nullptr,
-                                                                count));
+    if (m_search && !m_search->text().trimmed().isEmpty() && count == 0) {
+        m_countLabel->setText(QCoreApplication::translate("PhotoPrint", "Nincs találat."));
     } else {
-        m_countLabel->setText(QCoreApplication::translate("PhotoPrint", "%n effekt", nullptr, count));
+        m_countLabel->setText(
+            QCoreApplication::translate("PhotoPrint", "%n effekt", nullptr, count));
     }
 }
 
-void EffectBrowserDialog::selectTile(const QString &key)
+void EffectBrowserDialog::resetStrengthForSelection()
 {
-    if (!m_tiles.contains(key))
+    if (m_selectedKey.isEmpty())
         return;
-    m_selectedKey = key;
-    for (auto it = m_tiles.constBegin(); it != m_tiles.constEnd(); ++it)
-        it.value()->setMarkedSelected(it.key() == key);
-    syncStrengthUi();
-    if (EffectTile *tile = m_tiles.value(key))
-        tile->setFocus(Qt::OtherFocusReason);
+    int value = 100;
+    if (m_selectedKey == m_currentKey)
+        value = m_currentStrength;
+    if (m_selectedKey == QLatin1String("original") || effectIgnoresStrength(m_selectedKey))
+        value = 100;
+    const QSignalBlocker blocker(m_strength);
+    m_strength->setValue(value);
+    m_strengthValue->setText(QStringLiteral("%1%").arg(value));
 }
 
 void EffectBrowserDialog::syncStrengthUi()
 {
-    const bool ignores = effectIgnoresStrength(m_selectedKey);
-    const bool original = m_selectedKey.isEmpty() || m_selectedKey == QLatin1String("original");
-    const bool enabled = !ignores && !original;
+    const bool noSelection = m_selectedKey.isEmpty();
+    const bool original = m_selectedKey == QLatin1String("original");
+    const bool ignores = !noSelection && effectIgnoresStrength(m_selectedKey);
+    const bool enabled = !noSelection && !original && !ignores;
 
     const QSignalBlocker blocker(m_strength);
     m_strength->setEnabled(enabled);
     if (original || ignores) {
         m_strength->setValue(100);
         m_strengthValue->setText(QStringLiteral("100%"));
-    } else {
-        m_strength->setValue(m_strengthMemory);
-        m_strengthValue->setText(QStringLiteral("%1%").arg(m_strengthMemory));
     }
     m_strengthLabel->setEnabled(enabled);
+    m_strengthValue->setEnabled(enabled);
 
     if (ignores) {
         m_strengthHint->setText(effectStrengthReason());
@@ -849,30 +957,79 @@ void EffectBrowserDialog::syncStrengthUi()
         m_strengthHint->setVisible(false);
     }
 
-    const EffectRecipe recipe = m_byKey.value(m_selectedKey);
+    const EffectRecipe recipe = recipeForKey(m_selectedKey);
     m_adjacentHint->setVisible(recipe.approximate);
+}
+
+int EffectBrowserDialog::selectedStrength() const
+{
+    if (m_selectedKey.isEmpty())
+        return 100;
+    return effectiveEffectStrength(m_selectedKey, m_strength->value());
+}
+
+void EffectBrowserDialog::selectTile(const QString &key)
+{
+    if (!m_tiles.contains(key))
+        return;
+    m_selectedKey = key;
+    for (auto it = m_tiles.constBegin(); it != m_tiles.constEnd(); ++it)
+        it.value()->setMarkedSelected(it.key() == key);
+    resetStrengthForSelection();
+    syncStrengthUi();
+    m_applyButton->setEnabled(true);
+    scheduleSelectedRender();
+    if (EffectTile *tile = m_tiles.value(key))
+        tile->setFocus(Qt::OtherFocusReason);
 }
 
 void EffectBrowserDialog::activateCurrent()
 {
     if (m_selectedKey.isEmpty())
         return;
-    const int strength = effectIgnoresStrength(m_selectedKey) ? 100 : m_strength->value();
-    int version = 0;
-    if (m_selectedKey != QLatin1String("original"))
-        version = m_byKey.value(m_selectedKey).version;
-    m_currentKey = m_selectedKey;
-    for (auto it = m_tiles.constBegin(); it != m_tiles.constEnd(); ++it)
-        it.value()->setMarkedCurrent(it.key() == m_currentKey);
-    emit effectChosen(m_selectedKey, version, strength);
+    m_strengthTimer->stop();
+    const QString key = m_selectedKey;
+    const int strength = selectedStrength();
+    const int tileVersion = key == QLatin1String("original") ? 0 : recipeForKey(key).version;
+    const int version = appliedEffectVersion(key, tileVersion, m_currentKey,
+                                             m_request.currentVersion);
+    emit effectChosen(key, version, strength);
     accept();
+}
+
+void EffectBrowserDialog::applyFirstMatch()
+{
+    // Return is a search action. With an empty field it must not apply the
+    // first tile by accident; the user has not chosen anything yet.
+    const QString query = m_search->text().trimmed();
+    if (query.isEmpty())
+        return;
+    // Return applies the first real match. If the search only kept Eredeti, it
+    // applies only when the query actually names it, never as a blind fallback.
+    QString target;
+    for (const QString &key : m_visibleKeys) {
+        if (key != QLatin1String("original")) {
+            target = key;
+            break;
+        }
+    }
+    if (target.isEmpty()) {
+        const QString foldedQuery = folded(query);
+        if (folded(QCoreApplication::translate("PhotoPrint", "Eredeti"))
+                .contains(foldedQuery)
+            || QStringLiteral("original").contains(foldedQuery)) {
+            target = QStringLiteral("original");
+        }
+    }
+    if (target.isEmpty())
+        return;
+    selectTile(target);
+    activateCurrent();
 }
 
 void EffectBrowserDialog::scheduleRender()
 {
-    if (!m_started)
-        return;
-    if (m_tiles.isEmpty())
+    if (!m_started || m_tiles.isEmpty())
         return;
 
     ++m_generation;
@@ -890,8 +1047,9 @@ void EffectBrowserDialog::scheduleRender()
     for (const QString &key : m_visibleKeys) {
         if (key == QLatin1String("original"))
             continue;
-        if (!m_images.contains(cacheKeyFor(key)))
-            job->recipes.append(m_byKey.value(key));
+        if (!cachedImage(key, 100).isNull())
+            continue;
+        job->recipes.append(recipeForKey(key));
     }
     m_activeJob = job;
     if (job->recipes.isEmpty()) {
@@ -899,13 +1057,53 @@ void EffectBrowserDialog::scheduleRender()
         return;
     }
     m_rendering = true;
-    m_watcher->setFuture(QtConcurrent::run([job] { return renderTiles(*job); }));
+    m_watcher->setFuture(
+        QtConcurrent::run(effectPreviewPool(), [job] { return renderTiles(*job); }));
+}
+
+void EffectBrowserDialog::scheduleSelectedRender()
+{
+    if (!m_started || m_selectedKey.isEmpty())
+        return;
+    const QString key = m_selectedKey;
+    if (key == QLatin1String("original") || effectIgnoresStrength(key))
+        return;
+    const int strength = effectiveEffectStrength(key, m_strength->value());
+    if (const QImage cached = cachedImage(key, strength); !cached.isNull()) {
+        if (EffectTile *tile = m_tiles.value(key))
+            tile->setEffectImage(cached);
+        return;
+    }
+    // The batch is already producing the 100% version of every tile; do not
+    // start a duplicate for the highlighted one.
+    if (strength == 100 && (m_rendering || tileHasImage(key)))
+        return;
+
+    ++m_selectedGeneration;
+    if (m_selectedJob && m_selectedJob->stop)
+        m_selectedJob->stop->request_stop();
+    auto job = std::make_shared<RenderJob>();
+    job->generation = m_selectedGeneration;
+    job->sample = m_sample;
+    job->tileSize = m_tileSize;
+    job->rasterPx = m_rasterPx;
+    job->strength = strength;
+    job->sampleHash = scaledSampleHash();
+    job->stop = std::make_shared<std::stop_source>();
+    job->recipes.append(recipeForKey(key));
+    job->pinnedKey = key;
+    m_selectedJob = job;
+    m_selectedRendering = true;
+    m_selectedWatcher->setFuture(
+        QtConcurrent::run(effectPreviewPool(), [job] { return renderTiles(*job); }));
 }
 
 EffectBrowserDialog::RenderResult EffectBrowserDialog::renderTiles(RenderJob job)
 {
     RenderResult result;
     result.generation = job.generation;
+    result.key = job.pinnedKey;
+    result.strength = job.strength;
     const std::stop_token token = job.stop->get_token();
     for (const EffectRecipe &recipe : job.recipes) {
         if (token.stop_requested())
@@ -929,7 +1127,28 @@ void EffectBrowserDialog::handleRenderFinished()
     if (result.generation != m_generation)
         return;
     for (auto it = result.images.constBegin(); it != result.images.constEnd(); ++it) {
-        m_images.insert(cacheKeyFor(it.key()), it.value());
+        storeImage(it.key(), 100, it.value());
+        if (it.key() == m_selectedKey && selectedStrength() != 100)
+            continue;
+        if (EffectTile *tile = m_tiles.value(it.key()))
+            tile->setEffectImage(it.value());
+    }
+    if (!m_selectedKey.isEmpty() && selectedStrength() != 100)
+        scheduleSelectedRender();
+}
+
+void EffectBrowserDialog::handleSelectedRenderFinished()
+{
+    if (!m_selectedWatcher || !m_selectedWatcher->isFinished())
+        return;
+    m_selectedRendering = false;
+    const RenderResult result = m_selectedWatcher->result();
+    if (result.generation != m_selectedGeneration)
+        return;
+    if (result.key != m_selectedKey || result.strength != selectedStrength())
+        return;
+    for (auto it = result.images.constBegin(); it != result.images.constEnd(); ++it) {
+        storeImage(it.key(), result.strength, it.value());
         if (EffectTile *tile = m_tiles.value(it.key()))
             tile->setEffectImage(it.value());
     }

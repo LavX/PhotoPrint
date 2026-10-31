@@ -16,10 +16,8 @@ enum class FilterPreset {
     Crisp,      ///< Local contrast through a light unsharp mask.
 };
 
-/// Stable project keys and Hungarian labels for the preset picker.
-QString filterKey(FilterPreset preset);
+/// The preset a persisted 1.0.x project key names.
 FilterPreset filterFromKey(const QString &key);
-QString filterLabel(FilterPreset preset);
 
 /// Presets and enlargement for on-screen and in-page previews. Everything runs
 /// through MagickWand on 8-bit sRGB frames; nothing is written to disk and no

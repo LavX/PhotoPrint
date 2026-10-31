@@ -20,6 +20,8 @@ class QListWidget;
 class QPushButton;
 class QScrollArea;
 class QSlider;
+class QThreadPool;
+class QTimer;
 
 namespace pp {
 
@@ -49,13 +51,23 @@ QString effectButtonLabel(const QString &key, int version = 0);
 QString legacyEffectLabel();
 QString newEffectAffordance();
 
-/// True for the recipes whose dots or grain are finish stages: strength is not
-/// a continuous control there, because the screen either exists or it does not.
-bool effectIgnoresStrength(const QString &key);
 QString effectStrengthReason();
 
+/// The version Apply writes. A pinned frame keeps its version when the user
+/// re-applies the same effect; picking another effect takes that tile's
+/// recipe version, and Eredeti always writes 0.
+int appliedEffectVersion(const QString &key, int tileVersion, const QString &currentKey,
+                         int currentVersion);
+
+/// The one bounded pool every effect preview renders on. Two threads at most:
+/// one tile batch and one page preview may overlap, and the engine already
+/// keeps its wand passes atomic. The unbounded global pool is not used for
+/// previews.
+QThreadPool *effectPreviewPool();
+
 /// Effect browser: the twelve categories on the left, an `Eredeti` tile at the
-/// head of the grid, a search field and a strength slider. Tiles are rendered
+/// head of the grid, a search field and a strength slider. The dialog is a
+/// preview only: nothing reaches the document until Apply. Tiles are rendered
 /// lazily on one worker with a generation token, so the dialog opens at once
 /// and only the visible category costs anything.
 class EffectBrowserDialog : public QDialog
@@ -72,6 +84,7 @@ public:
     int visibleTileCount() const;
     QStringList visibleTileKeys() const;
     QString tileLabelFor(const QString &key) const;
+    QImage tileImage(const QString &key) const;
     bool tileHasImage(const QString &key) const;
     int renderedTileCount() const;
     bool strengthEnabled() const;
@@ -80,19 +93,22 @@ public:
     QString currentKey() const;
     QString selectedKey() const;
     bool tileMarkedCurrent(const QString &key) const;
+    bool applyEnabled() const;
+    bool hasLegacyMarker() const;
+    QString legacyMarkerText() const;
     int strengthValue() const;
     QSlider *strengthSlider() const { return m_strength; }
     /// Processes events until the visible set is rendered. Returns false on
     /// timeout; the dialog is never blocked while it waits.
     bool waitForRendering(int timeoutMs = 5000);
+    /// Processes events until the highlighted tile is rendered at the current
+    /// slider value.
+    bool waitForSelectedRender(int timeoutMs = 5000);
 
 signals:
     /// A tile was applied with Apply, Enter or a double click. The version is
-    /// the recipe's version and 0 for `Eredeti`.
+    /// the recipe version the frame keeps, and 0 for `Eredeti`.
     void effectChosen(const QString &key, int version, int strength);
-    /// The strength slider moved. The frame the browser was opened for is the
-    /// one being edited, live.
-    void strengthEdited(int strength);
 
 protected:
     void showEvent(QShowEvent *event) override;
@@ -108,11 +124,14 @@ private:
         int rasterPx = 0;
         int strength = 100;
         QString sampleHash;
+        QString pinnedKey; ///< the key whose pinned version was selected
         std::shared_ptr<std::stop_source> stop;
     };
 
     struct RenderResult {
         quint64 generation = 0;
+        QString key; ///< set for a single-tile render
+        int strength = 100;
         QHash<QString, QImage> images;
     };
 
@@ -124,21 +143,31 @@ private:
     void rebuildGrid();
     void relayoutGrid();
     int columnCount() const;
+    void categoryActivated();
     void scheduleRender();
     void handleRenderFinished();
+    void scheduleSelectedRender();
+    void handleSelectedRenderFinished();
     void selectTile(const QString &key);
     void activateCurrent();
+    void applyFirstMatch();
+    void resetStrengthForSelection();
     void syncStrengthUi();
     void updateCountLabel();
     void moveFocus(int delta);
-    QString cacheKeyFor(const QString &key) const;
+    void storeImage(const QString &key, int strength, const QImage &image);
+    QImage cachedImage(const QString &key, int strength) const;
+    EffectRecipe recipeForKey(const QString &key) const;
+    QString cacheKeyFor(const QString &key, int strength) const;
     QString scaledSampleHash() const;
+    int selectedStrength() const;
 
     EffectBrowserRequest m_request;
     QList<EffectRecipe> m_recipes;
     QHash<QString, EffectRecipe> m_byKey;
 
     QLineEdit *m_search = nullptr;
+    QLabel *m_legacyLabel = nullptr;
     QListWidget *m_categories = nullptr;
     QScrollArea *m_scroll = nullptr;
     QWidget *m_gridHost = nullptr;
@@ -149,6 +178,7 @@ private:
     QLabel *m_strengthHint = nullptr;
     QLabel *m_adjacentHint = nullptr;
     QSlider *m_strength = nullptr;
+    QTimer *m_strengthTimer = nullptr;
     QPushButton *m_applyButton = nullptr;
     QPushButton *m_closeButton = nullptr;
 
@@ -159,7 +189,7 @@ private:
     QImage m_sample;
     QSize m_tileSize;
     int m_rasterPx = 0;
-    int m_strengthMemory = 100;
+    int m_currentStrength = 100;
     int m_columns = 5;
     bool m_started = false;
 
@@ -168,6 +198,11 @@ private:
     QFutureWatcher<RenderResult> *m_watcher = nullptr;
     std::shared_ptr<RenderJob> m_activeJob;
     bool m_rendering = false;
+
+    quint64 m_selectedGeneration = 0;
+    QFutureWatcher<RenderResult> *m_selectedWatcher = nullptr;
+    std::shared_ptr<RenderJob> m_selectedJob;
+    bool m_selectedRendering = false;
 };
 
 } // namespace pp
