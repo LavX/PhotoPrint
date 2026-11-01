@@ -1233,10 +1233,6 @@
         <translation>Gap between photos</translation>
     </message>
     <message>
-        <source>Automatikus</source>
-        <translation>Automatic</translation>
-    </message>
-    <message>
         <source>Szegély</source>
         <translation>Border</translation>
     </message>
@@ -1251,10 +1247,6 @@
     <message>
         <source>Hely hozzáadása</source>
         <translation>Add cell</translation>
-    </message>
-    <message>
-        <source>Hely eltávolítása</source>
-        <translation>Remove cell</translation>
     </message>
     <message>
         <source>Elrendezés megszüntetése</source>
@@ -1290,6 +1282,30 @@
             <numerusform>%n cell</numerusform>
             <numerusform>%n cells</numerusform>
         </translation>
+    </message>
+    <message>
+        <source>Automatikus margó</source>
+        <translation>Automatic margin</translation>
+    </message>
+    <message>
+        <source>Automatikus hézag</source>
+        <translation>Automatic gap</translation>
+    </message>
+    <message>
+        <source>Hely törlése</source>
+        <translation>Delete cell</translation>
+    </message>
+    <message>
+        <source>A fotó szabadon marad a lapon, a többi hely a helyén marad.</source>
+        <translation>The photo stays on the page as a free photo. The other cells stay where they are.</translation>
+    </message>
+    <message>
+        <source>Az elrendezés megszűnt.</source>
+        <translation>The layout is gone.</translation>
+    </message>
+    <message>
+        <source>Az elrendezés megszűnt, a fotó a lapon marad.</source>
+        <translation>The layout is gone and the photo stays on the page.</translation>
     </message>
 </context>
 </TS>

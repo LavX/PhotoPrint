@@ -1226,10 +1226,6 @@
         <translation>照片间距</translation>
     </message>
     <message>
-        <source>Automatikus</source>
-        <translation>自动</translation>
-    </message>
-    <message>
         <source>Szegély</source>
         <translation>照片边框</translation>
     </message>
@@ -1244,10 +1240,6 @@
     <message>
         <source>Hely hozzáadása</source>
         <translation>添加单元格</translation>
-    </message>
-    <message>
-        <source>Hely eltávolítása</source>
-        <translation>删除单元格</translation>
     </message>
     <message>
         <source>Elrendezés megszüntetése</source>
@@ -1282,6 +1274,30 @@
         <translation>
             <numerusform>%n 个单元格</numerusform>
         </translation>
+    </message>
+    <message>
+        <source>Automatikus margó</source>
+        <translation>自动边距</translation>
+    </message>
+    <message>
+        <source>Automatikus hézag</source>
+        <translation>自动间距</translation>
+    </message>
+    <message>
+        <source>Hely törlése</source>
+        <translation>删除单元格</translation>
+    </message>
+    <message>
+        <source>A fotó szabadon marad a lapon, a többi hely a helyén marad.</source>
+        <translation>照片会作为自由照片留在页面上。其余单元格会留在原位。</translation>
+    </message>
+    <message>
+        <source>Az elrendezés megszűnt.</source>
+        <translation>布局已清除。</translation>
+    </message>
+    <message>
+        <source>Az elrendezés megszűnt, a fotó a lapon marad.</source>
+        <translation>布局已清除，照片留在页面上。</translation>
     </message>
 </context>
 </TS>

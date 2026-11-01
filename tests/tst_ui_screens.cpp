@@ -18,6 +18,7 @@
 #include <QPushButton>
 #include <QScrollArea>
 #include <QScrollBar>
+#include <QSettings>
 #include <QTimer>
 #include <QtTest>
 
@@ -118,10 +119,30 @@ class TestUiScreens : public QObject
     Q_OBJECT
 
 private slots:
+    void initTestCase();
     void captureStates();
     void captureSlotInteraction();
     void captureLayoutPanel();
+
+private:
+    QTemporaryDir m_settingsDir;
 };
+
+void TestUiScreens::initTestCase()
+{
+    // A language switch is saved and the window keeps a recovery checkpoint: both
+    // belong in a temporary profile. A checkpoint left behind would raise a modal
+    // question and the capture run would wait for a click that never comes.
+    QVERIFY(m_settingsDir.isValid());
+    QSettings::setDefaultFormat(QSettings::IniFormat);
+    QSettings::setPath(QSettings::IniFormat, QSettings::UserScope, m_settingsDir.path());
+    QCoreApplication::setOrganizationName(QStringLiteral("PhotoPrintTest"));
+    QCoreApplication::setApplicationName(QStringLiteral("PhotoPrintUiScreensTest"));
+    QSettings().clear();
+    qputenv("PHOTOPRINT_NO_RECOVERY", "1");
+    qputenv("PHOTOPRINT_NO_SETTINGS", "1");
+    qputenv("PHOTOPRINT_NO_CUPS", "1");
+}
 
 void TestUiScreens::captureStates()
 {
@@ -348,6 +369,36 @@ void TestUiScreens::captureLayoutPanel()
     auto *view = window.findChild<PageView *>();
     QVERIFY(view);
     QVERIFY(view->grab().save(evidenceDir() + QStringLiteral("/ui-layout-mats.png")));
+
+    // The same page as the print path rasterises it. An empty cell is paper with
+    // its mat: no dashed ring, no tint, nothing a printer would have to explain.
+    ImageStore store;
+    PageRenderer renderer(store);
+    const auto rendered = renderer.renderPage(window.document(), 0, 150.0);
+    if (!rendered)
+        QFAIL(qPrintable(rendered.error().message));
+    QVERIFY(rendered.value().save(evidenceDir() + QStringLiteral("/ui-layout-print.png")));
+
+    // The same panel at a 1.35x system font. The contract asks for a window that
+    // works with larger system text; the longest button used to clip here.
+    {
+        const QFont saved = QApplication::font();
+        QFont large = saved;
+        if (large.pointSizeF() > 0.0)
+            large.setPointSizeF(saved.pointSizeF() * 1.35);
+        else
+            large.setPixelSize(int(std::lround(saved.pixelSize() * 1.35)));
+        QApplication::setFont(large);
+        MainWindow largeWindow;
+        largeWindow.resize(1280, 800);
+        largeWindow.show();
+        QTest::qWait(150);
+        QVERIFY(loadDocument(largeWindow, dir, document));
+        QTest::qWait(300);
+        QVERIFY(largeWindow.grab().save(
+            evidenceDir() + QStringLiteral("/ui-layout-panel-large-font.png")));
+        QApplication::setFont(saved);
+    }
 
     // Dissolving keeps the photographs and removes the cells and the panel.
     answerNextQuestionWith(QMessageBox::Yes);

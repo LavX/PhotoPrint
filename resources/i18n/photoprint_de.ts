@@ -1233,10 +1233,6 @@
         <translation>Abstand zwischen den Fotos</translation>
     </message>
     <message>
-        <source>Automatikus</source>
-        <translation>Automatisch</translation>
-    </message>
-    <message>
         <source>Szegély</source>
         <translation>Fotorand</translation>
     </message>
@@ -1251,10 +1247,6 @@
     <message>
         <source>Hely hozzáadása</source>
         <translation>Zelle hinzufügen</translation>
-    </message>
-    <message>
-        <source>Hely eltávolítása</source>
-        <translation>Zelle entfernen</translation>
     </message>
     <message>
         <source>Elrendezés megszüntetése</source>
@@ -1290,6 +1282,30 @@
             <numerusform>%n Feld</numerusform>
             <numerusform>%n Felder</numerusform>
         </translation>
+    </message>
+    <message>
+        <source>Automatikus margó</source>
+        <translation>Automatischer Außenrand</translation>
+    </message>
+    <message>
+        <source>Automatikus hézag</source>
+        <translation>Automatischer Abstand</translation>
+    </message>
+    <message>
+        <source>Hely törlése</source>
+        <translation>Zelle löschen</translation>
+    </message>
+    <message>
+        <source>A fotó szabadon marad a lapon, a többi hely a helyén marad.</source>
+        <translation>Das Foto bleibt als freies Foto auf der Seite. Die übrigen Zellen bleiben, wo sie sind.</translation>
+    </message>
+    <message>
+        <source>Az elrendezés megszűnt.</source>
+        <translation>Das Layout ist aufgehoben.</translation>
+    </message>
+    <message>
+        <source>Az elrendezés megszűnt, a fotó a lapon marad.</source>
+        <translation>Das Layout ist aufgehoben, das Foto bleibt auf der Seite.</translation>
     </message>
 </context>
 </TS>

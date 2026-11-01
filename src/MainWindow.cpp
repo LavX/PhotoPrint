@@ -72,7 +72,6 @@
 
 #include <algorithm>
 #include <cmath>
-#include <utility>
 
 namespace pp {
 
@@ -88,6 +87,10 @@ constexpr double kRotateOffsetPx = 30.0;
 constexpr int kSettleDelayMs = 120;
 constexpr qint64 kMaxRasterPixels = 8000000; // retained raster ceiling (8 MP)
 constexpr int kEditPulseMs = 200;            // crop zoom or arrow nudge burst
+// A layout style edit follows the spin live and lands as one edit once the user
+// stops: short enough to feel immediate, long enough that a held arrow is one
+// undo step.
+constexpr int kStyleDebounceMs = 180;
 // A raster is kept while it is between 0.98x and 2x the view target: a slightly
 // larger raster is free and sharper than rebuilding a smaller one, and a 2x
 // surplus is still worth keeping. Outside that band the settle rebuilds.
@@ -2090,7 +2093,9 @@ void MainWindow::buildUi()
     auto *side = new QWidget(central);
     side->setObjectName(QStringLiteral("inspector"));
     side->setMinimumWidth(240);
-    side->setMaximumWidth(320);
+    // Wide enough for the longest label at a larger system font; the width the
+    // column actually gets is settled below from its own content.
+    side->setMaximumWidth(560);
     auto *sideLayout = new QVBoxLayout(side);
     sideLayout->setContentsMargins(12, 12, 12, 12);
     // A section header for one of the side column's two containers: the page's
@@ -2182,58 +2187,57 @@ void MainWindow::buildUi()
     m_layoutCountLabel->setStyleSheet(QStringLiteral("color: #6e6e73; font-size: 11px;"));
     layoutLayout->addWidget(m_layoutCountLabel);
 
-    // A length in millimetres. The title row carries the automatic switch when
-    // the field has one, and the spin gets the full width of the column below
-    // it, which is what a "10.0 mm" value needs next to its own arrows. Every
-    // one of them is committed when the edit finishes, so a typed "12" is one
-    // undo step, not one per keystroke.
-    const QString autoText = QCoreApplication::translate("PhotoPrint", "Automatikus");
-    const auto addLength = [side, layoutLayout, autoText](const QString &text,
-                                                         const QString &spinName,
-                                                         const QString &checkName,
-                                                         double maximum, double step) {
-        auto *titleRow = new QHBoxLayout;
+    // A length in millimetres. The spin gets the full width of the column, which
+    // is what a "10.0 mm" value needs next to its own arrows. For the two fields
+    // that can be automatic, the switch above it names the field ("Automatikus
+    // margó"), so the pair stays readable when the system font is larger.
+    const auto addTitle = [side, layoutLayout](const QString &text) {
         auto *title = new QLabel(text, side);
         title->setWordWrap(true);
-        titleRow->addWidget(title, 1);
-        QCheckBox *check = nullptr;
-        if (!checkName.isEmpty()) {
-            check = new QCheckBox(autoText, side);
-            check->setObjectName(checkName);
-            check->setAccessibleName(text);
-            titleRow->addWidget(check, 0);
-        }
-        layoutLayout->addLayout(titleRow);
+        layoutLayout->addWidget(title);
+    };
+    const auto addLength = [side, layoutLayout](const QString &spinName,
+                                                const QString &accessibleName, double maximum,
+                                                double step) {
         auto *spin = new QDoubleSpinBox(side);
         spin->setObjectName(spinName);
-        spin->setAccessibleName(text);
+        spin->setAccessibleName(accessibleName);
         spin->setDecimals(1);
         spin->setRange(0.0, maximum);
         spin->setSingleStep(step);
         spin->setSuffix(QStringLiteral(" mm"));
         spin->setMinimumWidth(96);
         layoutLayout->addWidget(spin);
-        return std::pair<QDoubleSpinBox *, QCheckBox *>{spin, check};
+        return spin;
+    };
+    const auto addAutomatic = [side, layoutLayout](const QString &text, const QString &name) {
+        auto *check = new QCheckBox(text, side);
+        check->setObjectName(name);
+        layoutLayout->addWidget(check);
+        return check;
     };
 
-    const auto margin = addLength(
-        QCoreApplication::translate("PhotoPrint", "Külső margó"), QStringLiteral("marginSpin"),
-        QStringLiteral("marginAutoCheck"), SlotGeometry::kMaxMarginMm, 0.5);
-    m_marginSpin = margin.first;
-    m_marginAutoCheck = margin.second;
-    const auto gutter = addLength(
-        QCoreApplication::translate("PhotoPrint", "Képek közti hézag"),
-        QStringLiteral("gutterSpin"), QStringLiteral("gutterAutoCheck"),
-        SlotGeometry::kMaxGutterMm, 0.5);
-    m_gutterSpin = gutter.first;
-    m_gutterAutoCheck = gutter.second;
-    const auto border = addLength(QCoreApplication::translate("PhotoPrint", "Szegély"),
-                                  QStringLiteral("borderSpin"), QString(),
-                                  SlotGeometry::kMaxBorderMm, 0.5);
-    m_borderSpin = border.first;
+    m_marginAutoCheck = addAutomatic(
+        QCoreApplication::translate("PhotoPrint", "Automatikus margó"),
+        QStringLiteral("marginAutoCheck"));
+    m_marginSpin = addLength(QStringLiteral("marginSpin"),
+                             QCoreApplication::translate("PhotoPrint", "Külső margó"),
+                             SlotGeometry::kMaxMarginMm, 0.5);
+    m_gutterAutoCheck = addAutomatic(
+        QCoreApplication::translate("PhotoPrint", "Automatikus hézag"),
+        QStringLiteral("gutterAutoCheck"));
+    m_gutterSpin = addLength(QStringLiteral("gutterSpin"),
+                             QCoreApplication::translate("PhotoPrint", "Képek közti hézag"),
+                             SlotGeometry::kMaxGutterMm, 0.5);
+    addTitle(QCoreApplication::translate("PhotoPrint", "Szegély"));
+    m_borderSpin = addLength(QStringLiteral("borderSpin"),
+                             QCoreApplication::translate("PhotoPrint", "Szegély"),
+                             SlotGeometry::kMaxBorderMm, 0.5);
 
     // The border colour: a swatch button, because the colour itself is the
-    // control. Alpha is allowed, so a translucent mat is a real choice.
+    // control. Alpha is allowed, so a translucent mat is a real choice. With no
+    // border width there is nothing to colour, so the panel disables it instead
+    // of storing a colour nobody can see.
     auto *colourTitle =
         new QLabel(QCoreApplication::translate("PhotoPrint", "Szegély színe"), side);
     colourTitle->setWordWrap(true);
@@ -2247,10 +2251,10 @@ void MainWindow::buildUi()
     connect(m_borderColourButton, &QPushButton::clicked, this,
             &MainWindow::chooseSlotBorderColour);
 
-    const auto radius = addLength(
-        QCoreApplication::translate("PhotoPrint", "Sarok lekerekítése"),
-        QStringLiteral("radiusSpin"), QString(), SlotGeometry::kMaxCornerRadiusMm, 1.0);
-    m_radiusSpin = radius.first;
+    addTitle(QCoreApplication::translate("PhotoPrint", "Sarok lekerekítése"));
+    m_radiusSpin = addLength(QStringLiteral("radiusSpin"),
+                             QCoreApplication::translate("PhotoPrint", "Sarok lekerekítése"),
+                             SlotGeometry::kMaxCornerRadiusMm, 1.0);
 
     // The two cell actions sit on their own rows: at the narrowest side column a
     // pair of buttons would have to clip its own label.
@@ -2261,7 +2265,7 @@ void MainWindow::buildUi()
     connect(m_addSlotButton, &QPushButton::clicked, this, &MainWindow::addSlotToPage);
 
     m_removeSlotButton =
-        new QPushButton(QCoreApplication::translate("PhotoPrint", "Hely eltávolítása"), side);
+        new QPushButton(QCoreApplication::translate("PhotoPrint", "Hely törlése"), side);
     m_removeSlotButton->setObjectName(QStringLiteral("removeSlotButton"));
     m_removeSlotButton->setToolTip(
         QCoreApplication::translate("PhotoPrint", "Válaszd ki a helyet a lapon."));
@@ -2288,17 +2292,44 @@ void MainWindow::buildUi()
     connect(m_layoutTemplatesButton, &QPushButton::clicked, this,
             &MainWindow::openTemplateBrowser);
 
-    for (QDoubleSpinBox *spin : {m_marginSpin, m_gutterSpin, m_borderSpin, m_radiusSpin})
-        connect(spin, &QDoubleSpinBox::editingFinished, this, &MainWindow::applySlotStyle);
+    // One burst timer for the four spins: a value change restarts it, so the
+    // page follows live and the whole burst lands as one undo step.
+    if (!m_styleTimer) {
+        m_styleTimer = new QTimer(this);
+        m_styleTimer->setSingleShot(true);
+        m_styleTimer->setInterval(kStyleDebounceMs);
+        connect(m_styleTimer, &QTimer::timeout, this, &MainWindow::flushSlotStyle);
+    }
+    m_pendingStyleField.reset();
+    const struct {
+        QDoubleSpinBox *spin;
+        SlotStyleField field;
+    } styleSpins[] = {
+        {m_marginSpin, SlotStyleField::Margin},
+        {m_gutterSpin, SlotStyleField::Gutter},
+        {m_borderSpin, SlotStyleField::Border},
+        {m_radiusSpin, SlotStyleField::Radius},
+    };
+    for (const auto &entry : styleSpins) {
+        connect(entry.spin, &QDoubleSpinBox::valueChanged, this,
+                [this, field = entry.field](double) { queueSlotStyle(field); });
+        connect(entry.spin, &QDoubleSpinBox::editingFinished, this,
+                [this, field = entry.field] {
+                    if (m_pendingStyleField && *m_pendingStyleField == field)
+                        flushSlotStyle();
+                });
+    }
     connect(m_marginAutoCheck, &QCheckBox::toggled, this, [this](bool automatic) {
-        // The spin follows the switch immediately; the document change that
-        // follows confirms it.
+        // A switch is one action, not a burst: it lands at once, and its spin
+        // follows it.
         m_marginSpin->setEnabled(!automatic);
-        applySlotStyle();
+        cancelPendingStyle();
+        applySlotStyleField(SlotStyleField::Margin);
     });
     connect(m_gutterAutoCheck, &QCheckBox::toggled, this, [this](bool automatic) {
         m_gutterSpin->setEnabled(!automatic);
-        applySlotStyle();
+        cancelPendingStyle();
+        applySlotStyleField(SlotStyleField::Gutter);
     });
     layoutPanel->setVisible(false);
     sideLayout->addWidget(layoutPanel);
@@ -2559,12 +2590,18 @@ void MainWindow::buildUi()
     sideScroll->setWidgetResizable(true);
     sideScroll->setFrameShape(QFrame::NoFrame);
     sideScroll->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
-    sideScroll->setMinimumWidth(240);
-    sideScroll->setMaximumWidth(330);
     sideScroll->setMinimumHeight(0);
     side->setMinimumHeight(0);
     side->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Ignored);
     sideScroll->setWidget(side);
+    // The column is never narrower than its own content. At the default font
+    // that is the old 240 px; at a larger system font the buttons and labels need
+    // more, and a horizontal scroll bar is switched off, so without this they
+    // would be clipped instead of laid out.
+    sideLayout->activate();
+    const int contentWidth = side->minimumSizeHint().width();
+    sideScroll->setMinimumWidth(std::max(240, contentWidth));
+    sideScroll->setMaximumWidth(std::max(330, contentWidth + 40));
     m_inspectorPanel = sideScroll;
     layout->addWidget(library);
     layout->addWidget(m_pageView, 1);
@@ -3279,6 +3316,10 @@ void MainWindow::clearSlot(const QString &slotId)
 
 void MainWindow::onDocumentChanged()
 {
+    // A change from outside the panel (an undo, a project load, another page)
+    // makes a pending style burst stale: landing it afterwards would write a
+    // value into a document the user is no longer looking at.
+    cancelPendingStyle();
     if (!m_restoringProject) {
         m_dirty = true;
         if (m_checkpointTimer)
@@ -4060,6 +4101,10 @@ void MainWindow::syncLayoutPanel()
     const double shortSide = std::min(sheet.width(), sheet.height());
     const double marginLimit = std::max(
         0.0, std::min(SlotGeometry::kMaxMarginMm, shortSide / 2.0 - 2.0));
+    // The gutter has its own range, so a future change to one constant cannot
+    // silently move the other.
+    const double gutterLimit = std::max(
+        0.0, std::min(SlotGeometry::kMaxGutterMm, shortSide / 2.0 - 2.0));
     // The border and the radius are clamped per cell, so the smallest cell on
     // the page is the one that limits them.
     double shortestCell = 0.0;
@@ -4091,7 +4136,7 @@ void MainWindow::syncLayoutPanel()
     const bool automaticGutter = !style.gutterMm.has_value();
     m_gutterAutoCheck->setChecked(automaticGutter);
     m_gutterSpin->setEnabled(!automaticGutter);
-    m_gutterSpin->setMaximum(marginLimit);
+    m_gutterSpin->setMaximum(gutterLimit);
     m_gutterSpin->setValue(
         style.gutterMm.value_or(SlotGeometry::effectiveGutterMm(style, sheet)));
 
@@ -4113,6 +4158,9 @@ void MainWindow::syncLayoutPanel()
     }
     m_borderColourButton->setIcon(QIcon(swatch));
     m_borderColourButton->setToolTip(style.borderColor.name(QColor::HexArgb));
+    // With no border width there is nothing to colour: the button is the one
+    // control that would otherwise make an undo with no visible effect.
+    m_borderColourButton->setEnabled(style.borderMm > 0.0);
 
     m_addSlotButton->setEnabled(page->slotList.size() < SlotGeometry::kMaxSlotsPerPage);
     m_removeSlotButton->setEnabled(
@@ -4120,7 +4168,37 @@ void MainWindow::syncLayoutPanel()
     m_syncing = wasSyncing;
 }
 
-void MainWindow::applySlotStyle()
+void MainWindow::queueSlotStyle(SlotStyleField field)
+{
+    if (m_syncing || !m_styleTimer)
+        return;
+    // A burst belongs to the control it was started in. Moving straight from one
+    // spin to another lands the first one instead of rewriting the burst, so no
+    // accepted value is ever dropped.
+    if (m_pendingStyleField && *m_pendingStyleField != field)
+        flushSlotStyle();
+    // One spin keeps one undo step no matter how many notches the user clicks.
+    m_pendingStyleField = field;
+    m_styleTimer->start();
+}
+
+void MainWindow::cancelPendingStyle()
+{
+    if (m_styleTimer)
+        m_styleTimer->stop();
+    m_pendingStyleField.reset();
+}
+
+void MainWindow::flushSlotStyle()
+{
+    if (!m_pendingStyleField)
+        return;
+    const SlotStyleField field = *m_pendingStyleField;
+    cancelPendingStyle();
+    applySlotStyleField(field);
+}
+
+void MainWindow::applySlotStyleField(SlotStyleField field)
 {
     if (m_syncing)
         return;
@@ -4131,20 +4209,34 @@ void MainWindow::applySlotStyle()
     if (!page.hasLayout())
         return;
 
+    // Only the edited field comes from the panel. The other three stay exactly
+    // as the page stores them, so a value this paper clamps on screen (a 20 mm
+    // border on a sheet whose cells only allow 19.1 mm) is never written back
+    // over the stored one because some other control was touched.
     SlotStyle style = page.slotStyle;
-    // An unchecked box pins the value in the spin, so 0 mm is a real choice and
-    // "automatic" is the absence of one.
-    style.marginMm = m_marginAutoCheck->isChecked()
-        ? std::nullopt
-        : std::optional<double>(m_marginSpin->value());
-    style.gutterMm = m_gutterAutoCheck->isChecked()
-        ? std::nullopt
-        : std::optional<double>(m_gutterSpin->value());
-    style.borderMm = m_borderSpin->value();
-    style.cornerRadiusMm = m_radiusSpin->value();
+    switch (field) {
+    case SlotStyleField::Margin:
+        // An unchecked switch pins the value in the spin, so 0 mm is a real
+        // choice and "automatic" is the absence of one.
+        style.marginMm = m_marginAutoCheck->isChecked()
+            ? std::nullopt
+            : std::optional<double>(m_marginSpin->value());
+        break;
+    case SlotStyleField::Gutter:
+        style.gutterMm = m_gutterAutoCheck->isChecked()
+            ? std::nullopt
+            : std::optional<double>(m_gutterSpin->value());
+        break;
+    case SlotStyleField::Border:
+        style.borderMm = m_borderSpin->value();
+        break;
+    case SlotStyleField::Radius:
+        style.cornerRadiusMm = m_radiusSpin->value();
+        break;
+    }
     if (style == page.slotStyle) {
-        // A focus loss on an untouched spin is not an edit: no undo entry, and
-        // the control still settles on the value the page actually uses.
+        // The field already holds this value, so there is nothing to undo and no
+        // undo entry is pushed.
         syncLayoutPanel();
         return;
     }
@@ -4154,8 +4246,7 @@ void MainWindow::applySlotStyle()
         syncLayoutPanel();
         return;
     }
-    const bool spacing = style.marginMm != page.slotStyle.marginMm
-        || style.gutterMm != page.slotStyle.gutterMm;
+    const bool spacing = field == SlotStyleField::Margin || field == SlotStyleField::Gutter;
     const auto published = m_controller.publishPage(
         restyled.value(),
         spacing ? QCoreApplication::translate("PhotoPrint", "Margó beállítása")
@@ -4175,6 +4266,11 @@ void MainWindow::applySlotBorderColour(const QColor &colour)
         return;
     const Page &page = document.pages.at(document.currentPage);
     if (!page.hasLayout())
+        return;
+    // A colour with no border width paints nothing, so it is not an edit. The
+    // button is disabled in that state as well; this guard keeps a stray call
+    // from pushing an undo entry nobody can see.
+    if (!(SlotGeometry::sanitiseStyle(page.slotStyle).borderMm > 0.0))
         return;
     SlotStyle style = page.slotStyle;
     style.borderColor = colour; // alpha included: a translucent mat is a choice
@@ -4234,26 +4330,54 @@ void MainWindow::removeSlotFromPage()
     const DocumentSnapshot document = m_controller.document();
     if (document.pages.isEmpty())
         return;
-    const Page page = document.pages.at(document.currentPage);
+    Page page = document.pages.at(document.currentPage);
     const QString slotId = m_selectedSlotId;
     if (!page.hasLayout() || slotId.isEmpty() || !SlotGeometry::slotById(page, slotId))
         return;
+
+    // The photograph is not deleted with its cell. It comes off the layout first
+    // and stays on the page as a free frame, exactly where it was printed, so
+    // removing a cell can never destroy a picture. One edit carries both halves.
+    bool detached = false;
+    if (const Frame *occupant = SlotGeometry::frameInSlot(page, slotId)) {
+        for (Frame &frame : page.frames) {
+            if (frame.id != occupant->id)
+                continue;
+            frame.slotId.clear();
+            frame.autoPlaced = false;
+            detached = true;
+            break;
+        }
+    }
+
     auto removed = SlotLayoutEngine::removeSlot(page, slotId);
     if (!removed) {
         showProblem(removed.error().message);
         return;
     }
     const auto published = m_controller.publishPage(
-        removed.value(), QCoreApplication::translate("PhotoPrint", "Hely eltávolítása"));
+        removed.value(), QCoreApplication::translate("PhotoPrint", "Hely törlése"));
     if (!published) {
         showProblem(published.error().message);
         return;
     }
-    // The other cells keep their rectangles: the neighbours do not slide
-    // together, so the space the removed cell leaves stays empty. Say it,
-    // because that is the one thing the result does not show by itself.
-    statusBar()->showMessage(
-        QCoreApplication::translate("PhotoPrint", "A többi hely a helyén marad."), 6000);
+    // Say what the page does not show by itself. The neighbours keep their
+    // rectangles, so the space a removed cell leaves stays empty; and the last
+    // cell takes the layout with it, which must not be reported as a gap.
+    const bool dissolved = removed.value().slotList.isEmpty();
+    QString message;
+    if (dissolved) {
+        message = detached
+            ? QCoreApplication::translate(
+                  "PhotoPrint", "Az elrendezés megszűnt, a fotó a lapon marad.")
+            : QCoreApplication::translate("PhotoPrint", "Az elrendezés megszűnt.");
+    } else if (detached) {
+        message = QCoreApplication::translate(
+            "PhotoPrint", "A fotó szabadon marad a lapon, a többi hely a helyén marad.");
+    } else {
+        message = QCoreApplication::translate("PhotoPrint", "A többi hely a helyén marad.");
+    }
+    statusBar()->showMessage(message, 6000);
 }
 
 void MainWindow::dissolvePageLayout()
@@ -4385,6 +4509,7 @@ void MainWindow::paperChanged(int index)
     const DocumentSnapshot document = m_controller.document();
     if (document.pages.isEmpty())
         return;
+    flushSlotStyle();
     m_paperName = currentPaper().name;
     m_controller.apply(SetProjectPaperEdit{currentPaper()});
     saveSettings();
@@ -4626,6 +4751,7 @@ void MainWindow::orientationChanged(int index)
     const DocumentSnapshot document = m_controller.document();
     if (document.pages.isEmpty())
         return;
+    flushSlotStyle();
     m_landscape = landscape;
     m_controller.apply(SetProjectLandscapeEdit{landscape});
     saveSettings();
@@ -4784,6 +4910,7 @@ void MainWindow::savePdfAll()
 
 void MainWindow::pageSelected(int index)
 {
+    flushSlotStyle();
     m_selectedId.clear();
     m_selectedSlotId.clear();
     m_controller.setCurrentPage(index);

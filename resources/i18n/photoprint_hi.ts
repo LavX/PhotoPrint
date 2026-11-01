@@ -1233,10 +1233,6 @@
         <translation>फ़ोटो के बीच की दूरी</translation>
     </message>
     <message>
-        <source>Automatikus</source>
-        <translation>स्वचालित</translation>
-    </message>
-    <message>
         <source>Szegély</source>
         <translation>किनारा</translation>
     </message>
@@ -1251,10 +1247,6 @@
     <message>
         <source>Hely hozzáadása</source>
         <translation>सेल जोड़ें</translation>
-    </message>
-    <message>
-        <source>Hely eltávolítása</source>
-        <translation>सेल हटाएँ</translation>
     </message>
     <message>
         <source>Elrendezés megszüntetése</source>
@@ -1290,6 +1282,30 @@
             <numerusform>%n सेल</numerusform>
             <numerusform>%n सेलें</numerusform>
         </translation>
+    </message>
+    <message>
+        <source>Automatikus margó</source>
+        <translation>स्वचालित मार्जिन</translation>
+    </message>
+    <message>
+        <source>Automatikus hézag</source>
+        <translation>स्वचालित दूरी</translation>
+    </message>
+    <message>
+        <source>Hely törlése</source>
+        <translation>सेल हटाएँ</translation>
+    </message>
+    <message>
+        <source>A fotó szabadon marad a lapon, a többi hely a helyén marad.</source>
+        <translation>फ़ोटो पेज पर खुली रह जाएगी। बाकी सेल अपनी जगह पर रहेंगी।</translation>
+    </message>
+    <message>
+        <source>Az elrendezés megszűnt.</source>
+        <translation>लेआउट हट गया।</translation>
+    </message>
+    <message>
+        <source>Az elrendezés megszűnt, a fotó a lapon marad.</source>
+        <translation>लेआउट हट गया और फ़ोटो पेज पर रह जाएगी।</translation>
     </message>
 </context>
 </TS>

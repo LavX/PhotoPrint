@@ -1233,10 +1233,6 @@
         <translation>Espace entre les photos</translation>
     </message>
     <message>
-        <source>Automatikus</source>
-        <translation>Automatique</translation>
-    </message>
-    <message>
         <source>Szegély</source>
         <translation>Bordure</translation>
     </message>
@@ -1251,10 +1247,6 @@
     <message>
         <source>Hely hozzáadása</source>
         <translation>Ajouter une case</translation>
-    </message>
-    <message>
-        <source>Hely eltávolítása</source>
-        <translation>Retirer la case</translation>
     </message>
     <message>
         <source>Elrendezés megszüntetése</source>
@@ -1290,6 +1282,30 @@
             <numerusform>%n case</numerusform>
             <numerusform>%n cases</numerusform>
         </translation>
+    </message>
+    <message>
+        <source>Automatikus margó</source>
+        <translation>Marge automatique</translation>
+    </message>
+    <message>
+        <source>Automatikus hézag</source>
+        <translation>Espacement automatique</translation>
+    </message>
+    <message>
+        <source>Hely törlése</source>
+        <translation>Supprimer la case</translation>
+    </message>
+    <message>
+        <source>A fotó szabadon marad a lapon, a többi hely a helyén marad.</source>
+        <translation>La photo reste sur la page, libre. Les autres cases restent à leur place.</translation>
+    </message>
+    <message>
+        <source>Az elrendezés megszűnt.</source>
+        <translation>La disposition a disparu.</translation>
+    </message>
+    <message>
+        <source>Az elrendezés megszűnt, a fotó a lapon marad.</source>
+        <translation>La disposition a disparu et la photo reste sur la page.</translation>
     </message>
 </context>
 </TS>
