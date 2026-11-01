@@ -16,8 +16,10 @@
 #include <QHash>
 #include <QElapsedTimer>
 #include <QImage>
+#include <QListWidget>
 #include <QMainWindow>
 #include <QPointer>
+#include <QSet>
 
 #include <QFutureWatcher>
 
@@ -30,8 +32,10 @@ class QAbstractButton;
 class QCheckBox;
 class QComboBox;
 class QDoubleSpinBox;
+class QDragEnterEvent;
+class QDragMoveEvent;
+class QDropEvent;
 class QLabel;
-class QListWidget;
 class QMenu;
 class QPushButton;
 class QSlider;
@@ -42,6 +46,25 @@ namespace pp {
 
 class EffectBrowserDialog;
 class TemplateBrowserDialog;
+
+/// The drag payload a photo in the library publishes. The frame id travels as
+/// the data, so the canvas knows exactly which photo to move instead of guessing
+/// from a thumbnail. Never shown to the user.
+inline constexpr char kFrameMimeType[] = "application/x-photoprint-frame";
+
+/// The left photo list. It is the current page's frames, so dragging out of it
+/// is a move, never a copy: the canvas applies the frame id to the slot it is
+/// dropped on. Dragging is the only drag mode; the list keeps its own order.
+class PhotoListWidget : public QListWidget
+{
+    Q_OBJECT
+
+public:
+    explicit PhotoListWidget(QWidget *parent = nullptr);
+
+protected:
+    QMimeData *mimeData(const QList<QListWidgetItem *> &items) const override;
+};
 
 /// The paper surface. It paints the same page recipe the export uses and adds
 /// editor-only marks; the marks never reach the PDF.
@@ -59,6 +82,35 @@ public:
     double viewZoom() const { return m_viewZoom; }
     void setSelectedFrame(const QString &frameId);
     QString selectedFrame() const { return m_selectedId; }
+    /// Which slot the selection sits in. A selected photo inside a layout also
+    /// selects its cell, so the inspector can talk about the cell even before
+    /// the layout panel exists. An empty id means no cell is selected.
+    void setSelectedSlot(const QString &slotId);
+    QString selectedSlot() const { return m_selectedSlotId; }
+
+    /// How a laid-out cell looks on screen right now. The three placeholder
+    /// states are screen-only; they are never part of the page raster.
+    enum class SlotState {
+        Filled,  ///< a photograph is decoded and the raster shows it
+        Empty,   ///< the cell has no photograph at all
+        Loading, ///< a photograph is assigned but its pixels are still decoding
+        Missing  ///< the photograph cannot be read (missing or undecodable)
+    };
+    SlotState slotState(const QString &slotId) const;
+    /// The frame ids the window has proven unreadable. A cell is "loading" until
+    /// the window says otherwise, so a fresh drop never flashes "not found".
+    void setUnavailableFrames(const QSet<QString> &frameIds);
+    /// A slot's cell in widget coordinates, or an empty rect. A utility for
+    /// tests and for pointing a hint at a cell; it is not used by paintEvent.
+    QRectF slotRect(const QString &slotId) const;
+    /// The slot under a widget point, or an empty id.
+    QString slotAtWidget(const QPointF &widgetPoint) const;
+    /// Test hooks: run the platform's drag handlers without a live drag
+    /// manager, which the offscreen platform does not have. The handlers are
+    /// the same code the window sees in use.
+    void dragEnterForTest(QDragEnterEvent *event) { dragEnterEvent(event); }
+    void dragMoveForTest(QDragMoveEvent *event) { dragMoveEvent(event); }
+    void dropForTest(QDropEvent *event) { dropEvent(event); }
     void setCropMode(bool enabled);
     bool cropMode() const { return m_cropMode; }
     void setEmptyHint(const QString &text);
@@ -94,10 +146,16 @@ public:
     void retryComposition();
 
     std::function<void(const QString &)> onSelectionChanged;
+    std::function<void(const QString &)> onSlotSelectionChanged;
     std::function<void(const Frame &)> onFrameCommitted;
     std::function<void(const QString &)> onDeleteRequested;
+    std::function<void(const QString &)> onEmptySlotRequested;
     std::function<void()> onCropModeExited;
-    std::function<void(const QStringList &)> onFilesDropped;
+    /// Files from the file manager (second argument: the slot under the cursor,
+    /// empty for the page background) and one frame dragged out of the library
+    /// (frame id, slot id or empty when dropped outside every slot).
+    std::function<void(const QStringList &, const QString &)> onFilesDroppedAt;
+    std::function<void(const QString &, const QString &)> onFrameDroppedAt;
     std::function<void(double)> onViewZoomChanged;
     std::function<void(bool)> onCropModeChanged;
     std::function<void()> onCancelBusy;
@@ -117,6 +175,8 @@ protected:
     void keyPressEvent(QKeyEvent *event) override;
     void mouseDoubleClickEvent(QMouseEvent *event) override;
     void dragEnterEvent(QDragEnterEvent *event) override;
+    void dragMoveEvent(QDragMoveEvent *event) override;
+    void dragLeaveEvent(QDragLeaveEvent *event) override;
     void dropEvent(QDropEvent *event) override;
 
 private:
@@ -154,11 +214,16 @@ private:
     };
 
     const Frame *selectedFramePtr() const;
+    const Page *currentPage() const;
     QTransform pageToWidget() const;
     QPointF widgetToPage(const QPointF &point) const;
     QPolygonF frameQuadWidget(const Frame &frame) const;
     int hitFrame(const QPointF &widgetPoint) const;
+    int hitSlot(const QPointF &widgetPoint) const;
     int hitHandle(const QPointF &widgetPoint) const;
+    SlotState slotStateFor(const Slot &slot) const;
+    void paintSlotOverlays(QPainter &painter, const Page &page) const;
+    void clearSelection();
     void beginDrag(DragKind kind, int handle, const QPointF &pagePoint, const Frame &frame);
     void ensureComposed() const;
     void startCompose() const;
@@ -179,13 +244,19 @@ private:
     void scheduleSettle();
     static QSize capRasterSize(QSize pixels, qint64 maxPixels);
     static ComposeResult composePage(const ComposeJob &job);
-    void updateLiveFrame(const Frame &frame);
+    void updateLiveFrame(const Frame &frame, bool markDragChanged = true);
+    /// The end of a wheel burst publishes one edit, not one per notch, so one
+    /// Ctrl+Z restores the photo's crop and zoom as the user saw it before.
+    void flushWheelZoom();
     Frame draggedFrame(const QPointF &pagePoint, bool fine) const;
     void positionBusyOverlay();
 
     DocumentSnapshot m_document;
     QHash<QString, QImage> m_images;
+    QSet<QString> m_unavailable;
     QString m_selectedId;
+    QString m_selectedSlotId;
+    QString m_dropSlotId;
     QString m_emptyHint;
     bool m_cropMode = false;
     double m_viewZoom = 1.0;
@@ -198,6 +269,12 @@ private:
     // once when the burst ends.
     QElapsedTimer m_cropZoomPulse;
     QElapsedTimer m_nudgePulse;
+    // A wheel burst on a photo inside a slot: the live frame follows every
+    // notch and one commit lands when the wheel stops.
+    QTimer *m_zoomTimer = nullptr;
+    QString m_zoomFrameId;
+    Frame m_zoomStartFrame;
+    Frame m_zoomCurrentFrame;
     QColor m_canvasColor{0xd9, 0xd9, 0xde};
     QColor m_pageBorderColor{0xc7, 0xc7, 0xcc};
     QColor m_pageShadowColor{0, 0, 0, 38};
@@ -235,6 +312,10 @@ public:
     ~MainWindow() override;
 
     DocumentSnapshot document() const { return m_controller.document(); }
+    /// The cell the canvas has selected, or empty. A photo inside a layout
+    /// selects its cell too; an empty cell can be selected on its own. The
+    /// layout panel of the next slice reads this state.
+    QString selectedSlot() const { return m_selectedSlotId; }
 
     /// Test hooks for the asynchronous page preview. The GUI thread starts a
     /// job and returns; the previous image stays installed until the matching
@@ -294,9 +375,12 @@ private slots:
     /// The collage template picker for the current page. Browsing never touches
     /// the document; the chosen template comes back to applyTemplate().
     void openTemplateBrowser();
-    /// Applies one catalogue template to the current page as a single
-    /// SetFramesEdit, so one undo restores the layout. Returns false and says
-    /// why on the status line when the engine refuses.
+    /// Applies one catalogue template to the current page as one page edit, so
+    /// one undo restores the layout. The slot engine creates the cells (and the
+    /// layout label) and assigns the photographs in display order; the page's
+    /// own layout is topped up, any other page is laid out from scratch. Fewer
+    /// photographs than cells is legal and the surplus stays free. Returns false
+    /// and says why when the engine refuses.
     bool applyTemplate(const QString &templateId);
 
 private:
@@ -307,6 +391,18 @@ private:
     void setLanguage(const QString &code);
     void showAbout();
     void addPhoto(const QString &path);
+    /// Files dropped on the canvas, or picked by "Fotók hozzáadása": a slot id
+    /// sends them there, an empty one is the page background (first empty slot
+    /// on a laid-out page). One edit, one undo.
+    void addFilesAt(const QStringList &paths, const QString &slotId);
+    /// One photo dragged out of the library: move or swap into a slot, or
+    /// detach to a free frame when dropped outside every slot.
+    void dropFrameAt(const QString &frameId, const QString &slotId);
+    /// Removes the photograph in a cell and keeps the cell empty.
+    void clearSlot(const QString &slotId);
+    /// Selects a cell; a filled cell selects its photograph instead.
+    void selectSlot(const QString &slotId);
+    std::optional<Frame> photoPayload(const QString &path, const Page &page);
     void refreshPhotoList();
     void rebuildPreviewImages();
     void startPreviewJob();
@@ -433,7 +529,12 @@ private:
 
     bool m_syncing = false;
     QString m_selectedId;
+    QString m_selectedSlotId;
     QHash<QString, QImage> m_previewImages;
+    /// Frames whose source could not be decoded on the last preview pass, so a
+    /// slot can say "not found" instead of pretending to load forever. A frame
+    /// that is simply not decoded yet is not in here.
+    QSet<QString> m_unavailableFrames;
     QHash<QString, QImage> m_originalPreviews;
     QPointer<EffectBrowserDialog> m_effectDialog;
     QPointer<TemplateBrowserDialog> m_templateDialog;

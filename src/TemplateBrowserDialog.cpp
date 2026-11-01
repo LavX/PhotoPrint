@@ -143,6 +143,14 @@ void TemplateBrowserDialog::buildUi()
     m_subtitle->setPalette(secondary);
     outer->addWidget(m_subtitle);
 
+    // The layout the page already uses, named by its catalogue label. It is a
+    // label only, so an unknown id simply does not name a layout.
+    m_currentLabel = new QLabel(this);
+    m_currentLabel->setObjectName(QStringLiteral("templateCurrentLayout"));
+    m_currentLabel->setWordWrap(true);
+    m_currentLabel->setVisible(false);
+    outer->addWidget(m_currentLabel);
+
     auto *chipHeader = new QLabel(QCoreApplication::translate("PhotoPrint", "Hány fotóhoz?"), this);
     chipHeader->setObjectName(QStringLiteral("templateChipHeader"));
     QFont headerFont = chipHeader->font();
@@ -150,8 +158,8 @@ void TemplateBrowserDialog::buildUi()
     chipHeader->setFont(headerFont);
     outer->addWidget(chipHeader);
 
-    // Every count 2..10 is browsable, whatever the page holds: browsing is how
-    // somebody with an empty page discovers what the feature offers.
+    // Every count 2..10 is browsable, whatever the page holds: the chip is a
+    // filter, never a gate. An empty page can pick a layout and fill it later.
     m_chipRow = new QWidget(this);
     m_chipRow->setObjectName(QStringLiteral("templateCountChips"));
     m_chipRow->setAccessibleName(QCoreApplication::translate("PhotoPrint", "Fotószám"));
@@ -174,35 +182,6 @@ void TemplateBrowserDialog::buildUi()
     m_grid->setUniformItemSizes(true);
     m_grid->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
     outer->addWidget(m_grid, 1);
-
-    m_mismatchLabel = new QLabel(this);
-    m_mismatchLabel->setObjectName(QStringLiteral("templateMismatch"));
-    m_mismatchLabel->setWordWrap(true);
-    m_mismatchLabel->setVisible(false);
-    outer->addWidget(m_mismatchLabel);
-
-    // The action that helps, and only when it helps: fewer photos than the
-    // layout needs can be fixed by adding them; more photos cannot, so that case
-    // explains itself instead of offering a button that makes it worse.
-    m_directionLabel = new QLabel(this);
-    m_directionLabel->setObjectName(QStringLiteral("templateDirection"));
-    m_directionLabel->setWordWrap(true);
-    m_directionLabel->setVisible(false);
-    outer->addWidget(m_directionLabel);
-
-    m_addPhotosButton =
-        new QPushButton(QCoreApplication::translate("PhotoPrint", "Fotók hozzáadása"), this);
-    m_addPhotosButton->setObjectName(QStringLiteral("templateAddPhotosButton"));
-    m_addPhotosButton->setAccessibleName(QCoreApplication::translate("PhotoPrint", "Fotók hozzáadása"));
-    m_addPhotosButton->setAutoDefault(false);
-    m_addPhotosButton->setVisible(false);
-    outer->addWidget(m_addPhotosButton);
-
-    m_capacityLabel = new QLabel(this);
-    m_capacityLabel->setObjectName(QStringLiteral("templateCapacity"));
-    m_capacityLabel->setWordWrap(true);
-    m_capacityLabel->setVisible(false);
-    outer->addWidget(m_capacityLabel);
 
     m_paperLabel = new QLabel(this);
     m_paperLabel->setObjectName(QStringLiteral("templatePaperMessage"));
@@ -236,8 +215,6 @@ void TemplateBrowserDialog::buildUi()
 
     connect(m_cancelButton, &QPushButton::clicked, this, &QDialog::reject);
     connect(m_applyButton, &QPushButton::clicked, this, &TemplateBrowserDialog::chooseSelected);
-    connect(m_addPhotosButton, &QPushButton::clicked, this,
-            &TemplateBrowserDialog::addPhotosRequested);
     connect(m_chipGroup, &QButtonGroup::idClicked, this, [this](int count) {
         if (!m_building)
             selectCount(count);
@@ -280,7 +257,31 @@ void TemplateBrowserDialog::fillChips()
     m_chipLayout->addStretch(1);
     m_building = false;
 
-    selectCount(std::clamp(int(m_request.frames.size()), 2, 10));
+    selectCount(preferredCount());
+}
+
+int TemplateBrowserDialog::preferredCount() const
+{
+    // A page that already uses a catalogue layout opens on that layout's count,
+    // so the current one is marked without the user hunting for it. Any other
+    // page follows its photo count. Both are clamped to the chips.
+    if (!m_request.layoutId.isEmpty()) {
+        if (const CollageTemplate *current = templateFor(m_request.layoutId))
+            return std::clamp(current->photoCount, 2, 10);
+    }
+    return std::clamp(int(m_request.frames.size()), 2, 10);
+}
+
+Page TemplateBrowserDialog::requestPage() const
+{
+    Page page;
+    page.paper = m_request.paper;
+    page.landscape = m_request.landscape;
+    page.frames = m_request.frames;
+    page.slotList = m_request.slotList;
+    page.slotStyle = m_request.slotStyle;
+    page.layoutId = m_request.layoutId;
+    return page;
 }
 
 int TemplateBrowserDialog::countChipCount() const
@@ -362,7 +363,8 @@ QString TemplateBrowserDialog::signature() const
           << QString::number(m_request.paper.physicalWidthMm, 'f', 3)
           << QString::number(m_request.paper.physicalHeightMm, 'f', 3)
           << (m_request.landscape ? QStringLiteral("landscape") : QStringLiteral("portrait"))
-          << QString::number(currentChipCount());
+          << QString::number(currentChipCount())
+          << m_request.layoutId;
     for (const QImage &photo : m_request.photos)
         parts << QString::number(photo.isNull() ? 0 : photo.cacheKey());
     return parts.join(QLatin1Char('|'));
@@ -396,21 +398,23 @@ bool TemplateBrowserDialog::waitForPendingSync(int timeoutMs)
 
 void TemplateBrowserDialog::setPage(const PaperSpec &paper, bool landscape,
                                     const QList<Frame> &frames, const QList<QImage> &photos,
-                                    const QList<Slot> &slotList)
+                                    const QList<Slot> &slotList, const SlotStyle &slotStyle,
+                                    const QString &layoutId)
 {
     m_request.paper = paper;
     m_request.landscape = landscape;
     m_request.frames = frames;
     m_request.slotList = slotList;
+    m_request.slotStyle = slotStyle;
+    m_request.layoutId = layoutId;
     m_request.photos = photos;
     if (m_request.photos.size() < m_request.frames.size())
         m_request.photos.resize(m_request.frames.size());
     orderByDisplay();
 
-    // Follow the page: the chip is the page's photo count, clamped to the
-    // catalogue. A count the page cannot have is not offered as if it were
-    // current.
-    const int target = std::clamp(int(m_request.frames.size()), 2, 10);
+    // Follow the page: the current layout's count when it has one, the photo
+    // count otherwise. A count the chips do not offer is not pretended.
+    const int target = preferredCount();
     if (target != currentChipCount()) {
         m_building = true;
         if (QAbstractButton *chip = m_chipGroup->button(target))
@@ -477,8 +481,10 @@ void TemplateBrowserDialog::rebuildTiles()
             tile.slotRects = mapping.value();
         else
             tile.paperMessage = mapping.error().message;
-        tile.preview = renderPreview(tile.slotRects, false);
+        tile.preview = renderPreview(tile.slotRects, false, t.id == m_request.layoutId);
         tile.marked = QPixmap();
+        tile.current = QPixmap();
+        tile.markedCurrent = QPixmap();
 
         auto *item = new QListWidgetItem(m_grid);
         item->setIcon(QIcon(tile.preview));
@@ -497,7 +503,11 @@ void TemplateBrowserDialog::rebuildTiles()
     // Keep the choice only while it still maps. A layout that stopped fitting
     // after a paper or orientation change is dropped, never swapped for another:
     // silently choosing a second layout would apply something nobody picked.
+    // With no choice yet, the page's own layout is selected, so it is marked
+    // and applying it is the explained no-op.
     int keep = indexOfTemplate(m_selectedId);
+    if (keep < 0 && !m_request.layoutId.isEmpty())
+        keep = indexOfTemplate(m_request.layoutId);
     if (keep >= 0 && !m_tiles.at(keep).mapped)
         keep = -1;
     m_grid->setCurrentRow(keep);
@@ -510,7 +520,8 @@ void TemplateBrowserDialog::rebuildTiles()
     refreshStatus();
 }
 
-QPixmap TemplateBrowserDialog::renderPreview(const QList<QRectF> &slotRects, bool marked) const
+QPixmap TemplateBrowserDialog::renderPreview(const QList<QRectF> &slotRects, bool marked,
+                                             bool current) const
 {
     const QSize size = previewSize();
     const qreal dpr = std::max<qreal>(1.0, devicePixelRatioF());
@@ -558,7 +569,8 @@ QPixmap TemplateBrowserDialog::renderPreview(const QList<QRectF> &slotRects, boo
         // Slot i is the i-th photograph of the page: the fill order is the
         // page's own order, so the preview never invents a new sequence.
         const QImage photo = m_request.photos.value(i);
-        if (!photo.isNull()) {
+        const bool empty = photo.isNull();
+        if (!empty) {
             // Crop at the device raster, not at the logical box, so a HiDPI
             // preview shows the crop it will print instead of an upscale of a
             // screen-sized one.
@@ -569,11 +581,14 @@ QPixmap TemplateBrowserDialog::renderPreview(const QList<QRectF> &slotRects, boo
             const int cropY = std::max(0, (scaled.height() - target.height()) / 2);
             painter.drawImage(box, scaled, QRectF(cropX, cropY, target.width(), target.height()));
         } else {
-            painter.fillRect(box, QColor(0xd4, 0xd4, 0xda));
+            // An empty cell is a placeholder, not a dark hole: a tinted fill and
+            // the fill-order number say "this is where the next photo lands".
+            painter.fillRect(box, QColor(0xe4, 0xe8, 0xef));
         }
         painter.restore();
 
-        painter.setPen(QPen(QColor(0, 0, 0, 45), 1.0));
+        painter.setPen(QPen(empty ? QColor(0x00, 0x7a, 0xff, 120) : QColor(0, 0, 0, 45), 1.0,
+                            empty ? Qt::DashLine : Qt::SolidLine));
         painter.setBrush(Qt::NoBrush);
         painter.drawRoundedRect(box, 2.0, 2.0);
 
@@ -586,6 +601,19 @@ QPixmap TemplateBrowserDialog::renderPreview(const QList<QRectF> &slotRects, boo
             painter.setPen(Qt::white);
             painter.drawText(badge, Qt::AlignCenter, QString::number(i + 1));
         }
+    }
+
+    if (current) {
+        // The page's own layout is marked in the bottom-left corner: the
+        // selection check is bottom-right and the slot numbers are top-left, so
+        // the three marks never cover each other.
+        const QRectF ring(sheet.left() + 4.0, sheet.bottom() - 17.0, 12.0, 12.0);
+        painter.setPen(QPen(palette().color(QPalette::Highlight), 1.6));
+        painter.setBrush(Qt::NoBrush);
+        painter.drawRoundedRect(ring, 2.0, 2.0);
+        painter.setPen(Qt::NoPen);
+        painter.setBrush(palette().color(QPalette::Highlight));
+        painter.drawEllipse(ring.center(), 2.2, 2.2);
     }
 
     if (marked) {
@@ -611,16 +639,36 @@ QPixmap TemplateBrowserDialog::renderPreview(const QList<QRectF> &slotRects, boo
 void TemplateBrowserDialog::refreshSelection()
 {
     const QString chosenLabel = QCoreApplication::translate("PhotoPrint", "Kiválasztott");
+    const QString currentLabel =
+        QCoreApplication::translate("PhotoPrint", "Jelenlegi elrendezés");
     for (int i = 0; i < m_tiles.size() && i < m_grid->count(); ++i) {
         TemplateTileState &tile = m_tiles[i];
         const bool chosen = tile.id == m_selectedId && tile.mapped;
-        if (chosen && tile.marked.isNull())
-            tile.marked = renderPreview(tile.slotRects, true);
+        const bool current = tile.id == m_request.layoutId;
+        QPixmap pixmap = tile.preview;
+        if (chosen && current) {
+            if (tile.markedCurrent.isNull())
+                tile.markedCurrent = renderPreview(tile.slotRects, true, true);
+            pixmap = tile.markedCurrent;
+        } else if (chosen) {
+            if (tile.marked.isNull())
+                tile.marked = renderPreview(tile.slotRects, true, false);
+            pixmap = tile.marked;
+        } else if (current) {
+            if (tile.current.isNull())
+                tile.current = renderPreview(tile.slotRects, false, true);
+            pixmap = tile.current;
+        }
         QListWidgetItem *item = m_grid->item(i);
-        item->setIcon(QIcon(chosen && !tile.marked.isNull() ? tile.marked : tile.preview));
-        // The selection state is exposed to a screen reader as a word, not only
-        // as the painted check.
-        item->setData(Qt::AccessibleDescriptionRole, chosen ? chosenLabel : QString());
+        item->setIcon(QIcon(pixmap));
+        // The selection and the current layout are exposed to a screen reader as
+        // words, not only as the painted marks.
+        QStringList states;
+        if (chosen)
+            states.append(chosenLabel);
+        if (current)
+            states.append(currentLabel);
+        item->setData(Qt::AccessibleDescriptionRole, states.join(QStringLiteral(" · ")));
     }
 }
 
@@ -696,15 +744,34 @@ QImage TemplateBrowserDialog::templateTileImage(const QString &id) const
     if (index < 0)
         return QImage();
     const TemplateTileState &tile = m_tiles.at(index);
-    const QPixmap &source = tile.id == m_selectedId && !tile.marked.isNull() ? tile.marked
-                                                                            : tile.preview;
-    return source.toImage();
+    const bool chosen = tile.id == m_selectedId && tile.mapped;
+    const bool current = tile.id == m_request.layoutId;
+    if (chosen && current && !tile.markedCurrent.isNull())
+        return tile.markedCurrent.toImage();
+    if (chosen && !tile.marked.isNull())
+        return tile.marked.toImage();
+    if (current && !tile.current.isNull())
+        return tile.current.toImage();
+    return tile.preview.toImage();
 }
 
 bool TemplateBrowserDialog::templateMarkedChosen(const QString &id) const
 {
     const int index = indexOfTemplate(id);
     return index >= 0 && m_tiles.at(index).id == m_selectedId && m_tiles.at(index).mapped;
+}
+
+bool TemplateBrowserDialog::templateIsCurrent(const QString &id) const
+{
+    return !m_request.layoutId.isEmpty() && id == m_request.layoutId
+        && indexOfTemplate(id) >= 0;
+}
+
+QString TemplateBrowserDialog::currentLayoutText() const
+{
+    if (!m_currentLabel || !m_currentLabel->isVisible())
+        return QString();
+    return m_currentLabel->text();
 }
 
 bool TemplateBrowserDialog::templateMapped(const QString &id) const
@@ -723,21 +790,6 @@ bool TemplateBrowserDialog::applyEnabled() const
     return m_applyButton && m_applyButton->isEnabled();
 }
 
-QString TemplateBrowserDialog::countMismatchText() const
-{
-    return m_mismatchLabel && m_mismatchLabel->isVisible() ? m_mismatchLabel->text() : QString();
-}
-
-QString TemplateBrowserDialog::directionHintText() const
-{
-    return m_directionLabel && m_directionLabel->isVisible() ? m_directionLabel->text() : QString();
-}
-
-QString TemplateBrowserDialog::capacityText() const
-{
-    return m_capacityLabel && m_capacityLabel->isVisible() ? m_capacityLabel->text() : QString();
-}
-
 QString TemplateBrowserDialog::paperMessageText() const
 {
     return m_paperLabel && m_paperLabel->isVisible() ? m_paperLabel->text() : QString();
@@ -753,18 +805,67 @@ QString TemplateBrowserDialog::applyErrorText() const
     return m_errorLabel && m_errorLabel->isVisible() ? m_errorLabel->text() : QString();
 }
 
-bool TemplateBrowserDialog::addPhotosVisible() const
+QString TemplateBrowserDialog::positionNotice(const TemplateTileState &tile) const
 {
-    return m_addPhotosButton && m_addPhotosButton->isVisible();
+    const CollageTemplate *t = templateFor(tile.id);
+    if (!t)
+        return QString();
+
+    // The prediction uses the same engine copy and the same compatibility rule
+    // as MainWindow: the page's own layout is topped up, anything else is laid
+    // out from scratch. What the line says is therefore what Apply does.
+    const Page page = requestPage();
+    SlotLayoutEngine::Report report;
+    auto applied = page.layoutId == t->id
+        ? SlotLayoutEngine::applyTemplateKeeping(page, *t, &report)
+        : SlotLayoutEngine::applyTemplate(page, *t, &report);
+    if (!applied)
+        return QString();
+    if (applied.value() == page) {
+        return QCoreApplication::translate("PhotoPrint", "Ez az elrendezés már a lapon van.");
+    }
+
+    QString notice;
+    const bool crops = !report.cropResetIds.isEmpty();
+    const bool rotations = !report.rotationResetIds.isEmpty();
+    if (crops && rotations) {
+        notice = QCoreApplication::translate(
+            "PhotoPrint",
+            "Az új elrendezés minden fotót a saját helyére tesz, a kivágásokat és az "
+            "elforgatást is ehhez igazítjuk.");
+    } else if (crops) {
+        notice = QCoreApplication::translate(
+            "PhotoPrint",
+            "Az új elrendezés minden fotót a saját helyére tesz, a kivágásokat ehhez "
+            "igazítjuk.");
+    } else if (rotations) {
+        notice = QCoreApplication::translate(
+            "PhotoPrint",
+            "Az új elrendezés minden fotót a saját helyére tesz, az elforgatást nullára "
+            "állítjuk.");
+    } else {
+        notice = QCoreApplication::translate(
+            "PhotoPrint", "Az új elrendezés minden fotót a saját helyére tesz.");
+    }
+    // What the layout cannot hold is named here, once, before Apply: fewer
+    // photos than cells leave empty cells, more photos stay free.
+    if (report.emptySlotsAfter > 0) {
+        notice += QLatin1Char(' ')
+            + QCoreApplication::translate("PhotoPrint", "%1 hely üresen marad.")
+                  .arg(report.emptySlotsAfter);
+    }
+    if (!report.leftFreeIds.isEmpty()) {
+        notice += QLatin1Char(' ')
+            + QCoreApplication::translate("PhotoPrint", "%1 fotó szabadon marad.")
+                  .arg(report.leftFreeIds.size());
+    }
+    return notice;
 }
 
 void TemplateBrowserDialog::refreshStatus()
 {
-    const int photos = m_request.frames.size();
-    const int chip = currentChipCount();
     const int index = indexOfTemplate(m_selectedId);
     const TemplateTileState *tile = index >= 0 ? &m_tiles.at(index) : nullptr;
-    const CollageTemplate *t = tile ? templateFor(tile->id) : nullptr;
 
     m_subtitle->setText(QStringLiteral("%1 · %2")
                             .arg(paperLabel(m_request.paper),
@@ -772,47 +873,20 @@ void TemplateBrowserDialog::refreshStatus()
                                      ? QCoreApplication::translate("PhotoPrint", "Fekvő")
                                      : QCoreApplication::translate("PhotoPrint", "Álló")));
 
-    const bool tooMany = photos > 10;
-    m_capacityLabel->setText(QCoreApplication::translate(
-        "PhotoPrint", "Ehhez a laphoz legfeljebb 10 fotóhoz van sablon."));
-    m_capacityLabel->setVisible(tooMany);
-
-    // A count difference belongs to the chip, not to the chosen tile: the line
-    // appears as soon as the chip is clicked, with or without a choice.
-    const bool mismatch = !tooMany && chip >= 2 && photos != chip;
-    if (mismatch) {
-        // The same sentence the engine refuses with, so the line and the error
-        // can never drift apart.
-        m_mismatchLabel->setText(
-            QCoreApplication::translate("PhotoPrint",
-                                        "Ehhez a sablonhoz %1 fotó kell, a lapon most %2 van.")
-                .arg(chip)
-                .arg(photos));
-        m_mismatchLabel->setAccessibleName(m_mismatchLabel->text());
+    // The page's own layout, named from the catalogue. A label only: an unknown
+    // id names nothing rather than showing an internal key.
+    QString currentLine;
+    if (const CollageTemplate *current = templateFor(m_request.layoutId)) {
+        currentLine = QCoreApplication::translate("PhotoPrint", "Jelenlegi elrendezés: %1")
+                          .arg(current->nameEn);
     }
-    m_mismatchLabel->setVisible(mismatch);
-
-    // Only the direction that can be fixed by adding photos offers the button.
-    QString direction;
-    if (mismatch && photos > chip) {
-        const int surplus = photos - chip;
-        direction = surplus == 1
-            ? QCoreApplication::translate(
-                  "PhotoPrint", "Válassz %1 fotós sablont, vagy távolíts el egy fotót.")
-                  .arg(photos)
-            : QCoreApplication::translate(
-                  "PhotoPrint", "Válassz %1 fotós sablont, vagy távolíts el %n fotót.", nullptr,
-                  surplus)
-                  .arg(photos);
-        m_directionLabel->setAccessibleName(direction);
-    }
-    m_directionLabel->setText(direction);
-    m_directionLabel->setVisible(!direction.isEmpty());
-    m_addPhotosButton->setVisible(mismatch && photos < chip);
+    m_currentLabel->setText(currentLine);
+    m_currentLabel->setAccessibleName(currentLine);
+    m_currentLabel->setVisible(!currentLine.isEmpty());
 
     // A paper message belongs to the chosen layout. With nothing chosen it still
-    // explains a count that cannot be used at all, and it can never sit next to
-    // an enabled Apply, because Apply needs a mapped layout.
+    // explains the selected count, and it can never sit next to an enabled
+    // Apply, because Apply needs a mapped layout.
     QString paperMessage;
     if (tile && !tile->mapped) {
         paperMessage = tile->paperMessage;
@@ -828,42 +902,10 @@ void TemplateBrowserDialog::refreshStatus()
     m_paperLabel->setAccessibleName(paperMessage);
     m_paperLabel->setVisible(!paperMessage.isEmpty());
 
-    // What Apply would do, from the engine's own report: the layout moves every
-    // photo into its slot, and any crop or rotation it resets is named in the
-    // same sentence instead of staying invisible.
-    QString notice;
-    const bool applicable = tile && tile->mapped && t && tile->photoCount == photos && photos > 0;
-    if (applicable) {
-        Page page;
-        page.paper = m_request.paper;
-        page.landscape = m_request.landscape;
-        page.frames = m_request.frames;
-        CollageApplyReport report;
-        const auto applied = CollageTemplates::instance().apply(*t, page, &report);
-        if (applied) {
-            const bool crops = !report.cropResetIds.isEmpty();
-            const bool rotations = !report.rotationResetIds.isEmpty();
-            if (crops && rotations) {
-                notice = QCoreApplication::translate(
-                    "PhotoPrint",
-                    "Az új elrendezés minden fotót a saját helyére tesz, a kivágásokat és az "
-                    "elforgatást is ehhez igazítjuk.");
-            } else if (crops) {
-                notice = QCoreApplication::translate(
-                    "PhotoPrint",
-                    "Az új elrendezés minden fotót a saját helyére tesz, a kivágásokat ehhez "
-                    "igazítjuk.");
-            } else if (rotations) {
-                notice = QCoreApplication::translate(
-                    "PhotoPrint",
-                    "Az új elrendezés minden fotót a saját helyére tesz, az elforgatást nullára "
-                    "állítjuk.");
-            } else {
-                notice = QCoreApplication::translate(
-                    "PhotoPrint", "Az új elrendezés minden fotót a saját helyére tesz.");
-            }
-        }
-    }
+    // What Apply would do, from the engine's own report: a count is never a
+    // gate, so an empty page can create cells and a page with more photos than
+    // cells is told how many stay free.
+    const QString notice = tile && tile->mapped ? positionNotice(*tile) : QString();
     m_noticeLabel->setText(notice);
     m_noticeLabel->setAccessibleName(notice);
     m_noticeLabel->setVisible(!notice.isEmpty());
@@ -872,7 +914,9 @@ void TemplateBrowserDialog::refreshStatus()
     m_errorLabel->setAccessibleName(m_applyError);
     m_errorLabel->setVisible(!m_applyError.isEmpty());
 
-    m_applyButton->setEnabled(applicable);
+    // Apply only needs a mapped layout: the count is a filter, and an empty page
+    // applies happily to gain sections for later.
+    m_applyButton->setEnabled(tile && tile->mapped);
 
     announce();
 }
@@ -883,8 +927,7 @@ void TemplateBrowserDialog::announce()
     // change is announced once instead of being left for a screen reader to
     // discover on its next pass.
     QStringList lines;
-    for (const QLabel *label : {m_mismatchLabel, m_directionLabel, m_capacityLabel, m_paperLabel,
-                                m_noticeLabel, m_errorLabel}) {
+    for (const QLabel *label : {m_currentLabel, m_paperLabel, m_noticeLabel, m_errorLabel}) {
         if (label && label->isVisible() && !label->text().isEmpty())
             lines.append(label->text());
     }

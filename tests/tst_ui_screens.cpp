@@ -1,6 +1,8 @@
 #include "AboutDialog.h"
+#include "Document.h"
 #include "EffectBrowserDialog.h"
 #include "MainWindow.h"
+#include "ProjectStore.h"
 #include "TemplateBrowserDialog.h"
 
 #include <QAbstractButton>
@@ -42,6 +44,45 @@ QString makePhoto(const QString &directory, const QString &name, const QColor &c
     return path;
 }
 
+/// A page with four empty cells in a 2 x 2 grid. The layout reaches the window
+/// through the normal project path, the same way a saved composition does.
+DocumentSnapshot fourEmptySlots()
+{
+    DocumentSnapshot document;
+    Page page;
+    page.id = QStringLiteral("page-slots");
+    page.paper.name = QStringLiteral("A4");
+    page.paper.physicalWidthMm = 210.0;
+    page.paper.physicalHeightMm = 297.0;
+    page.slotList = {
+        Slot{QStringLiteral("slot-evidence-0"), QRectF(0.0, 0.0, 0.5, 0.5)},
+        Slot{QStringLiteral("slot-evidence-1"), QRectF(0.5, 0.0, 0.5, 0.5)},
+        Slot{QStringLiteral("slot-evidence-2"), QRectF(0.0, 0.5, 0.5, 0.5)},
+        Slot{QStringLiteral("slot-evidence-3"), QRectF(0.5, 0.5, 0.5, 0.5)},
+    };
+    page.layoutId = QStringLiteral("n04-grid-2x2");
+    document.pages.append(page);
+    document.currentPage = 0;
+    return document;
+}
+
+bool loadDocument(MainWindow &window, const QTemporaryDir &dir, const DocumentSnapshot &document)
+{
+    const QString path = dir.filePath(QStringLiteral("slots.ppj"));
+    ProjectStore store;
+    if (!store.save(path, document, SaveMode::Normal).ok())
+        return false;
+    const auto loaded = store.load(path);
+    if (!loaded)
+        return false;
+    qRegisterMetaType<pp::LoadedProject>("pp::LoadedProject");
+    if (!QMetaObject::invokeMethod(&window, "applyLoadedProject", Qt::DirectConnection,
+                                   Q_ARG(pp::LoadedProject, loaded.value()), Q_ARG(bool, false))) {
+        return false;
+    }
+    return window.waitForPreview(15000);
+}
+
 } // namespace
 
 class TestUiScreens : public QObject
@@ -50,6 +91,7 @@ class TestUiScreens : public QObject
 
 private slots:
     void captureStates();
+    void captureSlotInteraction();
 };
 
 void TestUiScreens::captureStates()
@@ -186,6 +228,48 @@ void TestUiScreens::captureStates()
     window.resize(640, 360);
     QTest::qWait(250);
     QVERIFY(window.grab().save(evidenceDir() + QStringLiteral("/ui-small.png")));
+}
+
+void TestUiScreens::captureSlotInteraction()
+{
+    QTemporaryDir dir;
+    QVERIFY(dir.isValid());
+    const QString photo =
+        makePhoto(dir.path(), QStringLiteral("slot-photo.png"), QColor(75, 130, 175), QSize(900, 600));
+    QVERIFY(!photo.isEmpty());
+
+    MainWindow window;
+    window.resize(1280, 800);
+    window.show();
+    QTest::qWait(120);
+    QVERIFY(loadDocument(window, dir, fourEmptySlots()));
+    QTest::qWait(300);
+
+    auto *view = window.findChild<PageView *>();
+    QVERIFY(view);
+    const Page page = window.document().pages.first();
+    QVERIFY(page.hasLayout());
+    QCOMPARE(page.slotList.size(), 4);
+
+    // Empty cells: the dashed drop targets and the one hint line.
+    QVERIFY(view->slotState(page.slotList.at(0).id) == PageView::SlotState::Empty);
+    QVERIFY(window.grab().save(evidenceDir() + QStringLiteral("/ui-slots-empty.png")));
+
+    // One selected cell: a solid ring around the cell, no photograph.
+    const QString selected = page.slotList.at(1).id;
+    QTest::mouseClick(view, Qt::LeftButton, Qt::NoModifier,
+                      view->slotRect(selected).center().toPoint());
+    QCOMPARE(view->selectedSlot(), selected);
+    QTest::qWait(150);
+    QVERIFY(window.grab().save(evidenceDir() + QStringLiteral("/ui-slot-selected.png")));
+
+    // One filled cell next to the empty ones.
+    QVERIFY(QMetaObject::invokeMethod(&window, "addDroppedFiles", Qt::DirectConnection,
+                                      Q_ARG(QStringList, QStringList{photo})));
+    QVERIFY(window.waitForPreview(15000));
+    QTest::qWait(350);
+    QVERIFY(view->slotState(page.slotList.at(0).id) == PageView::SlotState::Filled);
+    QVERIFY(window.grab().save(evidenceDir() + QStringLiteral("/ui-slot-filled.png")));
 }
 
 QTEST_MAIN(TestUiScreens)

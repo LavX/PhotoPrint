@@ -3,6 +3,8 @@
 #include "MainWindow.h"
 #include "PaperCatalog.h"
 #include "ProjectStore.h"
+#include "SlotGeometry.h"
+#include "SlotLayoutEngine.h"
 #include "TemplateBrowserDialog.h"
 #include "Translation.h"
 
@@ -10,6 +12,7 @@
 #include <QDir>
 #include <QImage>
 #include <QImageWriter>
+#include <QLabel>
 #include <QListWidget>
 #include <QMenu>
 #include <QPushButton>
@@ -151,21 +154,24 @@ QAction *undoAction(MainWindow &window)
     return nullptr;
 }
 
-QString mismatchLine(int needed, int onPage)
-{
-    return QStringLiteral("Ehhez a sablonhoz %1 fotó kell, a lapon most %2 van.")
-        .arg(needed)
-        .arg(onPage);
-}
-
-QString tooManyLine(int onPage)
-{
-    return QStringLiteral("Válassz %1 fotós sablont, vagy távolíts el egy fotót.").arg(onPage);
-}
-
 QString positionBase()
 {
     return QStringLiteral("Az új elrendezés minden fotót a saját helyére tesz.");
+}
+
+QString emptySlotsSentence(int count)
+{
+    return QStringLiteral("%1 hely üresen marad.").arg(count);
+}
+
+QString freePhotosSentence(int count)
+{
+    return QStringLiteral("%1 fotó szabadon marad.").arg(count);
+}
+
+const Frame *frameInSlot(const Page &page, const QString &slotId)
+{
+    return SlotGeometry::frameInSlot(page, slotId);
 }
 
 TemplateBrowserDialog *openPicker(MainWindow &window)
@@ -192,8 +198,10 @@ private slots:
     void everyCountShowsItsLayoutsAtThePageAspect();
     void opensWithNothingChosen();
     void browseWorksWithZeroOneAndThreePhotos();
-    void wrongDirectionExplainsItself();
-    void elevenFramesShowTheCapacityLine();
+    void noCountGateForAnyPhotoCount();
+    void elevenFramesApplyAndNameTheFreeOne();
+    void appliesToAnEmptyPageWithNoPhotos();
+    void currentLayoutIsMarkedAndNamed();
     void tinyPaperDisablesWithTheMessage();
     void templateNamesAndAccessibleNames();
     void positionNoticeNamesEveryReset();
@@ -208,11 +216,13 @@ private slots:
     // The window: applying, undoing, and the guard against a reflow.
     void applyingOneTemplateIsOneUndo();
     void applyingFromThePickerClosesIt();
+    void emptyPageAppliesFromThePicker();
+    void pickerMarksTheLayoutJustApplied();
     void secondClickReusesTheOpenPicker();
     void selectionSurvivesApply();
     void applyingToASecondPageLeavesTheFirstAlone();
     void reapplyingTheSameLayoutChangesNothing();
-    void refusalStaysInTheDialog();
+    void applyingADifferentLayoutReplacesTheOldOne();
     void addingAPhotoKeepsTemplatedGeometry();
     void openingAndCancellingChangesNothing();
     void languageRebuildClosesThePicker();
@@ -329,6 +339,10 @@ void TestTemplateBrowser::opensWithNothingChosen()
     QVERIFY(dialog.templateMarkedChosen(dialog.templateIds().at(2)));
     QCOMPARE(dialog.templateAccessibleDescription(dialog.templateIds().at(2)),
              QStringLiteral("Kiválasztott"));
+
+    // A refusal from the window lands inside the open picker.
+    dialog.reportApplyFailure(QStringLiteral("próba hiba"));
+    QCOMPARE(dialog.applyErrorText(), QStringLiteral("próba hiba"));
 }
 
 void TestTemplateBrowser::browseWorksWithZeroOneAndThreePhotos()
@@ -343,64 +357,137 @@ void TestTemplateBrowser::browseWorksWithZeroOneAndThreePhotos()
         for (int count = 2; count <= 10; ++count) {
             dialog.selectCount(count);
             QVERIFY2(dialog.templateTileCount() == 6, qPrintable(where));
-            // A layout that needs another count cannot be applied, but it stays
-            // visible and selectable.
+            // A count is a filter, not a gate: a layout that needs another
+            // count is applicable, because the rest of its cells stay empty or
+            // the surplus photographs stay free.
             dialog.selectTemplate(dialog.templateIds().first());
-            QCOMPARE(dialog.applyEnabled(), photos == count);
-            if (photos != count)
-                QVERIFY2(dialog.countMismatchText() == mismatchLine(count, photos),
-                         qPrintable(where + QStringLiteral(": ") + dialog.countMismatchText()));
+            QVERIFY2(dialog.applyEnabled(), qPrintable(where));
+            QVERIFY2(!dialog.positionNoticeText().isEmpty(), qPrintable(where));
         }
+        // The old mismatch machinery is gone from the surface, not just hidden.
+        QVERIFY(!dialog.findChild<QLabel *>(QStringLiteral("templateMismatch")));
+        QVERIFY(!dialog.findChild<QLabel *>(QStringLiteral("templateDirection")));
+        QVERIFY(!dialog.findChild<QLabel *>(QStringLiteral("templateCapacity")));
+        QVERIFY(!dialog.findChild<QPushButton *>(QStringLiteral("templateAddPhotosButton")));
     }
 }
 
-void TestTemplateBrowser::wrongDirectionExplainsItself()
+void TestTemplateBrowser::noCountGateForAnyPhotoCount()
 {
     TemplateBrowserDialog dialog(requestWith(paperNamed(QStringLiteral("A4")), framesFor(3)));
     dialog.show();
     QTest::qWait(20);
+
+    // Every count is applicable on the same three-photo page: the count is a
+    // filter, and the line says what the layout cannot hold instead of refusing
+    // the choice.
+    for (int count = 2; count <= 10; ++count) {
+        dialog.selectCount(count);
+        dialog.selectTemplate(dialog.templateIds().first());
+        QVERIFY2(dialog.applyEnabled(), qPrintable(QString::number(count)));
+    }
+
+    // Two cells, three photographs: one stays free.
     dialog.selectCount(2);
-
-    // The page has more photos than the layout: adding another one would make
-    // the mismatch worse, so the picker explains the two ways forward instead.
-    QCOMPARE(dialog.countMismatchText(), mismatchLine(2, 3));
-    QCOMPARE(dialog.directionHintText(), tooManyLine(3));
-    QVERIFY(!dialog.addPhotosVisible());
-    QVERIFY(!dialog.applyEnabled());
-
-    // Fewer photos than the layout needs is the direction a button can fix.
-    dialog.selectCount(5);
-    QCOMPARE(dialog.countMismatchText(), mismatchLine(5, 3));
-    QVERIFY(dialog.directionHintText().isEmpty());
-    QVERIFY(dialog.addPhotosVisible());
-    QVERIFY(!dialog.applyEnabled());
-
-    QSignalSpy added(&dialog, &TemplateBrowserDialog::addPhotosRequested);
-    dialog.findChild<QPushButton *>(QStringLiteral("templateAddPhotosButton"))->click();
-    QCOMPARE(added.count(), 1);
-
-    // The matching count applies once a layout is chosen.
-    dialog.selectCount(3);
-    QVERIFY(dialog.countMismatchText().isEmpty());
-    QVERIFY(dialog.directionHintText().isEmpty());
-    QVERIFY(!dialog.addPhotosVisible());
     dialog.selectTemplate(dialog.templateIds().first());
-    QVERIFY(dialog.applyEnabled());
+    QVERIFY2(dialog.positionNoticeText().contains(freePhotosSentence(1)),
+             qPrintable(dialog.positionNoticeText()));
+
+    // Five cells, three photographs: two stay empty.
+    dialog.selectCount(5);
+    dialog.selectTemplate(dialog.templateIds().first());
+    QVERIFY2(dialog.positionNoticeText().contains(emptySlotsSentence(2)),
+             qPrintable(dialog.positionNoticeText()));
 }
 
-void TestTemplateBrowser::elevenFramesShowTheCapacityLine()
+void TestTemplateBrowser::elevenFramesApplyAndNameTheFreeOne()
 {
     TemplateBrowserDialog dialog(requestWith(paperNamed(QStringLiteral("A4")), framesFor(11)));
     dialog.show();
     QTest::qWait(20);
     dialog.selectCount(10);
-
-    QCOMPARE(dialog.capacityText(),
-             QStringLiteral("Ehhez a laphoz legfeljebb 10 fotóhoz van sablon."));
-    QVERIFY(!dialog.applyEnabled());
-    // Twelve frames are beyond the catalogue, but browsing still works.
     QCOMPARE(dialog.templateTileCount(), 6);
-    QVERIFY(dialog.countMismatchText().isEmpty());
+    dialog.selectTemplate(dialog.templateIds().first());
+    QVERIFY(dialog.applyEnabled());
+    QVERIFY2(dialog.positionNoticeText().contains(freePhotosSentence(1)),
+             qPrintable(dialog.positionNoticeText()));
+    QVERIFY(!dialog.findChild<QLabel *>(QStringLiteral("templateCapacity")));
+}
+
+void TestTemplateBrowser::appliesToAnEmptyPageWithNoPhotos()
+{
+    TemplateBrowserDialog dialog(requestWith(paperNamed(QStringLiteral("A4")), {}));
+    dialog.show();
+    QTest::qWait(20);
+    dialog.selectCount(4);
+    QCOMPARE(dialog.templateTileCount(), 6);
+    dialog.selectTemplate(QStringLiteral("n04-grid-2x2"));
+    QVERIFY(dialog.applyEnabled());
+    QVERIFY2(dialog.positionNoticeText().contains(emptySlotsSentence(4)),
+             qPrintable(dialog.positionNoticeText()));
+
+    // The preview paints numbered placeholders, not empty paper: the corner of
+    // the first cell carries the tint and the fill-order badge.
+    const QImage tile = dialog.templateTileImage(QStringLiteral("n04-grid-2x2"));
+    QVERIFY(!tile.isNull());
+    bool placeholder = false;
+    for (int y = int(tile.height() * 0.12); y < int(tile.height() * 0.22) && !placeholder; ++y) {
+        for (int x = int(tile.width() * 0.12); x < int(tile.width() * 0.22); ++x) {
+            if (qRed(tile.pixel(x, y)) < 250)
+                placeholder = true;
+        }
+    }
+    QVERIFY2(placeholder, "the empty cells are not drawn as placeholders");
+}
+
+void TestTemplateBrowser::currentLayoutIsMarkedAndNamed()
+{
+    const PaperSpec paper = paperNamed(QStringLiteral("A4"));
+    const QString id = QStringLiteral("n04-grid-2x2");
+    const CollageTemplate *layout = CollageTemplates::instance().find(id);
+    QVERIFY(layout);
+
+    // A real page that already uses the layout, through the engine.
+    Page page;
+    page.paper = paper;
+    page.frames = framesFor(3);
+    const auto laidOut = SlotLayoutEngine::applyTemplate(page, *layout);
+    QVERIFY(laidOut.ok());
+
+    TemplateBrowserRequest request = requestWith(paper, laidOut.value().frames);
+    request.slotList = laidOut.value().slotList;
+    request.slotStyle = laidOut.value().slotStyle;
+    request.layoutId = laidOut.value().layoutId;
+
+    TemplateBrowserDialog dialog(request);
+    dialog.show();
+    QTest::qWait(20);
+
+    // The chip follows the layout's count, not the three photographs.
+    QCOMPARE(dialog.selectedCount(), 4);
+    QCOMPARE(dialog.selectedTemplateId(), id);
+    QVERIFY(dialog.templateMarkedChosen(id));
+    QVERIFY(dialog.templateIsCurrent(id));
+    QVERIFY2(dialog.currentLayoutText().contains(layout->nameEn),
+             qPrintable(dialog.currentLayoutText()));
+    QVERIFY(dialog.applyEnabled());
+    QCOMPARE(dialog.positionNoticeText(),
+             QStringLiteral("Ez az elrendezés már a lapon van."));
+
+    // The current layout is painted with its own mark: the same tile without a
+    // current layout differs in the bottom-left corner, where the ring sits.
+    TemplateBrowserDialog plain(requestWith(paper, laidOut.value().frames));
+    plain.show();
+    QTest::qWait(20);
+    plain.selectCount(4);
+    plain.selectTemplate(id);
+    const QImage markedCurrent = dialog.templateTileImage(id);
+    const QImage plainTile = plain.templateTileImage(id);
+    QVERIFY(!markedCurrent.isNull());
+    QVERIFY(markedCurrent.size() == plainTile.size());
+    QCOMPARE(markedCurrent.pixel(2, 2), plainTile.pixel(2, 2));
+    QVERIFY(markedCurrent.pixel(9, markedCurrent.height() - 12)
+            != plainTile.pixel(9, plainTile.height() - 12));
 }
 
 void TestTemplateBrowser::tinyPaperDisablesWithTheMessage()
@@ -656,26 +743,24 @@ void TestTemplateBrowser::pageChangeWhileOpenFollowsThePage()
     TemplateBrowserDialog *picker = openPicker(window);
     QVERIFY(picker);
     QCOMPARE(picker->selectedCount(), 3);
-    QVERIFY(picker->countMismatchText().isEmpty());
+    QVERIFY(picker->selectedTemplateId().isEmpty());
 
     // Fourth photo: the picker follows to the count the page now has.
     QVERIFY(addPhotos(window, QStringList{photos.at(3)}));
     QVERIFY(picker->waitForPendingSync());
     QCOMPARE(picker->selectedCount(), 4);
     QCOMPARE(picker->templateTileCount(), 6);
-    QVERIFY(picker->countMismatchText().isEmpty());
-    QVERIFY(!picker->addPhotosVisible());
 
-    // Fifth photo, then the mismatch line follows as well.
+    // Fifth photo: the chip follows again, and a smaller layout still applies,
+    // naming the two photographs it cannot hold.
     QVERIFY(addPhotos(window, QStringList{photos.at(0)}));
     QVERIFY(picker->waitForPendingSync());
     QCOMPARE(picker->selectedCount(), 5);
     picker->selectCount(3);
-    QCOMPARE(picker->countMismatchText(), mismatchLine(3, 5));
-    QCOMPARE(picker->directionHintText(),
-             QStringLiteral("Válassz %1 fotós sablont, vagy távolíts el %2 fotót.")
-                 .arg(5)
-                 .arg(2));
+    picker->selectTemplate(picker->templateIds().first());
+    QVERIFY(picker->applyEnabled());
+    QVERIFY2(picker->positionNoticeText().contains(freePhotosSentence(2)),
+             qPrintable(picker->positionNoticeText()));
     picker->reject();
 }
 
@@ -804,12 +889,7 @@ void TestTemplateBrowser::applyingOneTemplateIsOneUndo()
     const DocumentSnapshot before = window.document();
     const Page page = before.pages.first();
     QCOMPARE(page.frames.size(), 3);
-
-    const CollageTemplate *chosen =
-        CollageTemplates::instance().find(QStringLiteral("n03-equal-cols"));
-    QVERIFY(chosen);
-    const auto expected = CollageTemplates::instance().apply(*chosen, page);
-    QVERIFY(expected.ok());
+    QVERIFY(!page.hasLayout());
 
     auto *view = window.findChild<PageView *>();
     QVERIFY(view);
@@ -822,22 +902,33 @@ void TestTemplateBrowser::applyingOneTemplateIsOneUndo()
     QVERIFY(applied);
 
     const Page after = window.document().pages.first();
-    // The engine's list, field for field: ids, sources, sha, rotation, label,
-    // tone and the effect all survive, only the layout changes.
-    QCOMPARE(after.frames, expected.value());
+    // The page gains a real layout: three cells, the label, and the same three
+    // photographs assigned to them in display order. Identity and the whole
+    // image state survive; the slot owns the geometry.
+    QCOMPARE(after.layoutId, QStringLiteral("n03-equal-cols"));
+    QCOMPARE(after.slotList.size(), 3);
+    QCOMPARE(after.frames.size(), 3);
+    QVERIFY(SlotGeometry::layoutConsistent(after));
     for (int i = 0; i < after.frames.size(); ++i) {
         const Frame &frame = after.frames.at(i);
-        QCOMPARE(frame.id, page.frames.at(i).id);
-        QCOMPARE(frame.sourcePath, page.frames.at(i).sourcePath);
-        QCOMPARE(frame.sourceSha256, page.frames.at(i).sourceSha256);
-        QCOMPARE(frame.imageRotationDeg, page.frames.at(i).imageRotationDeg);
-        QCOMPARE(frame.label, page.frames.at(i).label);
-        QCOMPARE(frame.filter, page.frames.at(i).filter);
-        QCOMPARE(frame.effectVersion, page.frames.at(i).effectVersion);
-        QCOMPARE(frame.upscale, page.frames.at(i).upscale);
+        const Frame &original = page.frames.at(i);
+        QCOMPARE(frame.id, original.id);
+        QCOMPARE(frame.sourcePath, original.sourcePath);
+        QCOMPARE(frame.sourceSha256, original.sourceSha256);
+        QCOMPARE(frame.imageRotationDeg, original.imageRotationDeg);
+        QCOMPARE(frame.label, original.label);
+        QCOMPARE(frame.filter, original.filter);
+        QCOMPARE(frame.effectVersion, original.effectVersion);
+        QCOMPARE(frame.upscale, original.upscale);
         QCOMPARE(frame.fit, FitMode::Fill);
         QCOMPARE(frame.angleDeg, 0.0);
-        QCOMPARE(frame.autoPlaced, false);
+        QVERIFY(!frame.autoPlaced);
+        QCOMPARE(frame.slotId, after.slotList.at(i).id);
+        const QRectF photo = SlotGeometry::slotPhotoRectMm(after, after.slotList.at(i));
+        QVERIFY(std::abs(frame.cx - photo.center().x()) < 0.01);
+        QVERIFY(std::abs(frame.cy - photo.center().y()) < 0.01);
+        QVERIFY(std::abs(frame.width - photo.width()) < 0.01);
+        QVERIFY(std::abs(frame.height - photo.height()) < 0.01);
     }
 
     // The edit is marked in the title and named after the action.
@@ -848,10 +939,10 @@ void TestTemplateBrowser::applyingOneTemplateIsOneUndo()
              qPrintable(undo->text()));
     QVERIFY2(!undo->text().contains(QStringLiteral("Elrendezés")), qPrintable(undo->text()));
 
-    // One undo restores the whole previous page.
+    // One undo restores the whole previous page, cells and all.
     QVERIFY(window.waitForPreview(15000));
     undo->trigger();
-    QCOMPARE(window.document().pages.first().frames, page.frames);
+    QVERIFY(window.document() == before);
 
     // The new layout is one page raster rebuild, not one per frame.
     QVERIFY(window.waitForPreview(15000));
@@ -882,9 +973,104 @@ void TestTemplateBrowser::applyingFromThePickerClosesIt()
 
     QTRY_VERIFY(!window.findChild<TemplateBrowserDialog *>());
     const Page page = window.document().pages.first();
+    QCOMPARE(page.layoutId, QStringLiteral("n03-equal-rows"));
+    QCOMPARE(page.slotList.size(), 3);
     QCOMPARE(page.frames.size(), 3);
-    for (const Frame &frame : page.frames)
+    QVERIFY(SlotGeometry::layoutConsistent(page));
+    for (const Frame &frame : page.frames) {
         QVERIFY(!frame.autoPlaced);
+        QVERIFY(!frame.slotId.isEmpty());
+    }
+}
+
+void TestTemplateBrowser::emptyPageAppliesFromThePicker()
+{
+    MainWindow window;
+    window.resize(1280, 800);
+    window.show();
+    QTest::qWait(100);
+    QCOMPARE(window.document().pages.first().frames.size(), 0);
+
+    // An empty page browses every layout, and Apply is enabled as soon as one
+    // is chosen: the sections are the point, the photographs come later.
+    TemplateBrowserDialog *picker = openPicker(window);
+    QVERIFY(picker);
+    QCOMPARE(picker->selectedTemplateId(), QString());
+    QVERIFY(!picker->applyEnabled());
+    picker->selectCount(4);
+    picker->selectTemplate(QStringLiteral("n04-grid-2x2"));
+    QVERIFY(picker->applyEnabled());
+    QVERIFY2(picker->positionNoticeText().contains(emptySlotsSentence(4)),
+             qPrintable(picker->positionNoticeText()));
+    picker->findChild<QPushButton *>(QStringLiteral("templateApplyButton"))->click();
+    QTRY_VERIFY(!window.findChild<TemplateBrowserDialog *>());
+    QVERIFY(window.waitForPreview(15000));
+
+    const Page page = window.document().pages.first();
+    QCOMPARE(page.layoutId, QStringLiteral("n04-grid-2x2"));
+    QCOMPARE(page.slotList.size(), 4);
+    QCOMPARE(page.frames.size(), 0);
+    // The cells are visible on the canvas immediately, as numbered drop targets.
+    auto *view = window.findChild<PageView *>();
+    QVERIFY(view);
+    for (const Slot &slot : page.slotList)
+        QCOMPARE(view->slotState(slot.id), PageView::SlotState::Empty);
+
+    // One undo takes the sections away again.
+    QAction *undo = undoAction(window);
+    QVERIFY(undo);
+    undo->trigger();
+    QTest::qWait(50);
+    QVERIFY(!window.document().pages.first().hasLayout());
+    QCOMPARE(window.document().pages.first().frames.size(), 0);
+}
+
+void TestTemplateBrowser::pickerMarksTheLayoutJustApplied()
+{
+    QTemporaryDir dir;
+    QVERIFY(dir.isValid());
+    const QStringList photos = makePhotos(dir.path(), 3);
+
+    MainWindow window;
+    window.resize(1280, 800);
+    window.show();
+    QTest::qWait(80);
+    QVERIFY(addPhotos(window, photos));
+    QVERIFY(window.waitForPreview(15000));
+
+    const QString id = QStringLiteral("n03-equal-cols");
+    bool applied = false;
+    QVERIFY(QMetaObject::invokeMethod(&window, "applyTemplate", Qt::DirectConnection,
+                                      Q_RETURN_ARG(bool, applied), Q_ARG(QString, id)));
+    QVERIFY(applied);
+
+    // Opening the picker on the laid-out page marks and names the layout it
+    // already uses, on the layout's own count.
+    TemplateBrowserDialog *picker = openPicker(window);
+    QVERIFY(picker);
+    QCOMPARE(picker->currentLayoutId(), id);
+    QCOMPARE(picker->selectedCount(), 3);
+    QCOMPARE(picker->selectedTemplateId(), id);
+    QVERIFY(picker->templateIsCurrent(id));
+    QVERIFY(picker->templateMarkedChosen(id));
+    QVERIFY2(picker->currentLayoutText().contains(picker->templateLabel(id)),
+             qPrintable(picker->currentLayoutText()));
+    QVERIFY(picker->applyEnabled());
+    QCOMPARE(picker->positionNoticeText(),
+             QStringLiteral("Ez az elrendezés már a lapon van."));
+
+    // Applying it again from the picker is the explained no-op: the dialog
+    // closes, the document and the undo history stay exactly as they were.
+    const DocumentSnapshot laidOut = window.document();
+    QAction *undo = undoAction(window);
+    QVERIFY(undo);
+    const QString undoText = undo->text();
+    const bool undoEnabled = undo->isEnabled();
+    picker->findChild<QPushButton *>(QStringLiteral("templateApplyButton"))->click();
+    QTRY_VERIFY(!window.findChild<TemplateBrowserDialog *>());
+    QVERIFY(window.document() == laidOut);
+    QCOMPARE(undo->text(), undoText);
+    QCOMPARE(undo->isEnabled(), undoEnabled);
 }
 
 void TestTemplateBrowser::secondClickReusesTheOpenPicker()
@@ -965,7 +1151,7 @@ void TestTemplateBrowser::applyingToASecondPageLeavesTheFirstAlone()
     QVERIFY(addPhotos(window, photos));
     QVERIFY(window.waitForPreview(15000));
     QCOMPARE(window.document().pages.at(1).frames.size(), 3);
-    const QList<Frame> secondPage = window.document().pages.at(1).frames;
+    const Page secondPage = window.document().pages.at(1);
 
     bool applied = false;
     QVERIFY(QMetaObject::invokeMethod(&window, "applyTemplate", Qt::DirectConnection,
@@ -976,17 +1162,23 @@ void TestTemplateBrowser::applyingToASecondPageLeavesTheFirstAlone()
     const DocumentSnapshot document = window.document();
     // Only the page the picker was opened for changes.
     QCOMPARE(document.pages.first().frames, firstPage);
-    QCOMPARE(document.pages.at(1).frames.size(), 3);
-    for (const Frame &frame : document.pages.at(1).frames) {
+    QVERIFY(!document.pages.first().hasLayout());
+    const Page laidOut = document.pages.at(1);
+    QCOMPARE(laidOut.layoutId, QStringLiteral("n03-equal-cols"));
+    QCOMPARE(laidOut.slotList.size(), 3);
+    QCOMPARE(laidOut.frames.size(), 3);
+    QVERIFY(SlotGeometry::layoutConsistent(laidOut));
+    for (int i = 0; i < secondPage.frames.size(); ++i) {
+        const Frame &frame = laidOut.frames.at(i);
+        QCOMPARE(frame.id, secondPage.frames.at(i).id);
         QVERIFY(!frame.autoPlaced);
         QCOMPARE(frame.fit, FitMode::Fill);
+        QVERIFY(!frame.slotId.isEmpty());
     }
-    for (int i = 0; i < secondPage.size(); ++i)
-        QCOMPARE(document.pages.at(1).frames.at(i).id, secondPage.at(i).id);
 
     undoAction(window)->trigger();
     QCOMPARE(window.document().pages.first().frames, firstPage);
-    QCOMPARE(window.document().pages.at(1).frames, secondPage);
+    QCOMPARE(window.document().pages.at(1), secondPage);
 }
 
 void TestTemplateBrowser::reapplyingTheSameLayoutChangesNothing()
@@ -1020,21 +1212,25 @@ void TestTemplateBrowser::reapplyingTheSameLayoutChangesNothing()
                                       Q_ARG(pp::LoadedProject, loaded.value()),
                                       Q_ARG(bool, false)));
     QVERIFY(!window.windowTitle().endsWith(QStringLiteral("*")));
-    const QList<Frame> laidOut = window.document().pages.first().frames;
+    const DocumentSnapshot laidOutDocument = window.document();
+    const Page reloaded = laidOutDocument.pages.first();
+    QCOMPARE(reloaded.layoutId, templateId);
+    QCOMPARE(reloaded.slotList.size(), 3);
     QAction *undo = undoAction(window);
     QVERIFY(undo);
     QVERIFY(!undo->isEnabled());
 
-    // The same layout on the same frames is not an edit.
+    // The same layout on the same page is a no-op: the page already uses it, so
+    // there is nothing to top up and no second edit.
     QVERIFY(QMetaObject::invokeMethod(&window, "applyTemplate", Qt::DirectConnection,
                                       Q_RETURN_ARG(bool, applied), Q_ARG(QString, templateId)));
     QVERIFY(applied);
-    QCOMPARE(window.document().pages.first().frames, laidOut);
+    QVERIFY(window.document() == laidOutDocument);
     QVERIFY(!undo->isEnabled());
     QVERIFY(!window.windowTitle().endsWith(QStringLiteral("*")));
 }
 
-void TestTemplateBrowser::refusalStaysInTheDialog()
+void TestTemplateBrowser::applyingADifferentLayoutReplacesTheOldOne()
 {
     QTemporaryDir dir;
     QVERIFY(dir.isValid());
@@ -1046,22 +1242,43 @@ void TestTemplateBrowser::refusalStaysInTheDialog()
     QTest::qWait(80);
     QVERIFY(addPhotos(window, photos));
     QVERIFY(window.waitForPreview(15000));
-    const DocumentSnapshot before = window.document();
 
-    TemplateBrowserDialog *picker = openPicker(window);
-    QVERIFY(picker);
-
-    // A two-photo layout on a three-photo page: the engine refuses it, and the
-    // refusal belongs in the picker, which stays open on the same page.
     bool applied = true;
     QVERIFY(QMetaObject::invokeMethod(&window, "applyTemplate", Qt::DirectConnection,
                                       Q_RETURN_ARG(bool, applied),
+                                      Q_ARG(QString, QStringLiteral("n03-equal-cols"))));
+    QVERIFY(applied);
+    const DocumentSnapshot withThree = window.document();
+    QCOMPARE(withThree.pages.first().slotList.size(), 3);
+
+    // A two-cell layout on the same three-photo page: the old cells are
+    // replaced, two photographs take the new cells and the third stays free.
+    QVERIFY(QMetaObject::invokeMethod(&window, "applyTemplate", Qt::DirectConnection,
+                                      Q_RETURN_ARG(bool, applied),
                                       Q_ARG(QString, QStringLiteral("n02-equal-stack"))));
-    QVERIFY(!applied);
-    QVERIFY(window.findChild<TemplateBrowserDialog *>() == picker);
-    QCOMPARE(picker->applyErrorText(), mismatchLine(2, 3));
-    QCOMPARE(window.document(), before);
-    picker->reject();
+    QVERIFY(applied);
+
+    const Page after = window.document().pages.first();
+    QCOMPARE(after.layoutId, QStringLiteral("n02-equal-stack"));
+    QCOMPARE(after.slotList.size(), 2);
+    QCOMPARE(after.frames.size(), 3);
+    QVERIFY(SlotGeometry::layoutConsistent(after));
+    int slotted = 0;
+    int free = 0;
+    for (const Frame &frame : after.frames) {
+        if (frame.slotId.isEmpty())
+            ++free;
+        else
+            ++slotted;
+    }
+    QCOMPARE(slotted, 2);
+    QCOMPARE(free, 1);
+
+    // One undo brings the previous three-cell layout back.
+    QAction *undo = undoAction(window);
+    QVERIFY(undo);
+    undo->trigger();
+    QVERIFY(window.document() == withThree);
 }
 
 void TestTemplateBrowser::addingAPhotoKeepsTemplatedGeometry()
@@ -1085,24 +1302,30 @@ void TestTemplateBrowser::addingAPhotoKeepsTemplatedGeometry()
 
     const QList<Frame> templated = window.document().pages.first().frames;
     QCOMPARE(templated.size(), 3);
-    for (const Frame &frame : templated)
+    for (const Frame &frame : templated) {
         QVERIFY(!frame.autoPlaced);
+        QVERIFY(!frame.slotId.isEmpty());
+    }
 
-    // A template layout is hand work: the next photo is added beside it and
-    // never reflows the arrangement.
+    // The cells are full, so the next photo becomes a free frame beside the
+    // layout instead of reflowing it.
     QVERIFY(addPhotos(window, QStringList{photos.at(3)}));
     QVERIFY(window.waitForPreview(15000));
 
     const Page page = window.document().pages.first();
     QCOMPARE(page.frames.size(), 4);
+    QCOMPARE(page.slotList.size(), 3);
+    QCOMPARE(page.layoutId, templateId);
     for (int i = 0; i < templated.size(); ++i) {
         const Frame &frame = page.frames.at(i);
         QCOMPARE(frame.id, templated.at(i).id);
+        QCOMPARE(frame.slotId, templated.at(i).slotId);
         QCOMPARE(frame.cx, templated.at(i).cx);
         QCOMPARE(frame.cy, templated.at(i).cy);
         QCOMPARE(frame.width, templated.at(i).width);
         QCOMPARE(frame.height, templated.at(i).height);
     }
+    QVERIFY(page.frames.at(3).slotId.isEmpty());
 }
 
 void TestTemplateBrowser::openingAndCancellingChangesNothing()
