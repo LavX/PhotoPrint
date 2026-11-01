@@ -1213,5 +1213,75 @@
             <numerusform>剩余 %n 张照片未放置。</numerusform>
         </translation>
     </message>
+    <message>
+        <source>Saját elrendezés</source>
+        <translation>自定义布局</translation>
+    </message>
+    <message>
+        <source>Külső margó</source>
+        <translation>外边距</translation>
+    </message>
+    <message>
+        <source>Képek közti hézag</source>
+        <translation>照片间距</translation>
+    </message>
+    <message>
+        <source>Automatikus</source>
+        <translation>自动</translation>
+    </message>
+    <message>
+        <source>Szegély</source>
+        <translation>照片边框</translation>
+    </message>
+    <message>
+        <source>Szegély színe</source>
+        <translation>边框颜色</translation>
+    </message>
+    <message>
+        <source>Sarok lekerekítése</source>
+        <translation>圆角半径</translation>
+    </message>
+    <message>
+        <source>Hely hozzáadása</source>
+        <translation>添加单元格</translation>
+    </message>
+    <message>
+        <source>Hely eltávolítása</source>
+        <translation>删除单元格</translation>
+    </message>
+    <message>
+        <source>Elrendezés megszüntetése</source>
+        <translation>清除布局</translation>
+    </message>
+    <message>
+        <source>Válaszd ki a helyet a lapon.</source>
+        <translation>请选择页面上的单元格。</translation>
+    </message>
+    <message>
+        <source>A fotók megmaradnak a helyükön.</source>
+        <translation>照片会留在原位。</translation>
+    </message>
+    <message>
+        <source>A többi hely a helyén marad.</source>
+        <translation>其余单元格会留在原位。</translation>
+    </message>
+    <message>
+        <source>Az elrendezés megszűnik, a fotók szabadon maradnak a helyükön.</source>
+        <translation>布局将被清除，照片会作为自由照片留在原位。</translation>
+    </message>
+    <message>
+        <source>Margó beállítása</source>
+        <translation>设置边距</translation>
+    </message>
+    <message>
+        <source>Szegély beállítása</source>
+        <translation>设置边框</translation>
+    </message>
+    <message numerus="yes">
+        <source>%n hely</source>
+        <translation>
+            <numerusform>%n 个单元格</numerusform>
+        </translation>
+    </message>
 </context>
 </TS>

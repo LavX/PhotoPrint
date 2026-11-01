@@ -569,7 +569,8 @@ void TestI18n::everyCatalogueTranslatesTheSlotUiMessages()
 
     // Every sentence the slot interaction and the picker added: the canvas hint,
     // the five undo labels, the picker's current-layout lines and the two
-    // surplus/drop messages.
+    // surplus/drop messages, plus the layout panel's own controls and one-line
+    // explanations.
     for (const QString &source : {
              QStringLiteral("Húzd ide a fotót"),
              QStringLiteral("Fotó beillesztése"),
@@ -582,6 +583,23 @@ void TestI18n::everyCatalogueTranslatesTheSlotUiMessages()
              QStringLiteral("Ez az elrendezés már a lapon van."),
              QStringLiteral("A többi fotó új lapra került."),
              QStringLiteral("Csere"),
+             QStringLiteral("Elrendezés"),
+             QStringLiteral("Saját elrendezés"),
+             QStringLiteral("Külső margó"),
+             QStringLiteral("Képek közti hézag"),
+             QStringLiteral("Automatikus"),
+             QStringLiteral("Szegély"),
+             QStringLiteral("Szegély színe"),
+             QStringLiteral("Sarok lekerekítése"),
+             QStringLiteral("Hely hozzáadása"),
+             QStringLiteral("Hely eltávolítása"),
+             QStringLiteral("Elrendezés megszüntetése"),
+             QStringLiteral("Válaszd ki a helyet a lapon."),
+             QStringLiteral("A fotók megmaradnak a helyükön."),
+             QStringLiteral("A többi hely a helyén marad."),
+             QStringLiteral("Az elrendezés megszűnik, a fotók szabadon maradnak a helyükön."),
+             QStringLiteral("Margó beállítása"),
+             QStringLiteral("Szegély beállítása"),
          }) {
         const QString text = translated("PhotoPrint", source);
         const QString where = QStringLiteral("%1: %2").arg(code, source);
@@ -605,10 +623,11 @@ void TestI18n::everyCataloguePluralisesTheSlotCounts()
     InstalledCatalogue catalogue(code);
     QVERIFY2(catalogue.loaded(), qPrintable(code));
 
-    // The two quantity lines are %n messages with numerus entries, not %1
+    // The three quantity lines are %n messages with numerus entries, not %1
     // arguments substituted by the caller.
     for (const QString &source : {QStringLiteral("%n hely üresen marad."),
-                                  QStringLiteral("%n fotó szabadon marad.")}) {
+                                  QStringLiteral("%n fotó szabadon marad."),
+                                  QStringLiteral("%n hely")}) {
         for (const int count : {1, 2, 5}) {
             const QString text = translatedWithCount("PhotoPrint", source, count);
             const QString where =

@@ -1220,5 +1220,76 @@
             <numerusform>%n फ़ोटो खाली रहेंगी।</numerusform>
         </translation>
     </message>
+    <message>
+        <source>Saját elrendezés</source>
+        <translation>अपना लेआउट</translation>
+    </message>
+    <message>
+        <source>Külső margó</source>
+        <translation>बाहरी मार्जिन</translation>
+    </message>
+    <message>
+        <source>Képek közti hézag</source>
+        <translation>फ़ोटो के बीच की दूरी</translation>
+    </message>
+    <message>
+        <source>Automatikus</source>
+        <translation>स्वचालित</translation>
+    </message>
+    <message>
+        <source>Szegély</source>
+        <translation>किनारा</translation>
+    </message>
+    <message>
+        <source>Szegély színe</source>
+        <translation>किनारे का रंग</translation>
+    </message>
+    <message>
+        <source>Sarok lekerekítése</source>
+        <translation>कोने की गोलाई</translation>
+    </message>
+    <message>
+        <source>Hely hozzáadása</source>
+        <translation>सेल जोड़ें</translation>
+    </message>
+    <message>
+        <source>Hely eltávolítása</source>
+        <translation>सेल हटाएँ</translation>
+    </message>
+    <message>
+        <source>Elrendezés megszüntetése</source>
+        <translation>लेआउट हटाएँ</translation>
+    </message>
+    <message>
+        <source>Válaszd ki a helyet a lapon.</source>
+        <translation>पेज पर सेल चुनें।</translation>
+    </message>
+    <message>
+        <source>A fotók megmaradnak a helyükön.</source>
+        <translation>फ़ोटो अपनी जगह पर रहेंगी।</translation>
+    </message>
+    <message>
+        <source>A többi hely a helyén marad.</source>
+        <translation>बाकी सेल अपनी जगह पर रहेंगी।</translation>
+    </message>
+    <message>
+        <source>Az elrendezés megszűnik, a fotók szabadon maradnak a helyükön.</source>
+        <translation>लेआउट हट जाएगा और फ़ोटो अपनी जगह पर खुली फ़ोटो की तरह रहेंगी।</translation>
+    </message>
+    <message>
+        <source>Margó beállítása</source>
+        <translation>मार्जिन सेट करें</translation>
+    </message>
+    <message>
+        <source>Szegély beállítása</source>
+        <translation>किनारा सेट करें</translation>
+    </message>
+    <message numerus="yes">
+        <source>%n hely</source>
+        <translation>
+            <numerusform>%n सेल</numerusform>
+            <numerusform>%n सेलें</numerusform>
+        </translation>
+    </message>
 </context>
 </TS>

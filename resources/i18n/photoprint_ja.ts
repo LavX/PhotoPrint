@@ -1213,5 +1213,75 @@
             <numerusform>%n 枚の写真が空きのまま残ります。</numerusform>
         </translation>
     </message>
+    <message>
+        <source>Saját elrendezés</source>
+        <translation>自作レイアウト</translation>
+    </message>
+    <message>
+        <source>Külső margó</source>
+        <translation>外側の余白</translation>
+    </message>
+    <message>
+        <source>Képek közti hézag</source>
+        <translation>写真どうしの間隔</translation>
+    </message>
+    <message>
+        <source>Automatikus</source>
+        <translation>自動</translation>
+    </message>
+    <message>
+        <source>Szegély</source>
+        <translation>縁取り</translation>
+    </message>
+    <message>
+        <source>Szegély színe</source>
+        <translation>縁取りの色</translation>
+    </message>
+    <message>
+        <source>Sarok lekerekítése</source>
+        <translation>角の丸み</translation>
+    </message>
+    <message>
+        <source>Hely hozzáadása</source>
+        <translation>セルを追加</translation>
+    </message>
+    <message>
+        <source>Hely eltávolítása</source>
+        <translation>セルを削除</translation>
+    </message>
+    <message>
+        <source>Elrendezés megszüntetése</source>
+        <translation>レイアウトを解除</translation>
+    </message>
+    <message>
+        <source>Válaszd ki a helyet a lapon.</source>
+        <translation>ページ上のセルを選んでください。</translation>
+    </message>
+    <message>
+        <source>A fotók megmaradnak a helyükön.</source>
+        <translation>写真はそのままの位置に残ります。</translation>
+    </message>
+    <message>
+        <source>A többi hely a helyén marad.</source>
+        <translation>ほかのセルはそのままの位置に残ります。</translation>
+    </message>
+    <message>
+        <source>Az elrendezés megszűnik, a fotók szabadon maradnak a helyükön.</source>
+        <translation>レイアウトを解除します。写真は自由な写真としてそのままの位置に残ります。</translation>
+    </message>
+    <message>
+        <source>Margó beállítása</source>
+        <translation>余白を設定</translation>
+    </message>
+    <message>
+        <source>Szegély beállítása</source>
+        <translation>縁取りを設定</translation>
+    </message>
+    <message numerus="yes">
+        <source>%n hely</source>
+        <translation>
+            <numerusform>%n 個のセル</numerusform>
+        </translation>
+    </message>
 </context>
 </TS>

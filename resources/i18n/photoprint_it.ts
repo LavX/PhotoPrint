@@ -1220,5 +1220,76 @@
             <numerusform>Restano %n foto libere.</numerusform>
         </translation>
     </message>
+    <message>
+        <source>Saját elrendezés</source>
+        <translation>Layout personalizzato</translation>
+    </message>
+    <message>
+        <source>Külső margó</source>
+        <translation>Margine esterno</translation>
+    </message>
+    <message>
+        <source>Képek közti hézag</source>
+        <translation>Spazio tra le foto</translation>
+    </message>
+    <message>
+        <source>Automatikus</source>
+        <translation>Automatico</translation>
+    </message>
+    <message>
+        <source>Szegély</source>
+        <translation>Bordo</translation>
+    </message>
+    <message>
+        <source>Szegély színe</source>
+        <translation>Colore del bordo</translation>
+    </message>
+    <message>
+        <source>Sarok lekerekítése</source>
+        <translation>Raggio degli angoli</translation>
+    </message>
+    <message>
+        <source>Hely hozzáadása</source>
+        <translation>Aggiungi cella</translation>
+    </message>
+    <message>
+        <source>Hely eltávolítása</source>
+        <translation>Rimuovi cella</translation>
+    </message>
+    <message>
+        <source>Elrendezés megszüntetése</source>
+        <translation>Rimuovi il layout</translation>
+    </message>
+    <message>
+        <source>Válaszd ki a helyet a lapon.</source>
+        <translation>Seleziona la cella sulla pagina.</translation>
+    </message>
+    <message>
+        <source>A fotók megmaradnak a helyükön.</source>
+        <translation>Le foto restano dove sono.</translation>
+    </message>
+    <message>
+        <source>A többi hely a helyén marad.</source>
+        <translation>Le altre celle restano dove sono.</translation>
+    </message>
+    <message>
+        <source>Az elrendezés megszűnik, a fotók szabadon maradnak a helyükön.</source>
+        <translation>Il layout sparisce e le foto restano al loro posto come foto libere.</translation>
+    </message>
+    <message>
+        <source>Margó beállítása</source>
+        <translation>Imposta il margine</translation>
+    </message>
+    <message>
+        <source>Szegély beállítása</source>
+        <translation>Imposta il bordo</translation>
+    </message>
+    <message numerus="yes">
+        <source>%n hely</source>
+        <translation>
+            <numerusform>%n cella</numerusform>
+            <numerusform>%n celle</numerusform>
+        </translation>
+    </message>
 </context>
 </TS>
