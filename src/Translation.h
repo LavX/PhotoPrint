@@ -40,11 +40,19 @@ QString selectedLanguage();
 void saveLanguage(const QString &code);
 
 /// Loads the translation for @p code into the application. An empty code or
-/// "hu" removes any installed translator. Returns false when the file cannot be
-/// read, in which case the interface stays in Hungarian.
+/// "hu" removes the PhotoPrint translator. Qt's own stock strings (standard
+/// dialog buttons, the colour picker, its alpha controls) still get their
+/// catalogue: qtbase_hu for the source language, qtbase_<code> otherwise.
+/// Returns false when the PhotoPrint file cannot be read, in which case the
+/// interface stays in Hungarian.
 bool installLanguage(const QString &code);
 
 /// The language installed in this process; empty means Hungarian.
 QString activeLanguage();
+
+/// The language of the Qt stock-string catalogue installed right now: "hu" in
+/// the source language, the active code otherwise. Empty when the system has no
+/// matching qtbase file, in which case Qt's own dialogs stay English.
+QString installedQtBaseLanguage();
 
 } // namespace pp::i18n

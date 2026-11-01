@@ -1226,10 +1226,6 @@
         <translation>写真どうしの間隔</translation>
     </message>
     <message>
-        <source>Automatikus</source>
-        <translation>自動</translation>
-    </message>
-    <message>
         <source>Szegély</source>
         <translation>縁取り</translation>
     </message>
@@ -1244,10 +1240,6 @@
     <message>
         <source>Hely hozzáadása</source>
         <translation>セルを追加</translation>
-    </message>
-    <message>
-        <source>Hely eltávolítása</source>
-        <translation>セルを削除</translation>
     </message>
     <message>
         <source>Elrendezés megszüntetése</source>
@@ -1282,6 +1274,30 @@
         <translation>
             <numerusform>%n 個のセル</numerusform>
         </translation>
+    </message>
+    <message>
+        <source>Automatikus margó</source>
+        <translation>余白を自動</translation>
+    </message>
+    <message>
+        <source>Automatikus hézag</source>
+        <translation>間隔を自動</translation>
+    </message>
+    <message>
+        <source>Hely törlése</source>
+        <translation>セルを削除</translation>
+    </message>
+    <message>
+        <source>A fotó szabadon marad a lapon, a többi hely a helyén marad.</source>
+        <translation>写真は自由な写真としてページに残ります。ほかのセルはそのままの位置に残ります。</translation>
+    </message>
+    <message>
+        <source>Az elrendezés megszűnt.</source>
+        <translation>レイアウトを解除しました。</translation>
+    </message>
+    <message>
+        <source>Az elrendezés megszűnt, a fotó a lapon marad.</source>
+        <translation>レイアウトを解除しました。写真はページに残ります。</translation>
     </message>
 </context>
 </TS>

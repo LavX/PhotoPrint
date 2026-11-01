@@ -1240,10 +1240,6 @@
         <translation>Расстояние между фото</translation>
     </message>
     <message>
-        <source>Automatikus</source>
-        <translation>Автоматически</translation>
-    </message>
-    <message>
         <source>Szegély</source>
         <translation>Окантовка</translation>
     </message>
@@ -1258,10 +1254,6 @@
     <message>
         <source>Hely hozzáadása</source>
         <translation>Добавить ячейку</translation>
-    </message>
-    <message>
-        <source>Hely eltávolítása</source>
-        <translation>Удалить ячейку</translation>
     </message>
     <message>
         <source>Elrendezés megszüntetése</source>
@@ -1298,6 +1290,30 @@
             <numerusform>%n ячейки</numerusform>
             <numerusform>%n ячеек</numerusform>
         </translation>
+    </message>
+    <message>
+        <source>Automatikus margó</source>
+        <translation>Автоматическое поле</translation>
+    </message>
+    <message>
+        <source>Automatikus hézag</source>
+        <translation>Автоматический отступ</translation>
+    </message>
+    <message>
+        <source>Hely törlése</source>
+        <translation>Удалить ячейку</translation>
+    </message>
+    <message>
+        <source>A fotó szabadon marad a lapon, a többi hely a helyén marad.</source>
+        <translation>Фотография останется на странице как свободная. Остальные ячейки останутся на своих местах.</translation>
+    </message>
+    <message>
+        <source>Az elrendezés megszűnt.</source>
+        <translation>Раскладка убрана.</translation>
+    </message>
+    <message>
+        <source>Az elrendezés megszűnt, a fotó a lapon marad.</source>
+        <translation>Раскладка убрана, фотография остаётся на странице.</translation>
     </message>
 </context>
 </TS>

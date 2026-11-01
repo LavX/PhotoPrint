@@ -341,6 +341,12 @@ public:
 protected:
     void closeEvent(QCloseEvent *event) override;
 
+private:
+    /// Which field of the page's layout style a control edits. A commit writes
+    /// only this one, so an untouched control can never republish its clamped
+    /// display over the stored value.
+    enum class SlotStyleField { Margin, Gutter, Border, Radius };
+
 private slots:
     void addPhotos();
     void addDroppedFiles(const QStringList &paths);
@@ -376,10 +382,19 @@ private slots:
     void brightnessChanged(int value);
     void showOriginalPressed(bool pressed);
     void applySizeFromControls();
-    /// The page-level layout panel. Each of these reads the controls (or the
-    /// chosen colour) and publishes one finished page, so one user action is one
-    /// undo step: a spin's editingFinished, a checkbox, one colour choice.
-    void applySlotStyle();
+    /// The page-level layout panel. A style edit names the one field the user
+    /// touched, and that field alone is written: the other three are taken from
+    /// the page, so a value the current paper clamps on screen is never written
+    /// back over the stored one.
+    ///
+    /// `queueSlotStyle` runs on every value change and restarts a short timer, so
+    /// the page follows the panel while the spin is still being used and the
+    /// whole burst becomes one edit. `flushSlotStyle` lands it now, and is what
+    /// editingFinished, the timer and a paper change call.
+    void queueSlotStyle(SlotStyleField field);
+    void flushSlotStyle();
+    void cancelPendingStyle();
+    void applySlotStyleField(SlotStyleField field);
     /// The colour dialog's answer, in one function, so the panel has one writer
     /// for the border colour and a test can deliver a colour without a modal
     /// dialog.
@@ -558,6 +573,10 @@ private:
     QPushButton *m_removeSlotButton = nullptr;
     QPushButton *m_dissolveLayoutButton = nullptr;
     QPushButton *m_layoutTemplatesButton = nullptr;
+    /// The live style burst: every value change restarts the timer, and the page
+    /// is updated once the user stops, so a spin that is held down is one undo.
+    QTimer *m_styleTimer = nullptr;
+    std::optional<SlotStyleField> m_pendingStyleField;
     PagesPanel *m_pagesPanel = nullptr;
     QLabel *m_pageInfo = nullptr;
     QWidget *m_noticeBar = nullptr;

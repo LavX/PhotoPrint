@@ -7,6 +7,7 @@
 #include <QMenu>
 #include <QMenuBar>
 #include <QPushButton>
+#include <QSet>
 #include <QSettings>
 #include <QStatusBar>
 #include <QTemporaryDir>
@@ -122,6 +123,7 @@ private slots:
     void everyCatalogueTranslatesTheSlotUiMessages();
     void everyCataloguePluralisesTheSlotCounts_data();
     void everyCataloguePluralisesTheSlotCounts();
+    void sourceLanguageInstallsTheQtCatalogue();
     void hungarianSourceSubstitutesTheCount();
     void repeatedLanguageSwitchingLeavesTranslatorsUnparented();
 
@@ -587,16 +589,21 @@ void TestI18n::everyCatalogueTranslatesTheSlotUiMessages()
              QStringLiteral("Saját elrendezés"),
              QStringLiteral("Külső margó"),
              QStringLiteral("Képek közti hézag"),
-             QStringLiteral("Automatikus"),
+             QStringLiteral("Automatikus margó"),
+             QStringLiteral("Automatikus hézag"),
              QStringLiteral("Szegély"),
              QStringLiteral("Szegély színe"),
              QStringLiteral("Sarok lekerekítése"),
              QStringLiteral("Hely hozzáadása"),
-             QStringLiteral("Hely eltávolítása"),
+             QStringLiteral("Hely törlése"),
              QStringLiteral("Elrendezés megszüntetése"),
+             QStringLiteral("Sablonok…"),
              QStringLiteral("Válaszd ki a helyet a lapon."),
              QStringLiteral("A fotók megmaradnak a helyükön."),
              QStringLiteral("A többi hely a helyén marad."),
+             QStringLiteral("A fotó szabadon marad a lapon, a többi hely a helyén marad."),
+             QStringLiteral("Az elrendezés megszűnt."),
+             QStringLiteral("Az elrendezés megszűnt, a fotó a lapon marad."),
              QStringLiteral("Az elrendezés megszűnik, a fotók szabadon maradnak a helyükön."),
              QStringLiteral("Margó beállítása"),
              QStringLiteral("Szegély beállítása"),
@@ -651,6 +658,33 @@ void TestI18n::everyCataloguePluralisesTheSlotCounts()
     }
 }
 
+void TestI18n::sourceLanguageInstallsTheQtCatalogue()
+{
+    // Hungarian is the source language, so PhotoPrint needs no catalogue of its
+    // own. Qt's stock strings do, or every standard dialog button and the colour
+    // picker would stay English in a Hungarian window.
+    QVERIFY(i18n::installLanguage(QString()));
+    QVERIFY(i18n::activeLanguage().isEmpty());
+    if (i18n::installedQtBaseLanguage().isEmpty())
+        QSKIP("this system ships no qtbase_hu catalogue");
+    QCOMPARE(i18n::installedQtBaseLanguage(), QStringLiteral("hu"));
+    QCOMPARE(QCoreApplication::translate("QPlatformTheme", "&Yes"), QStringLiteral("&Igen"));
+    QCOMPARE(QCoreApplication::translate("QPlatformTheme", "&No"), QStringLiteral("&Nem"));
+    QVERIFY2(QCoreApplication::translate("QColorDialog", "Select Color")
+                 != QStringLiteral("Select Color"),
+             "the colour picker is still English in Hungarian");
+    QVERIFY2(QCoreApplication::translate("QColorDialog", "A&lpha channel:")
+                 != QStringLiteral("A&lpha channel:"),
+             "the colour picker's alpha control is still English in Hungarian");
+
+    // A target language gets its own Qt catalogue, never a leftover Hungarian
+    // one from the previous choice.
+    QVERIFY(i18n::installLanguage(QStringLiteral("de")));
+    QVERIFY(i18n::installedQtBaseLanguage() != QStringLiteral("hu"));
+    QVERIFY(i18n::installLanguage(QString()));
+    QCOMPARE(i18n::installedQtBaseLanguage(), QStringLiteral("hu"));
+}
+
 void TestI18n::hungarianSourceSubstitutesTheCount()
 {
     // Hungarian is the source language and has no catalogue: the string in the
@@ -671,19 +705,31 @@ void TestI18n::repeatedLanguageSwitchingLeavesTranslatorsUnparented()
     // the shutdown double free this guards against cannot be observed from
     // inside a test, but its cause can: a translator parented to the
     // application would be deleted by QCoreApplication as well.
+    //
+    // A platform theme may install translators of its own as children of the
+    // application before the window is built, so the baseline is what the
+    // process started with; switching a language must add none of ours.
+    QSet<QTranslator *> baseline;
+    for (QTranslator *translator : QCoreApplication::instance()->findChildren<QTranslator *>())
+        baseline.insert(translator);
+    const auto parented = [&baseline] {
+        for (QTranslator *translator :
+             QCoreApplication::instance()->findChildren<QTranslator *>()) {
+            if (!baseline.contains(translator))
+                return true;
+        }
+        return false;
+    };
     for (int round = 0; round < 3; ++round) {
         QVERIFY(i18n::installLanguage(QStringLiteral("de")));
         QCOMPARE(translated("PhotoPrint", kPrint), QStringLiteral("Drucken"));
-        QVERIFY2(QCoreApplication::instance()->findChildren<QTranslator *>().isEmpty(),
-                 "a translator is parented to the application");
+        QVERIFY2(!parented(), "a translator is parented to the application");
         QVERIFY(i18n::installLanguage(QStringLiteral("zh_CN")));
         QVERIFY(translated("PhotoPrint", kPrint) != kPrint);
-        QVERIFY2(QCoreApplication::instance()->findChildren<QTranslator *>().isEmpty(),
-                 "a translator is parented to the application");
+        QVERIFY2(!parented(), "a translator is parented to the application");
         QVERIFY(i18n::installLanguage(QString()));
         QCOMPARE(translated("PhotoPrint", kPrint), kPrint);
-        QVERIFY2(QCoreApplication::instance()->findChildren<QTranslator *>().isEmpty(),
-                 "a translator is parented to the application");
+        QVERIFY2(!parented(), "a translator is parented to the application");
     }
 }
 

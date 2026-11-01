@@ -21,6 +21,26 @@ constexpr auto kSettingsKey = "language";
 std::unique_ptr<QTranslator> g_translator;
 std::unique_ptr<QTranslator> g_qtTranslator;
 QString g_active;
+QString g_qtBase;
+
+/// Qt's own catalogue: standard buttons, the colour picker, its alpha controls.
+/// It is installed before the PhotoPrint catalogue, so the application wins
+/// wherever both have an entry. A missing file is not an error, it only leaves
+/// Qt's dialogs in English.
+void installQtBase(QCoreApplication *application, const QString &code)
+{
+    if (!application || code.isEmpty())
+        return;
+    auto translator = std::make_unique<QTranslator>();
+    const QLocale locale(code);
+    if (!translator->load(locale, QStringLiteral("qtbase"), QStringLiteral("_"),
+                          QLibraryInfo::path(QLibraryInfo::TranslationsPath))) {
+        return;
+    }
+    application->installTranslator(translator.get());
+    g_qtTranslator = std::move(translator);
+    g_qtBase = code;
+}
 
 QString normalized(const QString &name)
 {
@@ -138,10 +158,17 @@ bool installLanguage(const QString &code)
     g_translator.reset();
     g_qtTranslator.reset();
     g_active.clear();
+    g_qtBase.clear();
 
     const QString resolved = resolveLocale(code);
-    if (resolved.isEmpty())
+    if (resolved.isEmpty()) {
+        // Hungarian is the source language: the interface needs no catalogue of
+        // its own. Qt's stock strings do, or every standard button and the colour
+        // picker would stay English in a Hungarian window.
+        if (application)
+            installQtBase(application, sourceLanguage());
         return true;
+    }
     if (!application)
         return false;
 
@@ -150,17 +177,7 @@ bool installLanguage(const QString &code)
     if (!translator->load(path))
         return false;
 
-    // Qt's own stock strings (standard dialog buttons, file dialogs) live in
-    // the qtbase catalogue of the system. It is installed first, so the
-    // application catalogue installed after it wins wherever both have an
-    // entry.
-    auto qtTranslator = std::make_unique<QTranslator>();
-    const QLocale locale(resolved);
-    if (qtTranslator->load(locale, QStringLiteral("qtbase"), QStringLiteral("_"),
-                           QLibraryInfo::path(QLibraryInfo::TranslationsPath))) {
-        application->installTranslator(qtTranslator.get());
-        g_qtTranslator = std::move(qtTranslator);
-    }
+    installQtBase(application, resolved);
 
     application->installTranslator(translator.get());
     g_translator = std::move(translator);
@@ -171,6 +188,11 @@ bool installLanguage(const QString &code)
 QString activeLanguage()
 {
     return g_active;
+}
+
+QString installedQtBaseLanguage()
+{
+    return g_qtBase;
 }
 
 } // namespace pp::i18n

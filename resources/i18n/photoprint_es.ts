@@ -1233,10 +1233,6 @@
         <translation>Separación entre fotos</translation>
     </message>
     <message>
-        <source>Automatikus</source>
-        <translation>Automático</translation>
-    </message>
-    <message>
         <source>Szegély</source>
         <translation>Borde</translation>
     </message>
@@ -1251,10 +1247,6 @@
     <message>
         <source>Hely hozzáadása</source>
         <translation>Añadir celda</translation>
-    </message>
-    <message>
-        <source>Hely eltávolítása</source>
-        <translation>Quitar celda</translation>
     </message>
     <message>
         <source>Elrendezés megszüntetése</source>
@@ -1290,6 +1282,30 @@
             <numerusform>%n celda</numerusform>
             <numerusform>%n celdas</numerusform>
         </translation>
+    </message>
+    <message>
+        <source>Automatikus margó</source>
+        <translation>Margen automático</translation>
+    </message>
+    <message>
+        <source>Automatikus hézag</source>
+        <translation>Separación automática</translation>
+    </message>
+    <message>
+        <source>Hely törlése</source>
+        <translation>Borrar celda</translation>
+    </message>
+    <message>
+        <source>A fotó szabadon marad a lapon, a többi hely a helyén marad.</source>
+        <translation>La foto se queda en la página, libre. Las demás celdas se quedan donde están.</translation>
+    </message>
+    <message>
+        <source>Az elrendezés megszűnt.</source>
+        <translation>El diseño ha desaparecido.</translation>
+    </message>
+    <message>
+        <source>Az elrendezés megszűnt, a fotó a lapon marad.</source>
+        <translation>El diseño ha desaparecido y la foto se queda en la página.</translation>
     </message>
 </context>
 </TS>
