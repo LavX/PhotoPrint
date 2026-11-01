@@ -156,7 +156,7 @@ void SheetPreview::setGuideState(CutGuides guides)
 
 QString SheetPreview::description() const
 {
-    return uiText("Előnézet") + QStringLiteral(" · ") + QString::number(m_rects.size());
+    return uiText(QT_TRANSLATE_NOOP("PhotoPrint", "Előnézet")) + QStringLiteral(" · ") + QString::number(m_rects.size());
 }
 
 void SheetPreview::paintEvent(QPaintEvent *)
@@ -225,7 +225,7 @@ SheetToolsDialog::SheetToolsDialog(Mode mode, DocumentSnapshot document, int pag
       m_previews(std::move(previews))
 {
     setObjectName(QStringLiteral("sheetToolsDialog"));
-    setWindowTitle(mode == Mode::Batch ? uiText("Képek sokszorosítása") : uiText("Fotók rendezése"));
+    setWindowTitle(mode == Mode::Batch ? uiText(QT_TRANSLATE_NOOP("PhotoPrint", "Képek sokszorosítása")) : uiText(QT_TRANSLATE_NOOP("PhotoPrint", "Fotók rendezése")));
     // The feedback panel below the tabs keeps Create, the warnings and the sheet
     // count in view at every system font size; the settings scroll on their own.
     setMinimumSize(760, 560);
@@ -238,13 +238,13 @@ SheetToolsDialog::SheetToolsDialog(Mode mode, DocumentSnapshot document, int pag
     m_tabs = new QTabWidget(this);
     m_tabs->setObjectName(QStringLiteral("sheetToolsTabs"));
     auto *previewColumn = new QVBoxLayout;
-    auto *previewTitle = new QLabel(uiText("Előnézet"), this);
+    auto *previewTitle = new QLabel(uiText(QT_TRANSLATE_NOOP("PhotoPrint", "Előnézet")), this);
     QFont titleFont = previewTitle->font();
     titleFont.setWeight(QFont::DemiBold);
     previewTitle->setFont(titleFont);
     previewColumn->addWidget(previewTitle);
     m_preview = new SheetPreview(this);
-    m_preview->setAccessibleName(uiText("Előnézet"));
+    m_preview->setAccessibleName(uiText(QT_TRANSLATE_NOOP("PhotoPrint", "Előnézet")));
     previewColumn->addWidget(m_preview, 1);
     m_caption = new QLabel(this);
     m_caption->setObjectName(QStringLiteral("previewCaption"));
@@ -263,13 +263,13 @@ SheetToolsDialog::SheetToolsDialog(Mode mode, DocumentSnapshot document, int pag
     m_createButton = buttons->addButton(QString(), QDialogButtonBox::AcceptRole);
     m_createButton->setObjectName(QStringLiteral("sheetCreateButton"));
     m_createButton->setDefault(true);
-    buttons->button(QDialogButtonBox::Cancel)->setText(uiText("Mégsem"));
+    buttons->button(QDialogButtonBox::Cancel)->setText(uiText(QT_TRANSLATE_NOOP("PhotoPrint", "Mégsem")));
     outer->addWidget(buttons);
     connect(buttons, &QDialogButtonBox::rejected, this, &QDialog::reject);
     connect(m_createButton, &QPushButton::clicked, this, &SheetToolsDialog::accept);
     connect(m_tabs, &QTabWidget::currentChanged, this, [this](int index) {
-        setWindowTitle(index == kBatchTab ? uiText("Képek sokszorosítása")
-                                          : uiText("Fotók rendezése"));
+        setWindowTitle(index == kBatchTab ? uiText(QT_TRANSLATE_NOOP("PhotoPrint", "Képek sokszorosítása"))
+                                          : uiText(QT_TRANSLATE_NOOP("PhotoPrint", "Fotók rendezése")));
         setCreateText();
         // The create state belongs to the active tab: switching must re-evaluate
         // that tab's inputs, not leave the other tab's answer in place.
@@ -301,7 +301,7 @@ void SheetToolsDialog::buildBatchTab()
     v->setContentsMargins(4, 8, 4, 8);
     scroll->setWidget(page);
 
-    auto *intro = new QLabel(uiText("Ugyanaz a fotó több példányban, egyenes rácsban."), page);
+    auto *intro = new QLabel(uiText(QT_TRANSLATE_NOOP("PhotoPrint", "Ugyanaz a fotó több példányban, egyenes rácsban.")), page);
     intro->setWordWrap(true);
     v->addWidget(intro);
 
@@ -312,17 +312,17 @@ void SheetToolsDialog::buildBatchTab()
         const QString name = QFileInfo(m_source->sourcePath).fileName();
         const QFontMetrics metrics(sourceLabel->font());
         sourceLabel->setText(
-            uiText("Fotó: %1").arg(metrics.elidedText(name, Qt::ElideMiddle, 360)));
+            uiText(QT_TRANSLATE_NOOP("PhotoPrint", "Fotó: %1")).arg(metrics.elidedText(name, Qt::ElideMiddle, 360)));
     } else {
-        sourceLabel->setText(uiText("Válassz ki egy fotót a sokszorosításhoz."));
+        sourceLabel->setText(uiText(QT_TRANSLATE_NOOP("PhotoPrint", "Válassz ki egy fotót a sokszorosításhoz.")));
     }
     v->addWidget(sourceLabel);
 
-    auto *placeGroup = new QGroupBox(uiText("Hely"), page);
+    auto *placeGroup = new QGroupBox(uiText(QT_TRANSLATE_NOOP("PhotoPrint", "Hely")), page);
     auto *placeLayout = new QVBoxLayout(placeGroup);
-    m_batchCurrent = new QRadioButton(uiText("Az aktuális lapra"), placeGroup);
+    m_batchCurrent = new QRadioButton(uiText(QT_TRANSLATE_NOOP("PhotoPrint", "Az aktuális lapra")), placeGroup);
     m_batchCurrent->setObjectName(QStringLiteral("batchPlaceCurrent"));
-    m_batchNew = new QRadioButton(uiText("Új lapokra"), placeGroup);
+    m_batchNew = new QRadioButton(uiText(QT_TRANSLATE_NOOP("PhotoPrint", "Új lapokra")), placeGroup);
     m_batchNew->setObjectName(QStringLiteral("batchPlaceNew"));
     m_batchPlaceNote = new QLabel(placeGroup);
     m_batchPlaceNote->setObjectName(QStringLiteral("batchPlaceNote"));
@@ -334,69 +334,69 @@ void SheetToolsDialog::buildBatchTab()
     v->addWidget(placeGroup);
 
 
-    auto *sizeGroup = new QGroupBox(uiText("Méret"), page);
+    auto *sizeGroup = new QGroupBox(uiText(QT_TRANSLATE_NOOP("PhotoPrint", "Méret")), page);
     auto *sizeForm = new QFormLayout(sizeGroup);
     m_batchPreset = new QComboBox(sizeGroup);
     m_batchPreset->setObjectName(QStringLiteral("batchPreset"));
-    m_batchPreset->setAccessibleName(uiText("Méret"));
+    m_batchPreset->setAccessibleName(uiText(QT_TRANSLATE_NOOP("PhotoPrint", "Méret")));
     for (const SheetLayout::CopyPreset &preset : SheetLayout::copyPresets()) {
         m_batchPreset->addItem(
             QCoreApplication::translate("PhotoPrint", preset.label.toUtf8().constData()),
             preset.id);
     }
-    m_batchPreset->addItem(uiText("Egyedi méret"), QString());
-    sizeForm->addRow(uiText("Méret"), m_batchPreset);
+    m_batchPreset->addItem(uiText(QT_TRANSLATE_NOOP("PhotoPrint", "Egyedi méret")), QString());
+    sizeForm->addRow(uiText(QT_TRANSLATE_NOOP("PhotoPrint", "Méret")), m_batchPreset);
 
     m_batchWidthCm = new QDoubleSpinBox(sizeGroup);
     m_batchWidthCm->setObjectName(QStringLiteral("batchWidthCm"));
-    m_batchWidthCm->setAccessibleName(uiText("Szélesség"));
+    m_batchWidthCm->setAccessibleName(uiText(QT_TRANSLATE_NOOP("PhotoPrint", "Szélesség")));
     m_batchHeightCm = new QDoubleSpinBox(sizeGroup);
     m_batchHeightCm->setObjectName(QStringLiteral("batchHeightCm"));
-    m_batchHeightCm->setAccessibleName(uiText("Magasság"));
+    m_batchHeightCm->setAccessibleName(uiText(QT_TRANSLATE_NOOP("PhotoPrint", "Magasság")));
     for (QDoubleSpinBox *spin : {m_batchWidthCm, m_batchHeightCm}) {
         spin->setRange(SheetLayout::kMinCopyMm / 10.0, SheetLayout::kMaxCopyMm / 10.0);
         spin->setDecimals(1);
         spin->setSingleStep(0.1);
         spin->setSuffix(QStringLiteral(" cm"));
     }
-    sizeForm->addRow(uiText("Szélesség"), m_batchWidthCm);
-    sizeForm->addRow(uiText("Magasság"), m_batchHeightCm);
-    m_batchSwap = new QPushButton(uiText("Méret csere"), sizeGroup);
+    sizeForm->addRow(uiText(QT_TRANSLATE_NOOP("PhotoPrint", "Szélesség")), m_batchWidthCm);
+    sizeForm->addRow(uiText(QT_TRANSLATE_NOOP("PhotoPrint", "Magasság")), m_batchHeightCm);
+    m_batchSwap = new QPushButton(uiText(QT_TRANSLATE_NOOP("PhotoPrint", "Méret csere")), sizeGroup);
     m_batchSwap->setObjectName(QStringLiteral("batchSwap"));
-    m_batchSwap->setAccessibleName(uiText("Szélesség és magasság cseréje"));
+    m_batchSwap->setAccessibleName(uiText(QT_TRANSLATE_NOOP("PhotoPrint", "Szélesség és magasság cseréje")));
     sizeForm->addRow(QString(), m_batchSwap);
 
     auto *sizeNote = new QLabel(
-        uiText("A 35 × 45 mm az igazolványkép szokásos mérete. Ez az eszköz csak a helyét állítja "
-           "be, azt nem ellenőrzi, hogy a fotó megfelel-e az előírásoknak."),
+        uiText(QT_TRANSLATE_NOOP("PhotoPrint", "A 35 × 45 mm az igazolványkép szokásos mérete. Ez az eszköz csak a helyét állítja "
+           "be, azt nem ellenőrzi, hogy a fotó megfelel-e az előírásoknak.")),
         sizeGroup);
     sizeNote->setWordWrap(true);
     sizeNote->setStyleSheet(QStringLiteral("color: #6e6e73;"));
     sizeForm->addRow(sizeNote);
     v->addWidget(sizeGroup);
 
-    auto *layoutGroup = new QGroupBox(uiText("Elrendezés"), page);
+    auto *layoutGroup = new QGroupBox(uiText(QT_TRANSLATE_NOOP("PhotoPrint", "Elrendezés")), page);
     auto *layoutForm = new QFormLayout(layoutGroup);
     m_batchGutter = new QDoubleSpinBox(layoutGroup);
     m_batchGutter->setObjectName(QStringLiteral("batchGutter"));
-    m_batchGutter->setAccessibleName(uiText("Térköz"));
+    m_batchGutter->setAccessibleName(uiText(QT_TRANSLATE_NOOP("PhotoPrint", "Térköz")));
     m_batchGutter->setRange(0.0, SheetLayout::kMaxGutterMm);
     m_batchGutter->setDecimals(1);
     m_batchGutter->setSingleStep(0.5);
     m_batchGutter->setSuffix(QStringLiteral(" mm"));
-    layoutForm->addRow(uiText("Térköz"), m_batchGutter);
+    layoutForm->addRow(uiText(QT_TRANSLATE_NOOP("PhotoPrint", "Térköz")), m_batchGutter);
 
     m_batchMargin = new QDoubleSpinBox(layoutGroup);
     m_batchMargin->setObjectName(QStringLiteral("batchMargin"));
-    m_batchMargin->setAccessibleName(uiText("Legkisebb margó"));
+    m_batchMargin->setAccessibleName(uiText(QT_TRANSLATE_NOOP("PhotoPrint", "Legkisebb margó")));
     m_batchMargin->setRange(SheetLayout::kMinMarginMm, SheetLayout::kMaxMarginMm);
     m_batchMargin->setDecimals(1);
     m_batchMargin->setSingleStep(0.5);
     m_batchMargin->setSuffix(QStringLiteral(" mm"));
-    layoutForm->addRow(uiText("Legkisebb margó"), m_batchMargin);
+    layoutForm->addRow(uiText(QT_TRANSLATE_NOOP("PhotoPrint", "Legkisebb margó")), m_batchMargin);
 
     auto *marginHint = new QLabel(
-        uiText("A nyomtató a lap szélétől 3 mm-t nem nyomtat ki, ezért a margó legalább 3,5 mm."),
+        uiText(QT_TRANSLATE_NOOP("PhotoPrint", "A nyomtató a lap szélétől 3 mm-t nem nyomtat ki, ezért a margó legalább 3,5 mm.")),
         layoutGroup);
     marginHint->setWordWrap(true);
     marginHint->setStyleSheet(QStringLiteral("color: #6e6e73;"));
@@ -407,26 +407,26 @@ void SheetToolsDialog::buildBatchTab()
     countLayout->setContentsMargins(0, 0, 0, 0);
     m_batchCount = new QSpinBox(countRow);
     m_batchCount->setObjectName(QStringLiteral("batchCount"));
-    m_batchCount->setAccessibleName(uiText("Darabszám"));
+    m_batchCount->setAccessibleName(uiText(QT_TRANSLATE_NOOP("PhotoPrint", "Darabszám")));
     m_batchCount->setRange(1, SheetLayout::maxCount());
     m_batchCount->setSuffix(QStringLiteral(" db"));
-    m_batchFill = new QCheckBox(uiText("Amennyi befér"), countRow);
+    m_batchFill = new QCheckBox(uiText(QT_TRANSLATE_NOOP("PhotoPrint", "Amennyi befér")), countRow);
     m_batchFill->setObjectName(QStringLiteral("batchFill"));
     countLayout->addWidget(m_batchCount);
     countLayout->addWidget(m_batchFill);
     countLayout->addStretch(1);
-    layoutForm->addRow(uiText("Darabszám"), countRow);
+    layoutForm->addRow(uiText(QT_TRANSLATE_NOOP("PhotoPrint", "Darabszám")), countRow);
     v->addWidget(layoutGroup);
 
-    auto *guideGroup = new QGroupBox(uiText("Vágójelek"), page);
+    auto *guideGroup = new QGroupBox(uiText(QT_TRANSLATE_NOOP("PhotoPrint", "Vágójelek")), page);
     auto *guideForm = new QFormLayout(guideGroup);
     m_batchGuides = new QComboBox(guideGroup);
     m_batchGuides->setObjectName(QStringLiteral("batchGuides"));
-    m_batchGuides->setAccessibleName(uiText("Vágójelek"));
-    m_batchGuides->addItem(uiText("Nincs"), int(CutGuides::None));
-    m_batchGuides->addItem(uiText("Képernyőn"), int(CutGuides::Screen));
-    m_batchGuides->addItem(uiText("Nyomtatás"), int(CutGuides::Print));
-    guideForm->addRow(uiText("Vágójelek"), m_batchGuides);
+    m_batchGuides->setAccessibleName(uiText(QT_TRANSLATE_NOOP("PhotoPrint", "Vágójelek")));
+    m_batchGuides->addItem(uiText(QT_TRANSLATE_NOOP("PhotoPrint", "Nincs")), int(CutGuides::None));
+    m_batchGuides->addItem(uiText(QT_TRANSLATE_NOOP("PhotoPrint", "Képernyőn")), int(CutGuides::Screen));
+    m_batchGuides->addItem(uiText(QT_TRANSLATE_NOOP("PhotoPrint", "Nyomtatás")), int(CutGuides::Print));
+    guideForm->addRow(uiText(QT_TRANSLATE_NOOP("PhotoPrint", "Vágójelek")), m_batchGuides);
     m_batchGuideHint = new QLabel(guideGroup);
     m_batchGuideHint->setObjectName(QStringLiteral("batchGuideHint"));
     m_batchGuideHint->setWordWrap(true);
@@ -540,7 +540,7 @@ void SheetToolsDialog::buildBatchTab()
     connect(m_batchGuides, &QComboBox::currentIndexChanged, this, [this](int) { updateBatch(); });
     connect(m_batchCurrent, &QRadioButton::toggled, this, [this](bool) { updateBatch(); });
 
-    m_tabs->addTab(scroll, uiText("Képek sokszorosítása"));
+    m_tabs->addTab(scroll, uiText(QT_TRANSLATE_NOOP("PhotoPrint", "Képek sokszorosítása")));
 }
 
 void SheetToolsDialog::buildAlignTab()
@@ -553,14 +553,14 @@ void SheetToolsDialog::buildAlignTab()
     v->setContentsMargins(4, 8, 4, 8);
     scroll->setWidget(page);
 
-    auto *intro = new QLabel(uiText("A lapon lévő fotók elrendezése. A sorrend nem változik."), page);
+    auto *intro = new QLabel(uiText(QT_TRANSLATE_NOOP("PhotoPrint", "A lapon lévő fotók elrendezése. A sorrend nem változik.")), page);
     intro->setWordWrap(true);
     v->addWidget(intro);
 
     auto *modeRow = new QHBoxLayout;
-    m_alignGridMode = new QRadioButton(uiText("Rácsba"), page);
+    m_alignGridMode = new QRadioButton(uiText(QT_TRANSLATE_NOOP("PhotoPrint", "Rácsba")), page);
     m_alignGridMode->setObjectName(QStringLiteral("alignGridMode"));
-    m_alignGapMode = new QRadioButton(uiText("Térköz kiegyenlítése"), page);
+    m_alignGapMode = new QRadioButton(uiText(QT_TRANSLATE_NOOP("PhotoPrint", "Térköz kiegyenlítése")), page);
     m_alignGapMode->setObjectName(QStringLiteral("alignGapMode"));
     m_alignGridMode->setChecked(true);
     modeRow->addWidget(m_alignGridMode);
@@ -576,8 +576,8 @@ void SheetToolsDialog::buildAlignTab()
     auto *gridLayout = new QVBoxLayout(gridPage);
     gridLayout->setContentsMargins(0, 0, 0, 0);
     auto *gridHint = new QLabel(
-        uiText("A fotók egyforma cellákba kerülnek. A kép kitölti a cellát, a kilógó rész "
-           "lemarad."),
+        uiText(QT_TRANSLATE_NOOP("PhotoPrint", "A fotók egyforma cellákba kerülnek. A kép kitölti a cellát, a kilógó rész "
+           "lemarad.")),
         gridPage);
     gridHint->setWordWrap(true);
     gridHint->setStyleSheet(QStringLiteral("color: #6e6e73;"));
@@ -586,33 +586,33 @@ void SheetToolsDialog::buildAlignTab()
     auto *gridForm = new QFormLayout;
     m_alignMargin = new QDoubleSpinBox(gridPage);
     m_alignMargin->setObjectName(QStringLiteral("alignMargin"));
-    m_alignMargin->setAccessibleName(uiText("Külső margó"));
+    m_alignMargin->setAccessibleName(uiText(QT_TRANSLATE_NOOP("PhotoPrint", "Külső margó")));
     m_alignMargin->setRange(SheetLayout::kMinMarginMm, SheetLayout::kMaxMarginMm);
     m_alignMargin->setDecimals(1);
     m_alignMargin->setSingleStep(0.5);
     m_alignMargin->setSuffix(QStringLiteral(" mm"));
-    gridForm->addRow(uiText("Külső margó"), m_alignMargin);
+    gridForm->addRow(uiText(QT_TRANSLATE_NOOP("PhotoPrint", "Külső margó")), m_alignMargin);
 
     m_alignGutter = new QDoubleSpinBox(gridPage);
     m_alignGutter->setObjectName(QStringLiteral("alignGutter"));
-    m_alignGutter->setAccessibleName(uiText("Térköz"));
+    m_alignGutter->setAccessibleName(uiText(QT_TRANSLATE_NOOP("PhotoPrint", "Térköz")));
     m_alignGutter->setRange(0.0, SheetLayout::kMaxGutterMm);
     m_alignGutter->setDecimals(1);
     m_alignGutter->setSingleStep(0.5);
     m_alignGutter->setSuffix(QStringLiteral(" mm"));
-    gridForm->addRow(uiText("Térköz"), m_alignGutter);
+    gridForm->addRow(uiText(QT_TRANSLATE_NOOP("PhotoPrint", "Térköz")), m_alignGutter);
 
     m_alignColumns = new QComboBox(gridPage);
     m_alignColumns->setObjectName(QStringLiteral("alignColumns"));
-    m_alignColumns->setAccessibleName(uiText("Oszlopok"));
-    gridForm->addRow(uiText("Oszlopok"), m_alignColumns);
+    m_alignColumns->setAccessibleName(uiText(QT_TRANSLATE_NOOP("PhotoPrint", "Oszlopok")));
+    gridForm->addRow(uiText(QT_TRANSLATE_NOOP("PhotoPrint", "Oszlopok")), m_alignColumns);
     gridLayout->addLayout(gridForm);
 
-    m_alignFill = new QCheckBox(uiText("A kép egésze látszódjon"), gridPage);
+    m_alignFill = new QCheckBox(uiText(QT_TRANSLATE_NOOP("PhotoPrint", "A kép egésze látszódjon")), gridPage);
     m_alignFill->setObjectName(QStringLiteral("alignFill"));
     gridLayout->addWidget(m_alignFill);
     auto *fillHint = new QLabel(
-        uiText("Bekapcsolva a kép nem tölti ki a cellát; a hiányzó rész fehér marad."), gridPage);
+        uiText(QT_TRANSLATE_NOOP("PhotoPrint", "Bekapcsolva a kép nem tölti ki a cellát; a hiányzó rész fehér marad.")), gridPage);
     fillHint->setWordWrap(true);
     fillHint->setStyleSheet(QStringLiteral("color: #6e6e73;"));
     gridLayout->addWidget(fillHint);
@@ -623,7 +623,7 @@ void SheetToolsDialog::buildAlignTab()
     auto *gapLayout = new QVBoxLayout(gapPage);
     gapLayout->setContentsMargins(0, 0, 0, 0);
     auto *gapHint = new QLabel(
-        uiText("A fotók megtartják a méretüket. A köztük lévő hely lesz egyenlő."), gapPage);
+        uiText(QT_TRANSLATE_NOOP("PhotoPrint", "A fotók megtartják a méretüket. A köztük lévő hely lesz egyenlő.")), gapPage);
     gapHint->setWordWrap(true);
     gapHint->setStyleSheet(QStringLiteral("color: #6e6e73;"));
     gapLayout->addWidget(gapHint);
@@ -631,20 +631,20 @@ void SheetToolsDialog::buildAlignTab()
     auto *gapForm = new QFormLayout;
     m_alignAxis = new QComboBox(gapPage);
     m_alignAxis->setObjectName(QStringLiteral("alignAxis"));
-    m_alignAxis->setAccessibleName(uiText("Irány"));
-    m_alignAxis->addItem(uiText("Egymás mellett"), int(SheetLayout::DistributeAxis::Horizontal));
-    m_alignAxis->addItem(uiText("Egymás alatt"), int(SheetLayout::DistributeAxis::Vertical));
-    gapForm->addRow(uiText("Irány"), m_alignAxis);
+    m_alignAxis->setAccessibleName(uiText(QT_TRANSLATE_NOOP("PhotoPrint", "Irány")));
+    m_alignAxis->addItem(uiText(QT_TRANSLATE_NOOP("PhotoPrint", "Egymás mellett")), int(SheetLayout::DistributeAxis::Horizontal));
+    m_alignAxis->addItem(uiText(QT_TRANSLATE_NOOP("PhotoPrint", "Egymás alatt")), int(SheetLayout::DistributeAxis::Vertical));
+    gapForm->addRow(uiText(QT_TRANSLATE_NOOP("PhotoPrint", "Irány")), m_alignAxis);
     m_alignGap = new QDoubleSpinBox(gapPage);
     m_alignGap->setObjectName(QStringLiteral("alignGap"));
-    m_alignGap->setAccessibleName(uiText("Térköz"));
+    m_alignGap->setAccessibleName(uiText(QT_TRANSLATE_NOOP("PhotoPrint", "Térköz")));
     m_alignGap->setRange(0.0, SheetLayout::kMaxGutterMm);
     m_alignGap->setDecimals(1);
     m_alignGap->setSingleStep(0.5);
     m_alignGap->setSuffix(QStringLiteral(" mm"));
-    gapForm->addRow(uiText("Térköz"), m_alignGap);
+    gapForm->addRow(uiText(QT_TRANSLATE_NOOP("PhotoPrint", "Térköz")), m_alignGap);
     gapLayout->addLayout(gapForm);
-    auto *gapNote = new QLabel(uiText("Ha nem fér el, a program csökkenti."), gapPage);
+    auto *gapNote = new QLabel(uiText(QT_TRANSLATE_NOOP("PhotoPrint", "Ha nem fér el, a program csökkenti.")), gapPage);
     gapNote->setWordWrap(true);
     gapNote->setStyleSheet(QStringLiteral("color: #6e6e73;"));
     gapLayout->addWidget(gapNote);
@@ -702,7 +702,7 @@ void SheetToolsDialog::buildAlignTab()
     connect(m_alignAxis, &QComboBox::currentIndexChanged, this, [this](int) { updateAlign(); });
     connect(m_alignGap, &QDoubleSpinBox::valueChanged, this, [this](double) { updateAlign(); });
 
-    m_tabs->addTab(scroll, uiText("Fotók rendezése"));
+    m_tabs->addTab(scroll, uiText(QT_TRANSLATE_NOOP("PhotoPrint", "Fotók rendezése")));
 }
 
 SheetLayout::BatchSpec SheetToolsDialog::batchSpec() const
@@ -779,7 +779,7 @@ void SheetToolsDialog::buildFeedback()
     auto *summaryRow = new QHBoxLayout;
     m_summary = new QLabel(m_feedback);
     m_summary->setObjectName(QStringLiteral("sheetSummary"));
-    m_summary->setAccessibleName(uiText("Összegzés"));
+    m_summary->setAccessibleName(uiText(QT_TRANSLATE_NOOP("PhotoPrint", "Összegzés")));
     m_summary->setWordWrap(true);
     QFont summaryFont = m_summary->font();
     summaryFont.setWeight(QFont::DemiBold);
@@ -788,7 +788,7 @@ void SheetToolsDialog::buildFeedback()
 
     m_prevPage = new QPushButton(QStringLiteral("‹"), m_feedback);
     m_prevPage->setObjectName(QStringLiteral("sheetPrevPage"));
-    m_prevPage->setAccessibleName(uiText("Előző lap"));
+    m_prevPage->setAccessibleName(uiText(QT_TRANSLATE_NOOP("PhotoPrint", "Előző lap")));
     m_prevPage->setFixedWidth(30);
     summaryRow->addWidget(m_prevPage);
     m_pageLabel = new QLabel(m_feedback);
@@ -796,14 +796,14 @@ void SheetToolsDialog::buildFeedback()
     summaryRow->addWidget(m_pageLabel);
     m_nextPage = new QPushButton(QStringLiteral("›"), m_feedback);
     m_nextPage->setObjectName(QStringLiteral("sheetNextPage"));
-    m_nextPage->setAccessibleName(uiText("Következő lap"));
+    m_nextPage->setAccessibleName(uiText(QT_TRANSLATE_NOOP("PhotoPrint", "Következő lap")));
     m_nextPage->setFixedWidth(30);
     summaryRow->addWidget(m_nextPage);
     feedbackLayout->addLayout(summaryRow);
 
     m_warning = new QLabel(m_feedback);
     m_warning->setObjectName(QStringLiteral("sheetWarning"));
-    m_warning->setAccessibleName(uiText("Figyelmeztetés"));
+    m_warning->setAccessibleName(uiText(QT_TRANSLATE_NOOP("PhotoPrint", "Figyelmeztetés")));
     m_warning->setWordWrap(true);
     m_warning->setStyleSheet(QStringLiteral("color: #8a5a00;"));
     m_warning->setVisible(false);
@@ -817,7 +817,7 @@ void SheetToolsDialog::buildFeedback()
     feedbackLayout->addWidget(m_note);
 
     m_exactNote = new QLabel(
-        uiText("A példányok pontosan a választott méretben nyomtatódnak, nagyítás nélkül."),
+        uiText(QT_TRANSLATE_NOOP("PhotoPrint", "A példányok pontosan a választott méretben nyomtatódnak, nagyítás nélkül.")),
         m_feedback);
     m_exactNote->setObjectName(QStringLiteral("sheetExactSizeNote"));
     m_exactNote->setWordWrap(true);
@@ -865,7 +865,7 @@ void SheetToolsDialog::updatePageNavigation()
     if (!multiple)
         return;
     m_previewPage = std::clamp(m_previewPage, 0, m_batchGrid->pageCount() - 1);
-    m_pageLabel->setText(uiText("%1/%2. lap")
+    m_pageLabel->setText(uiText(QT_TRANSLATE_NOOP("PhotoPrint", "%1/%2. lap"))
                              .arg(m_previewPage + 1)
                              .arg(m_batchGrid->pageCount()));
     m_prevPage->setEnabled(m_previewPage > 0);
@@ -919,20 +919,20 @@ void SheetToolsDialog::updateBatch()
     if (m_batchGuideHint) {
         m_batchGuideHint->setText(
             guideValue == int(CutGuides::Print)
-                ? uiText("A nyomaton is megjelenik; a vágás a vonal közepén halad, nyomtatás "
-                         "előtt megerősítést kér.")
+                ? uiText(QT_TRANSLATE_NOOP("PhotoPrint", "A nyomaton is megjelenik; a vágás a vonal közepén halad, nyomtatás "
+                         "előtt megerősítést kér."))
                 : (guideValue == int(CutGuides::Screen)
-                       ? uiText("Csak a képernyőn látszik, a nyomatra nem kerül.")
-                       : uiText("Nincs vágójel a képernyőn és a nyomaton.")));
+                       ? uiText(QT_TRANSLATE_NOOP("PhotoPrint", "Csak a képernyőn látszik, a nyomatra nem kerül."))
+                       : uiText(QT_TRANSLATE_NOOP("PhotoPrint", "Nincs vágójel a képernyőn és a nyomaton."))));
     }
 
     if (m_pageIndex < 0 || m_pageIndex >= m_document.pages.size() || !m_source) {
-        refuse(m_source ? uiText("Érvénytelen papírméret.")
-                        : uiText("Válassz ki egy fotót a sokszorosításhoz."));
+        refuse(m_source ? uiText(QT_TRANSLATE_NOOP("PhotoPrint", "Érvénytelen papírméret."))
+                        : uiText(QT_TRANSLATE_NOOP("PhotoPrint", "Válassz ki egy fotót a sokszorosításhoz.")));
         return;
     }
     if (!m_sourceReadable) {
-        refuse(uiText("A kiválasztott fotó nem olvasható."));
+        refuse(uiText(QT_TRANSLATE_NOOP("PhotoPrint", "A kiválasztott fotó nem olvasható.")));
         return;
     }
 
@@ -951,9 +951,9 @@ void SheetToolsDialog::updateBatch()
         m_batchCount->setValue(chosen.perPage);
     }
 
-    QString summary = uiText("%n példány fér el egy lapra.", chosen.perPage);
+    QString summary = uiText(QT_TRANSLATE_NOOP("PhotoPrint", "%n példány fér el egy lapra."), chosen.perPage);
     if (chosen.pageCount() > 1)
-        summary += QLatin1Char(' ') + uiText("%n lapra kerül.", chosen.pageCount());
+        summary += QLatin1Char(' ') + uiText(QT_TRANSLATE_NOOP("PhotoPrint", "%n lapra kerül."), chosen.pageCount());
     // A full sheet of very small copies hits the per-page cap: "as many as fit"
     // then means the cap, and the summary has to say which number stopped it.
     // The shaped block of a single sheet is not the raw capacity, so count the
@@ -968,33 +968,33 @@ void SheetToolsDialog::updateBatch()
         : 0;
     if (spec.fillPage && rawCapacity > chosen.perPage) {
         summary += QLatin1Char(' ')
-            + uiText("Egy lapra legfeljebb %1 példány kerül.").arg(chosen.perPage);
+            + uiText(QT_TRANSLATE_NOOP("PhotoPrint", "Egy lapra legfeljebb %1 példány kerül.")).arg(chosen.perPage);
     }
     if (!spec.fillPage && spec.count >= SheetLayout::maxCount()) {
         summary += QLatin1Char(' ')
-            + uiText("Egyszerre legfeljebb %1 példány készíthető.")
+            + uiText(QT_TRANSLATE_NOOP("PhotoPrint", "Egyszerre legfeljebb %1 példány készíthető."))
                   .arg(SheetLayout::maxCount());
     }
     m_summaryText = summary;
 
     QStringList warnings;
     if (m_source && std::abs(m_source->angleDeg) > 1e-9) {
-        warnings << uiText("A kiválasztott fotó el van forgatva. A példányok egyenesen kerülnek a "
-                           "rácsba.");
+        warnings << uiText(QT_TRANSLATE_NOOP("PhotoPrint", "A kiválasztott fotó el van forgatva. A példányok egyenesen kerülnek a "
+                           "rácsba."));
     }
     if (chosen.minVisible < 0.6)
-        warnings << uiText("A kiválasztott fotó szélei lemaradnak.");
+        warnings << uiText(QT_TRANSLATE_NOOP("PhotoPrint", "A kiválasztott fotó szélei lemaradnak."));
     if (guideValue == int(CutGuides::Print) && chosen.marginMm < 5.0) {
-        warnings << uiText("Ilyen szoros margónál a nyomtató a szélső vágójelet levághatja.");
+        warnings << uiText(QT_TRANSLATE_NOOP("PhotoPrint", "Ilyen szoros margónál a nyomtató a szélső vágójelet levághatja."));
     }
     if (!m_batchNew->isChecked() && page.hasLayout()) {
-        warnings << uiText("A lap elrendezése megszűnik, a példányok szabadon kerülnek a lapra.");
+        warnings << uiText(QT_TRANSLATE_NOOP("PhotoPrint", "A lap elrendezése megszűnik, a példányok szabadon kerülnek a lapra."));
     }
     const CutGuides guideChoice = static_cast<CutGuides>(guideValue);
     if (!m_batchNew->isChecked() && page.cutGuides != guideChoice) {
         // The chosen guide state is written to the target page as part of the
         // same edit. Say so before the user presses Create.
-        warnings << uiText("A lap vágójel-beállítása is módosul: %1.")
+        warnings << uiText(QT_TRANSLATE_NOOP("PhotoPrint", "A lap vágójel-beállítása is módosul: %1."))
                         .arg(m_batchGuides->currentText());
     }
     m_warningText = warnings.join(QLatin1Char('\n'));
@@ -1002,13 +1002,13 @@ void SheetToolsDialog::updateBatch()
     if (m_batchNew->isChecked())
         m_batchPlaceNote->clear();
     else if (!page.frames.isEmpty())
-        m_batchPlaceNote->setText(uiText("%n fotó helyére", page.frames.size()));
+        m_batchPlaceNote->setText(uiText(QT_TRANSLATE_NOOP("PhotoPrint", "%n fotó helyére"), page.frames.size()));
     else
         m_batchPlaceNote->clear();
 
     m_note->setText(chosen.pageCount() > 1
-                        ? uiText("A maradék az első kockáktól töltődik, hogy a lapok együtt "
-                                 "vághatók legyenek.")
+                        ? uiText(QT_TRANSLATE_NOOP("PhotoPrint", "A maradék az első kockáktól töltődik, hogy a lapok együtt "
+                                 "vághatók legyenek."))
                         : QString());
     m_note->setVisible(chosen.pageCount() > 1);
     m_exactNote->setVisible(true);
@@ -1050,7 +1050,7 @@ void SheetToolsDialog::updateAlign()
     };
 
     if (m_pageIndex < 0 || m_pageIndex >= m_document.pages.size()) {
-        refuse(uiText("Ezen a lapon nincs fotó."));
+        refuse(uiText(QT_TRANSLATE_NOOP("PhotoPrint", "Ezen a lapon nincs fotó.")));
         return;
     }
     const Page &page = m_document.pages.at(m_pageIndex);
@@ -1063,7 +1063,7 @@ void SheetToolsDialog::updateAlign()
         const int previous = m_alignColumns->currentData().toInt();
         const QSignalBlocker blocker(m_alignColumns);
         m_alignColumns->clear();
-        m_alignColumns->addItem(uiText("Automatikus"), 0);
+        m_alignColumns->addItem(uiText(QT_TRANSLATE_NOOP("PhotoPrint", "Automatikus")), 0);
         for (int columns = 1; columns <= count; ++columns)
             m_alignColumns->addItem(QString::number(columns), columns);
         const int index = m_alignColumns->findData(previous);
@@ -1071,12 +1071,12 @@ void SheetToolsDialog::updateAlign()
     }
 
     if (page.hasLayout()) {
-        refuse(uiText("Ehhez a laphoz elrendezés tartozik. Szüntesd meg az elrendezést az "
-                      "igazításhoz."));
+        refuse(uiText(QT_TRANSLATE_NOOP("PhotoPrint", "Ehhez a laphoz elrendezés tartozik. Szüntesd meg az elrendezést az "
+                      "igazításhoz.")));
         return;
     }
     if (count == 0) {
-        refuse(uiText("Ezen a lapon nincs fotó."));
+        refuse(uiText(QT_TRANSLATE_NOOP("PhotoPrint", "Ezen a lapon nincs fotó.")));
         return;
     }
 
@@ -1098,10 +1098,10 @@ void SheetToolsDialog::updateAlign()
         m_alignValid = true;
         if (count == 1) {
             m_summaryText =
-                uiText("Egy fotó van a lapon. Csak középre igazítjuk, a mérete nem változik.");
+                uiText(QT_TRANSLATE_NOOP("PhotoPrint", "Egy fotó van a lapon. Csak középre igazítjuk, a mérete nem változik."));
         } else {
             m_summaryText =
-                uiText("%n fotó: %1 oszlop × %2 sor. Egy cella %3 × %4 mm.", count)
+                uiText(QT_TRANSLATE_NOOP("PhotoPrint", "%n fotó: %1 oszlop × %2 sor. Egy cella %3 × %4 mm."), count)
                     .arg(m_alignPlan->columns)
                     .arg(m_alignPlan->rows)
                     .arg(mmText(m_alignPlan->cellWidthMm), mmText(m_alignPlan->cellHeightMm));
@@ -1111,8 +1111,8 @@ void SheetToolsDialog::updateAlign()
                 // old text suggested spreading the photos over more pages, which
                 // this product cannot do.
                 m_warningText =
-                    uiText("A fotók egy része erősen lemarad. Kapcsold be a »A kép egésze "
-                           "látszódjon« opciót, vagy válaszd a »Térköz kiegyenlítése« módot.");
+                    uiText(QT_TRANSLATE_NOOP("PhotoPrint", "A fotók egy része erősen lemarad. Kapcsold be a »A kép egésze "
+                           "látszódjon« opciót, vagy válaszd a »Térköz kiegyenlítése« módot."));
             }
         }
     } else {
@@ -1132,13 +1132,13 @@ void SheetToolsDialog::updateAlign()
         m_alignValid = true;
         if (count == 1) {
             m_summaryText =
-                uiText("Egy fotó van a lapon. Csak középre igazítjuk, a mérete nem változik.");
+                uiText(QT_TRANSLATE_NOOP("PhotoPrint", "Egy fotó van a lapon. Csak középre igazítjuk, a mérete nem változik."));
         } else {
-            m_summaryText = uiText("%n fotó, %1 mm térköz. A margó %2 mm.", count)
+            m_summaryText = uiText(QT_TRANSLATE_NOOP("PhotoPrint", "%n fotó, %1 mm térköz. A margó %2 mm."), count)
                                 .arg(mmText(m_distributePlan->gapMm),
                                      mmText(m_distributePlan->startMm));
             if (m_distributePlan->gapMm < m_distributePlan->requestedGapMm) {
-                m_warningText = uiText("A térköz %1 mm lett, hogy a fotók elférjenek.")
+                m_warningText = uiText(QT_TRANSLATE_NOOP("PhotoPrint", "A térköz %1 mm lett, hogy a fotók elférjenek."))
                                     .arg(mmText(m_distributePlan->gapMm));
             }
         }
@@ -1182,10 +1182,10 @@ void SheetToolsDialog::updatePreview()
         m_preview->setSheetMm(grid.sheet);
         m_preview->setRects(rects, images);
         m_preview->setGuideState(static_cast<CutGuides>(m_batchGuides->currentData().toInt()));
-        m_caption->setText(uiText("Így kerül a lapra.") + QLatin1Char('\n')
-                           + uiText("Szélek: %1 mm oldalt, %2 mm felül és alul.")
+        m_caption->setText(uiText(QT_TRANSLATE_NOOP("PhotoPrint", "Így kerül a lapra.")) + QLatin1Char('\n')
+                           + uiText(QT_TRANSLATE_NOOP("PhotoPrint", "Szélek: %1 mm oldalt, %2 mm felül és alul."))
                                  .arg(mmText(grid.leftMarginMm), mmText(grid.topMarginMm))
-                           + QLatin1Char('\n') + uiText("Az előnézet hozzávetőleges"));
+                           + QLatin1Char('\n') + uiText(QT_TRANSLATE_NOOP("PhotoPrint", "Az előnézet hozzávetőleges")));
         return;
     }
 
@@ -1207,8 +1207,8 @@ void SheetToolsDialog::updatePreview()
     m_preview->setSheetMm(SheetLayout::sheetOf(page));
     m_preview->setRects(rects, images);
     m_preview->setGuideState(page.cutGuides);
-    m_caption->setText(uiText("Így kerül a lapra.") + QLatin1Char('\n')
-                       + uiText("Az előnézet hozzávetőleges"));
+    m_caption->setText(uiText(QT_TRANSLATE_NOOP("PhotoPrint", "Így kerül a lapra.")) + QLatin1Char('\n')
+                       + uiText(QT_TRANSLATE_NOOP("PhotoPrint", "Az előnézet hozzávetőleges")));
 }
 
 void SheetToolsDialog::setCreateText()
@@ -1216,14 +1216,14 @@ void SheetToolsDialog::setCreateText()
     if (!m_createButton)
         return;
     if (m_tabs->currentIndex() != kBatchTab) {
-        m_createButton->setText(uiText("Rendezés"));
+        m_createButton->setText(uiText(QT_TRANSLATE_NOOP("PhotoPrint", "Rendezés")));
         return;
     }
     if (m_batchGrid && m_batchGrid->pageCount() > 1) {
         // The action itself names how many sheets it will add or replace.
-        m_createButton->setText(uiText("Létrehozás (%n lap)", m_batchGrid->pageCount()));
+        m_createButton->setText(uiText(QT_TRANSLATE_NOOP("PhotoPrint", "Létrehozás (%n lap)"), m_batchGrid->pageCount()));
     } else {
-        m_createButton->setText(uiText("Létrehozás"));
+        m_createButton->setText(uiText(QT_TRANSLATE_NOOP("PhotoPrint", "Létrehozás")));
     }
 }
 
@@ -1249,7 +1249,7 @@ bool SheetToolsDialog::buildBatchEdit(ApplyLayoutEdit *out)
     }
 
     ApplyLayoutEdit edit;
-    edit.actionText = uiText("Képek sokszorosítása");
+    edit.actionText = uiText(QT_TRANSLATE_NOOP("PhotoPrint", "Képek sokszorosítása"));
     edit.insertIndex = m_pageIndex + 1;
     if (m_batchNew->isChecked()) {
         for (const Page &page : generated)
@@ -1301,7 +1301,7 @@ bool SheetToolsDialog::buildAlignEdit(ApplyLayoutEdit *out)
     change.pageIndex = m_pageIndex;
     change.frames = frames;
     edit.pages.append(change);
-    edit.actionText = uiText("Fotók rendezése");
+    edit.actionText = uiText(QT_TRANSLATE_NOOP("PhotoPrint", "Fotók rendezése"));
     edit.selectPage = m_pageIndex;
     *out = edit;
     return true;

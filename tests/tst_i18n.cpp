@@ -713,7 +713,6 @@ void TestI18n::everyCatalogueTranslatesTheSheetToolMessages()
              QStringLiteral("Fotók rendezése…"),
              QStringLiteral("Fotók cseréje"),
              QStringLiteral("Vágójelek a nyomaton"),
-             QStringLiteral("A nyomtatott vágójel a példányok szélén jelenik meg."),
              QStringLiteral("A kiválasztott fotó szélei lemaradnak."),
              QStringLiteral("Egy fotó van a lapon. Csak középre igazítjuk, a mérete nem változik."),
              QStringLiteral("Ehhez a laphoz elrendezés tartozik. Szüntesd meg az elrendezést az "

@@ -124,22 +124,6 @@
         <translation>Brightness</translation>
     </message>
     <message>
-        <source>Képhangulat</source>
-        <translation type="vanished">Look</translation>
-    </message>
-    <message>
-        <source>Szűrő</source>
-        <translation type="vanished">Filter</translation>
-    </message>
-    <message>
-        <source>Hatás</source>
-        <translation type="vanished">Effect</translation>
-    </message>
-    <message>
-        <source>Hatás erőssége</source>
-        <translation type="vanished">Effect strength</translation>
-    </message>
-    <message>
         <source>Kép nagyítása 2×</source>
         <translation>Enlarge photo 2×</translation>
     </message>
@@ -818,28 +802,8 @@
         <translation>Original</translation>
     </message>
     <message>
-        <source>Élénk</source>
-        <translation type="vanished">Vivid</translation>
-    </message>
-    <message>
-        <source>Meleg</source>
-        <translation type="vanished">Warm</translation>
-    </message>
-    <message>
-        <source>Hűvös</source>
-        <translation type="vanished">Cool</translation>
-    </message>
-    <message>
-        <source>Szépia</source>
-        <translation type="vanished">Sepia</translation>
-    </message>
-    <message>
         <source>Fekete-fehér</source>
         <translation>Black and white</translation>
-    </message>
-    <message>
-        <source>Éles</source>
-        <translation type="vanished">Crisp</translation>
     </message>
     <message>
         <source>Fényes</source>
@@ -902,10 +866,6 @@
         <translation>Close</translation>
     </message>
     <message>
-        <source>Vintage</source>
-        <translation type="vanished">Vintage</translation>
-    </message>
-    <message>
         <source>A napló jelenleg használatban van.</source>
         <translation>The print log is currently in use.</translation>
     </message>
@@ -964,26 +924,11 @@
         <source>Sablon alkalmazása</source>
         <translation>Apply template</translation>
     </message>
-    <message>
-        <source>Ehhez a laphoz legfeljebb 10 fotóhoz van sablon.</source>
-        <translation>This page supports templates for at most 10 photos.</translation>
-    </message>
     <message numerus="yes">
         <source>%n fotó</source>
         <translation>
             <numerusform>%n photo</numerusform>
             <numerusform>%n photos</numerusform>
-        </translation>
-    </message>
-    <message>
-        <source>Válassz %1 fotós sablont, vagy távolíts el egy fotót.</source>
-        <translation>Pick the template for %1 photos, or remove one photo.</translation>
-    </message>
-    <message numerus="yes">
-        <source>Válassz %1 fotós sablont, vagy távolíts el %n fotót.</source>
-        <translation>
-            <numerusform>Pick the template for %1 photos, or remove %n photo.</numerusform>
-            <numerusform>Pick the template for %1 photos, or remove %n photos.</numerusform>
         </translation>
     </message>
     <message>
@@ -1109,38 +1054,6 @@
     <message>
         <source>Egy lapon legfeljebb 12 hely lehet.</source>
         <translation>A page can hold at most 12 slots.</translation>
-    </message>
-    <message>
-        <source>A sablonban minden fotóhoz pontosan egy helynek kell tartoznia.</source>
-        <translation>A template must have exactly one slot for every photo.</translation>
-    </message>
-    <message>
-        <source>A sablon egyik helye érvénytelen.</source>
-        <translation>One of the template's slots is invalid.</translation>
-    </message>
-    <message>
-        <source>Ehhez a laphoz még nincs elrendezés.</source>
-        <translation>This page does not have a layout yet.</translation>
-    </message>
-    <message>
-        <source>Ehhez a laphoz másik elrendezés tartozik.</source>
-        <translation>This page already uses a different layout.</translation>
-    </message>
-    <message>
-        <source>Ez a hely már nem létezik.</source>
-        <translation>That slot no longer exists.</translation>
-    </message>
-    <message>
-        <source>Egy fotó nem található ezen a lapon.</source>
-        <translation>A photo on this page cannot be found.</translation>
-    </message>
-    <message>
-        <source>A fotónak nincs forrásfájlja.</source>
-        <translation>The photo has no source file.</translation>
-    </message>
-    <message>
-        <source>Az elrendezés nem építhető fel ezen a lapon.</source>
-        <translation>The layout cannot be built on this page.</translation>
     </message>
     <message>
         <source>A hely azonosítója üres vagy ismétlődik.</source>
@@ -1308,6 +1221,101 @@
         <translation>The layout is gone and the photo stays on the page.</translation>
     </message>
     <message>
+        <source>Ugyanaz a fotó több példányban, egyenes rácsban.</source>
+        <translation>The same photo many times, in a straight grid.</translation>
+    </message>
+    <message>
+        <source>Válassz ki egy fotót a sokszorosításhoz.</source>
+        <translation>Select a photo to duplicate.</translation>
+    </message>
+    <message>
+        <source>Vágójelek</source>
+        <translation>Cut guides</translation>
+    </message>
+    <message>
+        <source>Nincs</source>
+        <translation>None</translation>
+    </message>
+    <message>
+        <source>Képernyőn</source>
+        <translation>On screen</translation>
+    </message>
+    <message>
+        <source>A lapon lévő fotók elrendezése. A sorrend nem változik.</source>
+        <translation>Arrange the photos on the page. Their order does not change.</translation>
+    </message>
+    <message>
+        <source>Automatikus</source>
+        <translation>Automatic</translation>
+    </message>
+    <message>
+        <source>Ehhez a laphoz elrendezés tartozik. Szüntesd meg az elrendezést az igazításhoz.</source>
+        <translation>This page has a layout. Remove the layout to arrange the photos.</translation>
+    </message>
+    <message>
+        <source>Sokszorosítás…</source>
+        <translation>Duplicate…</translation>
+    </message>
+    <message>
+        <source>Lap</source>
+        <translation>Page</translation>
+    </message>
+    <message>
+        <source>Fotók rendezése…</source>
+        <translation>Arrange photos…</translation>
+    </message>
+    <message>
+        <source>Fotók cseréje</source>
+        <translation>Replace photos</translation>
+    </message>
+    <message numerus="yes">
+        <source>A lapon most %n fotó van. A példányok ezek helyére kerülnek. Egy lépésben visszavonható.</source>
+        <translation>
+            <numerusform>There is %n photo on the page. The copies will take its place. One step, undoable.</numerusform>
+            <numerusform>There are %n photos on the page. The copies will take their place. One step, undoable.</numerusform>
+        </translation>
+    </message>
+    <message>
+        <source>Vágójelek a nyomaton</source>
+        <translation>Cut guides on the print</translation>
+    </message>
+    <message>
+        <source>A nyomatra vágójelek kerülnek a következő lapokon: %1. Folytatod?</source>
+        <translation>Cut guides will be printed on these pages: %1. Continue?</translation>
+    </message>
+    <message>
+        <source>A nyomaton is megjelenik; a vágás a vonal közepén halad, nyomtatás előtt megerősítést kér.</source>
+        <translation>It also appears on the print; the cut runs along the line&apos;s centre, and printing asks for confirmation.</translation>
+    </message>
+    <message>
+        <source>Csak a képernyőn látszik, a nyomatra nem kerül.</source>
+        <translation>It is visible on screen only and does not reach the print.</translation>
+    </message>
+    <message>
+        <source>Nincs vágójel a képernyőn és a nyomaton.</source>
+        <translation>There is no cut guide on screen or on the print.</translation>
+    </message>
+    <message>
+        <source>A példányok pontosan a választott méretben nyomtatódnak, nagyítás nélkül.</source>
+        <translation>The copies print at exactly the chosen size, with no enlargement.</translation>
+    </message>
+    <message>
+        <source>Szélig nyomtatás</source>
+        <translation>Borderless printing</translation>
+    </message>
+    <message>
+        <source>Be</source>
+        <translation>On</translation>
+    </message>
+    <message>
+        <source>A lapok szélig nyomtatása eltér. Állítsd egységesre.</source>
+        <translation>The pages differ in borderless printing. Make them the same.</translation>
+    </message>
+    <message>
+        <source>Előnézet</source>
+        <translation>Preview</translation>
+    </message>
+    <message>
         <source>Képek sokszorosítása</source>
         <translation>Print multiple copies</translation>
     </message>
@@ -1316,20 +1324,20 @@
         <translation>Arrange photos</translation>
     </message>
     <message>
-        <source>Előnézet</source>
-        <translation>Preview</translation>
-    </message>
-    <message>
-        <source>Ugyanaz a fotó több példányban, egyenes rácsban.</source>
-        <translation>The same photo many times, in a straight grid.</translation>
-    </message>
-    <message>
         <source>Fotó: %1</source>
         <translation>Photo: %1</translation>
     </message>
     <message>
-        <source>Válassz ki egy fotót a sokszorosításhoz.</source>
-        <translation>Select a photo to duplicate.</translation>
+        <source>Hely</source>
+        <translation>Placement</translation>
+    </message>
+    <message>
+        <source>Az aktuális lapra</source>
+        <translation>On the current page</translation>
+    </message>
+    <message>
+        <source>Új lapokra</source>
+        <translation>On new pages</translation>
     </message>
     <message>
         <source>Méret</source>
@@ -1338,6 +1346,10 @@
     <message>
         <source>Egyedi méret</source>
         <translation>Custom size</translation>
+    </message>
+    <message>
+        <source>Méret csere</source>
+        <translation>Swap size</translation>
     </message>
     <message>
         <source>Szélesség és magasság cseréje</source>
@@ -1368,95 +1380,6 @@
         <translation>As many as fit</translation>
     </message>
     <message>
-        <source>Vágójelek</source>
-        <translation>Cut guides</translation>
-    </message>
-    <message>
-        <source>Nincs</source>
-        <translation>None</translation>
-    </message>
-    <message>
-        <source>Képernyőn</source>
-        <translation>On screen</translation>
-    </message>
-    <message>
-        <source>A nyomtatott jel vékony szürke vonal a példányok szélén. Alapból nincs a nyomaton.</source>
-        <translation>The printed mark is a thin grey line at the edge of each copy. It is off by default.</translation>
-    </message>
-    <message>
-        <source>Hely</source>
-        <translation>Placement</translation>
-    </message>
-    <message>
-        <source>Az aktuális lapra</source>
-        <translation>On the current page</translation>
-    </message>
-    <message>
-        <source>Új lapokra</source>
-        <translation>On new pages</translation>
-    </message>
-    <message>
-        <source>A maradék az első kockáktól töltődik, hogy a lapok együtt vághatók legyenek.</source>
-        <translation>The remainder fills from the first cells, so the sheets can be cut together.</translation>
-    </message>
-    <message>
-        <source>Összegzés</source>
-        <translation>Summary</translation>
-    </message>
-    <message numerus="yes">
-        <source>%n példány fér el egy lapra.</source>
-        <translation>
-            <numerusform>%n copy fits on one sheet.</numerusform>
-            <numerusform>%n copies fit on one sheet.</numerusform>
-        </translation>
-    </message>
-    <message numerus="yes">
-        <source>%n lapra kerül.</source>
-        <translation>
-            <numerusform>Goes on %n sheet.</numerusform>
-            <numerusform>Goes on %n sheets.</numerusform>
-        </translation>
-    </message>
-    <message>
-        <source>A kiválasztott fotó el van forgatva. A példányok egyenesen kerülnek a rácsba.</source>
-        <translation>The selected photo is rotated. The copies are placed upright in the grid.</translation>
-    </message>
-    <message>
-        <source>A kiválasztott fotó szélei lemaradnak.</source>
-        <translation>The edges of the selected photo will be cropped.</translation>
-    </message>
-    <message>
-        <source>Ilyen szoros margónál a nyomtató a szélső vágójelet levághatja.</source>
-        <translation>With a margin this tight the printer may cut off the outer cut guide.</translation>
-    </message>
-    <message>
-        <source>A lap elrendezése megszűnik, a példányok szabadon kerülnek a lapra.</source>
-        <translation>The page's layout is removed and the copies are placed freely on the page.</translation>
-    </message>
-    <message numerus="yes">
-        <source>%n fotó helyére</source>
-        <translation>
-            <numerusform>Replaces %n photo</numerusform>
-            <numerusform>Replaces %n photos</numerusform>
-        </translation>
-    </message>
-    <message>
-        <source>Így kerül a lapra.</source>
-        <translation>This is how it lands on the sheet.</translation>
-    </message>
-    <message>
-        <source>Szélek: %1 mm oldalt, %2 mm felül és alul.</source>
-        <translation>Margins: %1 mm at the sides, %2 mm top and bottom.</translation>
-    </message>
-    <message>
-        <source>Létrehozás</source>
-        <translation>Create</translation>
-    </message>
-    <message>
-        <source>A lapon lévő fotók elrendezése. A sorrend nem változik.</source>
-        <translation>Arrange the photos on the page. Their order does not change.</translation>
-    </message>
-    <message>
         <source>Rácsba</source>
         <translation>Into a grid</translation>
     </message>
@@ -1481,8 +1404,12 @@
         <translation>When on, the photo does not fill the cell; the missing part stays white.</translation>
     </message>
     <message>
-        <source>Automatikus</source>
-        <translation>Automatic</translation>
+        <source>A fotók megtartják a méretüket. A köztük lévő hely lesz egyenlő.</source>
+        <translation>The photos keep their size. The space between them becomes equal.</translation>
+    </message>
+    <message>
+        <source>Irány</source>
+        <translation>Direction</translation>
     </message>
     <message>
         <source>Egymás mellett</source>
@@ -1493,125 +1420,12 @@
         <translation>One below the other</translation>
     </message>
     <message>
-        <source>Irány</source>
-        <translation>Direction</translation>
-    </message>
-    <message>
         <source>Ha nem fér el, a program csökkenti.</source>
         <translation>If it does not fit, the program shrinks the gap.</translation>
     </message>
-    <message numerus="yes">
-        <source>%n fotó: %1 oszlop × %2 sor. Egy cella %3 × %4 mm.</source>
-        <translation>
-            <numerusform>%n photo: %1 columns × %2 rows. One cell is %3 × %4 mm.</numerusform>
-            <numerusform>%n photos: %1 columns × %2 rows. One cell is %3 × %4 mm.</numerusform>
-        </translation>
-    </message>
     <message>
-        <source>A fotók egy része erősen lemarad. Kapcsold be a »A kép egésze látszódjon« opciót, vagy oszd el őket több lapon.</source>
-        <translation>Some photos lose a lot. Turn on “Show the whole photo”, or spread them over more pages.</translation>
-    </message>
-    <message>
-        <source>A fotók megtartják a méretüket. A köztük lévő hely lesz egyenlő.</source>
-        <translation>The photos keep their size. The space between them becomes equal.</translation>
-    </message>
-    <message numerus="yes">
-        <source>%n fotó, %1 mm térköz. A margó %2 mm.</source>
-        <translation>
-            <numerusform>%n photo, %1 mm gap. The margin is %2 mm.</numerusform>
-            <numerusform>%n photos, %1 mm gap. The margin is %2 mm.</numerusform>
-        </translation>
-    </message>
-    <message>
-        <source>A térköz %1 mm lett, hogy a fotók elférjenek.</source>
-        <translation>The gap became %1 mm so the photos fit.</translation>
-    </message>
-    <message>
-        <source>Egy fotó van a lapon. Csak középre igazítjuk, a mérete nem változik.</source>
-        <translation>There is one photo on the page. It is only centred; its size does not change.</translation>
-    </message>
-    <message>
-        <source>Ehhez a laphoz elrendezés tartozik. Szüntesd meg az elrendezést az igazításhoz.</source>
-        <translation>This page has a layout. Remove the layout to arrange the photos.</translation>
-    </message>
-    <message>
-        <source>Rendezés</source>
-        <translation>Arrange</translation>
-    </message>
-    <message>
-        <source>Sokszorosítás…</source>
-        <translation>Duplicate…</translation>
-    </message>
-    <message>
-        <source>Lap</source>
-        <translation>Page</translation>
-    </message>
-    <message>
-        <source>Fotók rendezése…</source>
-        <translation>Arrange photos…</translation>
-    </message>
-    <message>
-        <source>A nyomtatott vágójel a példányok szélén jelenik meg.</source>
-        <translation>The printed cut guide appears at the edge of the copies.</translation>
-    </message>
-    <message>
-        <source>Fotók cseréje</source>
-        <translation>Replace photos</translation>
-    </message>
-    <message numerus="yes">
-        <source>A lapon most %n fotó van. A példányok ezek helyére kerülnek. Egy lépésben visszavonható.</source>
-        <translation>
-            <numerusform>There is %n photo on the page. The copies will take its place. One step, undoable.</numerusform>
-            <numerusform>There are %n photos on the page. The copies will take their place. One step, undoable.</numerusform>
-        </translation>
-    </message>
-    <message>
-        <source>Vágójelek a nyomaton</source>
-        <translation>Cut guides on the print</translation>
-    </message>
-    <message>
-        <source>A nyomatra vágójelek kerülnek a következő lapokon: %1. Folytatod?</source>
-        <translation>Cut guides will be printed on these pages: %1. Continue?</translation>
-    </message>
-    <message>
-        <source>Méret csere</source>
-        <translation>Swap size</translation>
-    </message>
-    <message>
-        <source>A kiválasztott fotó nem olvasható.</source>
-        <translation>The selected photo cannot be read.</translation>
-    </message>
-    <message>
-        <source>A nyomaton is megjelenik; a vágás a vonal közepén halad, nyomtatás előtt megerősítést kér.</source>
-        <translation>It also appears on the print; the cut runs along the line's centre, and printing asks for confirmation.</translation>
-    </message>
-    <message>
-        <source>Csak a képernyőn látszik, a nyomatra nem kerül.</source>
-        <translation>It is visible on screen only and does not reach the print.</translation>
-    </message>
-    <message>
-        <source>Nincs vágójel a képernyőn és a nyomaton.</source>
-        <translation>There is no cut guide on screen or on the print.</translation>
-    </message>
-    <message>
-        <source>A lap vágójel-beállítása is módosul: %1.</source>
-        <translation>The page's cut guide setting changes too: %1.</translation>
-    </message>
-    <message>
-        <source>A fotók egy része erősen lemarad. Kapcsold be a »A kép egésze látszódjon« opciót, vagy válaszd a »Térköz kiegyenlítése« módot.</source>
-        <translation>Some photos lose a lot. Turn on “Show the whole photo”, or choose the “Equalise gaps” mode.</translation>
-    </message>
-    <message>
-        <source>A példányok pontosan a választott méretben nyomtatódnak, nagyítás nélkül.</source>
-        <translation>The copies print at exactly the chosen size, with no enlargement.</translation>
-    </message>
-    <message>
-        <source>Egy lapra legfeljebb %1 példány kerül.</source>
-        <translation>At most %1 copies go on one sheet.</translation>
-    </message>
-    <message>
-        <source>%1/%2. lap</source>
-        <translation>%1/%2 sheet</translation>
+        <source>Összegzés</source>
+        <translation>Summary</translation>
     </message>
     <message>
         <source>Előző lap</source>
@@ -1625,6 +1439,101 @@
         <source>Figyelmeztetés</source>
         <translation>Warning</translation>
     </message>
+    <message>
+        <source>%1/%2. lap</source>
+        <translation>%1/%2 sheet</translation>
+    </message>
+    <message>
+        <source>A kiválasztott fotó nem olvasható.</source>
+        <translation>The selected photo cannot be read.</translation>
+    </message>
+    <message numerus="yes">
+        <source>%n példány fér el egy lapra.</source>
+        <translation>
+            <numerusform>%n copy fits on one sheet.</numerusform>
+            <numerusform>%n copies fit on one sheet.</numerusform>
+        </translation>
+    </message>
+    <message numerus="yes">
+        <source>%n lapra kerül.</source>
+        <translation>
+            <numerusform>Goes on %n sheet.</numerusform>
+            <numerusform>Goes on %n sheets.</numerusform>
+        </translation>
+    </message>
+    <message>
+        <source>Egy lapra legfeljebb %1 példány kerül.</source>
+        <translation>At most %1 copies go on one sheet.</translation>
+    </message>
+    <message>
+        <source>A kiválasztott fotó el van forgatva. A példányok egyenesen kerülnek a rácsba.</source>
+        <translation>The selected photo is rotated. The copies are placed upright in the grid.</translation>
+    </message>
+    <message>
+        <source>A kiválasztott fotó szélei lemaradnak.</source>
+        <translation>The edges of the selected photo will be cropped.</translation>
+    </message>
+    <message>
+        <source>Ilyen szoros margónál a nyomtató a szélső vágójelet levághatja.</source>
+        <translation>With a margin this tight the printer may cut off the outer cut guide.</translation>
+    </message>
+    <message>
+        <source>A lap elrendezése megszűnik, a példányok szabadon kerülnek a lapra.</source>
+        <translation>The page's layout is removed and the copies are placed freely on the page.</translation>
+    </message>
+    <message>
+        <source>A lap vágójel-beállítása is módosul: %1.</source>
+        <translation>The page's cut guide setting changes too: %1.</translation>
+    </message>
+    <message numerus="yes">
+        <source>%n fotó helyére</source>
+        <translation>
+            <numerusform>Replaces %n photo</numerusform>
+            <numerusform>Replaces %n photos</numerusform>
+        </translation>
+    </message>
+    <message>
+        <source>A maradék az első kockáktól töltődik, hogy a lapok együtt vághatók legyenek.</source>
+        <translation>The remainder fills from the first cells, so the sheets can be cut together.</translation>
+    </message>
+    <message>
+        <source>Egy fotó van a lapon. Csak középre igazítjuk, a mérete nem változik.</source>
+        <translation>There is one photo on the page. It is only centred; its size does not change.</translation>
+    </message>
+    <message numerus="yes">
+        <source>%n fotó: %1 oszlop × %2 sor. Egy cella %3 × %4 mm.</source>
+        <translation>
+            <numerusform>%n photo: %1 columns × %2 rows. One cell is %3 × %4 mm.</numerusform>
+            <numerusform>%n photos: %1 columns × %2 rows. One cell is %3 × %4 mm.</numerusform>
+        </translation>
+    </message>
+    <message>
+        <source>A fotók egy része erősen lemarad. Kapcsold be a »A kép egésze látszódjon« opciót, vagy válaszd a »Térköz kiegyenlítése« módot.</source>
+        <translation>Some photos lose a lot. Turn on “Show the whole photo”, or choose the “Equalise gaps” mode.</translation>
+    </message>
+    <message numerus="yes">
+        <source>%n fotó, %1 mm térköz. A margó %2 mm.</source>
+        <translation>
+            <numerusform>%n photo, %1 mm gap. The margin is %2 mm.</numerusform>
+            <numerusform>%n photos, %1 mm gap. The margin is %2 mm.</numerusform>
+        </translation>
+    </message>
+    <message>
+        <source>A térköz %1 mm lett, hogy a fotók elférjenek.</source>
+        <translation>The gap became %1 mm so the photos fit.</translation>
+    </message>
+    <message>
+        <source>Így kerül a lapra.</source>
+        <translation>This is how it lands on the sheet.</translation>
+    </message>
+    <message>
+        <source>Szélek: %1 mm oldalt, %2 mm felül és alul.</source>
+        <translation>Margins: %1 mm at the sides, %2 mm top and bottom.</translation>
+    </message>
+    <message>
+        <source>Rendezés</source>
+        <translation>Arrange</translation>
+    </message>
     <message numerus="yes">
         <source>Létrehozás (%n lap)</source>
         <translation>
@@ -1633,16 +1542,40 @@
         </translation>
     </message>
     <message>
-        <source>Szélig nyomtatás</source>
-        <translation>Borderless printing</translation>
+        <source>Létrehozás</source>
+        <translation>Create</translation>
     </message>
     <message>
-        <source>Be</source>
-        <translation>On</translation>
+        <source>Ez a hely már nem létezik.</source>
+        <translation>That slot no longer exists.</translation>
     </message>
     <message>
-        <source>A lapok szélig nyomtatása eltér. Állítsd egységesre.</source>
-        <translation>The pages differ in borderless printing. Make them the same.</translation>
+        <source>Egy fotó nem található ezen a lapon.</source>
+        <translation>A photo on this page cannot be found.</translation>
+    </message>
+    <message>
+        <source>Az elrendezés nem építhető fel ezen a lapon.</source>
+        <translation>The layout cannot be built on this page.</translation>
+    </message>
+    <message>
+        <source>A fotónak nincs forrásfájlja.</source>
+        <translation>The photo has no source file.</translation>
+    </message>
+    <message>
+        <source>A sablonban minden fotóhoz pontosan egy helynek kell tartoznia.</source>
+        <translation>A template must have exactly one slot for every photo.</translation>
+    </message>
+    <message>
+        <source>A sablon egyik helye érvénytelen.</source>
+        <translation>One of the template's slots is invalid.</translation>
+    </message>
+    <message>
+        <source>Ehhez a laphoz másik elrendezés tartozik.</source>
+        <translation>This page already uses a different layout.</translation>
+    </message>
+    <message>
+        <source>Ehhez a laphoz még nincs elrendezés.</source>
+        <translation>This page does not have a layout yet.</translation>
     </message>
 </context>
 </TS>

@@ -21,19 +21,17 @@ Error translated(const QString &code, const char *source)
 
 Error slotMissing()
 {
-    return translated(QStringLiteral("slot-missing"), "Ez a hely már nem létezik.");
+    return translated(QStringLiteral("slot-missing"), QT_TRANSLATE_NOOP("PhotoPrint", "Ez a hely már nem létezik."));
 }
 
 Error frameMissing()
 {
-    return translated(QStringLiteral("frame-missing"),
-                      "Egy fotó nem található ezen a lapon.");
+    return translated(QStringLiteral("frame-missing"),QT_TRANSLATE_NOOP("PhotoPrint", "Egy fotó nem található ezen a lapon."));
 }
 
 Error slotInvalid()
 {
-    return translated(QStringLiteral("slot-invalid"),
-                      "Az elrendezés nem építhető fel ezen a lapon.");
+    return translated(QStringLiteral("slot-invalid"),QT_TRANSLATE_NOOP("PhotoPrint", "Az elrendezés nem építhető fel ezen a lapon."));
 }
 
 /// A photograph is a frame with a source. A source-less frame is a placeholder
@@ -124,8 +122,7 @@ Result<void> assignFrame(Page &page, const QString &slotId, Frame payload, bool 
 
     const bool existing = frameIndexById(page, payload.id) >= 0;
     if (!existing && payload.sourcePath.isEmpty()) {
-        return translated(QStringLiteral("frame-source"),
-                          "A fotónak nincs forrásfájlja.");
+        return translated(QStringLiteral("frame-source"),QT_TRANSLATE_NOOP("PhotoPrint", "A fotónak nincs forrásfájlja."));
     }
 
     for (int i = page.frames.size() - 1; i >= 0; --i) {
@@ -252,11 +249,9 @@ Result<Page> applyTemplate(const Page &page, const CollageTemplate &t, Report *r
         *report = Report{};
 
     if (t.slotList.isEmpty() || t.slotList.size() != t.photoCount)
-        return translated(QStringLiteral("template-invalid"),
-                          "A sablonban minden fotóhoz pontosan egy helynek kell tartoznia.");
+        return translated(QStringLiteral("template-invalid"),QT_TRANSLATE_NOOP("PhotoPrint", "A sablonban minden fotóhoz pontosan egy helynek kell tartoznia."));
     if (t.slotList.size() > SlotGeometry::kMaxSlotsPerPage)
-        return translated(QStringLiteral("slot-cap"),
-                          "Egy lapon legfeljebb 12 hely lehet.");
+        return translated(QStringLiteral("slot-cap"),QT_TRANSLATE_NOOP("PhotoPrint", "Egy lapon legfeljebb 12 hely lehet."));
 
     Page result = page;
     result.slotList.clear();
@@ -267,8 +262,7 @@ Result<Page> applyTemplate(const Page &page, const CollageTemplate &t, Report *r
         slot.unitRect = t.slotList.at(i).rect;
         QRectF unit = slot.unitRect;
         if (!SlotGeometry::sanitiseUnitRect(&unit))
-            return translated(QStringLiteral("template-invalid"),
-                              "A sablon egyik helye érvénytelen.");
+            return translated(QStringLiteral("template-invalid"),QT_TRANSLATE_NOOP("PhotoPrint", "A sablon egyik helye érvénytelen."));
         slot.unitRect = unit;
         result.slotList.append(slot);
     }
@@ -317,8 +311,7 @@ Result<Page> applyTemplateKeeping(const Page &page, const CollageTemplate &t, Re
     if (!page.hasLayout())
         return applyTemplate(page, t, report);
     if (!page.layoutId.isEmpty() && page.layoutId != t.id) {
-        return translated(QStringLiteral("layout-mismatch"),
-                          "Ehhez a laphoz másik elrendezés tartozik.");
+        return translated(QStringLiteral("layout-mismatch"),QT_TRANSLATE_NOOP("PhotoPrint", "Ehhez a laphoz másik elrendezés tartozik."));
     }
     return fillEmptySlots(page, report);
 }
@@ -527,18 +520,15 @@ Result<Page> setStyle(Page page, const SlotStyle &style)
 Result<Page> addSlot(Page page, const QString &afterSlotId)
 {
     if (page.slotList.isEmpty())
-        return translated(QStringLiteral("no-layout"),
-                          "Ehhez a laphoz még nincs elrendezés.");
+        return translated(QStringLiteral("no-layout"),QT_TRANSLATE_NOOP("PhotoPrint", "Ehhez a laphoz még nincs elrendezés."));
     if (page.slotList.size() >= SlotGeometry::kMaxSlotsPerPage)
-        return translated(QStringLiteral("slot-cap"),
-                          "Egy lapon legfeljebb 12 hely lehet.");
+        return translated(QStringLiteral("slot-cap"),QT_TRANSLATE_NOOP("PhotoPrint", "Egy lapon legfeljebb 12 hely lehet."));
 
     int index = SlotGeometry::slotIndexOf(page, afterSlotId);
     if (index < 0)
         index = largestSlotIndex(page);
     if (index < 0)
-        return translated(QStringLiteral("no-layout"),
-                          "Ehhez a laphoz még nincs elrendezés.");
+        return translated(QStringLiteral("no-layout"),QT_TRANSLATE_NOOP("PhotoPrint", "Ehhez a laphoz még nincs elrendezés."));
 
     const Slot target = page.slotList.at(index);
     const QRectF cell = SlotGeometry::slotCellMm(page, target);

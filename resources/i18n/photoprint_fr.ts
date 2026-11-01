@@ -9,7 +9,7 @@
     </message>
     <message>
         <source>Nyomtató:</source>
-        <translation>Imprimante :</translation>
+        <translation>Imprimante&#xa0;:</translation>
     </message>
     <message>
         <source>Nyomtató</source>
@@ -17,7 +17,7 @@
     </message>
     <message>
         <source>Papír:</source>
-        <translation>Papier :</translation>
+        <translation>Papier&#xa0;:</translation>
     </message>
     <message>
         <source>Papír</source>
@@ -37,7 +37,7 @@
     </message>
     <message>
         <source>Tájolás:</source>
-        <translation>Orientation :</translation>
+        <translation>Orientation&#xa0;:</translation>
     </message>
     <message>
         <source>Tájolás</source>
@@ -53,7 +53,7 @@
     </message>
     <message>
         <source>Nézet:</source>
-        <translation>Affichage :</translation>
+        <translation>Affichage&#xa0;:</translation>
     </message>
     <message>
         <source>Nézet nagyítása</source>
@@ -109,7 +109,7 @@
     </message>
     <message>
         <source>Finoman igazítja a fényt és a színt a nyomtatáshoz.</source>
-        <translation>Ajuste en douceur la lumière et les couleurs pour l'impression.</translation>
+        <translation>Ajuste en douceur la lumière et les couleurs pour l&apos;impression.</translation>
     </message>
     <message>
         <source>Finom fény- és színjavítás</source>
@@ -117,27 +117,11 @@
     </message>
     <message>
         <source>Tartsd nyomva az eredeti képhez.</source>
-        <translation>Maintenez pour voir l'original.</translation>
+        <translation>Maintenez pour voir l&apos;original.</translation>
     </message>
     <message>
         <source>Világosítás</source>
         <translation>Luminosité</translation>
-    </message>
-    <message>
-        <source>Képhangulat</source>
-        <translation type="vanished">Ambiance</translation>
-    </message>
-    <message>
-        <source>Szűrő</source>
-        <translation type="vanished">Filtre</translation>
-    </message>
-    <message>
-        <source>Hatás</source>
-        <translation type="vanished">Effet</translation>
-    </message>
-    <message>
-        <source>Hatás erőssége</source>
-        <translation type="vanished">Intensité de l'effet</translation>
     </message>
     <message>
         <source>Kép nagyítása 2×</source>
@@ -145,11 +129,11 @@
     </message>
     <message>
         <source>A nyomtatási felbontást növeli; az előnézet nem változik.</source>
-        <translation>Augmente la résolution d'impression ; l'aperçu ne change pas.</translation>
+        <translation>Augmente la résolution d&apos;impression&#xa0;; l&apos;aperçu ne change pas.</translation>
     </message>
     <message>
         <source>A nyomtatási felbontást növeli.</source>
-        <translation>Augmente la résolution d'impression.</translation>
+        <translation>Augmente la résolution d&apos;impression.</translation>
     </message>
     <message>
         <source>Próbanyomat</source>
@@ -157,7 +141,7 @@
     </message>
     <message>
         <source>További beállítások</source>
-        <translation>Plus d'options</translation>
+        <translation>Plus d&apos;options</translation>
     </message>
     <message>
         <source>Szélesség</source>
@@ -205,7 +189,7 @@
     </message>
     <message>
         <source>Nyomtatási minőség</source>
-        <translation>Qualité d'impression</translation>
+        <translation>Qualité d&apos;impression</translation>
     </message>
     <message>
         <source>Szín</source>
@@ -293,7 +277,7 @@
     </message>
     <message>
         <source>A PDF elkészült: %1</source>
-        <translation>Le PDF est prêt : %1</translation>
+        <translation>Le PDF est prêt&#xa0;: %1</translation>
     </message>
     <message>
         <source>Kilépés</source>
@@ -336,7 +320,7 @@
     </message>
     <message>
         <source>A matt papírt a nyomtató tintasugaras papírként kezeli.</source>
-        <translation>L'imprimante traite le papier mat comme du papier jet d'encre.</translation>
+        <translation>L&apos;imprimante traite le papier mat comme du papier jet d&apos;encre.</translation>
     </message>
     <message>
         <source>Ennél a papírnál keskeny fehér szél maradhat.</source>
@@ -348,7 +332,7 @@
     </message>
     <message>
         <source>Erre a képre most nincs szükség.</source>
-        <translation>Cette photo n'a pas besoin de correction.</translation>
+        <translation>Cette photo n&apos;a pas besoin de correction.</translation>
     </message>
     <message>
         <source>Ekkora méretben a kép életlen lehet.</source>
@@ -432,11 +416,11 @@
     </message>
     <message>
         <source>Effekt erőssége</source>
-        <translation>Intensité de l'effet</translation>
+        <translation>Intensité de l&apos;effet</translation>
     </message>
     <message>
         <source>Az előnézet hozzávetőleges</source>
-        <translation>L'aperçu est approximatif</translation>
+        <translation>L&apos;aperçu est approximatif</translation>
     </message>
     <message>
         <source>Alkalmaz</source>
@@ -460,11 +444,11 @@
     </message>
     <message>
         <source>Mentett egyedi papírok:</source>
-        <translation>Papiers personnalisés enregistrés :</translation>
+        <translation>Papiers personnalisés enregistrés&#xa0;:</translation>
     </message>
     <message>
         <source>Például: Négyzetes 12 × 12</source>
-        <translation>Par exemple : Carré 12 × 12</translation>
+        <translation>Par exemple&#xa0;: Carré 12 × 12</translation>
     </message>
     <message>
         <source>%1 (egyedi)</source>
@@ -488,7 +472,7 @@
     </message>
     <message>
         <source>Ez a név már egy beépített papíré. Adj másik nevet.</source>
-        <translation>Ce nom est déjà celui d'un papier intégré. Choisissez un autre nom.</translation>
+        <translation>Ce nom est déjà celui d&apos;un papier intégré. Choisissez un autre nom.</translation>
     </message>
     <message>
         <source>Nincs nyomtató</source>
@@ -496,7 +480,7 @@
     </message>
     <message>
         <source>A nyomtató most nem érhető el. Ellenőrizd, hogy be van-e kapcsolva.</source>
-        <translation>L'imprimante n'est pas disponible pour le moment. Vérifiez qu'elle est allumée.</translation>
+        <translation>L&apos;imprimante n&apos;est pas disponible pour le moment. Vérifiez qu&apos;elle est allumée.</translation>
     </message>
     <message>
         <source>A lapok papírja vagy tájolása eltér. Állítsd egységesre.</source>
@@ -516,11 +500,11 @@
     </message>
     <message>
         <source>A nyomtatás már elindult. Várd meg az eredményét.</source>
-        <translation>L'impression a déjà commencé. Attendez le résultat.</translation>
+        <translation>L&apos;impression a déjà commencé. Attendez le résultat.</translation>
     </message>
     <message>
         <source>Nyomtatásra vár.</source>
-        <translation>En attente d'impression.</translation>
+        <translation>En attente d&apos;impression.</translation>
     </message>
     <message>
         <source>Válassz egy fotót a próbalaphoz.</source>
@@ -540,11 +524,11 @@
     </message>
     <message>
         <source>Más tintát használok</source>
-        <translation>J'utilise une autre encre</translation>
+        <translation>J&apos;utilise une autre encre</translation>
     </message>
     <message>
         <source>A próbalap elküldve. Nézd meg a nyomatot, majd válaszd ki, amelyik tetszik.</source>
-        <translation>La feuille test a été envoyée. Regardez l'impression, puis choisissez celle qui vous plaît.</translation>
+        <translation>La feuille test a été envoyée. Regardez l&apos;impression, puis choisissez celle qui vous plaît.</translation>
     </message>
     <message>
         <source>A papírbeállítás elmentve.</source>
@@ -563,7 +547,7 @@
     </message>
     <message>
         <source>Nincs mit elmenteni.</source>
-        <translation>Il n'y a rien à enregistrer.</translation>
+        <translation>Il n&apos;y a rien à enregistrer.</translation>
     </message>
     <message>
         <source>Projekt mentése</source>
@@ -575,7 +559,7 @@
     </message>
     <message>
         <source>A jelenlegi munka nincs elmentve. Megnyitod a másikat?</source>
-        <translation>Le travail en cours n'est pas enregistré. Ouvrir l'autre ?</translation>
+        <translation>Le travail en cours n&apos;est pas enregistré. Ouvrir l&apos;autre&#xa0;?</translation>
     </message>
     <message>
         <source>Fotó megkeresése</source>
@@ -591,23 +575,23 @@
     </message>
     <message>
         <source>Mentetted a munkát kilépés előtt?</source>
-        <translation>Enregistrer le travail avant de quitter ?</translation>
+        <translation>Enregistrer le travail avant de quitter&#xa0;?</translation>
     </message>
     <message>
         <source>Korábbi nyomtatás eredménye bizonytalan. Nézd meg a nyomtatót.</source>
-        <translation>Le résultat d'une impression précédente est incertain. Vérifiez l'imprimante.</translation>
+        <translation>Le résultat d&apos;une impression précédente est incertain. Vérifiez l&apos;imprimante.</translation>
     </message>
     <message>
         <source>Korábbi, nem mentett munka található. Folytatod?</source>
-        <translation>Un travail précédent non enregistré est disponible. Le reprendre ?</translation>
+        <translation>Un travail précédent non enregistré est disponible. Le reprendre&#xa0;?</translation>
     </message>
     <message>
         <source>Ez a papírméret nem nyomtatható. A nyomtató 8,9–21,6 × 12,7–35,6 cm közötti egyedi méretet fogad el.</source>
-        <translation>Ce format de papier ne peut pas être imprimé. L'imprimante accepte des formats personnalisés de 8,9–21,6 × 12,7–35,6 cm.</translation>
+        <translation>Ce format de papier ne peut pas être imprimé. L&apos;imprimante accepte des formats personnalisés de 8,9–21,6 × 12,7–35,6 cm.</translation>
     </message>
     <message>
         <source>Ez a fotó megváltozott. Add meg újra, ha ezt szeretnéd nyomtatni.</source>
-        <translation>Cette photo a changé. Ajoutez-la de nouveau si vous voulez l'imprimer.</translation>
+        <translation>Cette photo a changé. Ajoutez-la de nouveau si vous voulez l&apos;imprimer.</translation>
     </message>
     <message>
         <source>Ezt a fotót nem találjuk.</source>
@@ -615,55 +599,55 @@
     </message>
     <message>
         <source>Ezt a képet most nem tudjuk megnyitni. Próbálj JPG- vagy PNG-másolatot.</source>
-        <translation>Impossible d'ouvrir cette image pour l'instant. Essayez une copie JPG ou PNG.</translation>
+        <translation>Impossible d&apos;ouvrir cette image pour l&apos;instant. Essayez une copie JPG ou PNG.</translation>
     </message>
     <message>
         <source>Ezt a képet most nem tudjuk feldolgozni. Próbáld újra.</source>
-        <translation>Impossible de traiter cette image pour l'instant. Réessayez.</translation>
+        <translation>Impossible de traiter cette image pour l&apos;instant. Réessayez.</translation>
     </message>
     <message>
         <source>Ehhez a nyomtatási mérethez a kép túl nagy. Csökkentsd a nyomtatási felbontást.</source>
-        <translation>La photo est trop grande pour ce format d'impression. Réduis la résolution d'impression.</translation>
+        <translation>La photo est trop grande pour ce format d&apos;impression. Réduis la résolution d&apos;impression.</translation>
     </message>
     <message>
         <source>A művelet megszakadt.</source>
-        <translation>L'opération a été annulée.</translation>
+        <translation>L&apos;opération a été annulée.</translation>
     </message>
     <message>
         <source>Elküldve a nyomtatónak.</source>
-        <translation>Envoyé à l'imprimante.</translation>
+        <translation>Envoyé à l&apos;imprimante.</translation>
     </message>
     <message>
         <source>A nyomtató nem fogadta el a feladatot.</source>
-        <translation>L'imprimante n'a pas accepté la tâche.</translation>
+        <translation>L&apos;imprimante n&apos;a pas accepté la tâche.</translation>
     </message>
     <message>
         <source>Nem tudjuk, elindult-e a nyomtatás. Nézd meg a nyomtatót, mielőtt újraindítod.</source>
-        <translation>Nous ignorons si l'impression a démarré. Vérifiez l'imprimante avant de relancer.</translation>
+        <translation>Nous ignorons si l&apos;impression a démarré. Vérifiez l&apos;imprimante avant de relancer.</translation>
     </message>
     <message>
         <source>Nem tudjuk, elindult-e a nyomtatás.</source>
-        <translation>Nous ignorons si l'impression a démarré.</translation>
+        <translation>Nous ignorons si l&apos;impression a démarré.</translation>
     </message>
     <message>
         <source>Nincs mit nyomtatni.</source>
-        <translation>Il n'y a rien à imprimer.</translation>
+        <translation>Il n&apos;y a rien à imprimer.</translation>
     </message>
     <message>
         <source>A nyomtatás előkészítése nem sikerült.</source>
-        <translation>La préparation de l'impression a échoué.</translation>
+        <translation>La préparation de l&apos;impression a échoué.</translation>
     </message>
     <message>
         <source>A nyomtatási jegyzék nem írható.</source>
-        <translation>Le registre d'impression ne peut pas être écrit.</translation>
+        <translation>Le registre d&apos;impression ne peut pas être écrit.</translation>
     </message>
     <message>
         <source>A nyomtatási napló nem írható.</source>
-        <translation>Le journal d'impression ne peut pas être écrit.</translation>
+        <translation>Le journal d&apos;impression ne peut pas être écrit.</translation>
     </message>
     <message>
         <source>A nyomtatási napló nem olvasható.</source>
-        <translation>Le journal d'impression ne peut pas être lu.</translation>
+        <translation>Le journal d&apos;impression ne peut pas être lu.</translation>
     </message>
     <message>
         <source>Ez az oldal nem található.</source>
@@ -671,11 +655,11 @@
     </message>
     <message>
         <source>A felbontás érvénytelen.</source>
-        <translation>La résolution n'est pas valide.</translation>
+        <translation>La résolution n&apos;est pas valide.</translation>
     </message>
     <message>
         <source>A papírméret érvénytelen.</source>
-        <translation>Le format de papier n'est pas valide.</translation>
+        <translation>Le format de papier n&apos;est pas valide.</translation>
     </message>
     <message>
         <source>A lap nem rajzolható meg.</source>
@@ -683,19 +667,19 @@
     </message>
     <message>
         <source>A lapot most nem tudjuk elkészíteni. Próbáld újra.</source>
-        <translation>Impossible de préparer la page pour l'instant. Réessayez.</translation>
+        <translation>Impossible de préparer la page pour l&apos;instant. Réessayez.</translation>
     </message>
     <message>
         <source>A PDF mentése nem sikerült.</source>
-        <translation>L'enregistrement du PDF a échoué.</translation>
+        <translation>L&apos;enregistrement du PDF a échoué.</translation>
     </message>
     <message>
         <source>Ezt a projektet most nem tudjuk megnyitni.</source>
-        <translation>Impossible d'ouvrir ce projet pour l'instant.</translation>
+        <translation>Impossible d&apos;ouvrir ce projet pour l&apos;instant.</translation>
     </message>
     <message>
         <source>Ezt a projektet az alkalmazás egy újabb változata készítette.</source>
-        <translation>Ce projet a été créé par une version plus récente de l'application.</translation>
+        <translation>Ce projet a été créé par une version plus récente de l&apos;application.</translation>
     </message>
     <message>
         <source>A mappa nem hozható létre.</source>
@@ -707,7 +691,7 @@
     </message>
     <message>
         <source>A fotót nem sikerült a másolatba tenni.</source>
-        <translation>La photo n'a pas pu être placée dans la copie.</translation>
+        <translation>La photo n&apos;a pas pu être placée dans la copie.</translation>
     </message>
     <message>
         <source>A projektfájl nem másolható a fotók közé.</source>
@@ -715,19 +699,19 @@
     </message>
     <message>
         <source>A fotó másolata nem egyezik az eredetivel.</source>
-        <translation>La copie de la photo ne correspond pas à l'original.</translation>
+        <translation>La copie de la photo ne correspond pas à l&apos;original.</translation>
     </message>
     <message>
         <source>A projektet nem sikerült menteni.</source>
-        <translation>Le projet n'a pas pu être enregistré.</translation>
+        <translation>Le projet n&apos;a pas pu être enregistré.</translation>
     </message>
     <message>
         <source>A munkamenet mentése nem sikerült.</source>
-        <translation>La session n'a pas pu être enregistrée.</translation>
+        <translation>La session n&apos;a pas pu être enregistrée.</translation>
     </message>
     <message>
         <source>A munkamenet mentését nem sikerült törölni.</source>
-        <translation>La session enregistrée n'a pas pu être supprimée.</translation>
+        <translation>La session enregistrée n&apos;a pas pu être supprimée.</translation>
     </message>
     <message>
         <source>Nincs folytatható munka.</source>
@@ -743,19 +727,19 @@
     </message>
     <message>
         <source>Ehhez a papírhoz nincs szélig nyomtatás.</source>
-        <translation>Ce papier ne permet pas l'impression sans bordure.</translation>
+        <translation>Ce papier ne permet pas l&apos;impression sans bordure.</translation>
     </message>
     <message>
         <source>Ezzel a papírral nem tudunk nyomtatni. Válassz másik papírt.</source>
-        <translation>Impossible d'imprimer sur ce papier. Choisissez un autre papier.</translation>
+        <translation>Impossible d&apos;imprimer sur ce papier. Choisissez un autre papier.</translation>
     </message>
     <message>
         <source>A nyomtató leírása üres.</source>
-        <translation>La description de l'imprimante est vide.</translation>
+        <translation>La description de l&apos;imprimante est vide.</translation>
     </message>
     <message>
         <source>A nyomtató beállításait nem tudjuk elolvasni.</source>
-        <translation>Impossible de lire les réglages de l'imprimante.</translation>
+        <translation>Impossible de lire les réglages de l&apos;imprimante.</translation>
     </message>
     <message>
         <source>A papírbeállítás nem menthető.</source>
@@ -775,7 +759,7 @@
     </message>
     <message>
         <source>A papírt nem sikerült elmenteni.</source>
-        <translation>Le papier n'a pas pu être enregistré.</translation>
+        <translation>Le papier n&apos;a pas pu être enregistré.</translation>
     </message>
     <message>
         <source>Ezt a papírt nem találjuk.</source>
@@ -783,11 +767,11 @@
     </message>
     <message>
         <source>A papírt nem sikerült törölni.</source>
-        <translation>Le papier n'a pas pu être supprimé.</translation>
+        <translation>Le papier n&apos;a pas pu être supprimé.</translation>
     </message>
     <message>
         <source>Nincs mit kipróbálni.</source>
-        <translation>Il n'y a rien à essayer.</translation>
+        <translation>Il n&apos;y a rien à essayer.</translation>
     </message>
     <message>
         <source>Ez a papír túl kicsi a próbalaphoz.</source>
@@ -818,28 +802,8 @@
         <translation>Original</translation>
     </message>
     <message>
-        <source>Élénk</source>
-        <translation type="vanished">Éclatant</translation>
-    </message>
-    <message>
-        <source>Meleg</source>
-        <translation type="vanished">Chaud</translation>
-    </message>
-    <message>
-        <source>Hűvös</source>
-        <translation type="vanished">Froid</translation>
-    </message>
-    <message>
-        <source>Szépia</source>
-        <translation type="vanished">Sépia</translation>
-    </message>
-    <message>
         <source>Fekete-fehér</source>
         <translation>Noir et blanc</translation>
-    </message>
-    <message>
-        <source>Éles</source>
-        <translation type="vanished">Net</translation>
     </message>
     <message>
         <source>Fényes</source>
@@ -902,24 +866,20 @@
         <translation>Fermer</translation>
     </message>
     <message>
-        <source>Vintage</source>
-        <translation type="vanished">Vintage</translation>
-    </message>
-    <message>
         <source>A napló jelenleg használatban van.</source>
-        <translation>Le journal d'impression est en cours d'utilisation.</translation>
+        <translation>Le journal d&apos;impression est en cours d&apos;utilisation.</translation>
     </message>
     <message>
         <source>Az eredményt nem sikerült a naplóba írni.</source>
-        <translation>Le résultat n'a pas pu être écrit dans le journal d'impression.</translation>
+        <translation>Le résultat n&apos;a pas pu être écrit dans le journal d&apos;impression.</translation>
     </message>
     <message>
         <source>A napló írása nem sikerült, a félbehagyott bejegyzést pedig nem sikerült eltávolítani.</source>
-        <translation>Le journal d'impression n'a pas pu être écrit et l'entrée à moitié écrite n'a pas pu être supprimée.</translation>
+        <translation>Le journal d&apos;impression n&apos;a pas pu être écrit et l&apos;entrée à moitié écrite n&apos;a pas pu être supprimée.</translation>
     </message>
     <message>
         <source>A naplóbejegyzést nem sikerült eltávolítani. A nyomtatás nem indult el, de a napló bizonytalan feladatot jelezhet, ezért a nyomtatási fájl megmarad.</source>
-        <translation>L'entrée du journal n'a pas pu être supprimée. L'impression n'a pas démarré, mais le journal peut signaler un travail incertain, donc le fichier d'impression est conservé.</translation>
+        <translation>L&apos;entrée du journal n&apos;a pas pu être supprimée. L&apos;impression n&apos;a pas démarré, mais le journal peut signaler un travail incertain, donc le fichier d&apos;impression est conservé.</translation>
     </message>
     <message numerus="yes">
         <source>%n effekt</source>
@@ -938,7 +898,7 @@
     </message>
     <message>
         <source>Egy képnek nincs forrásfájlja, ezért a sablon nem alkalmazható.</source>
-        <translation>Une photo n'a pas de fichier source, le modèle ne peut donc pas être appliqué.</translation>
+        <translation>Une photo n&apos;a pas de fichier source, le modèle ne peut donc pas être appliqué.</translation>
     </message>
     <message>
         <source>Sablonok</source>
@@ -964,26 +924,11 @@
         <source>Sablon alkalmazása</source>
         <translation>Appliquer le modèle</translation>
     </message>
-    <message>
-        <source>Ehhez a laphoz legfeljebb 10 fotóhoz van sablon.</source>
-        <translation>Cette page accepte des modèles pour 10 photos au maximum.</translation>
-    </message>
     <message numerus="yes">
         <source>%n fotó</source>
         <translation>
             <numerusform>%n photo</numerusform>
             <numerusform>%n photos</numerusform>
-        </translation>
-    </message>
-    <message>
-        <source>Válassz %1 fotós sablont, vagy távolíts el egy fotót.</source>
-        <translation>Choisis le modèle pour %1 photos ou retire une photo.</translation>
-    </message>
-    <message numerus="yes">
-        <source>Válassz %1 fotós sablont, vagy távolíts el %n fotót.</source>
-        <translation>
-            <numerusform>Choisis le modèle pour %1 photos ou retire %n photo.</numerusform>
-            <numerusform>Choisis le modèle pour %1 photos ou retire %n photos.</numerusform>
         </translation>
     </message>
     <message>
@@ -1012,7 +957,7 @@
     </message>
     <message>
         <source>Ezen a lapon nincs fotó.</source>
-        <translation>Il n'y a pas de photo sur cette page.</translation>
+        <translation>Il n&apos;y a pas de photo sur cette page.</translation>
     </message>
     <message>
         <source>Ekkora margó mellett nem marad hely. Csökkentsd a margót.</source>
@@ -1048,11 +993,11 @@
     </message>
     <message>
         <source>A %1. fotó el van forgatva, ezért nem lehet térközzel rendezni. Előbb állítsd egyenesbe.</source>
-        <translation>La photo %1 est tournée, les écarts ne peuvent donc pas être égalisés. Redresse-la d'abord.</translation>
+        <translation>La photo %1 est tournée, les écarts ne peuvent donc pas être égalisés. Redresse-la d&apos;abord.</translation>
     </message>
     <message>
         <source>A %1. fotó a lap másik irányában sem fér el. Kicsinyítsd, vagy használd a rácsot.</source>
-        <translation>La photo %1 ne tient pas non plus dans l'autre direction. Réduis-la ou utilise la grille.</translation>
+        <translation>La photo %1 ne tient pas non plus dans l&apos;autre direction. Réduis-la ou utilise la grille.</translation>
     </message>
     <message>
         <source>A fotók így nem férnek el a lapon. Kicsinyítsd őket, vagy használd a rácsot.</source>
@@ -1064,11 +1009,11 @@
     </message>
     <message>
         <source>Egy lap csak egyszer szerepelhet a módosításban.</source>
-        <translation>Une page ne peut apparaître qu'une seule fois dans la modification.</translation>
+        <translation>Une page ne peut apparaître qu&apos;une seule fois dans la modification.</translation>
     </message>
     <message>
         <source>A lap azonosítója nem lehet üres.</source>
-        <translation>L'identifiant de page ne peut pas être vide.</translation>
+        <translation>L&apos;identifiant de page ne peut pas être vide.</translation>
     </message>
     <message>
         <source>Az új lap azonosítója már létezik.</source>
@@ -1080,7 +1025,7 @@
     </message>
     <message>
         <source>Érvénytelen beszúrási hely.</source>
-        <translation>Position d'insertion non valide.</translation>
+        <translation>Position d&apos;insertion non valide.</translation>
     </message>
     <message>
         <source>Érvénytelen kiválasztott lap.</source>
@@ -1088,7 +1033,7 @@
     </message>
     <message>
         <source>35 × 45 mm (igazolványkép)</source>
-        <translation>35 × 45 mm (photo d'identité)</translation>
+        <translation>35 × 45 mm (photo d&apos;identité)</translation>
     </message>
     <message>
         <source>50 × 70 mm</source>
@@ -1111,40 +1056,8 @@
         <translation>Une page peut contenir au maximum 12 emplacements.</translation>
     </message>
     <message>
-        <source>A sablonban minden fotóhoz pontosan egy helynek kell tartoznia.</source>
-        <translation>Un modèle doit avoir exactement un emplacement par photo.</translation>
-    </message>
-    <message>
-        <source>A sablon egyik helye érvénytelen.</source>
-        <translation>L'un des emplacements du modèle n'est pas valide.</translation>
-    </message>
-    <message>
-        <source>Ehhez a laphoz még nincs elrendezés.</source>
-        <translation>Cette page n'a pas encore de disposition.</translation>
-    </message>
-    <message>
-        <source>Ehhez a laphoz másik elrendezés tartozik.</source>
-        <translation>Cette page utilise déjà une autre disposition.</translation>
-    </message>
-    <message>
-        <source>Ez a hely már nem létezik.</source>
-        <translation>Cet emplacement n'existe plus.</translation>
-    </message>
-    <message>
-        <source>Egy fotó nem található ezen a lapon.</source>
-        <translation>Une photo de cette page est introuvable.</translation>
-    </message>
-    <message>
-        <source>A fotónak nincs forrásfájlja.</source>
-        <translation>La photo n'a pas de fichier source.</translation>
-    </message>
-    <message>
-        <source>Az elrendezés nem építhető fel ezen a lapon.</source>
-        <translation>Impossible de créer la disposition sur cette page.</translation>
-    </message>
-    <message>
         <source>A hely azonosítója üres vagy ismétlődik.</source>
-        <translation>Un identifiant d'emplacement est vide ou en double.</translation>
+        <translation>Un identifiant d&apos;emplacement est vide ou en double.</translation>
     </message>
     <message>
         <source>A hely a lapon kívülre esik.</source>
@@ -1160,7 +1073,7 @@
     </message>
     <message>
         <source>A margó, a hézag vagy a szegély értéke érvénytelen.</source>
-        <translation>La valeur de la marge, de l'espacement ou du bord n'est pas valide.</translation>
+        <translation>La valeur de la marge, de l&apos;espacement ou du bord n&apos;est pas valide.</translation>
     </message>
     <message>
         <source>Húzd ide a fotót</source>
@@ -1308,6 +1221,101 @@
         <translation>La disposition a disparu et la photo reste sur la page.</translation>
     </message>
     <message>
+        <source>Ugyanaz a fotó több példányban, egyenes rácsban.</source>
+        <translation>La même photo plusieurs fois, en grille régulière.</translation>
+    </message>
+    <message>
+        <source>Válassz ki egy fotót a sokszorosításhoz.</source>
+        <translation>Sélectionnez une photo à dupliquer.</translation>
+    </message>
+    <message>
+        <source>Vágójelek</source>
+        <translation>Repères de coupe</translation>
+    </message>
+    <message>
+        <source>Nincs</source>
+        <translation>Aucun</translation>
+    </message>
+    <message>
+        <source>Képernyőn</source>
+        <translation>À l&apos;écran</translation>
+    </message>
+    <message>
+        <source>A lapon lévő fotók elrendezése. A sorrend nem változik.</source>
+        <translation>Organisez les photos de la page. L&apos;ordre ne change pas.</translation>
+    </message>
+    <message>
+        <source>Automatikus</source>
+        <translation>Automatique</translation>
+    </message>
+    <message>
+        <source>Ehhez a laphoz elrendezés tartozik. Szüntesd meg az elrendezést az igazításhoz.</source>
+        <translation>Cette page a une mise en page. Supprimez-la pour organiser les photos.</translation>
+    </message>
+    <message>
+        <source>Sokszorosítás…</source>
+        <translation>Dupliquer…</translation>
+    </message>
+    <message>
+        <source>Lap</source>
+        <translation>Page</translation>
+    </message>
+    <message>
+        <source>Fotók rendezése…</source>
+        <translation>Organiser les photos…</translation>
+    </message>
+    <message>
+        <source>Fotók cseréje</source>
+        <translation>Remplacer les photos</translation>
+    </message>
+    <message numerus="yes">
+        <source>A lapon most %n fotó van. A példányok ezek helyére kerülnek. Egy lépésben visszavonható.</source>
+        <translation>
+            <numerusform>Il y a %n photo sur la page. Les copies prendront sa place. Une étape, annulable.</numerusform>
+            <numerusform>Il y a %n photos sur la page. Les copies prendront leur place. Une étape, annulable.</numerusform>
+        </translation>
+    </message>
+    <message>
+        <source>Vágójelek a nyomaton</source>
+        <translation>Repères de coupe sur l&apos;impression</translation>
+    </message>
+    <message>
+        <source>A nyomatra vágójelek kerülnek a következő lapokon: %1. Folytatod?</source>
+        <translation>Des repères de coupe seront imprimés sur ces pages : %1. Continuer ?</translation>
+    </message>
+    <message>
+        <source>A nyomaton is megjelenik; a vágás a vonal közepén halad, nyomtatás előtt megerősítést kér.</source>
+        <translation>Il apparaît aussi sur l&apos;impression ; la coupe passe au centre de la ligne et l&apos;impression demande une confirmation.</translation>
+    </message>
+    <message>
+        <source>Csak a képernyőn látszik, a nyomatra nem kerül.</source>
+        <translation>Il n&apos;est visible qu&apos;à l&apos;écran et n&apos;apparaît pas sur l&apos;impression.</translation>
+    </message>
+    <message>
+        <source>Nincs vágójel a képernyőn és a nyomaton.</source>
+        <translation>Aucun repère de coupe, ni à l&apos;écran ni sur l&apos;impression.</translation>
+    </message>
+    <message>
+        <source>A példányok pontosan a választott méretben nyomtatódnak, nagyítás nélkül.</source>
+        <translation>Les copies s&apos;impriment exactement à la taille choisie, sans agrandissement.</translation>
+    </message>
+    <message>
+        <source>Szélig nyomtatás</source>
+        <translation>Impression sans marge</translation>
+    </message>
+    <message>
+        <source>Be</source>
+        <translation>Activé</translation>
+    </message>
+    <message>
+        <source>A lapok szélig nyomtatása eltér. Állítsd egységesre.</source>
+        <translation>Les pages diffèrent pour l&apos;impression sans marge. Uniformisez-les.</translation>
+    </message>
+    <message>
+        <source>Előnézet</source>
+        <translation>Aperçu</translation>
+    </message>
+    <message>
         <source>Képek sokszorosítása</source>
         <translation>Dupliquer des photos</translation>
     </message>
@@ -1316,20 +1324,20 @@
         <translation>Organiser les photos</translation>
     </message>
     <message>
-        <source>Előnézet</source>
-        <translation>Aperçu</translation>
-    </message>
-    <message>
-        <source>Ugyanaz a fotó több példányban, egyenes rácsban.</source>
-        <translation>La même photo plusieurs fois, en grille régulière.</translation>
-    </message>
-    <message>
         <source>Fotó: %1</source>
         <translation>Photo : %1</translation>
     </message>
     <message>
-        <source>Válassz ki egy fotót a sokszorosításhoz.</source>
-        <translation>Sélectionnez une photo à dupliquer.</translation>
+        <source>Hely</source>
+        <translation>Emplacement</translation>
+    </message>
+    <message>
+        <source>Az aktuális lapra</source>
+        <translation>Sur la page actuelle</translation>
+    </message>
+    <message>
+        <source>Új lapokra</source>
+        <translation>Sur de nouvelles pages</translation>
     </message>
     <message>
         <source>Méret</source>
@@ -1338,6 +1346,10 @@
     <message>
         <source>Egyedi méret</source>
         <translation>Taille personnalisée</translation>
+    </message>
+    <message>
+        <source>Méret csere</source>
+        <translation>Échanger la taille</translation>
     </message>
     <message>
         <source>Szélesség és magasság cseréje</source>
@@ -1368,95 +1380,6 @@
         <translation>Autant que possible</translation>
     </message>
     <message>
-        <source>Vágójelek</source>
-        <translation>Repères de coupe</translation>
-    </message>
-    <message>
-        <source>Nincs</source>
-        <translation>Aucun</translation>
-    </message>
-    <message>
-        <source>Képernyőn</source>
-        <translation>À l'écran</translation>
-    </message>
-    <message>
-        <source>A nyomtatott jel vékony szürke vonal a példányok szélén. Alapból nincs a nyomaton.</source>
-        <translation>Le repère imprimé est une fine ligne grise au bord de chaque copie. Il est désactivé par défaut.</translation>
-    </message>
-    <message>
-        <source>Hely</source>
-        <translation>Emplacement</translation>
-    </message>
-    <message>
-        <source>Az aktuális lapra</source>
-        <translation>Sur la page actuelle</translation>
-    </message>
-    <message>
-        <source>Új lapokra</source>
-        <translation>Sur de nouvelles pages</translation>
-    </message>
-    <message>
-        <source>A maradék az első kockáktól töltődik, hogy a lapok együtt vághatók legyenek.</source>
-        <translation>Le reste remplit depuis les premières cases, pour que les feuilles se coupent ensemble.</translation>
-    </message>
-    <message>
-        <source>Összegzés</source>
-        <translation>Résumé</translation>
-    </message>
-    <message numerus="yes">
-        <source>%n példány fér el egy lapra.</source>
-        <translation>
-            <numerusform>%n copie tient sur une feuille.</numerusform>
-            <numerusform>%n copies tiennent sur une feuille.</numerusform>
-        </translation>
-    </message>
-    <message numerus="yes">
-        <source>%n lapra kerül.</source>
-        <translation>
-            <numerusform>Tient sur %n feuille.</numerusform>
-            <numerusform>Tient sur %n feuilles.</numerusform>
-        </translation>
-    </message>
-    <message>
-        <source>A kiválasztott fotó el van forgatva. A példányok egyenesen kerülnek a rácsba.</source>
-        <translation>La photo sélectionnée est pivotée. Les copies sont placées droites dans la grille.</translation>
-    </message>
-    <message>
-        <source>A kiválasztott fotó szélei lemaradnak.</source>
-        <translation>Les bords de la photo sélectionnée seront rognés.</translation>
-    </message>
-    <message>
-        <source>Ilyen szoros margónál a nyomtató a szélső vágójelet levághatja.</source>
-        <translation>Avec une marge aussi juste, l'imprimante peut couper le repère de coupe extérieur.</translation>
-    </message>
-    <message>
-        <source>A lap elrendezése megszűnik, a példányok szabadon kerülnek a lapra.</source>
-        <translation>La mise en page est supprimée et les copies sont placées librement sur la page.</translation>
-    </message>
-    <message numerus="yes">
-        <source>%n fotó helyére</source>
-        <translation>
-            <numerusform>Remplace %n photo</numerusform>
-            <numerusform>Remplace %n photos</numerusform>
-        </translation>
-    </message>
-    <message>
-        <source>Így kerül a lapra.</source>
-        <translation>Voici le rendu sur la feuille.</translation>
-    </message>
-    <message>
-        <source>Szélek: %1 mm oldalt, %2 mm felül és alul.</source>
-        <translation>Marges : %1 mm sur les côtés, %2 mm en haut et en bas.</translation>
-    </message>
-    <message>
-        <source>Létrehozás</source>
-        <translation>Créer</translation>
-    </message>
-    <message>
-        <source>A lapon lévő fotók elrendezése. A sorrend nem változik.</source>
-        <translation>Organisez les photos de la page. L'ordre ne change pas.</translation>
-    </message>
-    <message>
         <source>Rácsba</source>
         <translation>En grille</translation>
     </message>
@@ -1481,8 +1404,12 @@
         <translation>Activé, la photo ne remplit pas la case ; la partie manquante reste blanche.</translation>
     </message>
     <message>
-        <source>Automatikus</source>
-        <translation>Automatique</translation>
+        <source>A fotók megtartják a méretüket. A köztük lévő hely lesz egyenlő.</source>
+        <translation>Les photos gardent leur taille. L'espace entre elles devient égal.</translation>
+    </message>
+    <message>
+        <source>Irány</source>
+        <translation>Direction</translation>
     </message>
     <message>
         <source>Egymás mellett</source>
@@ -1493,125 +1420,12 @@
         <translation>L'un sous l'autre</translation>
     </message>
     <message>
-        <source>Irány</source>
-        <translation>Direction</translation>
-    </message>
-    <message>
         <source>Ha nem fér el, a program csökkenti.</source>
         <translation>Si cela ne tient pas, le programme réduit l'espacement.</translation>
     </message>
-    <message numerus="yes">
-        <source>%n fotó: %1 oszlop × %2 sor. Egy cella %3 × %4 mm.</source>
-        <translation>
-            <numerusform>%n photo : %1 colonnes × %2 lignes. Une case mesure %3 × %4 mm.</numerusform>
-            <numerusform>%n photos : %1 colonnes × %2 lignes. Une case mesure %3 × %4 mm.</numerusform>
-        </translation>
-    </message>
     <message>
-        <source>A fotók egy része erősen lemarad. Kapcsold be a »A kép egésze látszódjon« opciót, vagy oszd el őket több lapon.</source>
-        <translation>Certaines photos perdent beaucoup. Activez « Afficher toute la photo » ou répartissez-les sur plusieurs pages.</translation>
-    </message>
-    <message>
-        <source>A fotók megtartják a méretüket. A köztük lévő hely lesz egyenlő.</source>
-        <translation>Les photos gardent leur taille. L'espace entre elles devient égal.</translation>
-    </message>
-    <message numerus="yes">
-        <source>%n fotó, %1 mm térköz. A margó %2 mm.</source>
-        <translation>
-            <numerusform>%n photo, espacement de %1 mm. La marge est de %2 mm.</numerusform>
-            <numerusform>%n photos, espacement de %1 mm. La marge est de %2 mm.</numerusform>
-        </translation>
-    </message>
-    <message>
-        <source>A térköz %1 mm lett, hogy a fotók elférjenek.</source>
-        <translation>L'espacement est passé à %1 mm pour que les photos tiennent.</translation>
-    </message>
-    <message>
-        <source>Egy fotó van a lapon. Csak középre igazítjuk, a mérete nem változik.</source>
-        <translation>Il y a une photo sur la page. Elle est seulement centrée, sa taille ne change pas.</translation>
-    </message>
-    <message>
-        <source>Ehhez a laphoz elrendezés tartozik. Szüntesd meg az elrendezést az igazításhoz.</source>
-        <translation>Cette page a une mise en page. Supprimez-la pour organiser les photos.</translation>
-    </message>
-    <message>
-        <source>Rendezés</source>
-        <translation>Organiser</translation>
-    </message>
-    <message>
-        <source>Sokszorosítás…</source>
-        <translation>Dupliquer…</translation>
-    </message>
-    <message>
-        <source>Lap</source>
-        <translation>Page</translation>
-    </message>
-    <message>
-        <source>Fotók rendezése…</source>
-        <translation>Organiser les photos…</translation>
-    </message>
-    <message>
-        <source>A nyomtatott vágójel a példányok szélén jelenik meg.</source>
-        <translation>Le repère de coupe imprimé apparaît au bord des copies.</translation>
-    </message>
-    <message>
-        <source>Fotók cseréje</source>
-        <translation>Remplacer les photos</translation>
-    </message>
-    <message numerus="yes">
-        <source>A lapon most %n fotó van. A példányok ezek helyére kerülnek. Egy lépésben visszavonható.</source>
-        <translation>
-            <numerusform>Il y a %n photo sur la page. Les copies prendront sa place. Une étape, annulable.</numerusform>
-            <numerusform>Il y a %n photos sur la page. Les copies prendront leur place. Une étape, annulable.</numerusform>
-        </translation>
-    </message>
-    <message>
-        <source>Vágójelek a nyomaton</source>
-        <translation>Repères de coupe sur l'impression</translation>
-    </message>
-    <message>
-        <source>A nyomatra vágójelek kerülnek a következő lapokon: %1. Folytatod?</source>
-        <translation>Des repères de coupe seront imprimés sur ces pages : %1. Continuer ?</translation>
-    </message>
-    <message>
-        <source>Méret csere</source>
-        <translation>Échanger la taille</translation>
-    </message>
-    <message>
-        <source>A kiválasztott fotó nem olvasható.</source>
-        <translation>La photo sélectionnée est illisible.</translation>
-    </message>
-    <message>
-        <source>A nyomaton is megjelenik; a vágás a vonal közepén halad, nyomtatás előtt megerősítést kér.</source>
-        <translation>Il apparaît aussi sur l'impression ; la coupe passe au centre de la ligne et l'impression demande une confirmation.</translation>
-    </message>
-    <message>
-        <source>Csak a képernyőn látszik, a nyomatra nem kerül.</source>
-        <translation>Il n'est visible qu'à l'écran et n'apparaît pas sur l'impression.</translation>
-    </message>
-    <message>
-        <source>Nincs vágójel a képernyőn és a nyomaton.</source>
-        <translation>Aucun repère de coupe, ni à l'écran ni sur l'impression.</translation>
-    </message>
-    <message>
-        <source>A lap vágójel-beállítása is módosul: %1.</source>
-        <translation>Le réglage des repères de coupe de la page change aussi : %1.</translation>
-    </message>
-    <message>
-        <source>A fotók egy része erősen lemarad. Kapcsold be a »A kép egésze látszódjon« opciót, vagy válaszd a »Térköz kiegyenlítése« módot.</source>
-        <translation>Certaines photos perdent beaucoup. Activez « Afficher toute la photo » ou choisissez le mode « Égaliser les espacements ».</translation>
-    </message>
-    <message>
-        <source>A példányok pontosan a választott méretben nyomtatódnak, nagyítás nélkül.</source>
-        <translation>Les copies s'impriment exactement à la taille choisie, sans agrandissement.</translation>
-    </message>
-    <message>
-        <source>Egy lapra legfeljebb %1 példány kerül.</source>
-        <translation>Au plus %1 copies tiennent sur une feuille.</translation>
-    </message>
-    <message>
-        <source>%1/%2. lap</source>
-        <translation>%1/%2 feuille</translation>
+        <source>Összegzés</source>
+        <translation>Résumé</translation>
     </message>
     <message>
         <source>Előző lap</source>
@@ -1625,6 +1439,101 @@
         <source>Figyelmeztetés</source>
         <translation>Avertissement</translation>
     </message>
+    <message>
+        <source>%1/%2. lap</source>
+        <translation>%1/%2 feuille</translation>
+    </message>
+    <message>
+        <source>A kiválasztott fotó nem olvasható.</source>
+        <translation>La photo sélectionnée est illisible.</translation>
+    </message>
+    <message numerus="yes">
+        <source>%n példány fér el egy lapra.</source>
+        <translation>
+            <numerusform>%n copie tient sur une feuille.</numerusform>
+            <numerusform>%n copies tiennent sur une feuille.</numerusform>
+        </translation>
+    </message>
+    <message numerus="yes">
+        <source>%n lapra kerül.</source>
+        <translation>
+            <numerusform>Tient sur %n feuille.</numerusform>
+            <numerusform>Tient sur %n feuilles.</numerusform>
+        </translation>
+    </message>
+    <message>
+        <source>Egy lapra legfeljebb %1 példány kerül.</source>
+        <translation>Au plus %1 copies tiennent sur une feuille.</translation>
+    </message>
+    <message>
+        <source>A kiválasztott fotó el van forgatva. A példányok egyenesen kerülnek a rácsba.</source>
+        <translation>La photo sélectionnée est pivotée. Les copies sont placées droites dans la grille.</translation>
+    </message>
+    <message>
+        <source>A kiválasztott fotó szélei lemaradnak.</source>
+        <translation>Les bords de la photo sélectionnée seront rognés.</translation>
+    </message>
+    <message>
+        <source>Ilyen szoros margónál a nyomtató a szélső vágójelet levághatja.</source>
+        <translation>Avec une marge aussi juste, l'imprimante peut couper le repère de coupe extérieur.</translation>
+    </message>
+    <message>
+        <source>A lap elrendezése megszűnik, a példányok szabadon kerülnek a lapra.</source>
+        <translation>La mise en page est supprimée et les copies sont placées librement sur la page.</translation>
+    </message>
+    <message>
+        <source>A lap vágójel-beállítása is módosul: %1.</source>
+        <translation>Le réglage des repères de coupe de la page change aussi : %1.</translation>
+    </message>
+    <message numerus="yes">
+        <source>%n fotó helyére</source>
+        <translation>
+            <numerusform>Remplace %n photo</numerusform>
+            <numerusform>Remplace %n photos</numerusform>
+        </translation>
+    </message>
+    <message>
+        <source>A maradék az első kockáktól töltődik, hogy a lapok együtt vághatók legyenek.</source>
+        <translation>Le reste remplit depuis les premières cases, pour que les feuilles se coupent ensemble.</translation>
+    </message>
+    <message>
+        <source>Egy fotó van a lapon. Csak középre igazítjuk, a mérete nem változik.</source>
+        <translation>Il y a une photo sur la page. Elle est seulement centrée, sa taille ne change pas.</translation>
+    </message>
+    <message numerus="yes">
+        <source>%n fotó: %1 oszlop × %2 sor. Egy cella %3 × %4 mm.</source>
+        <translation>
+            <numerusform>%n photo : %1 colonnes × %2 lignes. Une case mesure %3 × %4 mm.</numerusform>
+            <numerusform>%n photos : %1 colonnes × %2 lignes. Une case mesure %3 × %4 mm.</numerusform>
+        </translation>
+    </message>
+    <message>
+        <source>A fotók egy része erősen lemarad. Kapcsold be a »A kép egésze látszódjon« opciót, vagy válaszd a »Térköz kiegyenlítése« módot.</source>
+        <translation>Certaines photos perdent beaucoup. Activez « Afficher toute la photo » ou choisissez le mode « Égaliser les espacements ».</translation>
+    </message>
+    <message numerus="yes">
+        <source>%n fotó, %1 mm térköz. A margó %2 mm.</source>
+        <translation>
+            <numerusform>%n photo, espacement de %1 mm. La marge est de %2 mm.</numerusform>
+            <numerusform>%n photos, espacement de %1 mm. La marge est de %2 mm.</numerusform>
+        </translation>
+    </message>
+    <message>
+        <source>A térköz %1 mm lett, hogy a fotók elférjenek.</source>
+        <translation>L'espacement est passé à %1 mm pour que les photos tiennent.</translation>
+    </message>
+    <message>
+        <source>Így kerül a lapra.</source>
+        <translation>Voici le rendu sur la feuille.</translation>
+    </message>
+    <message>
+        <source>Szélek: %1 mm oldalt, %2 mm felül és alul.</source>
+        <translation>Marges : %1 mm sur les côtés, %2 mm en haut et en bas.</translation>
+    </message>
+    <message>
+        <source>Rendezés</source>
+        <translation>Organiser</translation>
+    </message>
     <message numerus="yes">
         <source>Létrehozás (%n lap)</source>
         <translation>
@@ -1633,16 +1542,40 @@
         </translation>
     </message>
     <message>
-        <source>Szélig nyomtatás</source>
-        <translation>Impression sans marge</translation>
+        <source>Létrehozás</source>
+        <translation>Créer</translation>
     </message>
     <message>
-        <source>Be</source>
-        <translation>Activé</translation>
+        <source>Ez a hely már nem létezik.</source>
+        <translation>Cet emplacement n'existe plus.</translation>
     </message>
     <message>
-        <source>A lapok szélig nyomtatása eltér. Állítsd egységesre.</source>
-        <translation>Les pages diffèrent pour l'impression sans marge. Uniformisez-les.</translation>
+        <source>Egy fotó nem található ezen a lapon.</source>
+        <translation>Une photo de cette page est introuvable.</translation>
+    </message>
+    <message>
+        <source>Az elrendezés nem építhető fel ezen a lapon.</source>
+        <translation>Impossible de créer la disposition sur cette page.</translation>
+    </message>
+    <message>
+        <source>A fotónak nincs forrásfájlja.</source>
+        <translation>La photo n'a pas de fichier source.</translation>
+    </message>
+    <message>
+        <source>A sablonban minden fotóhoz pontosan egy helynek kell tartoznia.</source>
+        <translation>Un modèle doit avoir exactement un emplacement par photo.</translation>
+    </message>
+    <message>
+        <source>A sablon egyik helye érvénytelen.</source>
+        <translation>L'un des emplacements du modèle n'est pas valide.</translation>
+    </message>
+    <message>
+        <source>Ehhez a laphoz másik elrendezés tartozik.</source>
+        <translation>Cette page utilise déjà une autre disposition.</translation>
+    </message>
+    <message>
+        <source>Ehhez a laphoz még nincs elrendezés.</source>
+        <translation>Cette page n'a pas encore de disposition.</translation>
     </message>
 </context>
 </TS>
