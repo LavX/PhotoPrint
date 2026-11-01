@@ -2986,7 +2986,8 @@ void MainWindow::onDocumentChanged()
     if (m_templateDialog && !document.pages.isEmpty()) {
         const Page &page = document.pages.at(document.currentPage);
         m_templateDialog->setPage(page.paper, page.landscape, page.frames,
-                                  templatePhotoThumbnails(page));
+                                  templatePhotoThumbnails(page), page.slotList,
+                                  page.slotStyle, page.layoutId);
     }
 }
 
@@ -3332,7 +3333,7 @@ void MainWindow::openTemplateBrowser()
         // The entry points are three doors to one picker; a second click brings
         // the open one forward with the page it shows up to date.
         m_templateDialog->setPage(page.paper, page.landscape, page.frames, photos,
-                                  page.slotList);
+                                  page.slotList, page.slotStyle, page.layoutId);
         m_templateDialog->raise();
         m_templateDialog->activateWindow();
         return;
@@ -3343,12 +3344,13 @@ void MainWindow::openTemplateBrowser()
     request.landscape = page.landscape;
     request.frames = page.frames;
     request.slotList = page.slotList;
+    request.slotStyle = page.slotStyle;
+    request.layoutId = page.layoutId;
     request.photos = photos;
 
     auto *dialog = new TemplateBrowserDialog(request, this);
     dialog->setAttribute(Qt::WA_DeleteOnClose);
     connect(dialog, &TemplateBrowserDialog::templateChosen, this, &MainWindow::applyTemplate);
-    connect(dialog, &TemplateBrowserDialog::addPhotosRequested, this, &MainWindow::addPhotos);
     m_templateDialog = dialog;
     dialog->show();
     dialog->raise();
@@ -3366,67 +3368,41 @@ bool MainWindow::applyTemplate(const QString &templateId)
         return false;
     const Page &page = document.pages.at(document.currentPage);
 
-    // A page that already has cells is arranged by the slot engine: the slot
-    // list, the assignments and the derived geometry change together, so the
-    // old picker cannot leave free frames floating over the new layout. A free
-    // canvas keeps the shipped frame-only path byte for byte.
-    if (page.hasLayout()) {
-        SlotLayoutEngine::Report report;
-        const auto applied = SlotLayoutEngine::applyTemplate(page, *chosen, &report);
-        if (!applied) {
-            if (m_templateDialog)
-                m_templateDialog->reportApplyFailure(applied.error().message);
-            else
-                showProblem(applied.error().message);
-            return false;
-        }
-        if (applied.value() == page) {
-            if (m_templateDialog)
-                m_templateDialog->accept();
-            return true;
-        }
-        const auto published = m_controller.publishPage(
-            applied.value(),
-            QCoreApplication::translate("PhotoPrint", "Sablon alkalmazása"));
-        if (!published) {
-            showProblem(published.error().message);
-            return false;
-        }
-        if (m_templateDialog)
-            m_templateDialog->accept();
-        return true;
-    }
-
-    // The engine returns the full frame list, so the whole layout is one edit and
-    // the frame ids survive: the selection and the cached previews stay valid,
-    // and one undo puts the previous arrangement back.
-    CollageApplyReport report;
-    const auto frames = catalogue.apply(*chosen, page, &report);
-    if (!frames) {
+    // One engine for every page. The page's own layout is topped up: its cells
+    // and assignments stay, and its empty cells take the free photographs. Any
+    // other page is laid out from scratch, assigning the photographs in display
+    // order. Fewer photographs than cells is legal, and more than cells stay
+    // free; the picker names both before Apply, from the same engine report.
+    auto applied = page.layoutId == chosen->id
+        ? SlotLayoutEngine::applyTemplateKeeping(page, *chosen)
+        : SlotLayoutEngine::applyTemplate(page, *chosen);
+    if (!applied) {
         // A refusal belongs where the choice was made. The picker stays open so
         // the person can see which layout was refused and why.
         if (m_templateDialog)
-            m_templateDialog->reportApplyFailure(frames.error().message);
+            m_templateDialog->reportApplyFailure(applied.error().message);
         else
-            showProblem(frames.error().message);
+            showProblem(applied.error().message);
         return false;
     }
 
     // The same layout on the same page changes nothing: no second undo entry,
     // and a saved project is not marked dirty by a click that applies nothing.
-    if (frames.value() == page.frames) {
+    if (applied.value() == page) {
         if (m_templateDialog)
             m_templateDialog->accept();
         return true;
     }
 
-    // The stack names a single pushed edit itself, so the one layout change is
-    // published inside a one-command macro named after the action: one undo, and
-    // an undo entry the person can read.
-    QUndoStack *stack = m_controller.undoStack();
-    stack->beginMacro(QCoreApplication::translate("PhotoPrint", "Sablon alkalmazása"));
-    m_controller.apply(SetFramesEdit{document.currentPage, frames.value()});
-    stack->endMacro();
+    // The slots, the assignments and the derived geometry land as one page
+    // edit, so one undo restores the previous arrangement. Frame ids survive,
+    // so the selection and the cached previews stay valid.
+    const auto published = m_controller.publishPage(
+        applied.value(), QCoreApplication::translate("PhotoPrint", "Sablon alkalmazása"));
+    if (!published) {
+        showProblem(published.error().message);
+        return false;
+    }
     if (m_templateDialog)
         m_templateDialog->accept();
     return true;

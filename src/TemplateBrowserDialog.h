@@ -30,6 +30,10 @@ struct TemplateBrowserRequest {
     /// The page's slots, so a slotted page maps its photographs to the right
     /// preview cells instead of to their z-order.
     QList<Slot> slotList;
+    /// The page's style and layout label. The label names the layout the page
+    /// already uses, so the picker can mark it and applying it is a no-op.
+    SlotStyle slotStyle;
+    QString layoutId;
     /// Optional, one entry per frame (a null image is fine). Slot i shows
     /// photos.at(i) after both lists are reordered into display order.
     QList<QImage> photos;
@@ -39,9 +43,9 @@ struct TemplateBrowserRequest {
 };
 
 /// One tile of the current count. The preview is rebuilt when the count, the
-/// paper or the photographs change; the check mark is painted into it on
-/// selection. It lives at namespace scope because moc cannot describe a nested
-/// class of a QObject.
+/// paper, the photographs or the current layout change; the check mark and the
+/// current-layout ring are painted into it on selection. It lives at namespace
+/// scope because moc cannot describe a nested class of a QObject.
 struct TemplateTileState {
     QString id;
     QString nameEn;
@@ -49,20 +53,23 @@ struct TemplateTileState {
     bool mapped = false; ///< slotsMm() succeeded on this paper
     QString paperMessage;
     QList<QRectF> slotRects; ///< page millimetres, from slotsMm()
-    QPixmap preview;         ///< page-aspect preview without the check
-    QPixmap marked;          ///< with the check, built on first use
+    QPixmap preview;         ///< page-aspect preview without a mark
+    QPixmap marked;          ///< with the selection check, built on first use
+    QPixmap current;         ///< with the current-layout ring
+    QPixmap markedCurrent;   ///< with both
 };
 
 /// Collage template picker for the current page.
 ///
 /// The dialog is a preview and a chooser: it maps every browsable layout
-/// against the page's paper to draw it, and it runs apply() on a copy only to
-/// tell the truth about what applying would change. It never edits the
-/// document and it never claims the page already uses a layout, because a
-/// project stores frames and no template id.
+/// against the page's paper to draw it, and it runs the slot engine on a copy
+/// only to tell the truth about what applying would change. It never edits the
+/// document. A count is a filter, never a gate: a layout may be applied to a
+/// page with fewer photographs (the rest stay empty) or more (the surplus stays
+/// free), and the page's own layout is marked and named when it has one.
 ///
 /// Apply emits templateChosen() and nothing else: MainWindow publishes the one
-/// SetFramesEdit, closes the dialog on success, and hands a refusal back through
+/// page edit, closes the dialog on success, and hands a refusal back through
 /// reportApplyFailure() so the picker stays open with the reason on screen.
 class TemplateBrowserDialog : public QDialog
 {
@@ -72,11 +79,13 @@ public:
     explicit TemplateBrowserDialog(const TemplateBrowserRequest &request,
                                    QWidget *parent = nullptr);
 
-    /// Follows the page while the dialog is open. The count chip follows the
-    /// page's photo count, and the tiles and the guidance are updated once the
-    /// burst of edits is over, so a nudge does not rebuild six previews.
+    /// Follows the page while the dialog is open. The chip follows the page's
+    /// layout when it has one and its photo count otherwise, and the tiles and
+    /// the guidance are updated once the burst of edits is over, so a nudge does
+    /// not rebuild six previews.
     void setPage(const PaperSpec &paper, bool landscape, const QList<Frame> &frames,
-                 const QList<QImage> &photos = {}, const QList<Slot> &slotList = {});
+                 const QList<QImage> &photos = {}, const QList<Slot> &slotList = {},
+                 const SlotStyle &slotStyle = {}, const QString &layoutId = QString());
     /// The reason the last Apply was refused, shown inside the dialog.
     void reportApplyFailure(const QString &message);
     /// Processes events until a scheduled page sync has run.
@@ -99,25 +108,23 @@ public:
     QImage templateTileImage(const QString &id) const; ///< as painted
     bool templateMarkedChosen(const QString &id) const; ///< the check mark
     bool templateMapped(const QString &id) const;       ///< slotsMm() on this paper
+    /// The layout the page currently uses, and whether a tile is that layout.
+    QString currentLayoutId() const { return m_request.layoutId; }
+    bool templateIsCurrent(const QString &id) const;
+    QString currentLayoutText() const; ///< the visible current-layout line, or empty
     QString gridAccessibleName() const;
     /// How many times the tiles were (re)built. A burst of document changes
     /// must end in one rebuild, and a nudge in none.
     int tileRebuildCount() const { return m_rebuilds; }
 
     bool applyEnabled() const;
-    QString countMismatchText() const;  ///< visible count line, or empty
-    QString directionHintText() const;  ///< what to do with too many photos
-    QString capacityText() const;       ///< the 11+ line, or empty
     QString paperMessageText() const;   ///< template-too-small message, or empty
     QString positionNoticeText() const; ///< what Apply changes, or empty
     QString applyErrorText() const;     ///< a refusal from the last Apply
-    bool addPhotosVisible() const;
 
 signals:
     /// The chosen template, on Apply. The dialog does not apply it.
     void templateChosen(const QString &templateId);
-    /// Add photographs to the current page. The caller owns the file dialog.
-    void addPhotosRequested();
 
 protected:
     void showEvent(QShowEvent *event) override;
@@ -144,9 +151,17 @@ private:
     QSizeF pageMm() const;
     QSize previewSize() const;
     int currentChipCount() const;
+    /// The chip the page asks for: the current layout's count when it names a
+    /// catalogue layout, otherwise the page's photo count. Clamped to the chips.
+    int preferredCount() const;
+    /// The page as the picker's engine copy sees it, with the current slots,
+    /// style and layout label, so a top-up prediction is the real one.
+    Page requestPage() const;
     int indexOfTemplate(const QString &id) const;
     const CollageTemplate *templateFor(const QString &id) const;
-    QPixmap renderPreview(const QList<QRectF> &slotRects, bool marked) const;
+    QPixmap renderPreview(const QList<QRectF> &slotRects, bool marked, bool current) const;
+    /// The one sentence Apply would produce from the engine's own report.
+    QString positionNotice(const TemplateTileState &tile) const;
     QString countLabel(int count) const;
 
     TemplateBrowserRequest m_request;
@@ -159,18 +174,15 @@ private:
     bool m_building = false;
 
     QLabel *m_subtitle = nullptr;
+    QLabel *m_currentLabel = nullptr;
     QWidget *m_chipRow = nullptr;
     QHBoxLayout *m_chipLayout = nullptr;
     QButtonGroup *m_chipGroup = nullptr;
     QList<QPushButton *> m_chipButtons;
     QListWidget *m_grid = nullptr;
-    QLabel *m_mismatchLabel = nullptr;
-    QLabel *m_directionLabel = nullptr;
-    QLabel *m_capacityLabel = nullptr;
     QLabel *m_paperLabel = nullptr;
     QLabel *m_noticeLabel = nullptr;
     QLabel *m_errorLabel = nullptr;
-    QPushButton *m_addPhotosButton = nullptr;
     QPushButton *m_applyButton = nullptr;
     QPushButton *m_cancelButton = nullptr;
     QTimer *m_syncTimer = nullptr;

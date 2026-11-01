@@ -375,9 +375,12 @@ private slots:
     /// The collage template picker for the current page. Browsing never touches
     /// the document; the chosen template comes back to applyTemplate().
     void openTemplateBrowser();
-    /// Applies one catalogue template to the current page as a single
-    /// SetFramesEdit, so one undo restores the layout. Returns false and says
-    /// why on the status line when the engine refuses.
+    /// Applies one catalogue template to the current page as one page edit, so
+    /// one undo restores the layout. The slot engine creates the cells (and the
+    /// layout label) and assigns the photographs in display order; the page's
+    /// own layout is topped up, any other page is laid out from scratch. Fewer
+    /// photographs than cells is legal and the surplus stays free. Returns false
+    /// and says why when the engine refuses.
     bool applyTemplate(const QString &templateId);
 
 private:

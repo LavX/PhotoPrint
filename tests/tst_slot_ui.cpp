@@ -198,6 +198,8 @@ private slots:
     void dragInsideSlotPansThePhoto();
     void wheelZoomsPhotoCtrlZoomsPage();
     void addPhotoFillsFirstEmptySlot();
+    void applyLayoutToAnEmptyPageThenFill();
+    void topUpFillsTheDetachedPhoto();
     void slottedFrameControlsAreDisabled();
     void templateApplyKeepsSlotsOnALaidOutPage();
     void deleteClearsSelectedSlot();
@@ -716,6 +718,120 @@ void TestSlotUi::addPhotoFillsFirstEmptySlot()
     undo->trigger();
     QTest::qWait(50);
     QVERIFY(window.document() == before);
+}
+
+void TestSlotUi::applyLayoutToAnEmptyPageThenFill()
+{
+    QTemporaryDir dir;
+    QVERIFY(dir.isValid());
+    const QString photo = makePhoto(dir.path(), QStringLiteral("later.png"), QColor(90, 110, 190));
+
+    MainWindow window;
+    window.resize(1280, 800);
+    window.show();
+    QTest::qWait(100);
+    QVERIFY(window.document().pages.first().frames.isEmpty());
+
+    // An empty page takes a layout: four sections, the label, no photographs.
+    bool applied = false;
+    QVERIFY(QMetaObject::invokeMethod(&window, "applyTemplate", Qt::DirectConnection,
+                                      Q_RETURN_ARG(bool, applied),
+                                      Q_ARG(QString, QStringLiteral("n04-grid-2x2"))));
+    QVERIFY(applied);
+
+    Page page = window.document().pages.first();
+    QCOMPARE(page.layoutId, QStringLiteral("n04-grid-2x2"));
+    QCOMPARE(page.slotList.size(), 4);
+    QCOMPARE(page.frames.size(), 0);
+    QVERIFY(SlotGeometry::layoutConsistent(page));
+
+    // The four numbered cells are on the canvas immediately, all empty and all
+    // drop targets.
+    auto *view = window.findChild<PageView *>();
+    QVERIFY(view);
+    for (const Slot &slot : page.slotList) {
+        QCOMPARE(view->slotState(slot.id), PageView::SlotState::Empty);
+        QVERIFY(!view->slotRect(slot.id).isEmpty());
+    }
+
+    // Filling later goes through the ordinary drop path.
+    dropFiles(*view, view->slotRect(page.slotList.at(2).id).center(), {photo});
+    QVERIFY(window.waitForPreview(15000));
+
+    page = window.document().pages.first();
+    QCOMPARE(page.frames.size(), 1);
+    const Frame *placed = frameInSlot(page, page.slotList.at(2).id);
+    QVERIFY(placed);
+    QCOMPARE(placed->sourcePath, photo);
+    QCOMPARE(view->slotState(page.slotList.at(0).id), PageView::SlotState::Empty);
+    QCOMPARE(view->slotState(page.slotList.at(2).id), PageView::SlotState::Filled);
+}
+
+void TestSlotUi::topUpFillsTheDetachedPhoto()
+{
+    QTemporaryDir dir;
+    QVERIFY(dir.isValid());
+    const QString photoA = makePhoto(dir.path(), QStringLiteral("ta.png"), QColor(190, 70, 70));
+    const QString photoB = makePhoto(dir.path(), QStringLiteral("tb.png"), QColor(70, 70, 190));
+
+    MainWindow window;
+    window.resize(1280, 800);
+    window.show();
+    QTest::qWait(100);
+    bool applied = false;
+    QVERIFY(QMetaObject::invokeMethod(&window, "applyTemplate", Qt::DirectConnection,
+                                      Q_RETURN_ARG(bool, applied),
+                                      Q_ARG(QString, QStringLiteral("n04-grid-2x2"))));
+    QVERIFY(applied);
+    const QStringList both = {photoA, photoB};
+    QVERIFY(QMetaObject::invokeMethod(&window, "addDroppedFiles", Qt::DirectConnection,
+                                      Q_ARG(QStringList, both)));
+    QVERIFY(window.waitForPreview(15000));
+
+    auto *view = window.findChild<PageView *>();
+    QVERIFY(view);
+    Page page = window.document().pages.first();
+    const QString filledSlot = page.slotList.at(0).id;
+    const QString emptiedSlot = page.slotList.at(1).id;
+    const QString frameB = frameInSlot(page, emptiedSlot)->id;
+
+    // Detach the second photograph: it leaves its cell and becomes free.
+    const QPointF background = view->pageRect().topLeft() + QPointF(4.0, 4.0);
+    QVERIFY(view->slotAtWidget(background).isEmpty());
+    dropFrame(*view, background, frameB);
+    QTest::qWait(50);
+    page = window.document().pages.first();
+    QVERIFY(!frameInSlot(page, emptiedSlot));
+    QVERIFY(frameInSlot(page, filledSlot));
+    bool free = false;
+    for (const Frame &frame : page.frames) {
+        if (frame.id == frameB && frame.slotId.isEmpty())
+            free = true;
+    }
+    QVERIFY(free);
+    const DocumentSnapshot detached = window.document();
+
+    // Re-applying the same layout is a top-up: the cells and the assigned photo
+    // stay, and the free photograph returns to the first empty cell.
+    QVERIFY(QMetaObject::invokeMethod(&window, "applyTemplate", Qt::DirectConnection,
+                                      Q_RETURN_ARG(bool, applied),
+                                      Q_ARG(QString, QStringLiteral("n04-grid-2x2"))));
+    QVERIFY(applied);
+    page = window.document().pages.first();
+    QCOMPARE(page.layoutId, QStringLiteral("n04-grid-2x2"));
+    QCOMPARE(page.frames.size(), 2);
+    QVERIFY(frameInSlot(page, filledSlot));
+    const Frame *topped = frameInSlot(page, emptiedSlot);
+    QVERIFY(topped);
+    QCOMPARE(topped->id, frameB);
+    QVERIFY(SlotGeometry::layoutConsistent(page));
+
+    // The top-up is one edit: one undo restores the detached arrangement.
+    QAction *undo = undoAction(window);
+    QVERIFY(undo);
+    undo->trigger();
+    QTest::qWait(50);
+    QVERIFY(window.document() == detached);
 }
 
 void TestSlotUi::slottedFrameControlsAreDisabled()
