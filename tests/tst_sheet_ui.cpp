@@ -21,6 +21,9 @@
 #include <QListWidget>
 #include <QMessageBox>
 #include <QPointer>
+#include <QLabel>
+#include <QLocale>
+#include <QFontMetrics>
 #include <QPushButton>
 #include <QRadioButton>
 #include <QRandomGenerator>
@@ -52,6 +55,14 @@ QString evidenceDir()
 
 /// QVERIFY2 evaluates its description eagerly, so a failure message must not
 /// call Result::error() on a successful result.
+QString mmTextExpected(double value)
+{
+    QString text = QLocale().toString(value, 'f', 1);
+    if (text.endsWith(QLocale().decimalPoint() + QStringLiteral("0")))
+        text.chop(2);
+    return text;
+}
+
 template <typename T>
 QString why(const Result<T> &result)
 {
@@ -215,6 +226,17 @@ private slots:
     void printGuardNamesPrintedPages();
     void guidesComboIsUndoable();
 
+    void unreadableSourceDisablesCreate();
+    void unavailableFramesFeedTheBatchDialog();
+    void batchPreviewNavigatesSheets();
+    void batchGuideOverwriteIsStated();
+    void fillCapIsNamed();
+    void alignDoesNotClaimReplacement();
+    void borderlessComboIsUndoable();
+    void borderlessConsistencyIsEnforced();
+    void printGuardNamesTheGivenPages();
+    void guideHintsFollowTheSelection();
+
     void borderlessOverridePinsExactCopySize();
     void verifyOncePerPrintJob();
     void captureSheetToolDialogs();
@@ -271,11 +293,21 @@ void TestSheetUi::batchDefaultsShowFitAndMargins()
     // "margin is a minimum" rule is visible before commit.
     QVERIFY2(dialog.summaryTextForTest().contains(QStringLiteral("6")),
              qPrintable(dialog.summaryTextForTest()));
-    QVERIFY2(dialog.captionTextForTest().contains(QStringLiteral("13.5")),
+    QVERIFY2(dialog.captionTextForTest().contains(mmTextExpected(13.5)),
              qPrintable(dialog.captionTextForTest()));
-    QVERIFY2(dialog.captionTextForTest().contains(QStringLiteral("4.5")),
+    QVERIFY2(dialog.captionTextForTest().contains(mmTextExpected(4.5)),
              qPrintable(dialog.captionTextForTest()));
     QVERIFY(!dialog.lastSheetNoteVisibleForTest());
+    auto *exact = dialog.findChild<QLabel *>(QStringLiteral("sheetExactSizeNote"));
+    QVERIFY(exact);
+    QVERIFY2(exact->text().contains(QStringLiteral("pontosan")), qPrintable(exact->text()));
+
+    // The screen reader gets the same fit count and warnings through the
+    // preview's accessible description.
+    auto *preview = dialog.findChild<SheetPreview *>(QStringLiteral("sheetPreview"));
+    QVERIFY(preview);
+    QVERIFY2(preview->accessibleDescription().contains(QStringLiteral("6")),
+             qPrintable(preview->accessibleDescription()));
 
     auto *fill = dialog.findChild<QCheckBox *>(QStringLiteral("batchFill"));
     QVERIFY(fill);
@@ -485,7 +517,7 @@ void TestSheetUi::batchAppliesOneUndoOnCurrentPage()
     const int undoBefore = window.undoStackForTest()->count();
 
     SheetToolsDialog dialog(SheetToolsDialog::Mode::Batch, before, 0, before.pages.at(0).frames.at(0),
-                            window.previewImagesForTest(), &window);
+                            window.previewImagesForTest(), true, &window);
     auto *fill = dialog.findChild<QCheckBox *>(QStringLiteral("batchFill"));
     auto *count = dialog.findChild<QSpinBox *>(QStringLiteral("batchCount"));
     auto *guides = dialog.findChild<QComboBox *>(QStringLiteral("batchGuides"));
@@ -557,7 +589,7 @@ void TestSheetUi::batchNewPagesLeaveCurrentPageAlone()
     const DocumentSnapshot before = window.document();
 
     SheetToolsDialog dialog(SheetToolsDialog::Mode::Batch, before, 0, before.pages.at(0).frames.at(0),
-                            window.previewImagesForTest(), &window);
+                            window.previewImagesForTest(), true, &window);
     auto *fill = dialog.findChild<QCheckBox *>(QStringLiteral("batchFill"));
     auto *count = dialog.findChild<QSpinBox *>(QStringLiteral("batchCount"));
     auto *placeNew = dialog.findChild<QRadioButton *>(QStringLiteral("batchPlaceNew"));
@@ -603,7 +635,7 @@ void TestSheetUi::batchHundredCopiesAcrossSeventeenPages()
     const int undoBefore = window.undoStackForTest()->count();
 
     SheetToolsDialog dialog(SheetToolsDialog::Mode::Batch, document, 0, source,
-                            previewsFor(document), &window);
+                            previewsFor(document), true, &window);
     auto *fill = dialog.findChild<QCheckBox *>(QStringLiteral("batchFill"));
     auto *count = dialog.findChild<QSpinBox *>(QStringLiteral("batchCount"));
     auto *placeNew = dialog.findChild<QRadioButton *>(QStringLiteral("batchPlaceNew"));
@@ -666,7 +698,7 @@ void TestSheetUi::batchDissolvesTargetLayout()
     const DocumentSnapshot before = window.document();
 
     SheetToolsDialog dialog(SheetToolsDialog::Mode::Batch, before, 0, before.pages.at(0).frames.at(0),
-                            window.previewImagesForTest(), &window);
+                            window.previewImagesForTest(), true, &window);
     // The batch warns that the page's layout is dissolved in the same step.
     QVERIFY2(dialog.warningTextForTest().contains(QStringLiteral("elrendezése")),
              qPrintable(dialog.warningTextForTest()));
@@ -702,7 +734,7 @@ void TestSheetUi::livePreviewDoesNotMutate()
     const int undoBefore = window.undoStackForTest()->count();
 
     SheetToolsDialog dialog(SheetToolsDialog::Mode::Batch, before, 0, source,
-                            previewsFor(before), &window);
+                            previewsFor(before), true, &window);
     auto *preset = dialog.findChild<QComboBox *>(QStringLiteral("batchPreset"));
     auto *gutter = dialog.findChild<QDoubleSpinBox *>(QStringLiteral("batchGutter"));
     auto *count = dialog.findChild<QSpinBox *>(QStringLiteral("batchCount"));
@@ -726,7 +758,7 @@ void TestSheetUi::livePreviewDoesNotMutate()
     // The align tab has the same contract: browsing rebuilds its preview and
     // leaves both the document and the undo stack alone.
     SheetToolsDialog align(SheetToolsDialog::Mode::Align, before, 0, std::nullopt,
-                           previewsFor(before), &window);
+                           previewsFor(before), true, &window);
     auto *gridMode = align.findChild<QRadioButton *>(QStringLiteral("alignGridMode"));
     auto *gapMode = align.findChild<QRadioButton *>(QStringLiteral("alignGapMode"));
     auto *alignMarginSpin = align.findChild<QDoubleSpinBox *>(QStringLiteral("alignMargin"));
@@ -855,6 +887,12 @@ void TestSheetUi::alignWarnsOnHeavyCropAndFullPhotoKeepsAll()
     QVERIFY(whole);
     QVERIFY(!whole->isChecked()); // crop to fill by default
     QVERIFY2(dialog.warningTextForTest().contains(QStringLiteral("erősen lemarad")),
+             qPrintable(dialog.warningTextForTest()));
+    // The alternative it offers is a real action in this dialog, not a promise
+    // to spread the photos over more pages.
+    QVERIFY2(dialog.warningTextForTest().contains(QStringLiteral("Térköz kiegyenlítése")),
+             qPrintable(dialog.warningTextForTest()));
+    QVERIFY2(!dialog.warningTextForTest().contains(QStringLiteral("több lapon")),
              qPrintable(dialog.warningTextForTest()));
 
     whole->setChecked(true);
@@ -1159,20 +1197,13 @@ void TestSheetUi::cutGuidesScreenOverlayDiffersFromPrint()
                             .arg(screenInk)
                             .arg(dashedTotal)));
 
-    // Evidence for the two screen states. The photo selection is cleared first so
-    // the selection outline does not cover the guides it is evidence of.
-    const auto clearSelection = [&window] {
-        QMetaObject::invokeMethod(&window, "selectFrame", Qt::DirectConnection,
-                                  Q_ARG(QString, QString()), Q_ARG(bool, false));
-        QTest::qWait(60);
-    };
+    // Evidence for the two screen states with the photo still selected: the
+    // orange dashed guide has to read as a guide next to the blue selection.
     combo->setCurrentIndex(combo->findData(int(CutGuides::Screen)));
     QTest::qWait(120);
-    clearSelection();
     QVERIFY(window.grab().save(evidenceDir() + QStringLiteral("/sheet-guides-screen.png")));
     combo->setCurrentIndex(combo->findData(int(CutGuides::Print)));
     QTest::qWait(120);
-    clearSelection();
     QVERIFY(window.grab().save(evidenceDir() + QStringLiteral("/sheet-guides-print.png")));
 }
 
@@ -1351,6 +1382,327 @@ void TestSheetUi::guidesComboIsUndoable()
     QVERIFY(QMetaObject::invokeMethod(&window, "selectFrame", Qt::DirectConnection,
                                       Q_ARG(QString, frameId), Q_ARG(bool, false)));
     QVERIFY(batch->isEnabled());
+}
+
+void TestSheetUi::unreadableSourceDisablesCreate()
+{
+    QTemporaryDir dir;
+    QVERIFY(dir.isValid());
+    const QString photo =
+        makePhoto(dir.path(), QStringLiteral("missing.png"), QColor(100, 100, 100), QSize(400, 500));
+    const QByteArray sha = fileSha256(photo);
+    const Frame source = frameAt(photo, sha, 31.0, 27.0, 35.0, 45.0);
+    const DocumentSnapshot document = singlePage(tenByFifteen(), {source});
+
+    SheetToolsDialog dialog(SheetToolsDialog::Mode::Batch, document, 0, source,
+                            previewsFor(document), false);
+    QVERIFY(!dialog.createEnabledForTest());
+    QCOMPARE(dialog.summaryTextForTest(),
+             QStringLiteral("A kiválasztott fotó nem olvasható."));
+    dialog.accept();
+    QVERIFY(!dialog.hasEdit());
+}
+
+void TestSheetUi::unavailableFramesFeedTheBatchDialog()
+{
+    QTemporaryDir dir;
+    QVERIFY(dir.isValid());
+    // A file that exists but cannot be decoded: the preview pass marks the frame
+    // unavailable, and that set is what disables the batch action. A missing
+    // file would raise the project's find-the-photo prompt instead.
+    const QString brokenPath = dir.filePath(QStringLiteral("broken.png"));
+    {
+        QFile bad(brokenPath);
+        QVERIFY(bad.open(QIODevice::WriteOnly));
+        bad.write("this is not a png");
+    }
+    Frame broken;
+    broken.id = makeId(QStringLiteral("frame"));
+    broken.sourcePath = brokenPath;
+    broken.sourceSha256 = fileSha256(brokenPath);
+    broken.cx = 50.0;
+    broken.cy = 75.0;
+    broken.width = 35.0;
+    broken.height = 45.0;
+    broken.fit = FitMode::Fill;
+    broken.autoPlaced = false;
+    const DocumentSnapshot document = singlePage(tenByFifteen(), {broken});
+
+    MainWindow window;
+    window.resize(1100, 760);
+    window.show();
+    QTest::qWait(60);
+    QVERIFY(loadDocument(window, dir, document));
+    QVERIFY(window.unavailableFramesForTest().contains(broken.id));
+
+    const bool readable = !window.unavailableFramesForTest().contains(broken.id);
+    SheetToolsDialog dialog(SheetToolsDialog::Mode::Batch, window.document(), 0, broken,
+                            window.previewImagesForTest(), readable, &window);
+    QVERIFY(!dialog.createEnabledForTest());
+    QCOMPARE(dialog.summaryTextForTest(),
+             QStringLiteral("A kiválasztott fotó nem olvasható."));
+}
+
+void TestSheetUi::batchPreviewNavigatesSheets()
+{
+    QTemporaryDir dir;
+    QVERIFY(dir.isValid());
+    const QString photo =
+        makePhoto(dir.path(), QStringLiteral("nav.png"), QColor(80, 120, 150), QSize(600, 900));
+    const QByteArray sha = fileSha256(photo);
+    const Frame source = frameAt(photo, sha, 31.0, 27.0, 35.0, 45.0);
+    const DocumentSnapshot document = singlePage(tenByFifteen(), {source});
+
+    SheetToolsDialog dialog(SheetToolsDialog::Mode::Batch, document, 0, source,
+                            previewsFor(document));
+    auto *fill = dialog.findChild<QCheckBox *>(QStringLiteral("batchFill"));
+    auto *count = dialog.findChild<QSpinBox *>(QStringLiteral("batchCount"));
+    auto *label = dialog.findChild<QLabel *>(QStringLiteral("sheetPageLabel"));
+    auto *next = dialog.findChild<QPushButton *>(QStringLiteral("sheetNextPage"));
+    auto *prev = dialog.findChild<QPushButton *>(QStringLiteral("sheetPrevPage"));
+    auto *create = dialog.findChild<QPushButton *>(QStringLiteral("sheetCreateButton"));
+    auto *preview = dialog.findChild<SheetPreview *>(QStringLiteral("sheetPreview"));
+    QVERIFY(fill && count && label && next && prev && create && preview);
+    fill->setChecked(false);
+    count->setValue(20);
+
+    // Four sheets, and the action names the count on the button.
+    QVERIFY(label->isVisible() || !label->isHidden());
+    QCOMPARE(label->text(), QStringLiteral("1/4. lap"));
+    QVERIFY2(create->text().contains(QStringLiteral("4")), qPrintable(create->text()));
+    QVERIFY(dialog.lastSheetNoteVisibleForTest());
+
+    next->click();
+    QCOMPARE(label->text(), QStringLiteral("2/4. lap"));
+    next->click();
+    next->click();
+    QCOMPARE(label->text(), QStringLiteral("4/4. lap"));
+    // The last sheet holds the remainder, two copies.
+    QVERIFY2(preview->description().endsWith(QStringLiteral("2")),
+             qPrintable(preview->description()));
+    QVERIFY(!next->isEnabled());
+    prev->click();
+    QCOMPARE(label->text(), QStringLiteral("3/4. lap"));
+}
+
+void TestSheetUi::batchGuideOverwriteIsStated()
+{
+    QTemporaryDir dir;
+    QVERIFY(dir.isValid());
+    const QString photo =
+        makePhoto(dir.path(), QStringLiteral("guides-warning.png"), QColor(120, 90, 90),
+                  QSize(600, 900));
+    const QByteArray sha = fileSha256(photo);
+    const Frame source = frameAt(photo, sha, 31.0, 27.0, 35.0, 45.0);
+    const DocumentSnapshot document = singlePage(tenByFifteen(), {source});
+
+    SheetToolsDialog dialog(SheetToolsDialog::Mode::Batch, document, 0, source,
+                            previewsFor(document));
+    auto *guides = dialog.findChild<QComboBox *>(QStringLiteral("batchGuides"));
+    QVERIFY(guides);
+    QCOMPARE(document.pages.at(0).cutGuides, CutGuides::None);
+    guides->setCurrentIndex(guides->findData(int(CutGuides::Print)));
+    QVERIFY2(dialog.warningTextForTest().contains(QStringLiteral("vágójel-beállítása")),
+             qPrintable(dialog.warningTextForTest()));
+    QVERIFY2(dialog.warningTextForTest().contains(QStringLiteral("Nyomtatás")),
+             qPrintable(dialog.warningTextForTest()));
+    dialog.accept();
+    QVERIFY(dialog.hasEdit());
+    QCOMPARE(dialog.edit().pages.first().cutGuides.value(), CutGuides::Print);
+}
+
+void TestSheetUi::fillCapIsNamed()
+{
+    QTemporaryDir dir;
+    QVERIFY(dir.isValid());
+    const QString photo =
+        makePhoto(dir.path(), QStringLiteral("capname.png"), QColor(90, 110, 130), QSize(400, 400));
+    const QByteArray sha = fileSha256(photo);
+    const Frame source = frameAt(photo, sha, 42.0, 44.0, 35.0, 45.0);
+    const DocumentSnapshot document = singlePage(a4(), {source});
+
+    SheetToolsDialog dialog(SheetToolsDialog::Mode::Batch, document, 0, source,
+                            previewsFor(document));
+    auto *width = dialog.findChild<QDoubleSpinBox *>(QStringLiteral("batchWidthCm"));
+    auto *height = dialog.findChild<QDoubleSpinBox *>(QStringLiteral("batchHeightCm"));
+    auto *gutter = dialog.findChild<QDoubleSpinBox *>(QStringLiteral("batchGutter"));
+    QVERIFY(width && height && gutter);
+    width->setValue(1.0);
+    height->setValue(1.0);
+    gutter->setValue(0.0);
+    const auto grid = dialog.batchGridForTest();
+    QVERIFY(grid.has_value());
+    // A4 holds 580 of these cells, but one sheet is capped at 100.
+    QCOMPARE(grid->perPage, 100);
+    QVERIFY2(dialog.summaryTextForTest().contains(QStringLiteral("legfeljebb 100")),
+             qPrintable(dialog.summaryTextForTest()));
+}
+
+void TestSheetUi::alignDoesNotClaimReplacement()
+{
+    QTemporaryDir dir;
+    QVERIFY(dir.isValid());
+    const QString photo =
+        makePhoto(dir.path(), QStringLiteral("align-replace.png"), QColor(90, 120, 90),
+                  QSize(600, 400));
+    const QByteArray sha = fileSha256(photo);
+    QList<Frame> frames;
+    for (int i = 0; i < 2; ++i)
+        frames.append(frameAt(photo, sha, 60.0 + i * 80.0, 100.0, 50.0, 40.0));
+    const DocumentSnapshot document = singlePage(a4(), frames);
+
+    SheetToolsDialog dialog(SheetToolsDialog::Mode::Align, document, 0, std::nullopt,
+                            previewsFor(document));
+    dialog.accept();
+    QVERIFY(dialog.hasEdit());
+    // Align edits a page but keeps its frames' identity; it is not the
+    // destructive replacement the batch asks about.
+    QVERIFY(!dialog.replacesCurrentPage());
+}
+
+void TestSheetUi::borderlessComboIsUndoable()
+{
+    QTemporaryDir dir;
+    QVERIFY(dir.isValid());
+    const QString photo =
+        makePhoto(dir.path(), QStringLiteral("borderless-combo.png"), QColor(90, 90, 120),
+                  QSize(600, 400));
+    const QByteArray sha = fileSha256(photo);
+    const DocumentSnapshot document =
+        singlePage(tenByFifteen(), {frameAt(photo, sha, 50.0, 75.0, 35.0, 45.0)});
+
+    MainWindow window;
+    window.resize(1100, 760);
+    window.show();
+    QTest::qWait(60);
+    QVERIFY(loadDocument(window, dir, document));
+
+    auto *combo = window.findChild<QComboBox *>(QStringLiteral("borderlessCombo"));
+    QVERIFY(combo);
+    QCOMPARE(combo->currentIndex(), 0);
+    combo->setCurrentIndex(combo->findData(int(BorderlessOverride::On)));
+    QCOMPARE(window.document().pages.at(0).borderlessOverride, BorderlessOverride::On);
+    QCOMPARE(window.undoStackForTest()->undoText(), QStringLiteral("Szélig nyomtatás"));
+    window.undoStackForTest()->undo();
+    QCOMPARE(window.document().pages.at(0).borderlessOverride, BorderlessOverride::Auto);
+    QCOMPARE(combo->currentIndex(), 0);
+
+    combo->setCurrentIndex(combo->findData(int(BorderlessOverride::Off)));
+    QCOMPARE(window.document().pages.at(0).borderlessOverride, BorderlessOverride::Off);
+}
+
+void TestSheetUi::borderlessConsistencyIsEnforced()
+{
+    QTemporaryDir dir;
+    QVERIFY(dir.isValid());
+    const QString photo =
+        makePhoto(dir.path(), QStringLiteral("borderless-pages.png"), QColor(70, 110, 90),
+                  QSize(600, 400));
+    const QByteArray sha = fileSha256(photo);
+    DocumentSnapshot document;
+    for (int i = 0; i < 2; ++i) {
+        Page page;
+        page.id = makeId(QStringLiteral("page"));
+        page.paper = tenByFifteen();
+        page.frames = {frameAt(photo, sha, 50.0, 75.0, 35.0, 45.0)};
+        document.pages.append(page);
+    }
+    document.pages[0].borderlessOverride = BorderlessOverride::On;
+    document.pages[1].borderlessOverride = BorderlessOverride::Off;
+
+    MainWindow window;
+    window.resize(1100, 760);
+    window.show();
+    QTest::qWait(60);
+    QVERIFY(loadDocument(window, dir, document));
+    QVERIFY(!window.borderlessConsistentForTest());
+
+    ApplyLayoutEdit unify;
+    for (int i = 0; i < 2; ++i) {
+        PageLayout change;
+        change.pageIndex = i;
+        change.borderlessOverride = BorderlessOverride::Off;
+        unify.pages.append(change);
+    }
+    unify.actionText = QStringLiteral("Szélig nyomtatás");
+    QVERIFY(window.applySheetEdit(unify).ok());
+    QVERIFY(window.borderlessConsistentForTest());
+}
+
+void TestSheetUi::printGuardNamesTheGivenPages()
+{
+    QTemporaryDir dir;
+    QVERIFY(dir.isValid());
+    const QString photo =
+        makePhoto(dir.path(), QStringLiteral("guard-numbers.png"), QColor(80, 90, 110),
+                  QSize(600, 400));
+    const QByteArray sha = fileSha256(photo);
+    DocumentSnapshot document;
+    for (int i = 0; i < 3; ++i) {
+        Page page;
+        page.id = makeId(QStringLiteral("page"));
+        page.paper = a4();
+        page.frames = {frameAt(photo, sha, 105.0, 148.5, 100.0, 120.0)};
+        document.pages.append(page);
+    }
+    document.pages[2].cutGuides = CutGuides::Print;
+
+    MainWindow window;
+    window.resize(1100, 760);
+    window.show();
+    QTest::qWait(60);
+    QVERIFY(loadDocument(window, dir, document));
+
+    QString boxText;
+    QTimer timer;
+    timer.setInterval(10);
+    connect(&timer, &QTimer::timeout, &timer, [&boxText] {
+        if (auto *box = qobject_cast<QMessageBox *>(QApplication::activeModalWidget())) {
+            boxText = box->text();
+            if (QAbstractButton *no = box->button(QMessageBox::No))
+                no->click();
+        }
+    });
+    timer.start();
+    // The export path names the document's pages, so a current-page export of
+    // page 3 stays "3" instead of being renumbered to 1.
+    QVERIFY(!window.confirmCutGuides(window.document(), QList<int>{4, 7}));
+    timer.stop();
+    QVERIFY2(boxText.contains(QStringLiteral("4, 7")), qPrintable(boxText));
+}
+
+void TestSheetUi::guideHintsFollowTheSelection()
+{
+    QTemporaryDir dir;
+    QVERIFY(dir.isValid());
+    const QString photo =
+        makePhoto(dir.path(), QStringLiteral("hints.png"), QColor(90, 110, 80), QSize(600, 400));
+    const QByteArray sha = fileSha256(photo);
+    const DocumentSnapshot document =
+        singlePage(a4(), {frameAt(photo, sha, 105.0, 148.5, 100.0, 120.0)});
+
+    MainWindow window;
+    window.resize(1100, 760);
+    window.show();
+    QTest::qWait(60);
+    QVERIFY(loadDocument(window, dir, document));
+    auto *combo = window.findChild<QComboBox *>(QStringLiteral("cutGuidesCombo"));
+    auto *hint = window.findChild<QLabel *>(QStringLiteral("cutGuidesHint"));
+    QVERIFY(combo && hint);
+    QVERIFY2(hint->text().contains(QStringLiteral("Nincs vágójel")), qPrintable(hint->text()));
+    combo->setCurrentIndex(combo->findData(int(CutGuides::Screen)));
+    QVERIFY2(hint->text().contains(QStringLiteral("Csak a képernyőn")), qPrintable(hint->text()));
+    combo->setCurrentIndex(combo->findData(int(CutGuides::Print)));
+    QVERIFY2(hint->text().contains(QStringLiteral("megerősítést kér")), qPrintable(hint->text()));
+
+    SheetToolsDialog dialog(SheetToolsDialog::Mode::Batch, document, 0,
+                            document.pages.at(0).frames.at(0), previewsFor(document));
+    auto *batchGuides = dialog.findChild<QComboBox *>(QStringLiteral("batchGuides"));
+    auto *batchHint = dialog.findChild<QLabel *>(QStringLiteral("batchGuideHint"));
+    QVERIFY(batchGuides && batchHint);
+    batchGuides->setCurrentIndex(batchGuides->findData(int(CutGuides::Print)));
+    QVERIFY2(batchHint->text().contains(QStringLiteral("megerősítést kér")),
+             qPrintable(batchHint->text()));
 }
 
 void TestSheetUi::borderlessOverridePinsExactCopySize()
@@ -1533,25 +1885,140 @@ void TestSheetUi::captureSheetToolDialogs()
     QVERIFY(window.waitForPreview(15000));
     QTest::qWait(250);
 
-    const DocumentSnapshot document = window.document();
+    DocumentSnapshot document = window.document();
     QCOMPARE(document.pages.at(0).frames.size(), 3);
     const Frame source = document.pages.at(0).frames.at(0);
 
+    // Guides and selection together: the first photo is selected, the orange
+    // dashed guides are on every photo, so both marks are visible at once.
+    auto *windowGuides = window.findChild<QComboBox *>(QStringLiteral("cutGuidesCombo"));
+    QVERIFY(windowGuides);
+    QVERIFY(QMetaObject::invokeMethod(&window, "selectFrame", Qt::DirectConnection,
+                                      Q_ARG(QString, source.id), Q_ARG(bool, false)));
+    windowGuides->setCurrentIndex(windowGuides->findData(int(CutGuides::Screen)));
+    QTest::qWait(150);
+    QVERIFY(window.grab().save(
+        evidenceDir() + QStringLiteral("/sheet-guides-selection.png")));
+    windowGuides->setCurrentIndex(windowGuides->findData(int(CutGuides::None)));
+    QTest::qWait(100);
+
+    // Duplicate dialog with the feedback line and Create in view.
     SheetToolsDialog batch(SheetToolsDialog::Mode::Batch, document, 0, source,
-                           window.previewImagesForTest(), &window);
-    batch.resize(980, 680);
+                           window.previewImagesForTest(), true, &window);
+    batch.resize(1020, 720);
     batch.show();
     QTest::qWait(200);
     QVERIFY(batch.grab().save(evidenceDir() + QStringLiteral("/sheet-batch-dialog.png")));
-    batch.close();
 
-    SheetToolsDialog align(SheetToolsDialog::Mode::Align, document, 0, std::nullopt,
-                           window.previewImagesForTest(), &window);
-    align.resize(980, 680);
+    // A multi-sheet batch on its last sheet: the page indicator, the last-sheet
+    // note and the Create label all name the count.
+    auto *fill = batch.findChild<QCheckBox *>(QStringLiteral("batchFill"));
+    auto *count = batch.findChild<QSpinBox *>(QStringLiteral("batchCount"));
+    auto *next = batch.findChild<QPushButton *>(QStringLiteral("sheetNextPage"));
+    auto *pageLabel = batch.findChild<QLabel *>(QStringLiteral("sheetPageLabel"));
+    QVERIFY(fill && count && next && pageLabel);
+    fill->setChecked(false);
+    count->setValue(100);
+    while (next->isEnabled())
+        next->click();
+    QVERIFY2(pageLabel->text().endsWith(QStringLiteral("4/4. lap")),
+             qPrintable(pageLabel->text()));
+    QTest::qWait(150);
+    QVERIFY(batch.grab().save(evidenceDir() + QStringLiteral("/sheet-batch-last-sheet.png")));
+
+    // Align in grid mode on the three-photo page, before the batch replaces it.
+    SheetToolsDialog align(SheetToolsDialog::Mode::Align, window.document(),
+                           window.document().currentPage, std::nullopt,
+                           window.previewImagesForTest(), true, &window);
+    align.resize(1020, 720);
     align.show();
-    QTest::qWait(200);
+    QTest::qWait(220);
     QVERIFY(align.grab().save(evidenceDir() + QStringLiteral("/sheet-align-dialog.png")));
     align.close();
+
+    // Distribute mode on a page of three differently sized photos, which is the
+    // case it exists for.
+    DocumentSnapshot distributeDoc;
+    {
+        Page page;
+        page.id = makeId(QStringLiteral("page"));
+        page.paper = a4();
+        page.frames = {frameAt(first, fileSha256(first), 40.0, 148.5, 40.0, 30.0),
+                       frameAt(second, fileSha256(second), 110.0, 148.5, 60.0, 30.0),
+                       frameAt(third, fileSha256(third), 175.0, 148.5, 50.0, 30.0)};
+        distributeDoc.pages.append(page);
+    }
+    SheetToolsDialog distribute(SheetToolsDialog::Mode::Align, distributeDoc, 0, std::nullopt,
+                                previewsFor(distributeDoc, QSize(600, 400)), true, &window);
+    auto *gapMode = distribute.findChild<QRadioButton *>(QStringLiteral("alignGapMode"));
+    auto *gapMargin = distribute.findChild<QDoubleSpinBox *>(QStringLiteral("alignMargin"));
+    auto *gapValue = distribute.findChild<QDoubleSpinBox *>(QStringLiteral("alignGap"));
+    QVERIFY(gapMode && gapMargin && gapValue);
+    gapMode->setChecked(true);
+    gapMargin->setValue(10.0);
+    gapValue->setValue(5.0);
+    distribute.resize(1020, 720);
+    distribute.show();
+    QTest::qWait(220);
+    QVERIFY(distribute.grab().save(
+        evidenceDir() + QStringLiteral("/sheet-align-distribute.png")));
+    distribute.close();
+
+    // Apply the batch and show the canvas with the copies on it.
+    count->setValue(20);
+    batch.accept();
+    QVERIFY(batch.hasEdit());
+    const auto applied = window.applySheetEdit(batch.edit());
+    QVERIFY2(applied.ok(), qPrintable(why(applied)));
+    QVERIFY(window.waitForPreview(15000));
+    QTest::qWait(300);
+    QVERIFY(window.grab().save(evidenceDir() + QStringLiteral("/sheet-batch-applied.png")));
+
+    // Large font: the settings scroll, but the feedback line and Create stay in
+    // the dialog, so the action is never pressed blind. The application font is
+    // raised for the lifetime of this capture, which is what a user with a
+    // larger system font sees.
+    const QFont previousFont = QApplication::font();
+    QFont largeFont = previousFont;
+    largeFont.setPointSizeF(previousFont.pointSizeF() + 5.0);
+    QApplication::setFont(largeFont);
+    SheetToolsDialog large(SheetToolsDialog::Mode::Batch, window.document(),
+                           window.document().currentPage,
+                           window.document().pages.at(window.document().currentPage).frames.at(0),
+                           window.previewImagesForTest(), true, &window);
+    large.resize(1020, 760);
+    large.show();
+    QTest::qWait(250);
+    auto *create = large.findChild<QPushButton *>(QStringLiteral("sheetCreateButton"));
+    auto *summary = large.findChild<QLabel *>(QStringLiteral("sheetSummary"));
+    QVERIFY(create && summary);
+    QVERIFY(create->isVisible());
+    QVERIFY(summary->isVisible());
+    QVERIFY2(QFontMetrics(summary->font()).height() > 20,
+             qPrintable(QString::number(QFontMetrics(summary->font()).height())));
+    QVERIFY(large.grab().save(evidenceDir() + QStringLiteral("/sheet-batch-large-font.png")));
+    large.close();
+    QApplication::setFont(previousFont);
+
+    // Print guard: the modal itself as evidence.
+    auto *guides = window.findChild<QComboBox *>(QStringLiteral("cutGuidesCombo"));
+    QVERIFY(guides);
+    guides->setCurrentIndex(guides->findData(int(CutGuides::Print)));
+    QTest::qWait(120);
+    const QString guardPath = evidenceDir() + QStringLiteral("/sheet-print-guard.png");
+    QTimer guardTimer;
+    guardTimer.setInterval(10);
+    connect(&guardTimer, &QTimer::timeout, &guardTimer, [&guardPath] {
+        if (auto *box = qobject_cast<QMessageBox *>(QApplication::activeModalWidget())) {
+            box->grab().save(guardPath);
+            if (QAbstractButton *no = box->button(QMessageBox::No))
+                no->click();
+        }
+    });
+    guardTimer.start();
+    QVERIFY(!window.confirmCutGuides());
+    guardTimer.stop();
+    QVERIFY(QFileInfo::exists(guardPath));
 }
 
 QTEST_MAIN(TestSheetUi)

@@ -1559,5 +1559,75 @@
         <source>A nyomatra vágójelek kerülnek a következő lapokon: %1. Folytatod?</source>
         <translation>以下页面将打印裁切标记：%1。要继续吗？</translation>
     </message>
+    <message>
+        <source>Méret csere</source>
+        <translation>交换尺寸</translation>
+    </message>
+    <message>
+        <source>A kiválasztott fotó nem olvasható.</source>
+        <translation>无法读取所选照片。</translation>
+    </message>
+    <message>
+        <source>A nyomaton is megjelenik; a vágás a vonal közepén halad, nyomtatás előtt megerősítést kér.</source>
+        <translation>打印时也会出现；裁切沿线条中心进行，打印前会再次确认。</translation>
+    </message>
+    <message>
+        <source>Csak a képernyőn látszik, a nyomatra nem kerül.</source>
+        <translation>仅在屏幕上显示，不会打印出来。</translation>
+    </message>
+    <message>
+        <source>Nincs vágójel a képernyőn és a nyomaton.</source>
+        <translation>屏幕和打印上都没有裁切标记。</translation>
+    </message>
+    <message>
+        <source>A lap vágójel-beállítása is módosul: %1.</source>
+        <translation>页面的裁切标记设置也会改变：%1。</translation>
+    </message>
+    <message>
+        <source>A fotók egy része erősen lemarad. Kapcsold be a »A kép egésze látszódjon« opciót, vagy válaszd a »Térköz kiegyenlítése« módot.</source>
+        <translation>部分照片裁掉较多。请开启“显示完整照片”，或选择“均分间距”模式。</translation>
+    </message>
+    <message>
+        <source>A példányok pontosan a választott méretben nyomtatódnak, nagyítás nélkül.</source>
+        <translation>副本会按所选尺寸精确打印，不会放大。</translation>
+    </message>
+    <message>
+        <source>Egy lapra legfeljebb %1 példány kerül.</source>
+        <translation>一张纸最多放 %1 份。</translation>
+    </message>
+    <message>
+        <source>%1/%2. lap</source>
+        <translation>第 %1/%2 张</translation>
+    </message>
+    <message>
+        <source>Előző lap</source>
+        <translation>上一张</translation>
+    </message>
+    <message>
+        <source>Következő lap</source>
+        <translation>下一张</translation>
+    </message>
+    <message>
+        <source>Figyelmeztetés</source>
+        <translation>警告</translation>
+    </message>
+    <message numerus="yes">
+        <source>Létrehozás (%n lap)</source>
+        <translation>
+            <numerusform>创建（%n 张）</numerusform>
+        </translation>
+    </message>
+    <message>
+        <source>Szélig nyomtatás</source>
+        <translation>无边距打印</translation>
+    </message>
+    <message>
+        <source>Be</source>
+        <translation>开启</translation>
+    </message>
+    <message>
+        <source>A lapok szélig nyomtatása eltér. Állítsd egységesre.</source>
+        <translation>各页的无边距打印设置不同。请统一设置。</translation>
+    </message>
 </context>
 </TS>

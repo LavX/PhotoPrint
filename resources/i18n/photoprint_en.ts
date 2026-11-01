@@ -1573,5 +1573,76 @@
         <source>A nyomatra vágójelek kerülnek a következő lapokon: %1. Folytatod?</source>
         <translation>Cut guides will be printed on these pages: %1. Continue?</translation>
     </message>
+    <message>
+        <source>Méret csere</source>
+        <translation>Swap size</translation>
+    </message>
+    <message>
+        <source>A kiválasztott fotó nem olvasható.</source>
+        <translation>The selected photo cannot be read.</translation>
+    </message>
+    <message>
+        <source>A nyomaton is megjelenik; a vágás a vonal közepén halad, nyomtatás előtt megerősítést kér.</source>
+        <translation>It also appears on the print; the cut runs along the line's centre, and printing asks for confirmation.</translation>
+    </message>
+    <message>
+        <source>Csak a képernyőn látszik, a nyomatra nem kerül.</source>
+        <translation>It is visible on screen only and does not reach the print.</translation>
+    </message>
+    <message>
+        <source>Nincs vágójel a képernyőn és a nyomaton.</source>
+        <translation>There is no cut guide on screen or on the print.</translation>
+    </message>
+    <message>
+        <source>A lap vágójel-beállítása is módosul: %1.</source>
+        <translation>The page's cut guide setting changes too: %1.</translation>
+    </message>
+    <message>
+        <source>A fotók egy része erősen lemarad. Kapcsold be a »A kép egésze látszódjon« opciót, vagy válaszd a »Térköz kiegyenlítése« módot.</source>
+        <translation>Some photos lose a lot. Turn on “Show the whole photo”, or choose the “Equalise gaps” mode.</translation>
+    </message>
+    <message>
+        <source>A példányok pontosan a választott méretben nyomtatódnak, nagyítás nélkül.</source>
+        <translation>The copies print at exactly the chosen size, with no enlargement.</translation>
+    </message>
+    <message>
+        <source>Egy lapra legfeljebb %1 példány kerül.</source>
+        <translation>At most %1 copies go on one sheet.</translation>
+    </message>
+    <message>
+        <source>%1/%2. lap</source>
+        <translation>%1/%2 sheet</translation>
+    </message>
+    <message>
+        <source>Előző lap</source>
+        <translation>Previous sheet</translation>
+    </message>
+    <message>
+        <source>Következő lap</source>
+        <translation>Next sheet</translation>
+    </message>
+    <message>
+        <source>Figyelmeztetés</source>
+        <translation>Warning</translation>
+    </message>
+    <message numerus="yes">
+        <source>Létrehozás (%n lap)</source>
+        <translation>
+            <numerusform>Create (%n sheet)</numerusform>
+            <numerusform>Create (%n sheets)</numerusform>
+        </translation>
+    </message>
+    <message>
+        <source>Szélig nyomtatás</source>
+        <translation>Borderless printing</translation>
+    </message>
+    <message>
+        <source>Be</source>
+        <translation>On</translation>
+    </message>
+    <message>
+        <source>A lapok szélig nyomtatása eltér. Állítsd egységesre.</source>
+        <translation>The pages differ in borderless printing. Make them the same.</translation>
+    </message>
 </context>
 </TS>

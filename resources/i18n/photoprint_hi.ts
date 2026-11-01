@@ -1573,5 +1573,76 @@
         <source>A nyomatra vágójelek kerülnek a következő lapokon: %1. Folytatod?</source>
         <translation>इन पेजों पर कटाई के निशान छपेंगे: %1। जारी रखें?</translation>
     </message>
+    <message>
+        <source>Méret csere</source>
+        <translation>आकार बदलें</translation>
+    </message>
+    <message>
+        <source>A kiválasztott fotó nem olvasható.</source>
+        <translation>चुनी गई फ़ोटो पढ़ी नहीं जा सकती।</translation>
+    </message>
+    <message>
+        <source>A nyomaton is megjelenik; a vágás a vonal közepén halad, nyomtatás előtt megerősítést kér.</source>
+        <translation>यह छपाई पर भी दिखता है; कटाई रेखा के मध्य से होती है, और छापने से पहले पुष्टि माँगी जाती है।</translation>
+    </message>
+    <message>
+        <source>Csak a képernyőn látszik, a nyomatra nem kerül.</source>
+        <translation>यह केवल स्क्रीन पर दिखता है और छपाई पर नहीं आता।</translation>
+    </message>
+    <message>
+        <source>Nincs vágójel a képernyőn és a nyomaton.</source>
+        <translation>स्क्रीन पर और छपाई पर कोई कटाई निशान नहीं है।</translation>
+    </message>
+    <message>
+        <source>A lap vágójel-beállítása is módosul: %1.</source>
+        <translation>पेज की कटाई-निशान सेटिंग भी बदलेगी: %1।</translation>
+    </message>
+    <message>
+        <source>A fotók egy része erősen lemarad. Kapcsold be a »A kép egésze látszódjon« opciót, vagy válaszd a »Térköz kiegyenlítése« módot.</source>
+        <translation>कुछ फ़ोटो बहुत कट रही हैं। “पूरी फ़ोटो दिखाएँ” चालू करें या “अंतर बराबर करें” मोड चुनें।</translation>
+    </message>
+    <message>
+        <source>A példányok pontosan a választott méretben nyomtatódnak, nagyítás nélkül.</source>
+        <translation>प्रतियाँ ठीक चुने गए आकार में, बिना बड़ा किए छपती हैं।</translation>
+    </message>
+    <message>
+        <source>Egy lapra legfeljebb %1 példány kerül.</source>
+        <translation>एक शीट पर अधिकतम %1 प्रतियाँ आती हैं।</translation>
+    </message>
+    <message>
+        <source>%1/%2. lap</source>
+        <translation>%1/%2 शीट</translation>
+    </message>
+    <message>
+        <source>Előző lap</source>
+        <translation>पिछली शीट</translation>
+    </message>
+    <message>
+        <source>Következő lap</source>
+        <translation>अगली शीट</translation>
+    </message>
+    <message>
+        <source>Figyelmeztetés</source>
+        <translation>चेतावनी</translation>
+    </message>
+    <message numerus="yes">
+        <source>Létrehozás (%n lap)</source>
+        <translation>
+            <numerusform>बनाएँ (%n शीट)</numerusform>
+            <numerusform>बनाएँ (%n शीटें)</numerusform>
+        </translation>
+    </message>
+    <message>
+        <source>Szélig nyomtatás</source>
+        <translation>बिना हाशिये की छपाई</translation>
+    </message>
+    <message>
+        <source>Be</source>
+        <translation>चालू</translation>
+    </message>
+    <message>
+        <source>A lapok szélig nyomtatása eltér. Állítsd egységesre.</source>
+        <translation>पेजों में बिना हाशिये की छपाई अलग है। उन्हें एक जैसा करें।</translation>
+    </message>
 </context>
 </TS>

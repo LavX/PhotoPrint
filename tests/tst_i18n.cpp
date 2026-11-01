@@ -722,6 +722,26 @@ void TestI18n::everyCatalogueTranslatesTheSheetToolMessages()
              QStringLiteral("Szélek: %1 mm oldalt, %2 mm felül és alul."),
              QStringLiteral("A nyomatra vágójelek kerülnek a következő lapokon: %1. Folytatod?"),
              QStringLiteral("A térköz %1 mm lett, hogy a fotók elférjenek."),
+             QStringLiteral("A kiválasztott fotó nem olvasható."),
+             QStringLiteral("Méret csere"),
+             QStringLiteral("A nyomaton is megjelenik; a vágás a vonal közepén halad, nyomtatás "
+                            "előtt megerősítést kér."),
+             QStringLiteral("Csak a képernyőn látszik, a nyomatra nem kerül."),
+             QStringLiteral("Nincs vágójel a képernyőn és a nyomaton."),
+             QStringLiteral("A lap vágójel-beállítása is módosul: %1."),
+             QStringLiteral("A fotók egy része erősen lemarad. Kapcsold be a »A kép egésze "
+                            "látszódjon« opciót, vagy válaszd a »Térköz kiegyenlítése« módot."),
+             QStringLiteral("A példányok pontosan a választott méretben nyomtatódnak, nagyítás "
+                            "nélkül."),
+             QStringLiteral("Egy lapra legfeljebb %1 példány kerül."),
+             QStringLiteral("%1/%2. lap"),
+             QStringLiteral("Előző lap"),
+             QStringLiteral("Következő lap"),
+             QStringLiteral("Figyelmeztetés"),
+             QStringLiteral("Szélig nyomtatás"),
+             QStringLiteral("Kikapcsolva"),
+             QStringLiteral("Be"),
+             QStringLiteral("A lapok szélig nyomtatása eltér. Állítsd egységesre."),
          }) {
         const QString text = translated("PhotoPrint", source);
         const QString where = QStringLiteral("%1: %2").arg(code, source);
@@ -755,6 +775,7 @@ void TestI18n::everyCataloguePluralisesTheSheetToolCounts()
              QStringLiteral("%n fotó, %1 mm térköz. A margó %2 mm."),
              QStringLiteral("A lapon most %n fotó van. A példányok ezek helyére kerülnek. Egy "
                             "lépésben visszavonható."),
+             QStringLiteral("Létrehozás (%n lap)"),
          }) {
         for (const int count : {1, 2, 5}) {
             const QString text = translatedWithCount("PhotoPrint", source, count);

@@ -1573,5 +1573,76 @@
         <source>A nyomatra vágójelek kerülnek a következő lapokon: %1. Folytatod?</source>
         <translation>As marcas de corte serão impressas nestas páginas: %1. Continuar?</translation>
     </message>
+    <message>
+        <source>Méret csere</source>
+        <translation>Trocar tamanho</translation>
+    </message>
+    <message>
+        <source>A kiválasztott fotó nem olvasható.</source>
+        <translation>Não é possível ler a foto selecionada.</translation>
+    </message>
+    <message>
+        <source>A nyomaton is megjelenik; a vágás a vonal közepén halad, nyomtatás előtt megerősítést kér.</source>
+        <translation>Também aparece na impressão; o corte passa pelo centro da linha e a impressão pede confirmação.</translation>
+    </message>
+    <message>
+        <source>Csak a képernyőn látszik, a nyomatra nem kerül.</source>
+        <translation>Só aparece no ecrã e não chega à impressão.</translation>
+    </message>
+    <message>
+        <source>Nincs vágójel a képernyőn és a nyomaton.</source>
+        <translation>Não há marca de corte no ecrã nem na impressão.</translation>
+    </message>
+    <message>
+        <source>A lap vágójel-beállítása is módosul: %1.</source>
+        <translation>A definição de marcas de corte da página também muda: %1.</translation>
+    </message>
+    <message>
+        <source>A fotók egy része erősen lemarad. Kapcsold be a »A kép egésze látszódjon« opciót, vagy válaszd a »Térköz kiegyenlítése« módot.</source>
+        <translation>Algumas fotos perdem muito. Liga «Mostrar a foto inteira» ou escolhe o modo «Igualar espaçamentos».</translation>
+    </message>
+    <message>
+        <source>A példányok pontosan a választott méretben nyomtatódnak, nagyítás nélkül.</source>
+        <translation>As cópias são impressas exatamente no tamanho escolhido, sem ampliação.</translation>
+    </message>
+    <message>
+        <source>Egy lapra legfeljebb %1 példány kerül.</source>
+        <translation>No máximo %1 cópias cabem numa folha.</translation>
+    </message>
+    <message>
+        <source>%1/%2. lap</source>
+        <translation>%1/%2 folha</translation>
+    </message>
+    <message>
+        <source>Előző lap</source>
+        <translation>Folha anterior</translation>
+    </message>
+    <message>
+        <source>Következő lap</source>
+        <translation>Folha seguinte</translation>
+    </message>
+    <message>
+        <source>Figyelmeztetés</source>
+        <translation>Aviso</translation>
+    </message>
+    <message numerus="yes">
+        <source>Létrehozás (%n lap)</source>
+        <translation>
+            <numerusform>Criar (%n folha)</numerusform>
+            <numerusform>Criar (%n folhas)</numerusform>
+        </translation>
+    </message>
+    <message>
+        <source>Szélig nyomtatás</source>
+        <translation>Impressão sem margens</translation>
+    </message>
+    <message>
+        <source>Be</source>
+        <translation>Ligado</translation>
+    </message>
+    <message>
+        <source>A lapok szélig nyomtatása eltér. Állítsd egységesre.</source>
+        <translation>As páginas diferem na impressão sem margens. Iguala-as.</translation>
+    </message>
 </context>
 </TS>

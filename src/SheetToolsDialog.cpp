@@ -13,6 +13,8 @@
 #include <QGroupBox>
 #include <QHBoxLayout>
 #include <QLabel>
+#include <QLocale>
+#include <QAccessible>
 #include <QPainter>
 #include <QPushButton>
 #include <QRadioButton>
@@ -42,8 +44,11 @@ constexpr int kAlignTab = 1;
 /// 90.0 mm reads "90".
 QString mmText(double value)
 {
-    QString text = QString::number(value, 'f', 1);
-    if (text.endsWith(QLatin1String(".0")))
+    // Locale-aware: a Hungarian interface writes 13,5 mm and an English one
+    // 13.5 mm. The trailing zero group is removed in the same locale.
+    QString text = QLocale().toString(value, 'f', 1);
+    const QString zero = QStringLiteral("0");
+    if (text.endsWith(QLocale().decimalPoint() + zero))
         text.chop(2);
     return text;
 }
@@ -213,13 +218,18 @@ void SheetPreview::paintEvent(QPaintEvent *)
 
 SheetToolsDialog::SheetToolsDialog(Mode mode, DocumentSnapshot document, int pageIndex,
                                    std::optional<Frame> sourceFrame,
-                                   QHash<QString, QImage> previews, QWidget *parent)
+                                   QHash<QString, QImage> previews, bool sourceReadable,
+                                   QWidget *parent)
     : QDialog(parent), m_document(std::move(document)), m_pageIndex(pageIndex),
-      m_source(std::move(sourceFrame)), m_previews(std::move(previews))
+      m_source(std::move(sourceFrame)), m_sourceReadable(sourceReadable),
+      m_previews(std::move(previews))
 {
     setObjectName(QStringLiteral("sheetToolsDialog"));
     setWindowTitle(mode == Mode::Batch ? uiText("Képek sokszorosítása") : uiText("Fotók rendezése"));
-    resize(960, 660);
+    // The feedback panel below the tabs keeps Create, the warnings and the sheet
+    // count in view at every system font size; the settings scroll on their own.
+    setMinimumSize(760, 560);
+    resize(1020, 720);
 
     auto *outer = new QVBoxLayout(this);
     auto *body = new QHBoxLayout;
@@ -247,6 +257,7 @@ SheetToolsDialog::SheetToolsDialog(Mode mode, DocumentSnapshot document, int pag
     body->addWidget(m_tabs, 1);
     body->addLayout(previewColumn, 1);
     outer->addLayout(body, 1);
+    buildFeedback();
 
     auto *buttons = new QDialogButtonBox(QDialogButtonBox::Cancel, this);
     m_createButton = buttons->addButton(QString(), QDialogButtonBox::AcceptRole);
@@ -269,10 +280,15 @@ SheetToolsDialog::SheetToolsDialog(Mode mode, DocumentSnapshot document, int pag
     });
 
     m_tabs->setCurrentIndex(mode == Mode::Batch ? kBatchTab : kAlignTab);
+    if (m_tabs->count() == 2)
+        m_tabs->setTabVisible(mode == Mode::Batch ? kAlignTab : kBatchTab, false);
     setCreateText();
-    updateBatch();
-    updateAlign();
-    updatePreview();
+    // Only the active mode fills the shared feedback line: running both would
+    // let the hidden tab overwrite the visible one's summary.
+    if (m_tabs->currentIndex() == kBatchTab)
+        updateBatch();
+    else
+        updateAlign();
 }
 
 void SheetToolsDialog::buildBatchTab()
@@ -302,6 +318,22 @@ void SheetToolsDialog::buildBatchTab()
     }
     v->addWidget(sourceLabel);
 
+    auto *placeGroup = new QGroupBox(uiText("Hely"), page);
+    auto *placeLayout = new QVBoxLayout(placeGroup);
+    m_batchCurrent = new QRadioButton(uiText("Az aktuális lapra"), placeGroup);
+    m_batchCurrent->setObjectName(QStringLiteral("batchPlaceCurrent"));
+    m_batchNew = new QRadioButton(uiText("Új lapokra"), placeGroup);
+    m_batchNew->setObjectName(QStringLiteral("batchPlaceNew"));
+    m_batchPlaceNote = new QLabel(placeGroup);
+    m_batchPlaceNote->setObjectName(QStringLiteral("batchPlaceNote"));
+    m_batchPlaceNote->setWordWrap(true);
+    m_batchPlaceNote->setStyleSheet(QStringLiteral("color: #6e6e73;"));
+    placeLayout->addWidget(m_batchCurrent);
+    placeLayout->addWidget(m_batchPlaceNote);
+    placeLayout->addWidget(m_batchNew);
+    v->addWidget(placeGroup);
+
+
     auto *sizeGroup = new QGroupBox(uiText("Méret"), page);
     auto *sizeForm = new QFormLayout(sizeGroup);
     m_batchPreset = new QComboBox(sizeGroup);
@@ -329,7 +361,7 @@ void SheetToolsDialog::buildBatchTab()
     }
     sizeForm->addRow(uiText("Szélesség"), m_batchWidthCm);
     sizeForm->addRow(uiText("Magasság"), m_batchHeightCm);
-    m_batchSwap = new QPushButton(uiText("Csere"), sizeGroup);
+    m_batchSwap = new QPushButton(uiText("Méret csere"), sizeGroup);
     m_batchSwap->setObjectName(QStringLiteral("batchSwap"));
     m_batchSwap->setAccessibleName(uiText("Szélesség és magasság cseréje"));
     sizeForm->addRow(QString(), m_batchSwap);
@@ -395,48 +427,13 @@ void SheetToolsDialog::buildBatchTab()
     m_batchGuides->addItem(uiText("Képernyőn"), int(CutGuides::Screen));
     m_batchGuides->addItem(uiText("Nyomtatás"), int(CutGuides::Print));
     guideForm->addRow(uiText("Vágójelek"), m_batchGuides);
-    auto *guideHint = new QLabel(
-        uiText("A nyomtatott jel vékony szürke vonal a példányok szélén. Alapból nincs a "
-           "nyomaton."),
-        guideGroup);
-    guideHint->setWordWrap(true);
-    guideHint->setStyleSheet(QStringLiteral("color: #6e6e73;"));
-    guideForm->addRow(guideHint);
+    m_batchGuideHint = new QLabel(guideGroup);
+    m_batchGuideHint->setObjectName(QStringLiteral("batchGuideHint"));
+    m_batchGuideHint->setWordWrap(true);
+    m_batchGuideHint->setStyleSheet(QStringLiteral("color: #6e6e73;"));
+    guideForm->addRow(m_batchGuideHint);
     v->addWidget(guideGroup);
 
-    auto *placeGroup = new QGroupBox(uiText("Hely"), page);
-    auto *placeLayout = new QVBoxLayout(placeGroup);
-    m_batchCurrent = new QRadioButton(uiText("Az aktuális lapra"), placeGroup);
-    m_batchCurrent->setObjectName(QStringLiteral("batchPlaceCurrent"));
-    m_batchNew = new QRadioButton(uiText("Új lapokra"), placeGroup);
-    m_batchNew->setObjectName(QStringLiteral("batchPlaceNew"));
-    m_batchPlaceNote = new QLabel(placeGroup);
-    m_batchPlaceNote->setObjectName(QStringLiteral("batchPlaceNote"));
-    m_batchPlaceNote->setWordWrap(true);
-    m_batchPlaceNote->setStyleSheet(QStringLiteral("color: #6e6e73;"));
-    placeLayout->addWidget(m_batchCurrent);
-    placeLayout->addWidget(m_batchPlaceNote);
-    placeLayout->addWidget(m_batchNew);
-    v->addWidget(placeGroup);
-
-    m_batchLastSheet = new QLabel(
-        uiText("A maradék az első kockáktól töltődik, hogy a lapok együtt vághatók legyenek."), page);
-    m_batchLastSheet->setObjectName(QStringLiteral("batchLastSheet"));
-    m_batchLastSheet->setWordWrap(true);
-    m_batchLastSheet->setStyleSheet(QStringLiteral("color: #6e6e73;"));
-    v->addWidget(m_batchLastSheet);
-
-    m_batchSummary = new QLabel(page);
-    m_batchSummary->setObjectName(QStringLiteral("batchSummary"));
-    m_batchSummary->setWordWrap(true);
-    m_batchSummary->setAccessibleName(uiText("Összegzés"));
-    v->addWidget(m_batchSummary);
-
-    m_batchWarning = new QLabel(page);
-    m_batchWarning->setObjectName(QStringLiteral("batchWarning"));
-    m_batchWarning->setWordWrap(true);
-    m_batchWarning->setStyleSheet(QStringLiteral("color: #8a5a00;"));
-    v->addWidget(m_batchWarning);
     v->addStretch(1);
 
     // Defaults first, then the remembered values on top, clamped as they are
@@ -654,15 +651,6 @@ void SheetToolsDialog::buildAlignTab()
     gapLayout->addStretch(1);
     m_alignStack->addWidget(gapPage);
 
-    m_alignSummary = new QLabel(page);
-    m_alignSummary->setObjectName(QStringLiteral("alignSummary"));
-    m_alignSummary->setWordWrap(true);
-    v->addWidget(m_alignSummary);
-    m_alignWarning = new QLabel(page);
-    m_alignWarning->setObjectName(QStringLiteral("alignWarning"));
-    m_alignWarning->setWordWrap(true);
-    m_alignWarning->setStyleSheet(QStringLiteral("color: #8a5a00;"));
-    v->addWidget(m_alignWarning);
     v->addStretch(1);
 
     const SheetLayout::Sheet sheet = m_pageIndex >= 0 && m_pageIndex < m_document.pages.size()
@@ -780,20 +768,171 @@ QList<Frame> SheetToolsDialog::freeFrames(const QList<Frame> &frames) const
     return result;
 }
 
+void SheetToolsDialog::buildFeedback()
+{
+    m_feedback = new QWidget(this);
+    m_feedback->setObjectName(QStringLiteral("sheetFeedback"));
+    auto *feedbackLayout = new QVBoxLayout(m_feedback);
+    feedbackLayout->setContentsMargins(0, 6, 0, 0);
+    feedbackLayout->setSpacing(4);
+
+    auto *summaryRow = new QHBoxLayout;
+    m_summary = new QLabel(m_feedback);
+    m_summary->setObjectName(QStringLiteral("sheetSummary"));
+    m_summary->setAccessibleName(uiText("Összegzés"));
+    m_summary->setWordWrap(true);
+    QFont summaryFont = m_summary->font();
+    summaryFont.setWeight(QFont::DemiBold);
+    m_summary->setFont(summaryFont);
+    summaryRow->addWidget(m_summary, 1);
+
+    m_prevPage = new QPushButton(QStringLiteral("‹"), m_feedback);
+    m_prevPage->setObjectName(QStringLiteral("sheetPrevPage"));
+    m_prevPage->setAccessibleName(uiText("Előző lap"));
+    m_prevPage->setFixedWidth(30);
+    summaryRow->addWidget(m_prevPage);
+    m_pageLabel = new QLabel(m_feedback);
+    m_pageLabel->setObjectName(QStringLiteral("sheetPageLabel"));
+    summaryRow->addWidget(m_pageLabel);
+    m_nextPage = new QPushButton(QStringLiteral("›"), m_feedback);
+    m_nextPage->setObjectName(QStringLiteral("sheetNextPage"));
+    m_nextPage->setAccessibleName(uiText("Következő lap"));
+    m_nextPage->setFixedWidth(30);
+    summaryRow->addWidget(m_nextPage);
+    feedbackLayout->addLayout(summaryRow);
+
+    m_warning = new QLabel(m_feedback);
+    m_warning->setObjectName(QStringLiteral("sheetWarning"));
+    m_warning->setAccessibleName(uiText("Figyelmeztetés"));
+    m_warning->setWordWrap(true);
+    m_warning->setStyleSheet(QStringLiteral("color: #8a5a00;"));
+    m_warning->setVisible(false);
+    feedbackLayout->addWidget(m_warning);
+
+    m_note = new QLabel(m_feedback);
+    m_note->setObjectName(QStringLiteral("sheetLastSheetNote"));
+    m_note->setWordWrap(true);
+    m_note->setStyleSheet(QStringLiteral("color: #6e6e73;"));
+    m_note->setVisible(false);
+    feedbackLayout->addWidget(m_note);
+
+    m_exactNote = new QLabel(
+        uiText("A példányok pontosan a választott méretben nyomtatódnak, nagyítás nélkül."),
+        m_feedback);
+    m_exactNote->setObjectName(QStringLiteral("sheetExactSizeNote"));
+    m_exactNote->setWordWrap(true);
+    m_exactNote->setStyleSheet(QStringLiteral("color: #6e6e73;"));
+    feedbackLayout->addWidget(m_exactNote);
+
+    layout()->addWidget(m_feedback);
+
+    connect(m_prevPage, &QPushButton::clicked, this, [this] {
+        if (!m_batchGrid)
+            return;
+        m_previewPage = std::max(0, m_previewPage - 1);
+        updatePageNavigation();
+        updatePreview();
+        announce();
+    });
+    connect(m_nextPage, &QPushButton::clicked, this, [this] {
+        if (!m_batchGrid)
+            return;
+        m_previewPage = std::min(m_batchGrid->pageCount() - 1, m_previewPage + 1);
+        updatePageNavigation();
+        updatePreview();
+        announce();
+    });
+}
+
+void SheetToolsDialog::applyFeedback()
+{
+    if (!m_summary)
+        return;
+    m_summary->setText(m_summaryText);
+    m_warning->setText(m_warningText);
+    m_warning->setVisible(!m_warningText.isEmpty());
+}
+
+void SheetToolsDialog::updatePageNavigation()
+{
+    if (!m_pageLabel)
+        return;
+    const bool multiple = m_tabs->currentIndex() == kBatchTab && m_batchGrid
+        && m_batchGrid->pageCount() > 1;
+    m_prevPage->setVisible(multiple);
+    m_nextPage->setVisible(multiple);
+    m_pageLabel->setVisible(multiple);
+    if (!multiple)
+        return;
+    m_previewPage = std::clamp(m_previewPage, 0, m_batchGrid->pageCount() - 1);
+    m_pageLabel->setText(uiText("%1/%2. lap")
+                             .arg(m_previewPage + 1)
+                             .arg(m_batchGrid->pageCount()));
+    m_prevPage->setEnabled(m_previewPage > 0);
+    m_nextPage->setEnabled(m_previewPage + 1 < m_batchGrid->pageCount());
+}
+
+void SheetToolsDialog::announce()
+{
+    if (!m_preview)
+        return;
+    QString description = m_summaryText;
+    if (!m_warningText.isEmpty())
+        description += QLatin1Char('\n') + m_warningText;
+    if (m_note && !m_note->isHidden() && !m_note->text().isEmpty())
+        description += QLatin1Char('\n') + m_note->text();
+    if (m_pageLabel && !m_pageLabel->isHidden())
+        description += QLatin1Char('\n') + m_pageLabel->text();
+    // The preview announces the current fit count and every warning, so a
+    // screen reader hears what the sighted user reads below the tabs.
+    m_preview->setAccessibleDescription(description);
+    QAccessibleEvent event(m_summary, QAccessible::NameChanged);
+    QAccessible::updateAccessibility(&event);
+}
+
 void SheetToolsDialog::updateBatch()
 {
     m_batchGrid.reset();
+    m_summaryText.clear();
+    m_warningText.clear();
     const bool onTab = m_tabs->currentIndex() == kBatchTab;
 
-    if (m_pageIndex < 0 || m_pageIndex >= m_document.pages.size() || !m_source) {
-        m_batchSummary->setText(m_source ? uiText("Érvénytelen papírméret.")
-                                         : uiText("Válassz ki egy fotót a sokszorosításhoz."));
-        m_batchWarning->clear();
-        m_batchLastSheet->setVisible(false);
-        m_batchPlaceNote->clear();
+    const auto refuse = [this, onTab](const QString &message) {
+        m_summaryText = message;
+        m_warningText.clear();
+        m_note->clear();
+        m_note->setVisible(false);
+        m_prevPage->setVisible(false);
+        m_nextPage->setVisible(false);
+        m_pageLabel->setVisible(false);
+        m_exactNote->setVisible(false);
         if (onTab)
             m_createButton->setEnabled(false);
+        applyFeedback();
+        setCreateText();
         updatePreview();
+        announce();
+    };
+
+    // The hint follows the choice instead of describing the default forever.
+    const int guideValue = m_batchGuides->currentData().toInt();
+    if (m_batchGuideHint) {
+        m_batchGuideHint->setText(
+            guideValue == int(CutGuides::Print)
+                ? uiText("A nyomaton is megjelenik; a vágás a vonal közepén halad, nyomtatás "
+                         "előtt megerősítést kér.")
+                : (guideValue == int(CutGuides::Screen)
+                       ? uiText("Csak a képernyőn látszik, a nyomatra nem kerül.")
+                       : uiText("Nincs vágójel a képernyőn és a nyomaton.")));
+    }
+
+    if (m_pageIndex < 0 || m_pageIndex >= m_document.pages.size() || !m_source) {
+        refuse(m_source ? uiText("Érvénytelen papírméret.")
+                        : uiText("Válassz ki egy fotót a sokszorosításhoz."));
+        return;
+    }
+    if (!m_sourceReadable) {
+        refuse(uiText("A kiválasztott fotó nem olvasható."));
         return;
     }
 
@@ -801,12 +940,7 @@ void SheetToolsDialog::updateBatch()
     const SheetLayout::BatchSpec spec = batchSpec();
     const auto grid = SheetLayout::batchGrid(page, spec);
     if (!grid) {
-        m_batchSummary->setText(grid.error().message);
-        m_batchWarning->clear();
-        m_batchLastSheet->setVisible(false);
-        if (onTab)
-            m_createButton->setEnabled(false);
-        updatePreview();
+        refuse(grid.error().message);
         return;
     }
 
@@ -820,30 +954,50 @@ void SheetToolsDialog::updateBatch()
     QString summary = uiText("%n példány fér el egy lapra.", chosen.perPage);
     if (chosen.pageCount() > 1)
         summary += QLatin1Char(' ') + uiText("%n lapra kerül.", chosen.pageCount());
+    // A full sheet of very small copies hits the per-page cap: "as many as fit"
+    // then means the cap, and the summary has to say which number stopped it.
+    // The shaped block of a single sheet is not the raw capacity, so count the
+    // cells the paper would hold before the cap.
+    const double rawWidth = chosen.sheet.width - 2.0 * chosen.marginMm;
+    const double rawHeight = chosen.sheet.height - 2.0 * chosen.marginMm;
+    const double cell = chosen.copyWidthMm + chosen.gutterMm;
+    const double cellY = chosen.copyHeightMm + chosen.gutterMm;
+    const qint64 rawCapacity = cell > 0.0 && cellY > 0.0
+        ? qint64(std::floor((rawWidth + chosen.gutterMm) / cell))
+            * qint64(std::floor((rawHeight + chosen.gutterMm) / cellY))
+        : 0;
+    if (spec.fillPage && rawCapacity > chosen.perPage) {
+        summary += QLatin1Char(' ')
+            + uiText("Egy lapra legfeljebb %1 példány kerül.").arg(chosen.perPage);
+    }
     if (!spec.fillPage && spec.count >= SheetLayout::maxCount()) {
-        // The spin cannot go past the cap, so say why the number stopped there
-        // instead of letting the maximum look like an arbitrary limit.
         summary += QLatin1Char(' ')
             + uiText("Egyszerre legfeljebb %1 példány készíthető.")
                   .arg(SheetLayout::maxCount());
     }
-    m_batchSummary->setText(summary);
+    m_summaryText = summary;
 
     QStringList warnings;
     if (m_source && std::abs(m_source->angleDeg) > 1e-9) {
         warnings << uiText("A kiválasztott fotó el van forgatva. A példányok egyenesen kerülnek a "
-                       "rácsba.");
+                           "rácsba.");
     }
     if (chosen.minVisible < 0.6)
         warnings << uiText("A kiválasztott fotó szélei lemaradnak.");
-    if (m_batchGuides->currentData().toInt() == int(CutGuides::Print) && chosen.marginMm < 5.0) {
+    if (guideValue == int(CutGuides::Print) && chosen.marginMm < 5.0) {
         warnings << uiText("Ilyen szoros margónál a nyomtató a szélső vágójelet levághatja.");
     }
     if (!m_batchNew->isChecked() && page.hasLayout()) {
         warnings << uiText("A lap elrendezése megszűnik, a példányok szabadon kerülnek a lapra.");
     }
-    m_batchWarning->setText(warnings.join(QLatin1Char('\n')));
-    m_batchLastSheet->setVisible(chosen.pageCount() > 1);
+    const CutGuides guideChoice = static_cast<CutGuides>(guideValue);
+    if (!m_batchNew->isChecked() && page.cutGuides != guideChoice) {
+        // The chosen guide state is written to the target page as part of the
+        // same edit. Say so before the user presses Create.
+        warnings << uiText("A lap vágójel-beállítása is módosul: %1.")
+                        .arg(m_batchGuides->currentText());
+    }
+    m_warningText = warnings.join(QLatin1Char('\n'));
 
     if (m_batchNew->isChecked())
         m_batchPlaceNote->clear();
@@ -852,9 +1006,20 @@ void SheetToolsDialog::updateBatch()
     else
         m_batchPlaceNote->clear();
 
+    m_note->setText(chosen.pageCount() > 1
+                        ? uiText("A maradék az első kockáktól töltődik, hogy a lapok együtt "
+                                 "vághatók legyenek.")
+                        : QString());
+    m_note->setVisible(chosen.pageCount() > 1);
+    m_exactNote->setVisible(true);
+    m_previewPage = std::clamp(m_previewPage, 0, chosen.pageCount() - 1);
     if (onTab)
         m_createButton->setEnabled(true);
+    applyFeedback();
+    updatePageNavigation();
+    setCreateText();
     updatePreview();
+    announce();
 }
 
 void SheetToolsDialog::updateAlign()
@@ -863,14 +1028,29 @@ void SheetToolsDialog::updateAlign()
     m_distributePlan.reset();
     m_alignFrames.clear();
     m_alignValid = false;
+    m_summaryText.clear();
+    m_warningText.clear();
     const bool onTab = m_tabs->currentIndex() == kAlignTab;
 
-    if (m_pageIndex < 0 || m_pageIndex >= m_document.pages.size()) {
-        m_alignSummary->setText(uiText("Ezen a lapon nincs fotó."));
-        m_alignWarning->clear();
+    const auto refuse = [this, onTab](const QString &message) {
+        m_summaryText = message;
+        m_warningText.clear();
+        m_note->clear();
+        m_note->setVisible(false);
+        m_prevPage->setVisible(false);
+        m_nextPage->setVisible(false);
+        m_pageLabel->setVisible(false);
+        m_exactNote->setVisible(false);
         if (onTab)
             m_createButton->setEnabled(false);
+        applyFeedback();
+        setCreateText();
         updatePreview();
+        announce();
+    };
+
+    if (m_pageIndex < 0 || m_pageIndex >= m_document.pages.size()) {
+        refuse(uiText("Ezen a lapon nincs fotó."));
         return;
     }
     const Page &page = m_document.pages.at(m_pageIndex);
@@ -891,108 +1071,91 @@ void SheetToolsDialog::updateAlign()
     }
 
     if (page.hasLayout()) {
-        m_alignSummary->setText(
-            uiText("Ehhez a laphoz elrendezés tartozik. Szüntesd meg az elrendezést az "
-               "igazításhoz."));
-        m_alignWarning->clear();
-        if (onTab)
-            m_createButton->setEnabled(false);
-        updatePreview();
+        refuse(uiText("Ehhez a laphoz elrendezés tartozik. Szüntesd meg az elrendezést az "
+                      "igazításhoz."));
         return;
     }
     if (count == 0) {
-        m_alignSummary->setText(uiText("Ezen a lapon nincs fotó."));
-        m_alignWarning->clear();
-        if (onTab)
-            m_createButton->setEnabled(false);
-        updatePreview();
+        refuse(uiText("Ezen a lapon nincs fotó."));
         return;
     }
 
     const QList<QSize> pixels = sourcePixels();
-    QList<Frame> previewFrames;
-
     if (m_alignGridMode->isChecked()) {
         const SheetLayout::AlignSpec spec = alignSpec();
         const auto plan = SheetLayout::alignGrid(page, spec, pixels);
         if (!plan) {
-            m_alignSummary->setText(plan.error().message);
-            m_alignWarning->clear();
-            if (onTab)
-                m_createButton->setEnabled(false);
-            updatePreview();
+            refuse(plan.error().message);
             return;
         }
         m_alignPlan = plan.value();
         const auto frames = SheetLayout::alignFrames(page, spec, pixels);
         if (!frames) {
-            m_alignSummary->setText(frames.error().message);
-            m_alignWarning->clear();
-            if (onTab)
-                m_createButton->setEnabled(false);
-            updatePreview();
+            refuse(frames.error().message);
             return;
         }
         m_alignFrames = frames.value();
         m_alignValid = true;
         if (count == 1) {
-            m_alignSummary->setText(
-                uiText("Egy fotó van a lapon. Csak középre igazítjuk, a mérete nem változik."));
-            m_alignWarning->clear();
+            m_summaryText =
+                uiText("Egy fotó van a lapon. Csak középre igazítjuk, a mérete nem változik.");
         } else {
-            m_alignSummary->setText(
+            m_summaryText =
                 uiText("%n fotó: %1 oszlop × %2 sor. Egy cella %3 × %4 mm.", count)
                     .arg(m_alignPlan->columns)
                     .arg(m_alignPlan->rows)
-                    .arg(mmText(m_alignPlan->cellWidthMm), mmText(m_alignPlan->cellHeightMm)));
+                    .arg(mmText(m_alignPlan->cellWidthMm), mmText(m_alignPlan->cellHeightMm));
             const bool strongCrop = spec.fill && m_alignPlan->minVisible < 0.5;
-            m_alignWarning->setText(
-                strongCrop ? uiText("A fotók egy része erősen lemarad. Kapcsold be a »A kép egésze "
-                                "látszódjon« opciót, vagy oszd el őket több lapon.")
-                           : QString());
+            if (strongCrop) {
+                // Both alternatives are actions this dialog actually offers. The
+                // old text suggested spreading the photos over more pages, which
+                // this product cannot do.
+                m_warningText =
+                    uiText("A fotók egy része erősen lemarad. Kapcsold be a »A kép egésze "
+                           "látszódjon« opciót, vagy válaszd a »Térköz kiegyenlítése« módot.");
+            }
         }
     } else {
         const SheetLayout::DistributeSpec spec = distributeSpec();
         const auto plan = SheetLayout::distribute(page, spec);
         if (!plan) {
-            m_alignSummary->setText(plan.error().message);
-            m_alignWarning->clear();
-            if (onTab)
-                m_createButton->setEnabled(false);
-            updatePreview();
+            refuse(plan.error().message);
             return;
         }
         m_distributePlan = plan.value();
         const auto frames = SheetLayout::distributeFrames(page, spec);
         if (!frames) {
-            m_alignSummary->setText(frames.error().message);
-            m_alignWarning->clear();
-            if (onTab)
-                m_createButton->setEnabled(false);
-            updatePreview();
+            refuse(frames.error().message);
             return;
         }
         m_alignFrames = frames.value();
         m_alignValid = true;
         if (count == 1) {
-            m_alignSummary->setText(
-                uiText("Egy fotó van a lapon. Csak középre igazítjuk, a mérete nem változik."));
-            m_alignWarning->clear();
+            m_summaryText =
+                uiText("Egy fotó van a lapon. Csak középre igazítjuk, a mérete nem változik.");
         } else {
-            m_alignSummary->setText(
-                uiText("%n fotó, %1 mm térköz. A margó %2 mm.", count)
-                    .arg(mmText(m_distributePlan->gapMm),
-                         mmText(m_distributePlan->startMm)));
-            m_alignWarning->setText(m_distributePlan->gapMm < m_distributePlan->requestedGapMm
-                                        ? uiText("A térköz %1 mm lett, hogy a fotók elférjenek.")
-                                              .arg(mmText(m_distributePlan->gapMm))
-                                        : QString());
+            m_summaryText = uiText("%n fotó, %1 mm térköz. A margó %2 mm.", count)
+                                .arg(mmText(m_distributePlan->gapMm),
+                                     mmText(m_distributePlan->startMm));
+            if (m_distributePlan->gapMm < m_distributePlan->requestedGapMm) {
+                m_warningText = uiText("A térköz %1 mm lett, hogy a fotók elférjenek.")
+                                    .arg(mmText(m_distributePlan->gapMm));
+            }
         }
     }
 
+    m_note->clear();
+    m_note->setVisible(false);
+    m_exactNote->setVisible(false);
+    m_prevPage->setVisible(false);
+    m_nextPage->setVisible(false);
+    m_pageLabel->setVisible(false);
     if (onTab)
         m_createButton->setEnabled(true);
+    applyFeedback();
+    setCreateText();
     updatePreview();
+    announce();
 }
 
 void SheetToolsDialog::updatePreview()
@@ -1010,16 +1173,19 @@ void SheetToolsDialog::updatePreview()
             return;
         }
         const SheetLayout::BatchGrid &grid = *m_batchGrid;
+        m_previewPage = std::clamp(m_previewPage, 0, grid.pageCount() - 1);
+        const QList<QRectF> &rects = grid.pagesMm.at(m_previewPage);
         QList<QImage> images;
         const QImage source = m_source ? m_previews.value(m_source->id) : QImage();
-        for (int i = 0; i < grid.pagesMm.first().size(); ++i)
+        for (int i = 0; i < rects.size(); ++i)
             images.append(source);
         m_preview->setSheetMm(grid.sheet);
-        m_preview->setRects(grid.pagesMm.first(), images);
+        m_preview->setRects(rects, images);
         m_preview->setGuideState(static_cast<CutGuides>(m_batchGuides->currentData().toInt()));
         m_caption->setText(uiText("Így kerül a lapra.") + QLatin1Char('\n')
                            + uiText("Szélek: %1 mm oldalt, %2 mm felül és alul.")
-                                 .arg(mmText(grid.leftMarginMm), mmText(grid.topMarginMm)));
+                                 .arg(mmText(grid.leftMarginMm), mmText(grid.topMarginMm))
+                           + QLatin1Char('\n') + uiText("Az előnézet hozzávetőleges"));
         return;
     }
 
@@ -1041,15 +1207,24 @@ void SheetToolsDialog::updatePreview()
     m_preview->setSheetMm(SheetLayout::sheetOf(page));
     m_preview->setRects(rects, images);
     m_preview->setGuideState(page.cutGuides);
-    m_caption->setText(uiText("Így kerül a lapra."));
+    m_caption->setText(uiText("Így kerül a lapra.") + QLatin1Char('\n')
+                       + uiText("Az előnézet hozzávetőleges"));
 }
 
 void SheetToolsDialog::setCreateText()
 {
     if (!m_createButton)
         return;
-    m_createButton->setText(m_tabs->currentIndex() == kBatchTab ? uiText("Létrehozás")
-                                                               : uiText("Rendezés"));
+    if (m_tabs->currentIndex() != kBatchTab) {
+        m_createButton->setText(uiText("Rendezés"));
+        return;
+    }
+    if (m_batchGrid && m_batchGrid->pageCount() > 1) {
+        // The action itself names how many sheets it will add or replace.
+        m_createButton->setText(uiText("Létrehozás (%n lap)", m_batchGrid->pageCount()));
+    } else {
+        m_createButton->setText(uiText("Létrehozás"));
+    }
 }
 
 bool SheetToolsDialog::buildBatchEdit(ApplyLayoutEdit *out)
@@ -1134,13 +1309,19 @@ bool SheetToolsDialog::buildAlignEdit(ApplyLayoutEdit *out)
 
 void SheetToolsDialog::accept()
 {
+    // A disabled Create is a refusal, not a shortcut: nothing is built even if
+    // a caller reaches accept() directly.
+    if (!m_createButton || !m_createButton->isEnabled())
+        return;
     ApplyLayoutEdit built;
-    const bool ok = m_tabs->currentIndex() == kBatchTab ? buildBatchEdit(&built)
-                                                        : buildAlignEdit(&built);
+    const bool batch = m_tabs->currentIndex() == kBatchTab;
+    const bool ok = batch ? buildBatchEdit(&built) : buildAlignEdit(&built);
     if (!ok)
         return;
     m_edit = built;
     m_hasEdit = true;
+    m_replacesCurrentPage = batch && m_batchNew && !m_batchNew->isChecked()
+        && !m_edit.pages.isEmpty();
     saveSettings();
     QDialog::accept();
 }
@@ -1193,7 +1374,10 @@ void SheetToolsDialog::saveSettings() const
 
 bool SheetToolsDialog::replacesCurrentPage() const
 {
-    return m_hasEdit && !m_edit.pages.isEmpty();
+    // Only a batch edit that wrote the current page's frame list replaces it.
+    // An align edit also carries a PageLayout, but it keeps the page's identity
+    // and its guides, so it must not trigger the replacement question.
+    return m_hasEdit && m_replacesCurrentPage;
 }
 
 int SheetToolsDialog::currentTabIndexForTest() const
@@ -1218,7 +1402,7 @@ std::optional<SheetLayout::DistributePlan> SheetToolsDialog::distributePlanForTe
 
 QString SheetToolsDialog::summaryTextForTest() const
 {
-    return m_tabs->currentIndex() == kBatchTab ? m_batchSummary->text() : m_alignSummary->text();
+    return m_summary->text();
 }
 
 QString SheetToolsDialog::captionTextForTest() const
@@ -1228,7 +1412,7 @@ QString SheetToolsDialog::captionTextForTest() const
 
 QString SheetToolsDialog::warningTextForTest() const
 {
-    return m_tabs->currentIndex() == kBatchTab ? m_batchWarning->text() : m_alignWarning->text();
+    return m_warning->text();
 }
 
 bool SheetToolsDialog::createEnabledForTest() const
@@ -1240,7 +1424,7 @@ bool SheetToolsDialog::lastSheetNoteVisibleForTest() const
 {
     // isHidden(), not isVisible(): a dialog a test drives without show() is not
     // visible, but setVisible(true) has already cleared the hidden flag.
-    return !m_batchLastSheet->isHidden();
+    return !m_note->isHidden();
 }
 
 } // namespace pp

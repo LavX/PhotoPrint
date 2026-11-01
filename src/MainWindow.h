@@ -353,6 +353,9 @@ public:
     /// exported (the current-page PDF, for instance), so the page numbers name
     /// the sheets in that file.
     bool confirmCutGuides(const DocumentSnapshot &document);
+    /// The same question with the page numbers the caller will name, so a
+    /// current-page export says "3" rather than renumbering it to 1.
+    bool confirmCutGuides(const DocumentSnapshot &document, const QList<int> &pageNumbers);
     /// Applies one sheet-tool edit through the normal controller, one undo step.
     /// The same path the dialogs take, exposed so a test can drive it.
     Result<void> applySheetEdit(const ApplyLayoutEdit &edit);
@@ -360,6 +363,14 @@ public:
     /// Test hook: the sRGB previews the canvas is showing, keyed by frame id, so
     /// a test can build a sheet-tool dialog that paints real photographs.
     QHash<QString, QImage> previewImagesForTest() const { return m_previewImages; }
+    /// Test hook: the frames the preview pass proved unreadable. The batch
+    /// dialog's enable rule is built from this set.
+    QSet<QString> unavailableFramesForTest() const { return m_unavailableFrames; }
+    /// Test hook for the document-wide borderless rule the print path applies.
+    bool borderlessConsistentForTest() const
+    {
+        return projectBorderlessConsistent(m_controller.document());
+    }
 
 protected:
     void closeEvent(QCloseEvent *event) override;
@@ -443,6 +454,9 @@ private slots:
     /// The per-page cut guide state. Changing it is an undoable edit, so the
     /// state a project was printed with can always be recovered.
     void guidesChanged(int index);
+    /// The per-page borderless override. Auto follows the printer; Off and On
+    /// pin the decision so a batch sheet prints at its exact copy size.
+    void borderlessChanged(int index);
     /// Applies one catalogue template to the current page as one page edit, so
     /// one undo restores the layout. The slot engine creates the cells (and the
     /// layout label) and assigns the photographs in display order; the page's
@@ -515,6 +529,9 @@ private:
     QList<QImage> templatePhotoThumbnails(const Page &page);
     bool pageOverflows() const;
     bool projectPrintGeometryConsistent(const DocumentSnapshot &document) const;
+    /// The print path sends one ticket for the whole job, so pages that disagree
+    /// about borderless cannot be printed honestly.
+    bool projectBorderlessConsistent(const DocumentSnapshot &document) const;
     std::optional<Frame> selectedFrame() const;
     PaperSpec currentPaper() const;
     const PrinterCapabilities *printerByQueue(const QString &queue) const;
@@ -587,6 +604,8 @@ private:
     QPushButton *m_alignButton = nullptr;
     QComboBox *m_guidesCombo = nullptr;
     QLabel *m_guidesHint = nullptr;
+    QComboBox *m_borderlessCombo = nullptr;
+    QLabel *m_borderlessHint = nullptr;
     QPushButton *m_backwardButton = nullptr;
     QPushButton *m_advancedToggle = nullptr;
     QDoubleSpinBox *m_widthSpin = nullptr;

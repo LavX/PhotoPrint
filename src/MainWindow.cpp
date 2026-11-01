@@ -1213,9 +1213,12 @@ void PageView::paintEvent(QPaintEvent *)
     // SheetLayout::cutGuideLinesMm, so they cannot drift apart.
     if (const Page *cutPage = currentPage()) {
         if (cutPage->cutGuides != CutGuides::None) {
+            // The screen-only mark is orange, deliberately not the selection
+            // accent: a guide and the selection can be on screen at the same
+            // time, and the two must not look like one thicker outline.
             QPen guidePen = cutPage->cutGuides == CutGuides::Print
                 ? QPen(QColor(0x7f, 0x7f, 0x7f), 1.0, Qt::SolidLine)
-                : QPen(palette().color(QPalette::Highlight), 1.0, Qt::DashLine);
+                : QPen(QColor(0xc4, 0x55, 0x00), 1.0, Qt::DashLine);
             // 1 device pixel at every zoom: the marks are furniture, not a
             // hairline the zoom is supposed to thicken.
             guidePen.setCosmetic(true);
@@ -2388,13 +2391,37 @@ void MainWindow::buildUi()
                            int(CutGuides::Print));
     pageToolsLayout->addWidget(m_guidesCombo);
     connect(m_guidesCombo, &QComboBox::currentIndexChanged, this, &MainWindow::guidesChanged);
-    m_guidesHint = new QLabel(
-        QCoreApplication::translate("PhotoPrint",
-                                    "A nyomtatott vágójel a példányok szélén jelenik meg."),
-        side);
+    m_guidesHint = new QLabel(side);
+    m_guidesHint->setObjectName(QStringLiteral("cutGuidesHint"));
     m_guidesHint->setWordWrap(true);
     m_guidesHint->setStyleSheet(QStringLiteral("color: #6e6e73; font-size: 11px;"));
     pageToolsLayout->addWidget(m_guidesHint);
+
+    auto *borderlessTitle =
+        new QLabel(QCoreApplication::translate("PhotoPrint", "Szélig nyomtatás"), side);
+    borderlessTitle->setWordWrap(true);
+    pageToolsLayout->addWidget(borderlessTitle);
+    m_borderlessCombo = new QComboBox(pageTools);
+    m_borderlessCombo->setObjectName(QStringLiteral("borderlessCombo"));
+    m_borderlessCombo->setAccessibleName(borderlessTitle->text());
+    m_borderlessCombo->addItem(QCoreApplication::translate("PhotoPrint", "Automatikus"),
+                               int(BorderlessOverride::Auto));
+    m_borderlessCombo->addItem(QCoreApplication::translate("PhotoPrint", "Kikapcsolva"),
+                               int(BorderlessOverride::Off));
+    m_borderlessCombo->addItem(QCoreApplication::translate("PhotoPrint", "Be"),
+                               int(BorderlessOverride::On));
+    pageToolsLayout->addWidget(m_borderlessCombo);
+    connect(m_borderlessCombo, &QComboBox::currentIndexChanged, this,
+            &MainWindow::borderlessChanged);
+    m_borderlessHint =
+        new QLabel(QCoreApplication::translate(
+                       "PhotoPrint",
+                       "A példányok pontosan a választott méretben nyomtatódnak, nagyítás "
+                       "nélkül."),
+                   side);
+    m_borderlessHint->setWordWrap(true);
+    m_borderlessHint->setStyleSheet(QStringLiteral("color: #6e6e73; font-size: 11px;"));
+    pageToolsLayout->addWidget(m_borderlessHint);
     sideLayout->addWidget(pageTools);
 
     // --- Kiválasztott fotó and Effekt: the photograph's own inspector --------
@@ -4265,10 +4292,34 @@ void MainWindow::syncPageTools()
                                   ? 2
                                   : (page->cutGuides == CutGuides::Screen ? 1 : 0))
                            : 0;
+    if (m_guidesHint) {
+        m_guidesHint->setText(
+            index == 2
+                ? QCoreApplication::translate(
+                      "PhotoPrint",
+                      "A nyomaton is megjelenik; a vágás a vonal közepén halad, nyomtatás előtt "
+                      "megerősítést kér.")
+                : (index == 1
+                       ? QCoreApplication::translate(
+                             "PhotoPrint", "Csak a képernyőn látszik, a nyomatra nem kerül.")
+                       : QCoreApplication::translate(
+                             "PhotoPrint", "Nincs vágójel a képernyőn és a nyomaton.")));
+    }
+
+    int borderlessIndex = 0;
+    if (page) {
+        borderlessIndex = page->borderlessOverride == BorderlessOverride::Off
+            ? 1
+            : (page->borderlessOverride == BorderlessOverride::On ? 2 : 0);
+    }
     const bool wasSyncing = m_syncing;
     m_syncing = true;
     m_guidesCombo->setCurrentIndex(index);
     m_guidesCombo->setEnabled(page != nullptr);
+    if (m_borderlessCombo) {
+        m_borderlessCombo->setCurrentIndex(borderlessIndex);
+        m_borderlessCombo->setEnabled(page != nullptr);
+    }
     m_syncing = wasSyncing;
 }
 
@@ -5088,6 +5139,24 @@ void MainWindow::exportPdf(bool allPages)
         showProblem(QCoreApplication::translate("PhotoPrint", "A lapok papírja vagy tájolása eltér. Állítsd egységesre."));
         return;
     }
+    if (!projectBorderlessConsistent(document)) {
+        showProblem(QCoreApplication::translate("PhotoPrint", "A lapok szélig nyomtatása eltér. Állítsd egységesre."));
+        return;
+    }
+    // The exported page numbers are the document's own, also for a single-page
+    // export: page 3 stays page 3, it is not renumbered to 1 by the narrowing.
+    QList<int> guardedPages;
+    if (allPages) {
+        guardedPages = pagesPrintingCutGuides(document);
+    } else if (document.currentPage >= 0
+               && document.currentPage < document.pages.size()
+               && document.pages.at(document.currentPage).cutGuides == CutGuides::Print) {
+        guardedPages = {document.currentPage + 1};
+    }
+    // A PDF is a print proof: printed guides reach it exactly as they reach
+    // paper, so it asks the same question, naming the sheets in this file.
+    if (!confirmCutGuides(document, guardedPages))
+        return;
     if (!allPages) {
         const int index = document.currentPage;
         DocumentSnapshot single;
@@ -5097,10 +5166,6 @@ void MainWindow::exportPdf(bool allPages)
         single.currentPage = 0;
         document = single;
     }
-    // A PDF is a print proof: printed guides reach it exactly as they reach
-    // paper, so it asks the same question, naming the sheets in this file.
-    if (!confirmCutGuides(document))
-        return;
     const QString path = QFileDialog::getSaveFileName(this, QCoreApplication::translate("PhotoPrint", "Mentés PDF-ként"),
                                                      QStringLiteral("photoprint.pdf"),
                                                      QStringLiteral("PDF (*.pdf)"));
@@ -5281,6 +5346,18 @@ void MainWindow::showOriginalPressed(bool pressed)
     m_pageView->setFrameImages(displayedPreviewImages());
 }
 
+bool MainWindow::projectBorderlessConsistent(const DocumentSnapshot &document) const
+{
+    if (document.pages.isEmpty())
+        return true;
+    const bool first = wantBorderless(document.pages.first());
+    for (const Page &page : document.pages) {
+        if (wantBorderless(page) != first)
+            return false;
+    }
+    return true;
+}
+
 bool MainWindow::projectPrintGeometryConsistent(const DocumentSnapshot &document) const
 {
     if (document.pages.isEmpty())
@@ -5299,6 +5376,10 @@ void MainWindow::printNow()
         return;
     if (!projectPrintGeometryConsistent(m_controller.document())) {
         showProblem(QCoreApplication::translate("PhotoPrint", "A lapok papírja vagy tájolása eltér. Állítsd egységesre."));
+        return;
+    }
+    if (!projectBorderlessConsistent(m_controller.document())) {
+        showProblem(QCoreApplication::translate("PhotoPrint", "A lapok szélig nyomtatása eltér. Állítsd egységesre."));
         return;
     }
     if (m_queue.isEmpty()) {
@@ -5375,6 +5456,10 @@ void MainWindow::showTrialSheet()
 {
     if (!projectPrintGeometryConsistent(m_controller.document())) {
         showProblem(QCoreApplication::translate("PhotoPrint", "A lapok papírja vagy tájolása eltér. Állítsd egységesre."));
+        return;
+    }
+    if (!projectBorderlessConsistent(m_controller.document())) {
+        showProblem(QCoreApplication::translate("PhotoPrint", "A lapok szélig nyomtatása eltér. Állítsd egységesre."));
         return;
     }
     const std::optional<Frame> frame = selectedFrame();
@@ -5513,8 +5598,11 @@ void MainWindow::openBatchCopies()
         return;
     }
 
+    // A photo the preview pass could not decode must not produce blank
+    // copies: the dialog disables Create and says why.
+    const bool sourceReadable = source && !m_unavailableFrames.contains(source->id);
     SheetToolsDialog dialog(SheetToolsDialog::Mode::Batch, document, document.currentPage,
-                            source, m_previewImages, this);
+                            source, m_previewImages, sourceReadable, this);
     if (dialog.exec() != QDialog::Accepted || !dialog.hasEdit())
         return;
 
@@ -5558,7 +5646,7 @@ void MainWindow::openAlignPhotos()
     if (document.pages.isEmpty())
         return;
     SheetToolsDialog dialog(SheetToolsDialog::Mode::Align, document, document.currentPage,
-                            std::nullopt, m_previewImages, this);
+                            std::nullopt, m_previewImages, true, this);
     if (dialog.exec() != QDialog::Accepted || !dialog.hasEdit())
         return;
     const auto applied = applySheetEdit(dialog.edit());
@@ -5592,6 +5680,33 @@ void MainWindow::guidesChanged(int index)
     }
 }
 
+void MainWindow::borderlessChanged(int index)
+{
+    if (m_syncing || index < 0)
+        return;
+    const DocumentSnapshot document = m_controller.document();
+    if (document.pages.isEmpty())
+        return;
+    const BorderlessOverride choice =
+        static_cast<BorderlessOverride>(m_borderlessCombo->itemData(index).toInt());
+    const Page &page = document.pages.at(document.currentPage);
+    if (page.borderlessOverride == choice)
+        return;
+
+    ApplyLayoutEdit edit;
+    PageLayout change;
+    change.pageIndex = document.currentPage;
+    change.borderlessOverride = choice;
+    edit.pages.append(change);
+    edit.selectPage = document.currentPage;
+    edit.actionText = QCoreApplication::translate("PhotoPrint", "Szélig nyomtatás");
+    const auto applied = applySheetEdit(edit);
+    if (!applied) {
+        showProblem(applied.error().message);
+        syncPageTools();
+    }
+}
+
 bool MainWindow::confirmCutGuides()
 {
     return confirmCutGuides(m_controller.document());
@@ -5599,11 +5714,16 @@ bool MainWindow::confirmCutGuides()
 
 bool MainWindow::confirmCutGuides(const DocumentSnapshot &document)
 {
-    if (!requiresCutGuideConfirmation(document))
+    return confirmCutGuides(document, pagesPrintingCutGuides(document));
+}
+
+bool MainWindow::confirmCutGuides(const DocumentSnapshot &document,
+                                  const QList<int> &pageNumbers)
+{
+    if (!requiresCutGuideConfirmation(document) || pageNumbers.isEmpty())
         return true;
-    const QList<int> pages = pagesPrintingCutGuides(document);
     QStringList numbers;
-    for (const int page : pages)
+    for (const int page : pageNumbers)
         numbers << QString::number(page);
     const auto answer = QMessageBox::question(
         this, QCoreApplication::translate("PhotoPrint", "Vágójelek a nyomaton"),

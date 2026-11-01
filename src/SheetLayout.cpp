@@ -353,6 +353,10 @@ Frame copyFrameAt(const Frame &source, const QRectF &rect)
     frame.autoPlaced = false;
     // A label numbers trial-sheet variants, not copies of one photo.
     frame.label.clear();
+    // A copy is a free frame. Keeping the source's slot id would make
+    // batchPages() alone produce a page whose frames all claim one cell, which
+    // the controller rightly refuses.
+    frame.slotId.clear();
     return frame;
 }
 

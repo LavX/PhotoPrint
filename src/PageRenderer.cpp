@@ -7,12 +7,11 @@
 #include "SlotGeometry.h"
 
 #include <QCoreApplication>
-#include <QBuffer>
 #include <QCryptographicHash>
 #include <QFile>
 #include <QFileInfo>
-#include <QImage>
 #include <QFont>
+#include <QImage>
 #include <QPainter>
 #include <QPainterPath>
 #include <QSaveFile>
@@ -31,6 +30,7 @@ namespace {
 
 constexpr double kMmToPt = 72.0 / 25.4;
 
+/// zlib stream for a small buffer (the ICC profile and the XMP packet).
 QByteArray flate(const QByteArray &input)
 {
     uLongf bound = compressBound(static_cast<uLong>(input.size()));
@@ -44,23 +44,66 @@ QByteArray flate(const QByteArray &input)
     return output;
 }
 
-QByteArray rgbBytes(const QImage &image)
+/// Flate-compresses the page raster one row at a time. A whole-page RGB copy
+/// plus its compressed form would double the peak for every sheet; the row
+/// buffer is the only extra allocation this needs.
+QByteArray flateImage(const QImage &image)
 {
-    const QImage rgb = image.format() == QImage::Format_RGB32 ? image
-                                                              : image.convertToFormat(QImage::Format_RGB32);
-    QByteArray bytes;
-    bytes.resize(static_cast<int>(static_cast<qsizetype>(rgb.width()) * rgb.height() * 3));
-    char *dst = bytes.data();
-    for (int y = 0; y < rgb.height(); ++y) {
+    if (image.isNull())
+        return {};
+    const QImage rgb = image.format() == QImage::Format_RGB32
+        ? image
+        : image.convertToFormat(QImage::Format_RGB32);
+    if (rgb.isNull() || rgb.width() <= 0 || rgb.height() <= 0)
+        return {};
+
+    z_stream stream{};
+    if (deflateInit(&stream, 6) != Z_OK)
+        return {};
+
+    QByteArray output;
+    output.reserve(std::max(1024, rgb.width() * rgb.height() / 2));
+    QByteArray row(rgb.width() * 3, Qt::Uninitialized);
+    QByteArray chunk(1 << 16, Qt::Uninitialized);
+    bool ok = true;
+
+    const auto drain = [&](int flush) {
+        int result = Z_OK;
+        do {
+            stream.next_out = reinterpret_cast<Bytef *>(chunk.data());
+            stream.avail_out = static_cast<uInt>(chunk.size());
+            result = deflate(&stream, flush);
+            if (result != Z_OK && result != Z_STREAM_END) {
+                ok = false;
+                return;
+            }
+            output.append(chunk.constData(), int(chunk.size() - stream.avail_out));
+        } while (stream.avail_out == 0);
+        if (flush == Z_FINISH && result != Z_STREAM_END)
+            ok = false;
+    };
+
+    for (int y = 0; y < rgb.height() && ok; ++y) {
         const QRgb *line = reinterpret_cast<const QRgb *>(rgb.constScanLine(y));
+        char *dst = row.data();
         for (int x = 0; x < rgb.width(); ++x) {
             const QRgb pixel = line[x];
             *dst++ = static_cast<char>(qRed(pixel));
             *dst++ = static_cast<char>(qGreen(pixel));
             *dst++ = static_cast<char>(qBlue(pixel));
         }
+        stream.next_in = reinterpret_cast<Bytef *>(row.data());
+        stream.avail_in = static_cast<uInt>(row.size());
+        while (stream.avail_in > 0 && ok)
+            drain(Z_NO_FLUSH);
     }
-    return bytes;
+    if (ok) {
+        stream.next_in = nullptr;
+        stream.avail_in = 0;
+        drain(Z_FINISH);
+    }
+    deflateEnd(&stream);
+    return ok ? output : QByteArray();
 }
 
 QString number(double value)
@@ -111,192 +154,27 @@ std::vector<Mark> developerMarksMm(const QSizeF &page)
     return marks;
 }
 
-class PdfWriter
+QByteArray xmpPacket()
 {
-public:
-    PdfWriter() = default;
-
-    void setPageSizeHint(const QSizeF &) {}
-
-    bool write(const QString &path, const QList<QImage> &pages, const QList<QSizeF> &sizesMm,
-               const QList<QSizeF> &mediaSizesMm, const QList<QPointF> &offsetsMm,
-               const QList<std::vector<Mark>> &marks, double optionsScale, bool /*pdfA*/,
-               QString *errorText)
-    {
-        if (pages.isEmpty() || pages.size() != sizesMm.size()) {
-            *errorText = QStringLiteral("empty-document");
-            return false;
-        }
-        const QByteArray icc = ColorPipeline::srgbProfileBytes();
-        if (icc.isEmpty()) {
-            *errorText = QStringLiteral("missing-srgb-profile");
-            return false;
-        }
-        const QByteArray iccCompressed = flate(icc);
-        if (iccCompressed.isEmpty()) {
-            *errorText = QStringLiteral("icc-compression");
-            return false;
-        }
-
-        const int pageCount = pages.size();
-        const int iccNum = 3 + 3 * pageCount;
-        const int metadataNum = iccNum + 1;
-        const int infoNum = iccNum + 2;
-
-        QList<QByteArray> objects;
-        objects.resize(5 + 3 * pageCount);
-
-        const QByteArray xmp = xmpPacket();
-        const QByteArray xmpCompressed = flate(xmp);
-
-        QString kids;
-        for (int i = 0; i < pageCount; ++i)
-            kids += QStringLiteral("%1 0 R ").arg(3 + 3 * i);
-
-        objects[0] = QStringLiteral("<< /Type /Catalog /Pages 2 0 R /OutputIntents [ << /Type "
-                                    "/OutputIntent /S /GTS_PDFA1 /OutputCondition (sRGB) "
-                                    "/OutputConditionIdentifier (sRGB IEC61966-2.1) /Info (sRGB "
-                                    "IEC61966-2.1) /DestOutputProfile %1 0 R >> ] /Metadata %2 0 "
-                                    "R >>")
-                         .arg(iccNum)
-                         .arg(metadataNum)
-                         .toLatin1();
-        objects[1] = QStringLiteral("<< /Type /Pages /Count %1 /Kids [ %2] >>")
-                         .arg(pageCount)
-                         .arg(kids)
-                         .toLatin1();
-
-        for (int i = 0; i < pageCount; ++i) {
-            const QSizeF size = sizesMm.at(i);
-            const QSizeF media = i < mediaSizesMm.size() ? mediaSizesMm.at(i) : size;
-            const QPointF offset = i < offsetsMm.size() ? offsetsMm.at(i) : QPointF();
-            const double widthPt = media.width() * kMmToPt;
-            const double heightPt = media.height() * kMmToPt;
-            const double contentScale =
-                optionsScale > 0.0 && std::isfinite(optionsScale) ? optionsScale : 1.0;
-            const double contentWidthPt = size.width() * contentScale * kMmToPt;
-            const double contentHeightPt = size.height() * contentScale * kMmToPt;
-            const double offsetXPt = offset.x() * kMmToPt;
-            const double offsetYPt =
-                (media.height() - offset.y() - size.height() * contentScale) * kMmToPt;
-            const int pageNum = 3 + 3 * i;
-            const int contentNum = pageNum + 1;
-            const int imageNum = pageNum + 2;
-
-            QString content;
-            content += QStringLiteral("q\n%1 0 0 %2 %3 %4 cm\n/Im0 Do\nQ\n")
-                           .arg(number(contentWidthPt), number(contentHeightPt), number(offsetXPt),
-                                number(offsetYPt));
-            const std::vector<Mark> pageMarks = i < marks.size() ? marks.at(i) : std::vector<Mark>{};
-            if (!pageMarks.empty()) {
-                content += QStringLiteral("0 0 0 RG 0 0 0 rg\n");
-                for (const Mark &mark : pageMarks) {
-                    const double x1 = (offset.x() + mark.x1 * contentScale) * kMmToPt;
-                    const double y1 = (media.height() - offset.y() - mark.y1 * contentScale) * kMmToPt;
-                    const double x2 = (offset.x() + mark.x2 * contentScale) * kMmToPt;
-                    const double y2 = (media.height() - offset.y() - mark.y2 * contentScale) * kMmToPt;
-                    content += QStringLiteral("%1 w %2 %3 m %4 %5 l S\n")
-                                   .arg(number(mark.widthMm * kMmToPt), number(x1), number(y1),
-                                        number(x2), number(y2));
-                }
-            }
-
-            const QByteArray imageData = flate(rgbBytes(pages.at(i)));
-            const QImage &page = pages.at(i);
-
-            objects[pageNum - 1] =
-                QStringLiteral("<< /Type /Page /Parent 2 0 R /MediaBox [0 0 %1 %2] /Resources << "
-                               "/XObject << /Im0 %3 0 R >> >> /Contents %4 0 R >>")
-                    .arg(number(widthPt), number(heightPt))
-                    .arg(imageNum)
-                    .arg(contentNum)
-                    .toLatin1();
-
-            objects[contentNum - 1] = QByteArray("<< /Length ")
-                + QByteArray::number(content.toLatin1().size()) + QByteArray(" >>\nstream\n")
-                + content.toLatin1() + QByteArray("endstream");
-
-            objects[imageNum - 1] =
-                QByteArray("<< /Type /XObject /Subtype /Image /Width ")
-                + QByteArray::number(page.width()) + QByteArray(" /Height ")
-                + QByteArray::number(page.height()) + QByteArray(" /ColorSpace [ /ICCBased ")
-                + QByteArray::number(iccNum) + QByteArray(" 0 R ] /BitsPerComponent 8 /Filter "
-                                                          "/FlateDecode /Length ")
-                + QByteArray::number(imageData.size()) + QByteArray(" >>\nstream\n") + imageData
-                + QByteArray("\nendstream");
-        }
-
-        objects[iccNum - 1] = QByteArray("<< /N 3 /Alternate /DeviceRGB /Filter /FlateDecode "
-                                         "/Length ")
-            + QByteArray::number(iccCompressed.size()) + QByteArray(" >>\nstream\n") + iccCompressed
-            + QByteArray("\nendstream");
-
-        objects[metadataNum - 1] = QByteArray("<< /Type /Metadata /Subtype /XML /Filter "
-                                              "/FlateDecode /Length ")
-            + QByteArray::number(xmpCompressed.size()) + QByteArray(" >>\nstream\n") + xmpCompressed
-            + QByteArray("\nendstream");
-
-        objects[infoNum - 1] = QStringLiteral("<< /Title (PhotoPrint) /Producer (PhotoPrint) "
-                                              "/Creator (PhotoPrint) >>")
-                                   .toLatin1();
-
-        QByteArray document;
-        document += "%PDF-1.4\n%\xE2\xE3\xCF\xD3\n";
-        QList<int> offsets;
-        offsets.resize(objects.size());
-        for (int i = 0; i < objects.size(); ++i) {
-            offsets[i] = document.size();
-            document += QByteArray::number(i + 1) + " 0 obj\n" + objects.at(i) + "\nendobj\n";
-        }
-        const int xrefOffset = document.size();
-        document += "xref\n0 " + QByteArray::number(objects.size() + 1) + "\n";
-        document += "0000000000 65535 f \n";
-        for (int offset : offsets)
-            document += QByteArray::number(offset).rightJustified(10, '0') + " 00000 n \n";
-        const QByteArray id = QCryptographicHash::hash(document, QCryptographicHash::Md5).toHex();
-        document += "trailer\n<< /Size " + QByteArray::number(objects.size() + 1) + " /Root 1 0 R"
-            + " /Info " + QByteArray::number(infoNum) + " 0 R /ID [<" + id + "><" + id + ">] >>\n";
-        document += "startxref\n" + QByteArray::number(xrefOffset) + "\n%%EOF\n";
-
-        QSaveFile file(path);
-        if (!file.open(QIODevice::WriteOnly)) {
-            *errorText = QStringLiteral("cannot-write");
-            return false;
-        }
-        if (file.write(document) != document.size()) {
-            *errorText = QStringLiteral("short-write");
-            return false;
-        }
-        if (!file.commit()) {
-            *errorText = QStringLiteral("commit-failed");
-            return false;
-        }
-        return true;
-    }
-
-private:
-    static QByteArray xmpPacket()
-    {
-        return QByteArrayLiteral(
-            "<?xpacket begin=\"\xEF\xBB\xBF\" id=\"W5M0MpCehiHzreSzNTczkc9d\"?>\n"
-            "<x:xmpmeta xmlns:x=\"adobe:ns:meta/\">\n"
-            " <rdf:RDF xmlns:rdf=\"http://www.w3.org/1999/02/22-rdf-syntax-ns#\">\n"
-            "  <rdf:Description rdf:about=\"\" xmlns:pdfaid=\"http://www.aiim.org/pdfa/ns/id/\" "
-            "xmlns:dc=\"http://purl.org/dc/elements/1.1/\" "
-            "xmlns:xmp=\"http://ns.adobe.com/xap/1.0/\" "
-            "xmlns:pdf=\"http://ns.adobe.com/pdf/1.3/\">\n"
-            "   <pdfaid:part>1</pdfaid:part>\n"
-            "   <pdfaid:conformance>B</pdfaid:conformance>\n"
-            "   <xmp:CreatorTool>PhotoPrint</xmp:CreatorTool>\n"
-            "   <pdf:Producer>PhotoPrint</pdf:Producer>\n"
-            "   <dc:title><rdf:Alt><rdf:li xml:lang=\"x-default\">PhotoPrint</rdf:li></rdf:Alt>"
-            "</dc:title>\n"
-            "  </rdf:Description>\n"
-            " </rdf:RDF>\n"
-            "</x:xmpmeta>\n"
-            "<?xpacket end=\"w\"?>");
-    }
-};
+    return QByteArrayLiteral(
+        "<?xpacket begin=\"\xEF\xBB\xBF\" id=\"W5M0MpCehiHzreSzNTczkc9d\"?>\n"
+        "<x:xmpmeta xmlns:x=\"adobe:ns:meta/\">\n"
+        " <rdf:RDF xmlns:rdf=\"http://www.w3.org/1999/02/22-rdf-syntax-ns#\">\n"
+        "  <rdf:Description rdf:about=\"\" xmlns:pdfaid=\"http://www.aiim.org/pdfa/ns/id/\" "
+        "xmlns:dc=\"http://purl.org/dc/elements/1.1/\" "
+        "xmlns:xmp=\"http://ns.adobe.com/xap/1.0/\" "
+        "xmlns:pdf=\"http://ns.adobe.com/pdf/1.3/\">\n"
+        "   <pdfaid:part>1</pdfaid:part>\n"
+        "   <pdfaid:conformance>B</pdfaid:conformance>\n"
+        "   <xmp:CreatorTool>PhotoPrint</xmp:CreatorTool>\n"
+        "   <pdf:Producer>PhotoPrint</pdf:Producer>\n"
+        "   <dc:title><rdf:Alt><rdf:li xml:lang=\"x-default\">PhotoPrint</rdf:li></rdf:Alt>"
+        "</dc:title>\n"
+        "  </rdf:Description>\n"
+        " </rdf:RDF>\n"
+        "</x:xmpmeta>\n"
+        "<?xpacket end=\"w\"?>");
+}
 
 /// sRGB border colour -> the page's working space. The canvas is linear
 /// Rec.2020 premultiplied, so writing the sRGB numbers into it directly would
@@ -548,6 +426,12 @@ void paintCutGuideInk(QImage &srgbPage, const Page &page, double ppi)
     // 0.2 mm at 300 ppi is 2.4 px: thin enough not to eat the photograph and
     // thick enough for the printer to render. Flat caps keep the corner joins
     // from growing a blob, and the miter join closes the rectangle cleanly.
+    // The line is centred on the trim on purpose: half of it sits on the
+    // photograph, half in the gutter, so a cut along the line's centre removes
+    // 0.1 mm from the copy. That is 0.2 % of a 45 mm side, well inside any print
+    // and cutting tolerance, and it keeps the mark readable on both sides of
+    // the cut. Offsetting it inward would instead leave a grey hairline on the
+    // finished piece.
     QPen pen(QColor(127, 127, 127), 0.2, Qt::SolidLine, Qt::FlatCap, Qt::MiterJoin);
     painter.setPen(pen);
     painter.setBrush(Qt::NoBrush);
@@ -572,14 +456,14 @@ Result<QImage> PageRenderer::renderPage(const DocumentSnapshot &snapshot, int pa
 {
     // A single call still verifies a source once: a page of copies is one job
     // as far as the identity check is concerned.
-    QSet<QString> verified;
+    QHash<QString, SourceImage> verified;
     return renderPageUsing(snapshot, pageIndex, ppi, token, options, &verified);
 }
 
 Result<QImage> PageRenderer::renderPageUsing(const DocumentSnapshot &snapshot, int pageIndex,
                                              double ppi, std::stop_token token,
                                              const RenderOptions &options,
-                                             QSet<QString> *verified) const
+                                             QHash<QString, SourceImage> *verified) const
 {
     if (pageIndex < 0 || pageIndex >= snapshot.pages.size())
         return error(QStringLiteral("page-index"), QCoreApplication::translate("PhotoPrint", "Ez az oldal nem található."));
@@ -591,8 +475,8 @@ Result<QImage> PageRenderer::renderPageUsing(const DocumentSnapshot &snapshot, i
     if (!(pageSize.width() > 0.0) || !(pageSize.height() > 0.0))
         return error(QStringLiteral("page-size"), QCoreApplication::translate("PhotoPrint", "A papírméret érvénytelen."));
 
-    QSet<QString> localVerified;
-    QSet<QString> *alreadyVerified = verified ? verified : &localVerified;
+    QHash<QString, SourceImage> localVerified;
+    QHash<QString, SourceImage> *alreadyVerified = verified ? verified : &localVerified;
 
     QHash<QString, QImage> images;
     // The snapshot may come straight from a project file or from a caller that
@@ -612,26 +496,18 @@ Result<QImage> PageRenderer::renderPageUsing(const DocumentSnapshot &snapshot, i
             if (!options.verifySources)
                 return m_store.load(frame.sourcePath, ImportPolicy{}, token);
             const QString key = verificationKey(frame);
-            if (alreadyVerified->contains(key)) {
-                // The identity was checked earlier in this job. A file replaced
-                // in the meantime must still fail closed: load() re-reads a
-                // changed file, so compare what it found with what was promised.
-                Result<SourceImage> cached =
-                    m_store.load(frame.sourcePath, ImportPolicy{}, token);
-                if (cached && cached.value().sha256 != frame.sourceSha256) {
-                    return error(QStringLiteral("source-changed"),
-                                 QCoreApplication::translate(
-                                     "PhotoPrint",
-                                     "Ez a fotó megváltozott. Add meg újra, ha ezt szeretnéd "
-                                     "nyomtatni."));
-                }
-                return cached;
-            }
+            // The verified snapshot is the job's own copy of the photograph.
+            // Reusing it means every copy of a source is identical even if the
+            // file is replaced between page 1 and page 2, and it removes the
+            // store's mtime+size shortcut from the decision entirely.
+            const auto known = alreadyVerified->constFind(key);
+            if (known != alreadyVerified->constEnd())
+                return *known;
             Result<SourceImage> checked =
                 m_store.reloadVerified(frame.sourcePath, frame.sourceSha256, token);
             if (checked) {
-                alreadyVerified->insert(key);
-                ++m_verificationCount;
+                alreadyVerified->insert(key, checked.value());
+                m_verificationCount.fetch_add(1, std::memory_order_relaxed);
             }
             return checked;
         };
@@ -690,6 +566,235 @@ Result<QImage> PageRenderer::renderPageUsing(const DocumentSnapshot &snapshot, i
     return srgb;
 }
 
+
+/// Streams the PDF object by object. The page raster is compressed and written
+/// as soon as it is rendered, so the job holds one sheet at a time instead of
+/// the whole document. The object layout is the one the file always had: one
+/// page object, one content stream and one image XObject per sheet, then the
+/// shared sRGB profile, the XMP packet and the document info.
+class StreamingPdfWriter
+{
+public:
+    bool open(const QString &path, int pageCount, QString *errorText)
+    {
+        if (pageCount < 1) {
+            *errorText = QStringLiteral("empty-document");
+            return false;
+        }
+        m_pageCount = pageCount;
+        m_file.setFileName(path);
+        if (!m_file.open(QIODevice::WriteOnly)) {
+            *errorText = QStringLiteral("cannot-write");
+            return false;
+        }
+        if (!write(QByteArrayLiteral("%PDF-1.4\n%\xE2\xE3\xCF\xD3\n"), errorText))
+            return false;
+
+        const int iccNum = 3 + 3 * pageCount;
+        const int metadataNum = iccNum + 1;
+        QString kids;
+        for (int i = 0; i < pageCount; ++i)
+            kids += QStringLiteral("%1 0 R ").arg(3 + 3 * i);
+        const QByteArray catalog =
+            QStringLiteral("<< /Type /Catalog /Pages 2 0 R /OutputIntents [ << /Type "
+                           "/OutputIntent /S /GTS_PDFA1 /OutputCondition (sRGB) "
+                           "/OutputConditionIdentifier (sRGB IEC61966-2.1) /Info (sRGB "
+                           "IEC61966-2.1) /DestOutputProfile %1 0 R >> ] /Metadata %2 0 "
+                           "R >>")
+                .arg(iccNum)
+                .arg(metadataNum)
+                .toLatin1();
+        if (!writeObject(catalog, errorText))
+            return false;
+        const QByteArray pages = QStringLiteral("<< /Type /Pages /Count %1 /Kids [ %2] >>")
+                                     .arg(pageCount)
+                                     .arg(kids)
+                                     .toLatin1();
+        return writeObject(pages, errorText);
+    }
+
+    bool addPage(const QImage &page, const QSizeF &sizeMm, const QSizeF &mediaMm,
+                 const QPointF &offsetMm, double contentScale, const std::vector<Mark> &marks,
+                 QString *errorText)
+    {
+        if (m_writtenPages >= m_pageCount) {
+            *errorText = QStringLiteral("too-many-pages");
+            return false;
+        }
+        const int pageNum = 3 + 3 * m_writtenPages;
+        const int contentNum = pageNum + 1;
+        const int imageNum = pageNum + 2;
+        const int iccNum = 3 + 3 * m_pageCount;
+
+        const double widthPt = mediaMm.width() * kMmToPt;
+        const double heightPt = mediaMm.height() * kMmToPt;
+        const double contentWidthPt = sizeMm.width() * contentScale * kMmToPt;
+        const double contentHeightPt = sizeMm.height() * contentScale * kMmToPt;
+        const double offsetXPt = offsetMm.x() * kMmToPt;
+        // PDF user space has its origin at the bottom-left corner, the model's at
+        // the top-left.
+        const double offsetYPt =
+            (mediaMm.height() - offsetMm.y() - sizeMm.height() * contentScale) * kMmToPt;
+
+        QString content;
+        content += QStringLiteral("q\n%1 0 0 %2 %3 %4 cm\n/Im0 Do\nQ\n")
+                       .arg(number(contentWidthPt), number(contentHeightPt), number(offsetXPt),
+                            number(offsetYPt));
+        if (!marks.empty()) {
+            content += QStringLiteral("0 0 0 RG 0 0 0 rg\n");
+            for (const Mark &mark : marks) {
+                const double x1 = (offsetMm.x() + mark.x1 * contentScale) * kMmToPt;
+                const double y1 =
+                    (mediaMm.height() - offsetMm.y() - mark.y1 * contentScale) * kMmToPt;
+                const double x2 = (offsetMm.x() + mark.x2 * contentScale) * kMmToPt;
+                const double y2 =
+                    (mediaMm.height() - offsetMm.y() - mark.y2 * contentScale) * kMmToPt;
+                content += QStringLiteral("%1 w %2 %3 m %4 %5 l S\n")
+                               .arg(number(mark.widthMm * kMmToPt), number(x1), number(y1),
+                                    number(x2), number(y2));
+            }
+        }
+
+        const QByteArray imageData = flateImage(page);
+        if (imageData.isEmpty()) {
+            *errorText = QStringLiteral("image-compression");
+            return false;
+        }
+
+        const QByteArray pageObject =
+            QStringLiteral("<< /Type /Page /Parent 2 0 R /MediaBox [0 0 %1 %2] /Resources << "
+                           "/XObject << /Im0 %3 0 R >> >> /Contents %4 0 R >>")
+                .arg(number(widthPt), number(heightPt))
+                .arg(imageNum)
+                .arg(contentNum)
+                .toLatin1();
+        if (!writeObject(pageObject, errorText))
+            return false;
+
+        const QByteArray contentBytes = content.toLatin1();
+        const QByteArray contentObject = QByteArray("<< /Length ")
+            + QByteArray::number(contentBytes.size()) + QByteArray(" >>\nstream\n")
+            + contentBytes + QByteArray("endstream");
+        if (!writeObject(contentObject, errorText))
+            return false;
+
+        const QByteArray imageObject =
+            QByteArray("<< /Type /XObject /Subtype /Image /Width ")
+            + QByteArray::number(page.width()) + QByteArray(" /Height ")
+            + QByteArray::number(page.height()) + QByteArray(" /ColorSpace [ /ICCBased ")
+            + QByteArray::number(iccNum) + QByteArray(" 0 R ] /BitsPerComponent 8 /Filter "
+                                                      "/FlateDecode /Length ")
+            + QByteArray::number(imageData.size()) + QByteArray(" >>\nstream\n") + imageData
+            + QByteArray("\nendstream");
+        if (!writeObject(imageObject, errorText))
+            return false;
+
+        ++m_writtenPages;
+        return true;
+    }
+
+    bool finish(QString *errorText)
+    {
+        if (m_writtenPages != m_pageCount) {
+            *errorText = QStringLiteral("missing-pages");
+            return false;
+        }
+        const int iccNum = 3 + 3 * m_pageCount;
+        const int infoNum = iccNum + 2;
+
+        const QByteArray icc = ColorPipeline::srgbProfileBytes();
+        if (icc.isEmpty()) {
+            *errorText = QStringLiteral("missing-srgb-profile");
+            return false;
+        }
+        const QByteArray iccCompressed = flate(icc);
+        if (iccCompressed.isEmpty()) {
+            *errorText = QStringLiteral("icc-compression");
+            return false;
+        }
+        const QByteArray iccObject =
+            QByteArray("<< /N 3 /Alternate /DeviceRGB /Filter /FlateDecode /Length ")
+            + QByteArray::number(iccCompressed.size()) + QByteArray(" >>\nstream\n")
+            + iccCompressed + QByteArray("\nendstream");
+        if (!writeObject(iccObject, errorText))
+            return false;
+
+        const QByteArray xmpCompressed = flate(xmpPacket());
+        if (xmpCompressed.isEmpty()) {
+            *errorText = QStringLiteral("xmp-compression");
+            return false;
+        }
+        const QByteArray metadataObject =
+            QByteArray("<< /Type /Metadata /Subtype /XML /Filter /FlateDecode /Length ")
+            + QByteArray::number(xmpCompressed.size()) + QByteArray(" >>\nstream\n")
+            + xmpCompressed + QByteArray("\nendstream");
+        if (!writeObject(metadataObject, errorText))
+            return false;
+
+        const QByteArray infoObject =
+            QStringLiteral("<< /Title (PhotoPrint) /Producer (PhotoPrint) "
+                           "/Creator (PhotoPrint) >>")
+                .toLatin1();
+        if (!writeObject(infoObject, errorText))
+            return false;
+
+        const qint64 xrefOffset = m_file.pos();
+        const int objectCount = 5 + 3 * m_pageCount;
+        QByteArray xref = "xref\n0 " + QByteArray::number(objectCount + 1) + "\n";
+        xref += "0000000000 65535 f \n";
+        for (const qint64 offset : m_offsets)
+            xref += QByteArray::number(offset).rightJustified(10, '0') + " 00000 n \n";
+        if (!write(xref, errorText))
+            return false;
+
+        // The file ID is the MD5 of everything up to the xref, exactly as the
+        // in-memory writer computed it.
+        const QByteArray id = m_hash.result().toHex();
+        QByteArray trailer = "trailer\n<< /Size " + QByteArray::number(objectCount + 1)
+            + " /Root 1 0 R" + " /Info " + QByteArray::number(infoNum) + " 0 R /ID [<" + id
+            + "><" + id + ">] >>\n";
+        trailer += "startxref\n" + QByteArray::number(xrefOffset) + "\n%%EOF\n";
+        // The trailer is not part of the hashed prefix; writing it through the
+        // hashing path would feed a finalised hash.
+        if (m_file.write(trailer) != trailer.size()) {
+            *errorText = QStringLiteral("short-write");
+            return false;
+        }
+        if (!m_file.commit()) {
+            *errorText = QStringLiteral("commit-failed");
+            return false;
+        }
+        return true;
+    }
+
+private:
+    bool write(const QByteArray &data, QString *errorText)
+    {
+        if (m_file.write(data) != data.size()) {
+            *errorText = QStringLiteral("short-write");
+            return false;
+        }
+        m_hash.addData(data);
+        return true;
+    }
+
+    bool writeObject(const QByteArray &body, QString *errorText)
+    {
+        m_offsets.append(m_file.pos());
+        if (!write(QByteArray::number(m_offsets.size()) + QByteArray(" 0 obj\n"), errorText))
+            return false;
+        if (!write(body, errorText))
+            return false;
+        return write(QByteArray("\nendobj\n"), errorText);
+    }
+
+    QSaveFile m_file;
+    QCryptographicHash m_hash{QCryptographicHash::Md5};
+    QList<qint64> m_offsets;
+    int m_pageCount = 0;
+    int m_writtenPages = 0;
+};
+
 Result<ExportArtifact> PageRenderer::writePdf(const DocumentSnapshot &snapshot, const QString &path,
                                               std::stop_token token,
                                               const RenderOptions &options) const
@@ -697,44 +802,62 @@ Result<ExportArtifact> PageRenderer::writePdf(const DocumentSnapshot &snapshot, 
     if (snapshot.pages.isEmpty())
         return error(QStringLiteral("empty-document"), QCoreApplication::translate("PhotoPrint", "Nincs mit nyomtatni."));
 
-    QList<QImage> pageImages;
-    QList<QSizeF> sizes;
-    QList<QSizeF> mediaSizes;
-    QList<QPointF> offsets;
-    QList<std::vector<Mark>> marks;
     const double ppi = options.printPpi > 0.0 && std::isfinite(options.printPpi)
         ? options.printPpi
         : 300.0;
-    // One job-wide identity cache: a four-page batch of one photograph verifies
-    // the file on page one and loads the cached decode on every later copy.
-    QSet<QString> verified;
+    const double contentScale =
+        options.contentScale > 0.0 && std::isfinite(options.contentScale) ? options.contentScale
+                                                                          : 1.0;
 
+    QString errorText;
+    StreamingPdfWriter writer;
+    if (!writer.open(path, int(snapshot.pages.size()), &errorText))
+        return error(QStringLiteral("pdf-write"), QCoreApplication::translate("PhotoPrint", "A PDF mentése nem sikerült."));
+
+    // One job-wide identity cache: a four-page batch of one photograph verifies
+    // the file on page one and reuses that verified snapshot on every later copy.
+    QHash<QString, SourceImage> verified;
     for (int i = 0; i < snapshot.pages.size(); ++i) {
+        if (token.stop_requested())
+            return error(QStringLiteral("cancelled"), QCoreApplication::translate("PhotoPrint", "A művelet megszakadt."));
+
+        const Page &page = snapshot.pages.at(i);
+        const QSizeF size = pageSizeMm(page);
+        if (!(size.width() > 0.0) || !(size.height() > 0.0))
+            return error(QStringLiteral("page-size"), QCoreApplication::translate("PhotoPrint", "A papírméret érvénytelen."));
+        const QSizeF media =
+            options.mediaSizeMm.width() > 0.0 && options.mediaSizeMm.height() > 0.0
+            ? options.mediaSizeMm
+            : size;
+
+        // Render, paint, release: the page raster lives for one iteration. The
+        // writer compresses it and drops it, so the job's peak is one sheet and
+        // not the sum of every sheet.
         Result<QImage> rendered = renderPageUsing(snapshot, i, ppi, token, options, &verified);
         if (!rendered)
             return rendered.error();
-        pageImages.append(rendered.value());
-        const QSizeF size = pageSizeMm(snapshot.pages.at(i));
-        sizes.append(size);
-        const QSizeF media = options.mediaSizeMm.width() > 0.0 && options.mediaSizeMm.height() > 0.0
-            ? options.mediaSizeMm
-            : size;
-        mediaSizes.append(media);
-        offsets.append(options.contentOffsetMm);
-        marks.push_back(options.developerMarks ? developerMarksMm(size) : std::vector<Mark>{});
+        const std::vector<Mark> marks =
+            options.developerMarks ? developerMarksMm(size) : std::vector<Mark>{};
+        if (!writer.addPage(rendered.value(), size, media, options.contentOffsetMm, contentScale,
+                            marks, &errorText)) {
+            return error(QStringLiteral("pdf-write"),
+                         QCoreApplication::translate("PhotoPrint", "A PDF mentése nem sikerült."));
+        }
+        if (m_afterPage)
+            m_afterPage(i);
     }
 
-    QString errorText;
-    PdfWriter writer;
-    if (!writer.write(path, pageImages, sizes, mediaSizes, offsets, marks,
-                      options.contentScale, true, &errorText))
+    if (!writer.finish(&errorText))
         return error(QStringLiteral("pdf-write"), QCoreApplication::translate("PhotoPrint", "A PDF mentése nem sikerült."));
 
     ExportArtifact artifact;
     artifact.path = path;
     artifact.sha256 = fileSha256(path);
-    artifact.pageCount = pageImages.size();
-    artifact.firstPageSizeMm = mediaSizes.first();
+    artifact.pageCount = int(snapshot.pages.size());
+    artifact.firstPageSizeMm =
+        options.mediaSizeMm.width() > 0.0 && options.mediaSizeMm.height() > 0.0
+        ? options.mediaSizeMm
+        : pageSizeMm(snapshot.pages.first());
     if (artifact.sha256.isEmpty())
         return error(QStringLiteral("pdf-read-back"), QCoreApplication::translate("PhotoPrint", "A PDF mentése nem sikerült."));
     return artifact;

@@ -68,9 +68,12 @@ public:
 
     /// `previews` maps a frame id to its preview layer: either already sRGB or
     /// the canvas's linear layer, which the preview converts once per image.
+    /// `sourceReadable` is the window's unavailable-frame answer: a missing or
+    /// undecodable source disables the batch action instead of making blank
+    /// copies. Align ignores it.
     SheetToolsDialog(Mode mode, DocumentSnapshot document, int pageIndex,
                      std::optional<Frame> sourceFrame, QHash<QString, QImage> previews,
-                     QWidget *parent = nullptr);
+                     bool sourceReadable = true, QWidget *parent = nullptr);
 
     /// The edit the last successful accept() produced.
     ApplyLayoutEdit edit() const { return m_edit; }
@@ -100,10 +103,14 @@ public:
 private:
     void buildBatchTab();
     void buildAlignTab();
+    void buildFeedback();
     void updateBatch();
     void updateAlign();
     void updatePreview();
+    void updatePageNavigation();
+    void applyFeedback();
     void setCreateText();
+    void announce();
     void saveSettings() const;
 
     SheetLayout::BatchSpec batchSpec() const;
@@ -119,10 +126,15 @@ private:
     DocumentSnapshot m_document;
     int m_pageIndex = 0;
     std::optional<Frame> m_source;
+    bool m_sourceReadable = true;
     QHash<QString, QImage> m_previews;
     ApplyLayoutEdit m_edit;
     bool m_hasEdit = false;
     bool m_alignValid = false;
+    bool m_replacesCurrentPage = false;
+    int m_previewPage = 0;
+    QString m_summaryText;
+    QString m_warningText;
     std::optional<SheetLayout::BatchGrid> m_batchGrid;
     std::optional<SheetLayout::AlignPlan> m_alignPlan;
     std::optional<SheetLayout::DistributePlan> m_distributePlan;
@@ -132,6 +144,17 @@ private:
     SheetPreview *m_preview = nullptr;
     QLabel *m_caption = nullptr;
     QPushButton *m_createButton = nullptr;
+
+    // Feedback lives outside both scroll areas, so a warning, the sheet count,
+    // the page indicator and Create are visible without scrolling.
+    QWidget *m_feedback = nullptr;
+    QLabel *m_summary = nullptr;
+    QLabel *m_warning = nullptr;
+    QLabel *m_note = nullptr;
+    QLabel *m_exactNote = nullptr;
+    QLabel *m_pageLabel = nullptr;
+    QPushButton *m_prevPage = nullptr;
+    QPushButton *m_nextPage = nullptr;
 
     // Batch tab.
     QComboBox *m_batchPreset = nullptr;
@@ -146,9 +169,7 @@ private:
     QRadioButton *m_batchCurrent = nullptr;
     QRadioButton *m_batchNew = nullptr;
     QLabel *m_batchPlaceNote = nullptr;
-    QLabel *m_batchSummary = nullptr;
-    QLabel *m_batchWarning = nullptr;
-    QLabel *m_batchLastSheet = nullptr;
+    QLabel *m_batchGuideHint = nullptr;
 
     // Align tab.
     QRadioButton *m_alignGridMode = nullptr;
@@ -160,8 +181,6 @@ private:
     QCheckBox *m_alignFill = nullptr;
     QComboBox *m_alignAxis = nullptr;
     QDoubleSpinBox *m_alignGap = nullptr;
-    QLabel *m_alignSummary = nullptr;
-    QLabel *m_alignWarning = nullptr;
 };
 
 } // namespace pp

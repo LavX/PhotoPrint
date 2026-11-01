@@ -1587,5 +1587,77 @@
         <source>A nyomatra vágójelek kerülnek a következő lapokon: %1. Folytatod?</source>
         <translation>Метки реза будут напечатаны на этих страницах: %1. Продолжить?</translation>
     </message>
+    <message>
+        <source>Méret csere</source>
+        <translation>Поменять размер</translation>
+    </message>
+    <message>
+        <source>A kiválasztott fotó nem olvasható.</source>
+        <translation>Не удаётся прочитать выбранную фотографию.</translation>
+    </message>
+    <message>
+        <source>A nyomaton is megjelenik; a vágás a vonal közepén halad, nyomtatás előtt megerősítést kér.</source>
+        <translation>Она появляется и на печати; рез идёт по центру линии, а перед печатью запрашивается подтверждение.</translation>
+    </message>
+    <message>
+        <source>Csak a képernyőn látszik, a nyomatra nem kerül.</source>
+        <translation>Видна только на экране и не попадает на печать.</translation>
+    </message>
+    <message>
+        <source>Nincs vágójel a képernyőn és a nyomaton.</source>
+        <translation>На экране и на печати меток реза нет.</translation>
+    </message>
+    <message>
+        <source>A lap vágójel-beállítása is módosul: %1.</source>
+        <translation>Настройка меток реза страницы тоже изменится: %1.</translation>
+    </message>
+    <message>
+        <source>A fotók egy része erősen lemarad. Kapcsold be a »A kép egésze látszódjon« opciót, vagy válaszd a »Térköz kiegyenlítése« módot.</source>
+        <translation>Некоторые фото теряют много. Включите «Показать фото целиком» или выберите режим «Выровнять отступы».</translation>
+    </message>
+    <message>
+        <source>A példányok pontosan a választott méretben nyomtatódnak, nagyítás nélkül.</source>
+        <translation>Копии печатаются точно в выбранном размере, без увеличения.</translation>
+    </message>
+    <message>
+        <source>Egy lapra legfeljebb %1 példány kerül.</source>
+        <translation>На лист помещается не больше %1 копий.</translation>
+    </message>
+    <message>
+        <source>%1/%2. lap</source>
+        <translation>%1/%2 лист</translation>
+    </message>
+    <message>
+        <source>Előző lap</source>
+        <translation>Предыдущий лист</translation>
+    </message>
+    <message>
+        <source>Következő lap</source>
+        <translation>Следующий лист</translation>
+    </message>
+    <message>
+        <source>Figyelmeztetés</source>
+        <translation>Предупреждение</translation>
+    </message>
+    <message numerus="yes">
+        <source>Létrehozás (%n lap)</source>
+        <translation>
+            <numerusform>Создать (%n лист)</numerusform>
+            <numerusform>Создать (%n листа)</numerusform>
+            <numerusform>Создать (%n листов)</numerusform>
+        </translation>
+    </message>
+    <message>
+        <source>Szélig nyomtatás</source>
+        <translation>Печать без полей</translation>
+    </message>
+    <message>
+        <source>Be</source>
+        <translation>Включено</translation>
+    </message>
+    <message>
+        <source>A lapok szélig nyomtatása eltér. Állítsd egységesre.</source>
+        <translation>Страницы различаются по печати без полей. Приведите их к одному виду.</translation>
+    </message>
 </context>
 </TS>

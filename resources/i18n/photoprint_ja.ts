@@ -1559,5 +1559,75 @@
         <source>A nyomatra vágójelek kerülnek a következő lapokon: %1. Folytatod?</source>
         <translation>次のページに裁断マークが印刷されます: %1。続行しますか？</translation>
     </message>
+    <message>
+        <source>Méret csere</source>
+        <translation>サイズを入れ替え</translation>
+    </message>
+    <message>
+        <source>A kiválasztott fotó nem olvasható.</source>
+        <translation>選んだ写真を読み込めません。</translation>
+    </message>
+    <message>
+        <source>A nyomaton is megjelenik; a vágás a vonal közepén halad, nyomtatás előtt megerősítést kér.</source>
+        <translation>印刷にも表示されます。裁断は線の中心で行い、印刷前に確認します。</translation>
+    </message>
+    <message>
+        <source>Csak a képernyőn látszik, a nyomatra nem kerül.</source>
+        <translation>画面にだけ表示され、印刷には入りません。</translation>
+    </message>
+    <message>
+        <source>Nincs vágójel a képernyőn és a nyomaton.</source>
+        <translation>画面にも印刷にも裁断マークはありません。</translation>
+    </message>
+    <message>
+        <source>A lap vágójel-beállítása is módosul: %1.</source>
+        <translation>ページの裁断マーク設定も変わります: %1。</translation>
+    </message>
+    <message>
+        <source>A fotók egy része erősen lemarad. Kapcsold be a »A kép egésze látszódjon« opciót, vagy válaszd a »Térköz kiegyenlítése« módot.</source>
+        <translation>大きく切れる写真があります。「写真全体を表示」をオンにするか、「間隔を均等に」を選んでください。</translation>
+    </message>
+    <message>
+        <source>A példányok pontosan a választott méretben nyomtatódnak, nagyítás nélkül.</source>
+        <translation>コピーは選んだサイズどおりに、拡大なしで印刷されます。</translation>
+    </message>
+    <message>
+        <source>Egy lapra legfeljebb %1 példány kerül.</source>
+        <translation>1枚に最大 %1 枚までです。</translation>
+    </message>
+    <message>
+        <source>%1/%2. lap</source>
+        <translation>%1/%2 枚目</translation>
+    </message>
+    <message>
+        <source>Előző lap</source>
+        <translation>前の用紙</translation>
+    </message>
+    <message>
+        <source>Következő lap</source>
+        <translation>次の用紙</translation>
+    </message>
+    <message>
+        <source>Figyelmeztetés</source>
+        <translation>警告</translation>
+    </message>
+    <message numerus="yes">
+        <source>Létrehozás (%n lap)</source>
+        <translation>
+            <numerusform>作成 (%n 枚)</numerusform>
+        </translation>
+    </message>
+    <message>
+        <source>Szélig nyomtatás</source>
+        <translation>縁なし印刷</translation>
+    </message>
+    <message>
+        <source>Be</source>
+        <translation>オン</translation>
+    </message>
+    <message>
+        <source>A lapok szélig nyomtatása eltér. Állítsd egységesre.</source>
+        <translation>ページによって縁なし印刷の設定が異なります。統一してください。</translation>
+    </message>
 </context>
 </TS>

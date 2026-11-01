@@ -14,6 +14,8 @@
 #include <QString>
 #include <QTransform>
 
+#include <atomic>
+#include <functional>
 #include <stop_token>
 
 class QPainter;
@@ -93,20 +95,32 @@ public:
 
     /// How many sources this renderer verified in total. A batch job verifies
     /// one source once however many copies share it, and this is the seam a
-    /// test counts instead of trusting the wall clock.
-    int verificationCount() const { return m_verificationCount; }
-    void resetVerificationCount() { m_verificationCount = 0; }
+    /// test counts instead of trusting the wall clock. Atomic because the
+    /// counter is incremented on whichever worker runs the job.
+    int verificationCount() const { return m_verificationCount.load(std::memory_order_relaxed); }
+    void resetVerificationCount() { m_verificationCount.store(0, std::memory_order_relaxed); }
+
+    /// Test seam: called with the page index after that page has been written.
+    /// It lets a test change a source file halfway through a job without a
+    /// second writer or a fake store.
+    void setAfterPageHookForTest(std::function<void(int)> hook)
+    {
+        m_afterPage = std::move(hook);
+    }
 
 private:
-    /// The shared implementation. `verified` is the job-wide set of
-    /// `path + sha` pairs already checked; a null set gives this call its own,
-    /// so even a direct multi-copy render verifies each source once.
+    /// The shared implementation. `verified` is the job-wide map of
+    /// `path + sha` identities to the decoded, verified snapshot. Every copy in
+    /// the job reuses that one snapshot, so a file replaced halfway through a
+    /// job cannot put two versions of it into one document. A null map gives
+    /// this call its own, so even a direct multi-copy render verifies once.
     Result<QImage> renderPageUsing(const DocumentSnapshot &snapshot, int pageIndex, double ppi,
                                    std::stop_token token, const RenderOptions &options,
-                                   QSet<QString> *verified) const;
+                                   QHash<QString, SourceImage> *verified) const;
 
     ImageStore &m_store;
-    mutable int m_verificationCount = 0;
+    mutable std::atomic<int> m_verificationCount{0};
+    std::function<void(int)> m_afterPage;
 };
 
 } // namespace pp
