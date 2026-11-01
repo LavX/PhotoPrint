@@ -1162,5 +1162,63 @@
         <source>A margó, a hézag vagy a szegély értéke érvénytelen.</source>
         <translation>La valeur de la marge, de l'espacement ou du bord n'est pas valide.</translation>
     </message>
+    <message>
+        <source>Húzd ide a fotót</source>
+        <translation>Glissez une photo ici</translation>
+    </message>
+    <message>
+        <source>Fotó beillesztése</source>
+        <translation>Insérer la photo</translation>
+    </message>
+    <message>
+        <source>Fotó áthelyezése</source>
+        <translation>Déplacer la photo</translation>
+    </message>
+    <message>
+        <source>Képek cseréje</source>
+        <translation>Échanger les photos</translation>
+    </message>
+    <message>
+        <source>Fotó leválasztása</source>
+        <translation>Détacher la photo</translation>
+    </message>
+    <message>
+        <source>Hely ürítése</source>
+        <translation>Vider la case</translation>
+    </message>
+    <message>
+        <source>Jelenlegi elrendezés: %1</source>
+        <translation>Disposition actuelle : %1</translation>
+    </message>
+    <message>
+        <source>Jelenlegi elrendezés</source>
+        <translation>Disposition actuelle</translation>
+    </message>
+    <message>
+        <source>Ez az elrendezés már a lapon van.</source>
+        <translation>Cette disposition est déjà sur la page.</translation>
+    </message>
+    <message>
+        <source>A többi fotó új lapra került.</source>
+        <translation>Les autres photos ont été placées sur une nouvelle page.</translation>
+    </message>
+    <message>
+        <source>Csere</source>
+        <translation>Remplacer</translation>
+    </message>
+    <message numerus="yes">
+        <source>%n hely üresen marad.</source>
+        <translation>
+            <numerusform>%n case vide reste libre.</numerusform>
+            <numerusform>%n cases vides restent libres.</numerusform>
+        </translation>
+    </message>
+    <message numerus="yes">
+        <source>%n fotó szabadon marad.</source>
+        <translation>
+            <numerusform>%n photo reste libre.</numerusform>
+            <numerusform>%n photos restent libres.</numerusform>
+        </translation>
+    </message>
 </context>
 </TS>

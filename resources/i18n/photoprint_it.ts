@@ -1162,5 +1162,63 @@
         <source>A margó, a hézag vagy a szegély értéke érvénytelen.</source>
         <translation>Il valore di margine, spaziatura o bordo non è valido.</translation>
     </message>
+    <message>
+        <source>Húzd ide a fotót</source>
+        <translation>Trascina qui una foto</translation>
+    </message>
+    <message>
+        <source>Fotó beillesztése</source>
+        <translation>Inserisci foto</translation>
+    </message>
+    <message>
+        <source>Fotó áthelyezése</source>
+        <translation>Sposta foto</translation>
+    </message>
+    <message>
+        <source>Képek cseréje</source>
+        <translation>Scambia foto</translation>
+    </message>
+    <message>
+        <source>Fotó leválasztása</source>
+        <translation>Stacca foto</translation>
+    </message>
+    <message>
+        <source>Hely ürítése</source>
+        <translation>Svuota cella</translation>
+    </message>
+    <message>
+        <source>Jelenlegi elrendezés: %1</source>
+        <translation>Layout attuale: %1</translation>
+    </message>
+    <message>
+        <source>Jelenlegi elrendezés</source>
+        <translation>Layout attuale</translation>
+    </message>
+    <message>
+        <source>Ez az elrendezés már a lapon van.</source>
+        <translation>Questo layout è già nella pagina.</translation>
+    </message>
+    <message>
+        <source>A többi fotó új lapra került.</source>
+        <translation>Le altre foto sono state messe in una nuova pagina.</translation>
+    </message>
+    <message>
+        <source>Csere</source>
+        <translation>Sostituisci</translation>
+    </message>
+    <message numerus="yes">
+        <source>%n hely üresen marad.</source>
+        <translation>
+            <numerusform>Resta %n cella vuota.</numerusform>
+            <numerusform>Restano %n celle vuote.</numerusform>
+        </translation>
+    </message>
+    <message numerus="yes">
+        <source>%n fotó szabadon marad.</source>
+        <translation>
+            <numerusform>Resta %n foto libera.</numerusform>
+            <numerusform>Restano %n foto libere.</numerusform>
+        </translation>
+    </message>
 </context>
 </TS>

@@ -1162,5 +1162,63 @@
         <source>A margó, a hézag vagy a szegély értéke érvénytelen.</source>
         <translation>O valor da margem, do espaçamento ou da borda é inválido.</translation>
     </message>
+    <message>
+        <source>Húzd ide a fotót</source>
+        <translation>Arraste uma foto para aqui</translation>
+    </message>
+    <message>
+        <source>Fotó beillesztése</source>
+        <translation>Inserir foto</translation>
+    </message>
+    <message>
+        <source>Fotó áthelyezése</source>
+        <translation>Mover foto</translation>
+    </message>
+    <message>
+        <source>Képek cseréje</source>
+        <translation>Trocar fotos</translation>
+    </message>
+    <message>
+        <source>Fotó leválasztása</source>
+        <translation>Separar foto</translation>
+    </message>
+    <message>
+        <source>Hely ürítése</source>
+        <translation>Esvaziar célula</translation>
+    </message>
+    <message>
+        <source>Jelenlegi elrendezés: %1</source>
+        <translation>Disposição atual: %1</translation>
+    </message>
+    <message>
+        <source>Jelenlegi elrendezés</source>
+        <translation>Disposição atual</translation>
+    </message>
+    <message>
+        <source>Ez az elrendezés már a lapon van.</source>
+        <translation>Esta disposição já está na página.</translation>
+    </message>
+    <message>
+        <source>A többi fotó új lapra került.</source>
+        <translation>As restantes fotos foram colocadas numa página nova.</translation>
+    </message>
+    <message>
+        <source>Csere</source>
+        <translation>Substituir</translation>
+    </message>
+    <message numerus="yes">
+        <source>%n hely üresen marad.</source>
+        <translation>
+            <numerusform>Fica %n célula vazia.</numerusform>
+            <numerusform>Ficam %n células vazias.</numerusform>
+        </translation>
+    </message>
+    <message numerus="yes">
+        <source>%n fotó szabadon marad.</source>
+        <translation>
+            <numerusform>Fica %n foto livre.</numerusform>
+            <numerusform>Ficam %n fotos livres.</numerusform>
+        </translation>
+    </message>
 </context>
 </TS>

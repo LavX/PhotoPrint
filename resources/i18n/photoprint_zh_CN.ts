@@ -1157,5 +1157,61 @@
         <source>A margó, a hézag vagy a szegély értéke érvénytelen.</source>
         <translation>边距、间距或边框的值无效。</translation>
     </message>
+    <message>
+        <source>Húzd ide a fotót</source>
+        <translation>将照片拖到此处</translation>
+    </message>
+    <message>
+        <source>Fotó beillesztése</source>
+        <translation>插入照片</translation>
+    </message>
+    <message>
+        <source>Fotó áthelyezése</source>
+        <translation>移动照片</translation>
+    </message>
+    <message>
+        <source>Képek cseréje</source>
+        <translation>交换照片</translation>
+    </message>
+    <message>
+        <source>Fotó leválasztása</source>
+        <translation>分离照片</translation>
+    </message>
+    <message>
+        <source>Hely ürítése</source>
+        <translation>清空单元格</translation>
+    </message>
+    <message>
+        <source>Jelenlegi elrendezés: %1</source>
+        <translation>当前版式：%1</translation>
+    </message>
+    <message>
+        <source>Jelenlegi elrendezés</source>
+        <translation>当前版式</translation>
+    </message>
+    <message>
+        <source>Ez az elrendezés már a lapon van.</source>
+        <translation>此版式已在页面上。</translation>
+    </message>
+    <message>
+        <source>A többi fotó új lapra került.</source>
+        <translation>其余照片已放在新页面上。</translation>
+    </message>
+    <message>
+        <source>Csere</source>
+        <translation>替换</translation>
+    </message>
+    <message numerus="yes">
+        <source>%n hely üresen marad.</source>
+        <translation>
+            <numerusform>剩余 %n 个空单元格。</numerusform>
+        </translation>
+    </message>
+    <message numerus="yes">
+        <source>%n fotó szabadon marad.</source>
+        <translation>
+            <numerusform>剩余 %n 张照片未放置。</numerusform>
+        </translation>
+    </message>
 </context>
 </TS>

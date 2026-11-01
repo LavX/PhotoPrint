@@ -118,6 +118,10 @@ private slots:
     void everyCatalogueTranslatesThePhotoIndex();
     void everyCatalogueTranslatesTheLayoutMessages_data();
     void everyCatalogueTranslatesTheLayoutMessages();
+    void everyCatalogueTranslatesTheSlotUiMessages_data();
+    void everyCatalogueTranslatesTheSlotUiMessages();
+    void everyCataloguePluralisesTheSlotCounts_data();
+    void everyCataloguePluralisesTheSlotCounts();
     void hungarianSourceSubstitutesTheCount();
     void repeatedLanguageSwitchingLeavesTranslatorsUnparented();
 
@@ -546,6 +550,85 @@ void TestI18n::everyCatalogueTranslatesTheLayoutMessages()
         QVERIFY2(!text.isEmpty(), qPrintable(where + QStringLiteral(" is empty")));
         QVERIFY2(text != source,
                  qPrintable(where + QStringLiteral(" is still the Hungarian source")));
+    }
+}
+
+void TestI18n::everyCatalogueTranslatesTheSlotUiMessages_data()
+{
+    QTest::addColumn<QString>("code");
+    for (const QString &code : i18n::targetCodes())
+        QTest::newRow(qPrintable(code)) << code;
+}
+
+void TestI18n::everyCatalogueTranslatesTheSlotUiMessages()
+{
+    QFETCH(QString, code);
+
+    InstalledCatalogue catalogue(code);
+    QVERIFY2(catalogue.loaded(), qPrintable(code));
+
+    // Every sentence the slot interaction and the picker added: the canvas hint,
+    // the five undo labels, the picker's current-layout lines and the two
+    // surplus/drop messages.
+    for (const QString &source : {
+             QStringLiteral("Húzd ide a fotót"),
+             QStringLiteral("Fotó beillesztése"),
+             QStringLiteral("Fotó áthelyezése"),
+             QStringLiteral("Képek cseréje"),
+             QStringLiteral("Fotó leválasztása"),
+             QStringLiteral("Hely ürítése"),
+             QStringLiteral("Jelenlegi elrendezés: %1"),
+             QStringLiteral("Jelenlegi elrendezés"),
+             QStringLiteral("Ez az elrendezés már a lapon van."),
+             QStringLiteral("A többi fotó új lapra került."),
+             QStringLiteral("Csere"),
+         }) {
+        const QString text = translated("PhotoPrint", source);
+        const QString where = QStringLiteral("%1: %2").arg(code, source);
+        QVERIFY2(!text.isEmpty(), qPrintable(where + QStringLiteral(" is empty")));
+        QVERIFY2(text != source,
+                 qPrintable(where + QStringLiteral(" is still the Hungarian source")));
+    }
+}
+
+void TestI18n::everyCataloguePluralisesTheSlotCounts_data()
+{
+    QTest::addColumn<QString>("code");
+    for (const QString &code : i18n::targetCodes())
+        QTest::newRow(qPrintable(code)) << code;
+}
+
+void TestI18n::everyCataloguePluralisesTheSlotCounts()
+{
+    QFETCH(QString, code);
+
+    InstalledCatalogue catalogue(code);
+    QVERIFY2(catalogue.loaded(), qPrintable(code));
+
+    // The two quantity lines are %n messages with numerus entries, not %1
+    // arguments substituted by the caller.
+    for (const QString &source : {QStringLiteral("%n hely üresen marad."),
+                                  QStringLiteral("%n fotó szabadon marad.")}) {
+        for (const int count : {1, 2, 5}) {
+            const QString text = translatedWithCount("PhotoPrint", source, count);
+            const QString where =
+                QStringLiteral("%1, count %2, %3").arg(code).arg(count).arg(source);
+            QVERIFY2(!text.isEmpty(), qPrintable(where + QStringLiteral(": empty")));
+            QVERIFY2(text != hungarianFallback(source, count),
+                     qPrintable(where + QStringLiteral(": still the Hungarian fallback")));
+            QVERIFY2(text.contains(QString::number(count)),
+                     qPrintable(where + QStringLiteral(": the count is missing")));
+            QVERIFY2(!text.contains(QStringLiteral("%n")),
+                     qPrintable(where + QStringLiteral(": %n was left in the text")));
+        }
+        const bool hasPluralForms =
+            code != QStringLiteral("ja") && code != QStringLiteral("zh_CN");
+        if (hasPluralForms) {
+            QVERIFY2(translatedWithCount("PhotoPrint", source, 1)
+                         != translatedWithCount("PhotoPrint", source, 2),
+                     qPrintable(QStringLiteral("%1: %2 has no numerus difference")
+                                    .arg(code, source)));
+        }
     }
 }
 

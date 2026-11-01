@@ -9,6 +9,7 @@
 #include "Translation.h"
 
 #include <QAction>
+#include <QCoreApplication>
 #include <QDir>
 #include <QImage>
 #include <QImageWriter>
@@ -161,12 +162,13 @@ QString positionBase()
 
 QString emptySlotsSentence(int count)
 {
-    return QStringLiteral("%1 hely üresen marad.").arg(count);
+    // The counted lines are %n messages with numerus forms, not %1 arguments.
+    return QCoreApplication::translate("PhotoPrint", "%n hely üresen marad.", nullptr, count);
 }
 
 QString freePhotosSentence(int count)
 {
-    return QStringLiteral("%1 fotó szabadon marad.").arg(count);
+    return QCoreApplication::translate("PhotoPrint", "%n fotó szabadon marad.", nullptr, count);
 }
 
 const Frame *frameInSlot(const Page &page, const QString &slotId)
@@ -202,6 +204,7 @@ private slots:
     void elevenFramesApplyAndNameTheFreeOne();
     void appliesToAnEmptyPageWithNoPhotos();
     void currentLayoutIsMarkedAndNamed();
+    void staleLayoutIdIsNotClaimed();
     void tinyPaperDisablesWithTheMessage();
     void templateNamesAndAccessibleNames();
     void positionNoticeNamesEveryReset();
@@ -488,6 +491,50 @@ void TestTemplateBrowser::currentLayoutIsMarkedAndNamed()
     QCOMPARE(markedCurrent.pixel(2, 2), plainTile.pixel(2, 2));
     QVERIFY(markedCurrent.pixel(9, markedCurrent.height() - 12)
             != plainTile.pixel(9, plainTile.height() - 12));
+}
+
+void TestTemplateBrowser::staleLayoutIdIsNotClaimed()
+{
+    const PaperSpec paper = paperNamed(QStringLiteral("A4"));
+    const QString id = QStringLiteral("n04-grid-2x2");
+    const CollageTemplate *layout = CollageTemplates::instance().find(id);
+    QVERIFY(layout);
+
+    Page page;
+    page.paper = paper;
+    page.frames = framesFor(2);
+    const auto laidOut = SlotLayoutEngine::applyTemplate(page, *layout);
+    QVERIFY(laidOut.ok());
+
+    // Adding a cell makes the page a hand-made layout even though the project
+    // still carries the old label; the picker must not claim the catalogue entry.
+    const auto enlarged = SlotLayoutEngine::addSlot(laidOut.value(),
+                                                    laidOut.value().slotList.at(0).id);
+    QVERIFY(enlarged.ok());
+    QCOMPARE(enlarged.value().slotList.size(), 5);
+
+    TemplateBrowserRequest request = requestWith(paper, enlarged.value().frames);
+    request.slotList = enlarged.value().slotList;
+    request.slotStyle = enlarged.value().slotStyle;
+    request.layoutId = id;
+    TemplateBrowserDialog dialog(request);
+    dialog.show();
+    QTest::qWait(20);
+
+    QVERIFY(dialog.currentLayoutId().isEmpty());
+    QVERIFY(!dialog.templateIsCurrent(id));
+    QVERIFY(dialog.currentLayoutText().isEmpty());
+    // With no honest current layout the chip follows the photographs again.
+    QCOMPARE(dialog.selectedCount(), 2);
+
+    // Restoring the matching cells brings the label and the mark back.
+    dialog.setPage(paper, false, laidOut.value().frames, {}, laidOut.value().slotList,
+                   laidOut.value().slotStyle, id);
+    QVERIFY(dialog.waitForPendingSync());
+    QCOMPARE(dialog.currentLayoutId(), id);
+    QVERIFY(dialog.templateIsCurrent(id));
+    QVERIFY2(dialog.currentLayoutText().contains(layout->nameEn),
+             qPrintable(dialog.currentLayoutText()));
 }
 
 void TestTemplateBrowser::tinyPaperDisablesWithTheMessage()
@@ -1307,13 +1354,15 @@ void TestTemplateBrowser::addingAPhotoKeepsTemplatedGeometry()
         QVERIFY(!frame.slotId.isEmpty());
     }
 
-    // The cells are full, so the next photo becomes a free frame beside the
-    // layout instead of reflowing it.
+    // The cells are full, so the next photo goes to a new page with the same
+    // layout: the arrangement is never overlapped by a free frame.
     QVERIFY(addPhotos(window, QStringList{photos.at(3)}));
     QVERIFY(window.waitForPreview(15000));
 
-    const Page page = window.document().pages.first();
-    QCOMPARE(page.frames.size(), 4);
+    const DocumentSnapshot document = window.document();
+    QCOMPARE(document.pages.size(), 2);
+    const Page page = document.pages.first();
+    QCOMPARE(page.frames.size(), 3);
     QCOMPARE(page.slotList.size(), 3);
     QCOMPARE(page.layoutId, templateId);
     for (int i = 0; i < templated.size(); ++i) {
@@ -1325,7 +1374,13 @@ void TestTemplateBrowser::addingAPhotoKeepsTemplatedGeometry()
         QCOMPARE(frame.width, templated.at(i).width);
         QCOMPARE(frame.height, templated.at(i).height);
     }
-    QVERIFY(page.frames.at(3).slotId.isEmpty());
+    const Page added = document.pages.at(1);
+    QVERIFY(added.hasLayout());
+    QCOMPARE(added.layoutId, templateId);
+    QCOMPARE(added.slotList.size(), 3);
+    QCOMPARE(added.frames.size(), 1);
+    QCOMPARE(added.frames.first().sourcePath, photos.at(3));
+    QVERIFY(!added.frames.first().slotId.isEmpty());
 }
 
 void TestTemplateBrowser::openingAndCancellingChangesNothing()

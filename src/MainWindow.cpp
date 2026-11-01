@@ -28,6 +28,7 @@
 #include <QStyleHints>
 #include <QDoubleSpinBox>
 #include <QFontDatabase>
+#include <QFontMetrics>
 #include <QPlainTextEdit>
 #include <QDragEnterEvent>
 #include <QDragLeaveEvent>
@@ -408,8 +409,15 @@ void PageView::setDocument(const DocumentSnapshot &document)
         if (!m_selectedSlotId.isEmpty()
             && (!page || !SlotGeometry::slotById(*page, m_selectedSlotId)))
             m_selectedSlotId.clear();
-        if (const Frame *frame = selectedFramePtr())
+        if (const Frame *frame = selectedFramePtr()) {
             m_selectedSlotId = frame->slotId;
+        } else if (!m_selectedSlotId.isEmpty() && page) {
+            // The selected cell gained a photograph (an undo, a drop, a top-up):
+            // the photo is what the user wants to act on now.
+            if (const Frame *occupant =
+                    SlotGeometry::frameInSlot(*page, m_selectedSlotId))
+                m_selectedId = occupant->id;
+        }
     };
 
     if (document == m_document) {
@@ -424,6 +432,17 @@ void PageView::setDocument(const DocumentSnapshot &document)
         return;
     }
     m_document = document;
+
+    // A document replaced from outside (an undo, a project load, another edit)
+    // makes a pending wheel burst stale: committing it would re-apply a zoom the
+    // new document no longer has. Drop the burst instead of landing it.
+    if (!m_zoomFrameId.isEmpty()) {
+        m_zoomFrameId.clear();
+        if (m_zoomTimer)
+            m_zoomTimer->stop();
+        m_cropZoomPulse.invalidate();
+    }
+
     pruneSelection();
     contentChanged(true);
 }
@@ -1087,6 +1106,28 @@ void PageView::clearSelection()
         onSlotSelectionChanged(QString());
 }
 
+void PageView::updateDropCue()
+{
+    QString cue;
+    const Page *page = currentPage();
+    if (!m_dropSlotId.isEmpty() && page) {
+        // A filled cell is replaced, not filled: the cue says so before the
+        // button is released, so a photo never disappears without warning.
+        if (SlotGeometry::frameInSlot(*page, m_dropSlotId))
+            cue = QCoreApplication::translate("PhotoPrint", "Csere");
+    }
+    if (cue == m_dropCue)
+        return;
+    m_dropCue = cue;
+    // The cue is what a screen reader hears while the drag hovers the cell; the
+    // base description returns as soon as the drag leaves.
+    if (!cue.isEmpty())
+        setAccessibleDescription(cue);
+    else
+        setAccessibleDescription(m_accessibleBeforeDrag);
+    update();
+}
+
 Frame PageView::draggedFrame(const QPointF &pagePoint, bool fine) const
 {
     Frame frame = m_drag.startFrame;
@@ -1312,10 +1353,34 @@ void PageView::paintSlotOverlays(QPainter &painter, const Page &page) const
         }
 
         if (hovered) {
-            QPen pen(accent, 2.4, Qt::SolidLine);
+            // A filled cell is replaced, so its hover cue is not the accent drop
+            // target: a distinct colour and a `Csere` badge say what the release
+            // will do before the photo disappears.
+            const bool occupied = SlotGeometry::frameInSlot(page, slot.id) != nullptr;
+            const QColor cue = occupied ? QColor(0xc4, 0x55, 0x00) : accent;
+            QPen pen(cue, 2.4, Qt::SolidLine);
             painter.setPen(pen);
             painter.setBrush(Qt::NoBrush);
             painter.drawRoundedRect(cell.adjusted(1.5, 1.5, -1.5, -1.5), 4.0, 4.0);
+            if (occupied) {
+                const QString label = QCoreApplication::translate("PhotoPrint", "Csere");
+                QFont font = baseFont;
+                font.setBold(true);
+                font.setPointSizeF(std::max(7.0, baseFont.pointSizeF() * 0.9));
+                const QFontMetrics metrics(font);
+                const int textWidth = metrics.horizontalAdvance(label) + 14;
+                const int textHeight = metrics.height() + 6;
+                if (cell.width() >= textWidth + 8 && cell.height() >= textHeight + 8) {
+                    const QRectF badge(cell.center().x() - textWidth / 2.0, cell.top() + 6.0,
+                                       textWidth, textHeight);
+                    painter.setPen(Qt::NoPen);
+                    painter.setBrush(cue);
+                    painter.drawRoundedRect(badge, 4.0, 4.0);
+                    painter.setFont(font);
+                    painter.setPen(Qt::white);
+                    painter.drawText(badge, Qt::AlignCenter, label);
+                }
+            }
         }
     }
 }
@@ -1550,34 +1615,41 @@ void PageView::wheelEvent(QWheelEvent *event)
 
     // Which photograph, if any, is under the wheel? Crop mode keeps acting on
     // the selected frame; otherwise the photo under the cursor wins, which is
-    // what "wheel over a photo" means.
-    const Frame *target = nullptr;
-    Frame copy;
+    // what "wheel over a photo" means. The frame is copied out of the document
+    // first: flushWheelZoom() commits synchronously and the window may publish a
+    // new document in response, so no pointer into m_document may outlive it.
+    Frame target;
+    bool hasTarget = false;
     const Page *page = currentPage();
     if (m_cropMode) {
-        target = selectedFramePtr();
+        if (const Frame *selected = selectedFramePtr()) {
+            target = *selected;
+            hasTarget = true;
+        }
     } else if (page) {
         const int index = hitFrame(position);
         if (index >= 0) {
-            copy = page->frames.at(index);
-            target = &copy;
+            target = page->frames.at(index);
+            hasTarget = true;
         }
     }
+    const QString targetId = hasTarget ? target.id : QString();
 
-    if (!pageZoomRequested && target && !target->slotId.isEmpty()) {
+    if (!pageZoomRequested && hasTarget && !target.slotId.isEmpty()) {
         // The page view does not move: the photograph zooms inside its cell and
         // the existing clip keeps everything outside the cell invisible.
-        const QSize pixels = m_images.contains(target->id) ? m_images.value(target->id).size()
-                                                          : QSize();
+        const QSize pixels =
+            m_images.contains(targetId) ? m_images.value(targetId).size() : QSize();
         if (!pixels.isEmpty()) {
-            Frame updated = PhotoItem::zoomAt(*target, widgetToPage(position), factor, pixels);
-            if (PhotoItem::clampCrop(updated, pixels).cropCenter != target->cropCenter
-                || updated.zoom != target->zoom) {
-                if (m_zoomFrameId != target->id) {
+            Frame updated = PhotoItem::zoomAt(target, widgetToPage(position), factor, pixels);
+            if (PhotoItem::clampCrop(updated, pixels).cropCenter != target.cropCenter
+                || updated.zoom != target.zoom) {
+                if (m_zoomFrameId != targetId) {
+                    const Frame start = target;
                     flushWheelZoom();
-                    m_zoomStartFrame = *target;
+                    m_zoomStartFrame = start;
                 }
-                m_zoomFrameId = target->id;
+                m_zoomFrameId = targetId;
                 m_zoomCurrentFrame = updated;
                 // A crop zoom is a gesture: compose the fitted page per notch so
                 // the picture follows the wheel, and sharpen when it stops.
@@ -1591,20 +1663,21 @@ void PageView::wheelEvent(QWheelEvent *event)
         }
     }
 
-    if (m_cropMode && target && !pageZoomRequested) {
+    if (m_cropMode && hasTarget && !pageZoomRequested) {
         // Crop mode on a free frame: unchanged from the shipped behaviour, but
         // the burst now commits once instead of once per notch.
-        const QSize pixels = m_images.contains(target->id) ? m_images.value(target->id).size()
-                                                          : QSize();
+        const QSize pixels =
+            m_images.contains(targetId) ? m_images.value(targetId).size() : QSize();
         const QPointF pagePoint = widgetToPage(position);
-        Frame updated = PhotoItem::zoomAt(*target, pagePoint, factor, pixels);
-        if (PhotoItem::clampCrop(updated, pixels).cropCenter != target->cropCenter
-            || updated.zoom != target->zoom) {
-            if (m_zoomFrameId != target->id) {
+        Frame updated = PhotoItem::zoomAt(target, pagePoint, factor, pixels);
+        if (PhotoItem::clampCrop(updated, pixels).cropCenter != target.cropCenter
+            || updated.zoom != target.zoom) {
+            if (m_zoomFrameId != targetId) {
+                const Frame start = target;
                 flushWheelZoom();
-                m_zoomStartFrame = *target;
+                m_zoomStartFrame = start;
             }
-            m_zoomFrameId = target->id;
+            m_zoomFrameId = targetId;
             m_zoomCurrentFrame = updated;
             m_cropZoomPulse.start();
             scheduleSettle();
@@ -1800,7 +1873,9 @@ void PageView::dragEnterEvent(QDragEnterEvent *event)
     flushWheelZoom();
     const bool frames = event->mimeData()->hasFormat(QString::fromLatin1(kFrameMimeType));
     if (event->mimeData()->hasUrls() || frames) {
+        m_accessibleBeforeDrag = accessibleDescription();
         m_dropSlotId = slotAtWidget(event->position());
+        updateDropCue();
         update();
         event->acceptProposedAction();
         return;
@@ -1810,20 +1885,17 @@ void PageView::dragEnterEvent(QDragEnterEvent *event)
 
 void PageView::dragMoveEvent(QDragMoveEvent *event)
 {
-    const QString slotId = slotAtWidget(event->position());
-    if (slotId != m_dropSlotId) {
-        m_dropSlotId = slotId;
-        update();
-    }
+    m_dropSlotId = slotAtWidget(event->position());
+    updateDropCue();
+    update();
     event->acceptProposedAction();
 }
 
 void PageView::dragLeaveEvent(QDragLeaveEvent *event)
 {
     Q_UNUSED(event)
-    if (m_dropSlotId.isEmpty())
-        return;
     m_dropSlotId.clear();
+    updateDropCue();
     update();
 }
 
@@ -1831,16 +1903,16 @@ void PageView::dropEvent(QDropEvent *event)
 {
     flushWheelZoom();
     const QString slotId = slotAtWidget(event->position());
-    if (!m_dropSlotId.isEmpty() || !slotId.isEmpty()) {
-        m_dropSlotId.clear();
-        update();
-    }
+    const QPointF pagePoint = widgetToPage(event->position());
+    m_dropSlotId.clear();
+    updateDropCue();
+    update();
 
     const QString frameFormat = QString::fromLatin1(kFrameMimeType);
     if (event->mimeData()->hasFormat(frameFormat)) {
         const QString frameId = QString::fromUtf8(event->mimeData()->data(frameFormat));
         if (!frameId.isEmpty() && onFrameDroppedAt)
-            onFrameDroppedAt(frameId, slotId);
+            onFrameDroppedAt(frameId, slotId, pagePoint);
         event->acceptProposedAction();
         return;
     }
@@ -2263,9 +2335,10 @@ void MainWindow::buildUi()
     m_pageView->onFilesDroppedAt = [this](const QStringList &paths, const QString &slotId) {
         addFilesAt(paths, slotId);
     };
-    m_pageView->onFrameDroppedAt = [this](const QString &frameId, const QString &slotId) {
-        dropFrameAt(frameId, slotId);
-    };
+    m_pageView->onFrameDroppedAt =
+        [this](const QString &frameId, const QString &slotId, const QPointF &pagePoint) {
+            dropFrameAt(frameId, slotId, pagePoint);
+        };
     m_pageView->onCancelBusy = [this] { cancelPreviewWork(); };
     m_pageView->onSelectionChanged = [this](const QString &frameId) {
         selectFrame(frameId, false);
@@ -2718,9 +2791,54 @@ void MainWindow::addFilesAt(const QStringList &paths, const QString &slotId)
     const Page page = document.pages.at(document.currentPage);
 
     if (!page.hasLayout()) {
-        // A free canvas keeps the shipped placement, one photograph at a time.
-        for (const QString &path : files)
-            addPhoto(path);
+        if (files.size() == 1) {
+            addPhoto(files.first());
+            return;
+        }
+        // A free canvas has no cells: build the same placement the sequential
+        // path makes, but publish it once so a multi-file drop is one undo.
+        Page built = page;
+        QString lastId;
+        for (const QString &path : files) {
+            const std::optional<Frame> payload = photoPayload(path, built);
+            if (!payload)
+                continue;
+            Frame frame = *payload;
+            frame.autoPlaced = true;
+            QHash<QString, QSize> pixelSizes;
+            for (const Frame &existing : built.frames) {
+                if (const std::optional<SourceImage> source =
+                        m_store.cached(existing.sourcePath))
+                    pixelSizes.insert(existing.id, source->size());
+            }
+            if (const std::optional<SourceImage> source = m_store.cached(frame.sourcePath))
+                pixelSizes.insert(frame.id, source->size());
+            bool allAuto = !built.frames.isEmpty();
+            for (const Frame &existing : built.frames) {
+                if (!existing.autoPlaced) {
+                    allAuto = false;
+                    break;
+                }
+            }
+            if (allAuto) {
+                built.frames = LayoutEngine::appendPhoto(built, built.frames, frame, pixelSizes);
+            } else {
+                const int count = built.frames.size();
+                frame.cx += (count % 5) * 6.0;
+                frame.cy += (count % 5) * 6.0;
+                built.frames.append(frame);
+            }
+            lastId = frame.id;
+        }
+        if (lastId.isEmpty() || built == page)
+            return;
+        const auto published = m_controller.publishPage(
+            built, QCoreApplication::translate("PhotoPrint", "Fotók hozzáadása"));
+        if (!published) {
+            showProblem(published.error().message);
+            return;
+        }
+        selectFrame(lastId, false);
         return;
     }
 
@@ -2750,34 +2868,84 @@ void MainWindow::addFilesAt(const QStringList &paths, const QString &slotId)
     }
     Page finished = placed.value();
 
-    // More files than free cells: the surplus keeps today's diagonal placement,
-    // inside the same page so a multi-file drop is still one undo.
+    // More files than empty cells: the surplus goes to new pages with the same
+    // layout, never onto the sheet as free frames across the sections. All of it
+    // is one edit and one undo.
+    QList<Frame> remaining;
     for (const Frame &payload : payloads) {
-        if (!report.leftFreeIds.contains(payload.id))
-            continue;
-        Frame extra = payload;
-        extra.autoPlaced = false;
-        const int count = finished.frames.size();
-        extra.cx += (count % 5) * 6.0;
-        extra.cy += (count % 5) * 6.0;
-        finished.frames.append(extra);
+        if (report.leftFreeIds.contains(payload.id))
+            remaining.append(payload);
+    }
+    QList<Page> extraPages;
+    while (!remaining.isEmpty()) {
+        Page extra;
+        extra.id = makeId(QStringLiteral("page"));
+        extra.paper = page.paper;
+        extra.landscape = page.landscape;
+        extra.slotList = page.slotList;
+        extra.slotStyle = page.slotStyle;
+        extra.layoutId = page.layoutId;
+        SlotLayoutEngine::Report extraReport;
+        auto filled = SlotLayoutEngine::placePhotos(extra, QString(), remaining, &extraReport);
+        if (!filled) {
+            showProblem(filled.error().message);
+            return;
+        }
+        QList<Frame> stillFree;
+        for (const Frame &frame : remaining) {
+            if (extraReport.leftFreeIds.contains(frame.id))
+                stillFree.append(frame);
+        }
+        extraPages.append(filled.value());
+        if (stillFree.size() == remaining.size())
+            break; // no usable cell on this layout: stop instead of looping
+        remaining = stillFree;
     }
 
-    if (!(finished == page)) {
-        m_controller.publishPage(finished,
-                                 QCoreApplication::translate("PhotoPrint",
-                                                             "Fotó beillesztése"));
+    ApplyLayoutEdit edit;
+    PageLayout change;
+    change.pageIndex = document.currentPage;
+    change.frames = finished.frames;
+    change.slotList = finished.slotList;
+    change.slotStyle = finished.slotStyle;
+    change.layoutId = finished.layoutId;
+    change.cutGuides = finished.cutGuides;
+    change.borderlessOverride = finished.borderlessOverride;
+    edit.pages.append(change);
+    edit.newPages = extraPages;
+    edit.insertIndex = document.currentPage + 1;
+    edit.selectPage = document.currentPage;
+    edit.actionText = QCoreApplication::translate("PhotoPrint", "Fotó beillesztése");
+    const auto published = m_controller.apply(edit);
+    if (!published) {
+        showProblem(published.error().message);
+        return;
+    }
+    if (!extraPages.isEmpty()) {
+        statusBar()->showMessage(
+            QCoreApplication::translate("PhotoPrint", "A többi fotó új lapra került."), 6000);
     }
 
     // The dropped photograph (or the first file of a multi-drop) is selected, so
-    // the inspector and the library show what just arrived.
+    // the inspector and the library show what just arrived. A file that landed
+    // only on a new page is not selected on this one.
     QString placedId;
     if (!target.isEmpty()) {
         if (const Frame *frame = SlotGeometry::frameInSlot(finished, target))
             placedId = frame->id;
     }
-    if (placedId.isEmpty() && !payloads.isEmpty())
-        placedId = payloads.first().id;
+    if (placedId.isEmpty()) {
+        for (const Frame &payload : payloads) {
+            for (const Frame &frame : finished.frames) {
+                if (frame.id == payload.id) {
+                    placedId = payload.id;
+                    break;
+                }
+            }
+            if (!placedId.isEmpty())
+                break;
+        }
+    }
     if (!placedId.isEmpty())
         selectFrame(placedId, false);
 }
@@ -2829,14 +2997,12 @@ void MainWindow::addPhoto(const QString &path)
     selectFrame(frame.id, false);
 }
 
-void MainWindow::dropFrameAt(const QString &frameId, const QString &slotId)
+void MainWindow::dropFrameAt(const QString &frameId, const QString &slotId, const QPointF &pagePoint)
 {
     const DocumentSnapshot document = m_controller.document();
     if (document.pages.isEmpty())
         return;
     const Page page = document.pages.at(document.currentPage);
-    if (!page.hasLayout())
-        return;
 
     const Frame *source = nullptr;
     for (const Frame &frame : page.frames) {
@@ -2847,6 +3013,32 @@ void MainWindow::dropFrameAt(const QString &frameId, const QString &slotId)
     }
     if (!source)
         return;
+
+    if (!page.hasLayout()) {
+        // A free canvas has no cells to drop into: the drag moves the photo to
+        // the drop point, as one edit, instead of being silently ignored.
+        const QSizeF sheet = pageSizeMm(page);
+        if (sheet.width() <= 0.0 || sheet.height() <= 0.0)
+            return;
+        Page placed = page;
+        for (Frame &frame : placed.frames) {
+            if (frame.id != frameId)
+                continue;
+            frame.cx = std::clamp(pagePoint.x(), 0.0, sheet.width());
+            frame.cy = std::clamp(pagePoint.y(), 0.0, sheet.height());
+            frame.autoPlaced = false;
+            break;
+        }
+        if (placed == page) {
+            selectFrame(frameId, false);
+            return;
+        }
+        m_controller.publishPage(placed,
+                                 QCoreApplication::translate("PhotoPrint",
+                                                             "Fotó áthelyezése"));
+        selectFrame(frameId, false);
+        return;
+    }
 
     if (slotId.isEmpty()) {
         // Dropped outside every cell: the photograph leaves the layout and
@@ -2947,8 +3139,14 @@ void MainWindow::onDocumentChanged()
         && (!page || !SlotGeometry::slotById(*page, m_selectedSlotId)))
         m_selectedSlotId.clear();
     if (const Frame *selected =
-            m_selectedId.isEmpty() ? nullptr : findFrame(document, m_selectedId))
+            m_selectedId.isEmpty() ? nullptr : findFrame(document, m_selectedId)) {
         m_selectedSlotId = selected->slotId;
+    } else if (!m_selectedSlotId.isEmpty() && page) {
+        // The selected empty cell gained a photograph (an undo, a drop, a
+        // top-up): the photo becomes the selection so the next action acts on it.
+        if (const Frame *occupant = SlotGeometry::frameInSlot(*page, m_selectedSlotId))
+            m_selectedId = occupant->id;
+    }
 
     // A frame that left the document cannot be "not found" any more.
     for (auto it = m_unavailableFrames.begin(); it != m_unavailableFrames.end();) {
@@ -4624,7 +4822,10 @@ void MainWindow::updateNoticeBar()
         return;
     const bool printer = m_printerStatus && !m_printerStatus->text().isEmpty();
     const bool paper = m_paperHint && !m_paperHint->text().isEmpty();
-    const bool overflow = m_overflowLabel && m_overflowLabel->isVisible();
+    // The overflow state is the page's own, not the label's effective
+    // visibility: a child of a hidden bar reports itself hidden, which would
+    // keep the bar hidden and the warning could never appear.
+    const bool overflow = pageOverflows();
     m_noticeBar->setVisible(printer || paper || overflow);
 }
 

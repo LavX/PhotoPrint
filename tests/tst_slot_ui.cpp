@@ -9,6 +9,9 @@
 #include <QApplication>
 #include <QDir>
 #include <QDoubleSpinBox>
+#include <QDragEnterEvent>
+#include <QDragLeaveEvent>
+#include <QDragMoveEvent>
 #include <QDropEvent>
 #include <QFile>
 #include <QImage>
@@ -16,6 +19,7 @@
 #include <QListWidget>
 #include <QMimeData>
 #include <QPushButton>
+#include <QStatusBar>
 #include <QTemporaryDir>
 #include <QUrl>
 #include <QWheelEvent>
@@ -105,6 +109,33 @@ DocumentSnapshot documentWithLayout(const QStringList &photos, int slotCount)
     return document;
 }
 
+/// A page without slots and one free frame per path, large enough to crop and
+/// zoom. The ids are stable so a test can address them directly.
+DocumentSnapshot documentWithFreeFrames(const QStringList &photos)
+{
+    DocumentSnapshot document;
+    Page page;
+    page.id = QStringLiteral("page-free");
+    page.paper = a4Paper();
+    for (int i = 0; i < photos.size(); ++i) {
+        Frame frame;
+        frame.id = QStringLiteral("frame-free-%1").arg(i);
+        frame.sourcePath = photos.at(i);
+        frame.sourceSha256 = fileSha256(photos.at(i));
+        frame.cx = 60.0 + 80.0 * i;
+        frame.cy = 80.0 + 100.0 * i;
+        frame.width = 70.0;
+        frame.height = 50.0;
+        frame.fit = FitMode::Fill;
+        frame.cropCenter = QPointF(0.5, 0.5);
+        frame.autoPlaced = false;
+        page.frames.append(frame);
+    }
+    document.pages.append(page);
+    document.currentPage = 0;
+    return document;
+}
+
 /// Loads a document through the real project path, so the window sees a layout
 /// the way it sees one from disk: no test-only setter, no private shortcut.
 bool loadDocument(MainWindow &window, const QTemporaryDir &dir, const DocumentSnapshot &document,
@@ -164,6 +195,16 @@ void sendWheel(PageView &view, const QPointF &position, int angle,
     QApplication::sendEvent(&view, &event);
 }
 
+QPointF pageToWidget(const PageView &view, const QPointF &mm)
+{
+    const QRectF rect = view.pageRect();
+    const QSizeF page = view.pageMm();
+    if (page.isEmpty())
+        return {};
+    return QPointF(rect.left() + mm.x() / page.width() * rect.width(),
+                   rect.top() + mm.y() / page.height() * rect.height());
+}
+
 QRgb rasterPixelAtMm(const QImage &image, const QSizeF &pageMm, const QPointF &mm)
 {
     if (image.isNull() || pageMm.isEmpty())
@@ -200,6 +241,16 @@ private slots:
     void addPhotoFillsFirstEmptySlot();
     void applyLayoutToAnEmptyPageThenFill();
     void topUpFillsTheDetachedPhoto();
+    void surplusFilesGoToANewPage();
+    void filledCellDropReplacesAndUndoes();
+    void hoverOnFilledCellSaysReplace();
+    void multiFileDropOnFreeCanvasIsOneUndo();
+    void freeCanvasLibraryDropMovesThePhoto();
+    void undoPromotesSelectedCell();
+    void missingStateAfterPreviewFinished();
+    void fitPageStaysHiddenOnALaidOutPageThatOverflows();
+    void cropWheelAfterSelectionChangeIsSafe();
+    void externalReplacementCancelsWheelBurst();
     void slottedFrameControlsAreDisabled();
     void templateApplyKeepsSlotsOnALaidOutPage();
     void deleteClearsSelectedSlot();
@@ -832,6 +883,453 @@ void TestSlotUi::topUpFillsTheDetachedPhoto()
     undo->trigger();
     QTest::qWait(50);
     QVERIFY(window.document() == detached);
+}
+
+void TestSlotUi::surplusFilesGoToANewPage()
+{
+    QTemporaryDir dir;
+    QVERIFY(dir.isValid());
+    const QStringList photos = {
+        makePhoto(dir.path(), QStringLiteral("s1.png"), QColor(200, 60, 60)),
+        makePhoto(dir.path(), QStringLiteral("s2.png"), QColor(60, 200, 60)),
+        makePhoto(dir.path(), QStringLiteral("s3.png"), QColor(60, 60, 200)),
+    };
+    for (const QString &photo : photos)
+        QVERIFY(!photo.isEmpty());
+
+    MainWindow window;
+    window.resize(1280, 800);
+    window.show();
+    QTest::qWait(100);
+    QVERIFY(loadDocument(window, dir, documentWithLayout({}, 2), QStringLiteral("two.ppj")));
+    auto *view = window.findChild<PageView *>();
+    QVERIFY(view);
+    const DocumentSnapshot before = window.document();
+    const Page page = before.pages.first();
+    QCOMPARE(page.slotList.size(), 2);
+
+    // Three files into two cells: the first two fill the page, the third goes to
+    // a new page with the same layout. Nothing overlaps the sections.
+    dropFiles(*view, view->slotRect(page.slotList.at(0).id).center(), photos);
+    QVERIFY(window.waitForPreview(15000));
+
+    const DocumentSnapshot after = window.document();
+    QCOMPARE(after.pages.size(), 2);
+    const Page first = after.pages.at(0);
+    QCOMPARE(first.frames.size(), 2);
+    for (const Frame &frame : first.frames)
+        QVERIFY(!frame.slotId.isEmpty());
+    const Page second = after.pages.at(1);
+    QVERIFY(second.hasLayout());
+    QCOMPARE(second.layoutId, first.layoutId);
+    QCOMPARE(second.slotList.size(), first.slotList.size());
+    QCOMPARE(second.frames.size(), 1);
+    QVERIFY(SlotGeometry::layoutConsistent(second));
+    QVERIFY2(window.statusBar()->currentMessage().contains(
+                 QStringLiteral("A többi fotó új lapra került.")),
+             qPrintable(window.statusBar()->currentMessage()));
+
+    // One action, one undo: the extra page and the fills go together.
+    QAction *undo = undoAction(window);
+    QVERIFY(undo);
+    undo->trigger();
+    QTest::qWait(50);
+    QVERIFY(window.document() == before);
+}
+
+void TestSlotUi::filledCellDropReplacesAndUndoes()
+{
+    QTemporaryDir dir;
+    QVERIFY(dir.isValid());
+    const QString oldPhoto = makePhoto(dir.path(), QStringLiteral("old.png"), QColor(190, 60, 60));
+    const QString newPhoto = makePhoto(dir.path(), QStringLiteral("new.png"), QColor(60, 60, 190));
+
+    MainWindow window;
+    window.resize(1280, 800);
+    window.show();
+    QTest::qWait(100);
+    QVERIFY(loadDocument(window, dir, documentWithLayout({oldPhoto}, 4),
+                         QStringLiteral("filled.ppj")));
+    auto *view = window.findChild<PageView *>();
+    QVERIFY(view);
+    QVERIFY(window.waitForPreview(15000));
+
+    const DocumentSnapshot before = window.document();
+    const Page page = before.pages.first();
+    const QString slotId = page.slotList.at(0).id;
+    const Frame *oldFrame = frameInSlot(page, slotId);
+    QVERIFY(oldFrame);
+    const QString oldId = oldFrame->id;
+
+    // Dropping onto a filled cell replaces the photo; the cue is tested on its
+    // own, this is the actual replacement and its undo.
+    dropFiles(*view, view->slotRect(slotId).center(), {newPhoto});
+    QVERIFY(window.waitForPreview(15000));
+
+    const Page after = window.document().pages.first();
+    QCOMPARE(after.frames.size(), 1);
+    const Frame *placed = frameInSlot(after, slotId);
+    QVERIFY(placed);
+    QCOMPARE(placed->sourcePath, newPhoto);
+    QVERIFY(placed->id != oldId);
+
+    QAction *undo = undoAction(window);
+    QVERIFY(undo);
+    undo->trigger();
+    QTest::qWait(50);
+    QVERIFY(window.document() == before);
+    QCOMPARE(frameInSlot(window.document().pages.first(), slotId)->sourcePath, oldPhoto);
+}
+
+void TestSlotUi::hoverOnFilledCellSaysReplace()
+{
+    QTemporaryDir dir;
+    QVERIFY(dir.isValid());
+    const QString photo = makePhoto(dir.path(), QStringLiteral("cue.png"), QColor(120, 120, 60));
+    const DocumentSnapshot document = documentWithLayout({photo}, 4);
+    QVERIFY(!document.pages.isEmpty());
+    const Page page = document.pages.first();
+    const QString filledSlot = page.slotList.at(0).id;
+    const QString emptySlot = page.slotList.at(1).id;
+    const QString frameId = frameInSlot(page, filledSlot)->id;
+
+    PageView view;
+    view.resize(900, 700);
+    view.setDocument(document);
+    view.setAccessibleDescription(QStringLiteral("alap"));
+    view.show();
+    QVERIFY(QTest::qWaitForWindowExposed(&view));
+
+    QMimeData mime;
+    mime.setData(QString::fromLatin1(kFrameMimeType), frameId.toUtf8());
+    const QPoint filledCentre = view.slotRect(filledSlot).center().toPoint();
+    const QPoint emptyCentre = view.slotRect(emptySlot).center().toPoint();
+
+    QDragEnterEvent enter(filledCentre, Qt::CopyAction, &mime, Qt::LeftButton, Qt::NoModifier);
+    view.dragEnterForTest(&enter);
+    QDragMoveEvent overFilled(filledCentre, Qt::CopyAction, &mime, Qt::LeftButton,
+                              Qt::NoModifier);
+    view.dragMoveForTest(&overFilled);
+    QCOMPARE(view.dropCue(), QStringLiteral("Csere"));
+    QCOMPARE(view.accessibleDescription(), QStringLiteral("Csere"));
+
+    // The cue is painted, not only announced: the orange badge sits in the
+    // filled cell while the drag hovers it.
+    const QImage hovering = view.grab().toImage();
+    const QRect cell = view.slotRect(filledSlot).toRect().intersected(hovering.rect());
+    int cuePixels = 0;
+    for (int y = cell.top(); y <= cell.bottom(); ++y) {
+        for (int x = cell.left(); x <= cell.right(); ++x) {
+            const QRgb pixel = hovering.pixel(x, y);
+            if (qRed(pixel) > 150 && qGreen(pixel) < 130 && qBlue(pixel) < 100)
+                ++cuePixels;
+        }
+    }
+    QVERIFY2(cuePixels > 20,
+             qPrintable(QStringLiteral("replace cue pixels %1").arg(cuePixels)));
+
+    // An empty cell keeps the ordinary drop target; the cue goes away.
+    QDragMoveEvent overEmpty(emptyCentre, Qt::CopyAction, &mime, Qt::LeftButton, Qt::NoModifier);
+    view.dragMoveForTest(&overEmpty);
+    QVERIFY(view.dropCue().isEmpty());
+    QCOMPARE(view.accessibleDescription(), QStringLiteral("alap"));
+
+    // Leaving the drag restores the base description as well.
+    QDragEnterEvent enterAgain(filledCentre, Qt::CopyAction, &mime, Qt::LeftButton,
+                               Qt::NoModifier);
+    view.dragEnterForTest(&enterAgain);
+    QDragMoveEvent overFilledAgain(filledCentre, Qt::CopyAction, &mime, Qt::LeftButton,
+                                   Qt::NoModifier);
+    view.dragMoveForTest(&overFilledAgain);
+    QCOMPARE(view.dropCue(), QStringLiteral("Csere"));
+    QDragLeaveEvent leave;
+    view.dragLeaveForTest(&leave);
+    QVERIFY(view.dropCue().isEmpty());
+    QCOMPARE(view.accessibleDescription(), QStringLiteral("alap"));
+}
+
+void TestSlotUi::multiFileDropOnFreeCanvasIsOneUndo()
+{
+    QTemporaryDir dir;
+    QVERIFY(dir.isValid());
+    const QStringList photos = {
+        makePhoto(dir.path(), QStringLiteral("f1.png"), QColor(180, 70, 70)),
+        makePhoto(dir.path(), QStringLiteral("f2.png"), QColor(70, 180, 70)),
+        makePhoto(dir.path(), QStringLiteral("f3.png"), QColor(70, 70, 180)),
+    };
+
+    MainWindow window;
+    window.resize(1280, 800);
+    window.show();
+    QTest::qWait(100);
+    const DocumentSnapshot before = window.document();
+    QVERIFY(!before.pages.first().hasLayout());
+
+    QVERIFY(QMetaObject::invokeMethod(&window, "addDroppedFiles", Qt::DirectConnection,
+                                      Q_ARG(QStringList, photos)));
+    QVERIFY(window.waitForPreview(15000));
+    QCOMPARE(window.document().pages.first().frames.size(), 3);
+
+    // One undo removes all three, not one photograph per drop.
+    QAction *undo = undoAction(window);
+    QVERIFY(undo);
+    undo->trigger();
+    QTest::qWait(50);
+    QVERIFY(window.document() == before);
+}
+
+void TestSlotUi::freeCanvasLibraryDropMovesThePhoto()
+{
+    QTemporaryDir dir;
+    QVERIFY(dir.isValid());
+    const QString photo = makePhoto(dir.path(), QStringLiteral("move.png"), QColor(90, 160, 90));
+
+    MainWindow window;
+    window.resize(1280, 800);
+    window.show();
+    QTest::qWait(100);
+    QVERIFY(QMetaObject::invokeMethod(&window, "addDroppedFiles", Qt::DirectConnection,
+                                      Q_ARG(QStringList, QStringList{photo})));
+    QVERIFY(window.waitForPreview(15000));
+
+    auto *view = window.findChild<PageView *>();
+    QVERIFY(view);
+    const DocumentSnapshot before = window.document();
+    QVERIFY(!before.pages.first().hasLayout());
+    const Frame oldFrame = before.pages.first().frames.first();
+
+    const QPointF target = view->pageRect().center() + QPointF(-30.0, 25.0);
+    dropFrame(*view, target, oldFrame.id);
+    QTest::qWait(50);
+
+    const Frame moved = window.document().pages.first().frames.first();
+    QVERIFY(moved.cx != oldFrame.cx || moved.cy != oldFrame.cy);
+    QCOMPARE(moved.id, oldFrame.id);
+
+    QAction *undo = undoAction(window);
+    QVERIFY(undo);
+    undo->trigger();
+    QTest::qWait(50);
+    QVERIFY(window.document() == before);
+}
+
+void TestSlotUi::undoPromotesSelectedCell()
+{
+    QTemporaryDir dir;
+    QVERIFY(dir.isValid());
+    const QString photo = makePhoto(dir.path(), QStringLiteral("undo.png"), QColor(150, 90, 150));
+    MainWindow window;
+    window.resize(1280, 800);
+    window.show();
+    QTest::qWait(100);
+    QVERIFY(loadDocument(window, dir, documentWithLayout({photo}, 4),
+                         QStringLiteral("undo.ppj")));
+    auto *view = window.findChild<PageView *>();
+    QVERIFY(view);
+    QVERIFY(window.waitForPreview(15000));
+
+    const Page page = window.document().pages.first();
+    const QString slotId = page.slotList.at(0).id;
+    const QString frameId = frameInSlot(page, slotId)->id;
+
+    QTest::mouseClick(view, Qt::LeftButton, Qt::NoModifier,
+                      view->slotRect(slotId).center().toPoint());
+    QCOMPARE(view->selectedFrame(), frameId);
+    QTest::keyClick(view, Qt::Key_Delete);
+    QTest::qWait(50);
+    QVERIFY(view->selectedFrame().isEmpty());
+    QCOMPARE(view->selectedSlot(), slotId);
+
+    // The undo returns the photograph to the selected cell: the photo becomes
+    // the selection, so Delete acts on the photo rather than emptying the cell.
+    QAction *undo = undoAction(window);
+    QVERIFY(undo);
+    undo->trigger();
+    QTest::qWait(50);
+    QCOMPARE(view->selectedFrame(), frameId);
+    QCOMPARE(view->selectedSlot(), slotId);
+}
+
+void TestSlotUi::missingStateAfterPreviewFinished()
+{
+    QTemporaryDir dir;
+    QVERIFY(dir.isValid());
+    const QString textPath = dir.filePath(QStringLiteral("not-a-photo.txt"));
+    {
+        QFile file(textPath);
+        QVERIFY(file.open(QIODevice::WriteOnly));
+        file.write("this is not an image");
+    }
+
+    MainWindow window;
+    window.resize(1280, 800);
+    window.show();
+    QTest::qWait(100);
+    QVERIFY(loadDocument(window, dir, documentWithLayout({textPath}, 4),
+                         QStringLiteral("missing.ppj")));
+    QVERIFY(window.waitForPreview(15000));
+
+    auto *view = window.findChild<PageView *>();
+    QVERIFY(view);
+    const Page page = window.document().pages.first();
+    // The preview pass proves a source unreadable; until then it is loading, and
+    // after the pass the cell says so instead of showing an empty download.
+    QCOMPARE(view->slotState(page.slotList.at(0).id), PageView::SlotState::Missing);
+    QCOMPARE(view->slotState(page.slotList.at(1).id), PageView::SlotState::Empty);
+}
+
+void TestSlotUi::fitPageStaysHiddenOnALaidOutPageThatOverflows()
+{
+    QTemporaryDir dir;
+    QVERIFY(dir.isValid());
+    const QString photo = makePhoto(dir.path(), QStringLiteral("fit.png"), QColor(120, 140, 90));
+
+    DocumentSnapshot overflowing = documentWithLayout({}, 4);
+    QVERIFY(!overflowing.pages.isEmpty());
+    Frame outside;
+    outside.id = QStringLiteral("frame-outside");
+    outside.sourcePath = photo;
+    outside.sourceSha256 = fileSha256(photo);
+    outside.cx = -40.0;
+    outside.cy = -40.0;
+    outside.width = 60.0;
+    outside.height = 60.0;
+    outside.autoPlaced = false;
+    overflowing.pages[0].frames.append(outside);
+    // An overflowing free frame without a layout is what shows the button.
+    DocumentSnapshot freePage = overflowing;
+    freePage.pages[0].slotList.clear();
+    freePage.pages[0].slotStyle = SlotStyle{};
+    freePage.pages[0].layoutId.clear();
+
+    QTemporaryDir secondDir;
+    QVERIFY(secondDir.isValid());
+
+    {
+        MainWindow window;
+        window.resize(1280, 800);
+        window.show();
+        QTest::qWait(100);
+        QVERIFY(loadDocument(window, dir, overflowing, QStringLiteral("fit-layout.ppj")));
+        auto *fit = window.findChild<QPushButton *>(QStringLiteral("fitPageButton"));
+        QVERIFY(fit);
+        QVERIFY2(!fit->isVisible(), "Fit page is offered on a laid-out page");
+        QVERIFY(!fit->isEnabled());
+        const DocumentSnapshot before = window.document();
+        QVERIFY(QMetaObject::invokeMethod(&window, "fitPage", Qt::DirectConnection));
+        QTest::qWait(50);
+        QVERIFY(window.document() == before);
+    }
+    {
+        MainWindow window;
+        window.resize(1280, 800);
+        window.show();
+        QTest::qWait(100);
+        QVERIFY(loadDocument(window, secondDir, freePage, QStringLiteral("fit-free.ppj")));
+        auto *fit = window.findChild<QPushButton *>(QStringLiteral("fitPageButton"));
+        QVERIFY(fit);
+        QVERIFY2(fit->isVisible(),
+                 qPrintable(QStringLiteral("Fit page must be offered on a free canvas: frames %1 slots %2")
+                                .arg(window.document().pages.first().frames.size())
+                                .arg(window.document().pages.first().slotList.size())));
+        QVERIFY(fit->isEnabled());
+    }
+}
+
+void TestSlotUi::cropWheelAfterSelectionChangeIsSafe()
+{
+    QTemporaryDir dir;
+    QVERIFY(dir.isValid());
+    const QString photoA = makePhoto(dir.path(), QStringLiteral("ca.png"), QColor(190, 70, 70));
+    const QString photoB = makePhoto(dir.path(), QStringLiteral("cb.png"), QColor(70, 70, 190));
+    const DocumentSnapshot document = documentWithFreeFrames({photoA, photoB});
+    QVERIFY(document.pages.first().frames.size() == 2);
+    const QString idA = document.pages.first().frames.at(0).id;
+    const QString idB = document.pages.first().frames.at(1).id;
+
+    QImage pixels(600, 400, QImage::Format_RGB32);
+    pixels.fill(QColor(140, 140, 140));
+
+    PageView view;
+    view.resize(900, 700);
+    view.setDocument(document);
+    view.setFrameImages({{idA, pixels}, {idB, pixels}});
+    view.show();
+    QVERIFY(QTest::qWaitForWindowExposed(&view));
+    view.setSelectedFrame(idA);
+    view.setCropMode(true);
+
+    // Commits behave like the window: apply the frame and publish the new
+    // document synchronously, which is what used to free the wheel target.
+    DocumentSnapshot live = document;
+    int commits = 0;
+    QStringList order;
+    view.onFrameCommitted = [&view, &live, &commits, &order](const Frame &frame) {
+        ++commits;
+        order.append(frame.id);
+        for (Frame &stored : live.pages[0].frames) {
+            if (stored.id == frame.id)
+                stored = frame;
+        }
+        view.setDocument(live);
+    };
+
+    const QPointF centreA = pageToWidget(view, QPointF(document.pages[0].frames.at(0).cx,
+                                                       document.pages[0].frames.at(0).cy));
+    sendWheel(view, centreA, 120);
+    QTest::qWait(30);
+    QCOMPARE(commits, 0); // the burst is still open
+
+    // A new selection flushes the burst synchronously and starts another.
+    view.setSelectedFrame(idB);
+    const QPointF centreB = pageToWidget(view, QPointF(document.pages[0].frames.at(1).cx,
+                                                       document.pages[0].frames.at(1).cy));
+    sendWheel(view, centreB, 120);
+    QVERIFY(commits >= 1);
+    QCOMPARE(order.first(), idA);
+
+    QTest::qWait(kZoomBurstMs + 150);
+    QCOMPARE(commits, 2);
+    QCOMPARE(order.at(1), idB);
+    for (const Frame &frame : live.pages[0].frames) {
+        if (frame.id == idA || frame.id == idB)
+            QVERIFY2(frame.zoom > 1.0, qPrintable(frame.id));
+    }
+}
+
+void TestSlotUi::externalReplacementCancelsWheelBurst()
+{
+    QTemporaryDir dir;
+    QVERIFY(dir.isValid());
+    const QString photo = makePhoto(dir.path(), QStringLiteral("ext.png"), QColor(90, 120, 190));
+    const DocumentSnapshot document = documentWithLayout({photo}, 4);
+    QVERIFY(!document.pages.isEmpty());
+    const Page page = document.pages.first();
+    const QString slotId = page.slotList.at(0).id;
+    const QString frameId = frameInSlot(page, slotId)->id;
+
+    QImage pixels(600, 400, QImage::Format_RGB32);
+    pixels.fill(QColor(140, 140, 140));
+
+    PageView view;
+    view.resize(900, 700);
+    view.setDocument(document);
+    view.setFrameImages({{frameId, pixels}});
+    view.show();
+    QVERIFY(QTest::qWaitForWindowExposed(&view));
+    int commits = 0;
+    view.onFrameCommitted = [&commits](const Frame &) { ++commits; };
+
+    sendWheel(view, view.slotRect(slotId).center(), 120);
+    QTest::qWait(30);
+
+    // The document is replaced from outside (an undo, a project load) while the
+    // burst is still open: its stale zoom must not be committed afterwards.
+    DocumentSnapshot replaced = document;
+    replaced.pages[0].frames[0].cx += 5.0;
+    view.setDocument(replaced);
+    QTest::qWait(kZoomBurstMs + 150);
+    QCOMPARE(commits, 0);
 }
 
 void TestSlotUi::slottedFrameControlsAreDisabled()

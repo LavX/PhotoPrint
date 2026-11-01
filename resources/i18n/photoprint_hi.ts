@@ -1162,5 +1162,63 @@
         <source>A margó, a hézag vagy a szegély értéke érvénytelen.</source>
         <translation>मार्जिन, गैप या बॉर्डर का मान अमान्य है।</translation>
     </message>
+    <message>
+        <source>Húzd ide a fotót</source>
+        <translation>फ़ोटो यहाँ खींचें</translation>
+    </message>
+    <message>
+        <source>Fotó beillesztése</source>
+        <translation>फ़ोटो डालें</translation>
+    </message>
+    <message>
+        <source>Fotó áthelyezése</source>
+        <translation>फ़ोटो ले जाएँ</translation>
+    </message>
+    <message>
+        <source>Képek cseréje</source>
+        <translation>फ़ोटो बदलें</translation>
+    </message>
+    <message>
+        <source>Fotó leválasztása</source>
+        <translation>फ़ोटो अलग करें</translation>
+    </message>
+    <message>
+        <source>Hely ürítése</source>
+        <translation>सेल खाली करें</translation>
+    </message>
+    <message>
+        <source>Jelenlegi elrendezés: %1</source>
+        <translation>मौजूदा लेआउट: %1</translation>
+    </message>
+    <message>
+        <source>Jelenlegi elrendezés</source>
+        <translation>मौजूदा लेआउट</translation>
+    </message>
+    <message>
+        <source>Ez az elrendezés már a lapon van.</source>
+        <translation>यह लेआउट पहले से पेज पर है।</translation>
+    </message>
+    <message>
+        <source>A többi fotó új lapra került.</source>
+        <translation>बाकी फ़ोटो नए पेज पर रखी गईं।</translation>
+    </message>
+    <message>
+        <source>Csere</source>
+        <translation>बदलें</translation>
+    </message>
+    <message numerus="yes">
+        <source>%n hely üresen marad.</source>
+        <translation>
+            <numerusform>%n खाली सेल बची रहेगी।</numerusform>
+            <numerusform>%n खाली सेल बची रहेंगी।</numerusform>
+        </translation>
+    </message>
+    <message numerus="yes">
+        <source>%n fotó szabadon marad.</source>
+        <translation>
+            <numerusform>%n फ़ोटो खाली रहेगी।</numerusform>
+            <numerusform>%n फ़ोटो खाली रहेंगी।</numerusform>
+        </translation>
+    </message>
 </context>
 </TS>

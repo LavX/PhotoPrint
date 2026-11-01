@@ -265,11 +265,36 @@ int TemplateBrowserDialog::preferredCount() const
     // A page that already uses a catalogue layout opens on that layout's count,
     // so the current one is marked without the user hunting for it. Any other
     // page follows its photo count. Both are clamped to the chips.
-    if (!m_request.layoutId.isEmpty()) {
-        if (const CollageTemplate *current = templateFor(m_request.layoutId))
-            return std::clamp(current->photoCount, 2, 10);
+    const QString current = effectiveLayoutId();
+    if (!current.isEmpty()) {
+        if (const CollageTemplate *layout = templateFor(current))
+            return std::clamp(layout->photoCount, 2, 10);
     }
     return std::clamp(int(m_request.frames.size()), 2, 10);
+}
+
+QString TemplateBrowserDialog::effectiveLayoutId() const
+{
+    if (m_request.layoutId.isEmpty())
+        return QString();
+    const CollageTemplate *layout = templateFor(m_request.layoutId);
+    if (!layout || m_request.slotList.size() != layout->slotList.size())
+        return QString();
+    // The label is only honest while the page still has the layout's cells, in
+    // the layout's order and shape. Adding, removing or re-mapping a cell turns
+    // the page into a hand-made layout, and the label goes away.
+    constexpr double epsilon = 1e-6;
+    for (int i = 0; i < layout->slotList.size(); ++i) {
+        const QRectF &stored = m_request.slotList.at(i).unitRect;
+        const QRectF &catalogue = layout->slotList.at(i).rect;
+        if (std::abs(stored.x() - catalogue.x()) > epsilon
+            || std::abs(stored.y() - catalogue.y()) > epsilon
+            || std::abs(stored.width() - catalogue.width()) > epsilon
+            || std::abs(stored.height() - catalogue.height()) > epsilon) {
+            return QString();
+        }
+    }
+    return m_request.layoutId;
 }
 
 Page TemplateBrowserDialog::requestPage() const
@@ -364,7 +389,16 @@ QString TemplateBrowserDialog::signature() const
           << QString::number(m_request.paper.physicalHeightMm, 'f', 3)
           << (m_request.landscape ? QStringLiteral("landscape") : QStringLiteral("portrait"))
           << QString::number(currentChipCount())
-          << m_request.layoutId;
+          << effectiveLayoutId();
+    // The cells themselves: an add/remove/re-map while the dialog is open must
+    // rebuild the tiles so the current-layout mark stays truthful.
+    for (const Slot &slot : m_request.slotList) {
+        parts << slot.id
+              << QString::number(slot.unitRect.x(), 'f', 6)
+              << QString::number(slot.unitRect.y(), 'f', 6)
+              << QString::number(slot.unitRect.width(), 'f', 6)
+              << QString::number(slot.unitRect.height(), 'f', 6);
+    }
     for (const QImage &photo : m_request.photos)
         parts << QString::number(photo.isNull() ? 0 : photo.cacheKey());
     return parts.join(QLatin1Char('|'));
@@ -468,6 +502,7 @@ void TemplateBrowserDialog::rebuildTiles()
     m_applyError.clear();
 
     const int count = currentChipCount();
+    const QString currentId = effectiveLayoutId();
     const auto &catalogue = CollageTemplates::instance();
     for (const CollageTemplate &t : catalogue.templatesForCount(count)) {
         TemplateTileState tile;
@@ -481,7 +516,7 @@ void TemplateBrowserDialog::rebuildTiles()
             tile.slotRects = mapping.value();
         else
             tile.paperMessage = mapping.error().message;
-        tile.preview = renderPreview(tile.slotRects, false, t.id == m_request.layoutId);
+        tile.preview = renderPreview(tile.slotRects, false, t.id == currentId);
         tile.marked = QPixmap();
         tile.current = QPixmap();
         tile.markedCurrent = QPixmap();
@@ -506,8 +541,8 @@ void TemplateBrowserDialog::rebuildTiles()
     // With no choice yet, the page's own layout is selected, so it is marked
     // and applying it is the explained no-op.
     int keep = indexOfTemplate(m_selectedId);
-    if (keep < 0 && !m_request.layoutId.isEmpty())
-        keep = indexOfTemplate(m_request.layoutId);
+    if (keep < 0 && !currentId.isEmpty())
+        keep = indexOfTemplate(currentId);
     if (keep >= 0 && !m_tiles.at(keep).mapped)
         keep = -1;
     m_grid->setCurrentRow(keep);
@@ -641,10 +676,11 @@ void TemplateBrowserDialog::refreshSelection()
     const QString chosenLabel = QCoreApplication::translate("PhotoPrint", "Kiválasztott");
     const QString currentLabel =
         QCoreApplication::translate("PhotoPrint", "Jelenlegi elrendezés");
+    const QString currentId = effectiveLayoutId();
     for (int i = 0; i < m_tiles.size() && i < m_grid->count(); ++i) {
         TemplateTileState &tile = m_tiles[i];
         const bool chosen = tile.id == m_selectedId && tile.mapped;
-        const bool current = tile.id == m_request.layoutId;
+        const bool current = tile.id == currentId;
         QPixmap pixmap = tile.preview;
         if (chosen && current) {
             if (tile.markedCurrent.isNull())
@@ -745,7 +781,7 @@ QImage TemplateBrowserDialog::templateTileImage(const QString &id) const
         return QImage();
     const TemplateTileState &tile = m_tiles.at(index);
     const bool chosen = tile.id == m_selectedId && tile.mapped;
-    const bool current = tile.id == m_request.layoutId;
+    const bool current = tile.id == effectiveLayoutId();
     if (chosen && current && !tile.markedCurrent.isNull())
         return tile.markedCurrent.toImage();
     if (chosen && !tile.marked.isNull())
@@ -763,8 +799,13 @@ bool TemplateBrowserDialog::templateMarkedChosen(const QString &id) const
 
 bool TemplateBrowserDialog::templateIsCurrent(const QString &id) const
 {
-    return !m_request.layoutId.isEmpty() && id == m_request.layoutId
-        && indexOfTemplate(id) >= 0;
+    const QString current = effectiveLayoutId();
+    return !current.isEmpty() && id == current && indexOfTemplate(id) >= 0;
+}
+
+QString TemplateBrowserDialog::currentLayoutId() const
+{
+    return effectiveLayoutId();
 }
 
 QString TemplateBrowserDialog::currentLayoutText() const
@@ -851,13 +892,13 @@ QString TemplateBrowserDialog::positionNotice(const TemplateTileState &tile) con
     // photos than cells leave empty cells, more photos stay free.
     if (report.emptySlotsAfter > 0) {
         notice += QLatin1Char(' ')
-            + QCoreApplication::translate("PhotoPrint", "%1 hely üresen marad.")
-                  .arg(report.emptySlotsAfter);
+            + QCoreApplication::translate("PhotoPrint", "%n hely üresen marad.", nullptr,
+                                          report.emptySlotsAfter);
     }
     if (!report.leftFreeIds.isEmpty()) {
         notice += QLatin1Char(' ')
-            + QCoreApplication::translate("PhotoPrint", "%1 fotó szabadon marad.")
-                  .arg(report.leftFreeIds.size());
+            + QCoreApplication::translate("PhotoPrint", "%n fotó szabadon marad.", nullptr,
+                                          int(report.leftFreeIds.size()));
     }
     return notice;
 }
@@ -876,7 +917,7 @@ void TemplateBrowserDialog::refreshStatus()
     // The page's own layout, named from the catalogue. A label only: an unknown
     // id names nothing rather than showing an internal key.
     QString currentLine;
-    if (const CollageTemplate *current = templateFor(m_request.layoutId)) {
+    if (const CollageTemplate *current = templateFor(effectiveLayoutId())) {
         currentLine = QCoreApplication::translate("PhotoPrint", "Jelenlegi elrendezés: %1")
                           .arg(current->nameEn);
     }
