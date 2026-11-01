@@ -3,6 +3,7 @@
 #include "EffectBrowserDialog.h"
 #include "MainWindow.h"
 #include "ProjectStore.h"
+#include "SlotLayoutEngine.h"
 #include "TemplateBrowserDialog.h"
 
 #include <QAbstractButton>
@@ -12,11 +13,15 @@
 #include <QImageWriter>
 #include <QAbstractItemView>
 #include <QListWidget>
+#include <QMessageBox>
 #include <QPointer>
 #include <QPushButton>
 #include <QScrollArea>
 #include <QScrollBar>
+#include <QTimer>
 #include <QtTest>
+
+#include <memory>
 
 using namespace pp;
 
@@ -83,6 +88,29 @@ bool loadDocument(MainWindow &window, const QTemporaryDir &dir, const DocumentSn
     return window.waitForPreview(15000);
 }
 
+/// Answers the next modal question with `button`. A modal dialog runs its own
+/// event loop, so a timer is what reaches into it.
+void answerNextQuestionWith(QMessageBox::StandardButton button)
+{
+    auto tries = std::make_shared<int>(0);
+    auto *timer = new QTimer;
+    timer->setInterval(10);
+    QObject::connect(timer, &QTimer::timeout, timer, [timer, button, tries] {
+        if (auto *box = qobject_cast<QMessageBox *>(QApplication::activeModalWidget())) {
+            if (QAbstractButton *target = box->button(button))
+                target->click();
+            timer->stop();
+            timer->deleteLater();
+            return;
+        }
+        if (++*tries > 1000) {
+            timer->stop();
+            timer->deleteLater();
+        }
+    });
+    timer->start();
+}
+
 } // namespace
 
 class TestUiScreens : public QObject
@@ -92,6 +120,7 @@ class TestUiScreens : public QObject
 private slots:
     void captureStates();
     void captureSlotInteraction();
+    void captureLayoutPanel();
 };
 
 void TestUiScreens::captureStates()
@@ -270,6 +299,63 @@ void TestUiScreens::captureSlotInteraction()
     QTest::qWait(350);
     QVERIFY(view->slotState(page.slotList.at(0).id) == PageView::SlotState::Filled);
     QVERIFY(window.grab().save(evidenceDir() + QStringLiteral("/ui-slot-filled.png")));
+}
+
+void TestUiScreens::captureLayoutPanel()
+{
+    QTemporaryDir dir;
+    QVERIFY(dir.isValid());
+    const QString photo =
+        makePhoto(dir.path(), QStringLiteral("layout-photo.png"), QColor(75, 130, 175),
+                  QSize(900, 600));
+    QVERIFY(!photo.isEmpty());
+
+    // A 2 x 2 layout with one photograph and a 3 mm black mat: the page panel
+    // shows the values, the filled cell shows its photograph inside the mat and
+    // the empty cells print the mat alone.
+    DocumentSnapshot document = fourEmptySlots();
+    Page page = document.pages.first();
+    SlotStyle style;
+    style.borderMm = 3.0;
+    style.borderColor = QColor(0, 0, 0);
+    const auto styled = SlotLayoutEngine::setStyle(page, style);
+    QVERIFY(styled);
+    page = styled.value();
+
+    Frame frame;
+    frame.id = QStringLiteral("frame-layout-panel");
+    frame.sourcePath = photo;
+    frame.sourceSha256 = fileSha256(photo);
+    frame.fit = FitMode::Fill;
+    frame.autoPlaced = false;
+    const auto placed = SlotLayoutEngine::placePhoto(page, page.slotList.at(1).id, frame);
+    QVERIFY(placed);
+    document.pages[0] = placed.value();
+
+    MainWindow window;
+    window.resize(1280, 800);
+    window.show();
+    QTest::qWait(120);
+    QVERIFY(loadDocument(window, dir, document));
+    QTest::qWait(350);
+
+    auto *panel = window.findChild<QWidget *>(QStringLiteral("layoutPanel"));
+    QVERIFY(panel);
+    QVERIFY2(panel->isVisible(), "the layout panel must be visible with nothing selected");
+    QVERIFY(window.grab().save(evidenceDir() + QStringLiteral("/ui-layout-panel.png")));
+
+    // The page alone, so the mat is readable at this size.
+    auto *view = window.findChild<PageView *>();
+    QVERIFY(view);
+    QVERIFY(view->grab().save(evidenceDir() + QStringLiteral("/ui-layout-mats.png")));
+
+    // Dissolving keeps the photographs and removes the cells and the panel.
+    answerNextQuestionWith(QMessageBox::Yes);
+    QVERIFY(QMetaObject::invokeMethod(&window, "dissolvePageLayout", Qt::DirectConnection));
+    QTest::qWait(250);
+    QVERIFY(!window.document().pages.first().hasLayout());
+    QVERIFY(!panel->isVisible());
+    QVERIFY(window.grab().save(evidenceDir() + QStringLiteral("/ui-layout-dissolved.png")));
 }
 
 QTEST_MAIN(TestUiScreens)

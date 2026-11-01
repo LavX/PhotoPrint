@@ -18,6 +18,7 @@
 #include <QActionGroup>
 #include <QCloseEvent>
 #include <QCheckBox>
+#include <QColorDialog>
 #include <QComboBox>
 #include <QCoreApplication>
 #include <QDebug>
@@ -71,6 +72,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <utility>
 
 namespace pp {
 
@@ -2091,14 +2093,17 @@ void MainWindow::buildUi()
     side->setMaximumWidth(320);
     auto *sideLayout = new QVBoxLayout(side);
     sideLayout->setContentsMargins(12, 12, 12, 12);
-    auto addSection = [side, sideLayout](const QString &text) {
+    // A section header for one of the side column's two containers: the page's
+    // own inspector and the selected-photograph inspector. They are separate
+    // widgets so the layout panel can stay on screen with nothing selected.
+    const auto addSectionTo = [side](QVBoxLayout *into, const QString &text) {
         auto *label = new QLabel(text, side);
         label->setObjectName(QStringLiteral("sectionHeader"));
         QFont font = label->font();
         font.setBold(true);
         label->setFont(font);
         label->setStyleSheet(QStringLiteral("margin-top: 8px;"));
-        sideLayout->addWidget(label);
+        into->addWidget(label);
     };
 
     auto *library = new QWidget(central);
@@ -2150,13 +2155,170 @@ void MainWindow::buildUi()
                 selectFrame(current->data(Qt::UserRole).toString(), true);
             });
 
-    addSection(QCoreApplication::translate("PhotoPrint", "Kiválasztott fotó"));
+    // --- Elrendezés: the page's own inspector -------------------------------
+    // A laid-out page is dressed as a whole, so these controls belong to the
+    // page and not to one photograph. The block is visible whenever the current
+    // page has slots, even with nothing selected, and it never hides the
+    // selected-photograph sections below it.
+    auto *layoutPanel = new QWidget(side);
+    layoutPanel->setObjectName(QStringLiteral("layoutPanel"));
+    auto *layoutLayout = new QVBoxLayout(layoutPanel);
+    layoutLayout->setContentsMargins(0, 0, 0, 0);
+    m_layoutPanel = layoutPanel;
+    addSectionTo(layoutLayout, QCoreApplication::translate("PhotoPrint", "Elrendezés"));
+
+    // The layout's name and how many cells it has. The name is the catalogue's
+    // English suggestion, so it reads the same in every language, exactly as the
+    // picker names its tiles.
+    m_layoutNameLabel = new QLabel(layoutPanel);
+    m_layoutNameLabel->setObjectName(QStringLiteral("layoutNameLabel"));
+    m_layoutNameLabel->setWordWrap(true);
+    QFont layoutNameFont = m_layoutNameLabel->font();
+    layoutNameFont.setWeight(QFont::DemiBold);
+    m_layoutNameLabel->setFont(layoutNameFont);
+    layoutLayout->addWidget(m_layoutNameLabel);
+    m_layoutCountLabel = new QLabel(layoutPanel);
+    m_layoutCountLabel->setObjectName(QStringLiteral("layoutCountLabel"));
+    m_layoutCountLabel->setStyleSheet(QStringLiteral("color: #6e6e73; font-size: 11px;"));
+    layoutLayout->addWidget(m_layoutCountLabel);
+
+    // A length in millimetres. The title row carries the automatic switch when
+    // the field has one, and the spin gets the full width of the column below
+    // it, which is what a "10.0 mm" value needs next to its own arrows. Every
+    // one of them is committed when the edit finishes, so a typed "12" is one
+    // undo step, not one per keystroke.
+    const QString autoText = QCoreApplication::translate("PhotoPrint", "Automatikus");
+    const auto addLength = [side, layoutLayout, autoText](const QString &text,
+                                                         const QString &spinName,
+                                                         const QString &checkName,
+                                                         double maximum, double step) {
+        auto *titleRow = new QHBoxLayout;
+        auto *title = new QLabel(text, side);
+        title->setWordWrap(true);
+        titleRow->addWidget(title, 1);
+        QCheckBox *check = nullptr;
+        if (!checkName.isEmpty()) {
+            check = new QCheckBox(autoText, side);
+            check->setObjectName(checkName);
+            check->setAccessibleName(text);
+            titleRow->addWidget(check, 0);
+        }
+        layoutLayout->addLayout(titleRow);
+        auto *spin = new QDoubleSpinBox(side);
+        spin->setObjectName(spinName);
+        spin->setAccessibleName(text);
+        spin->setDecimals(1);
+        spin->setRange(0.0, maximum);
+        spin->setSingleStep(step);
+        spin->setSuffix(QStringLiteral(" mm"));
+        spin->setMinimumWidth(96);
+        layoutLayout->addWidget(spin);
+        return std::pair<QDoubleSpinBox *, QCheckBox *>{spin, check};
+    };
+
+    const auto margin = addLength(
+        QCoreApplication::translate("PhotoPrint", "Külső margó"), QStringLiteral("marginSpin"),
+        QStringLiteral("marginAutoCheck"), SlotGeometry::kMaxMarginMm, 0.5);
+    m_marginSpin = margin.first;
+    m_marginAutoCheck = margin.second;
+    const auto gutter = addLength(
+        QCoreApplication::translate("PhotoPrint", "Képek közti hézag"),
+        QStringLiteral("gutterSpin"), QStringLiteral("gutterAutoCheck"),
+        SlotGeometry::kMaxGutterMm, 0.5);
+    m_gutterSpin = gutter.first;
+    m_gutterAutoCheck = gutter.second;
+    const auto border = addLength(QCoreApplication::translate("PhotoPrint", "Szegély"),
+                                  QStringLiteral("borderSpin"), QString(),
+                                  SlotGeometry::kMaxBorderMm, 0.5);
+    m_borderSpin = border.first;
+
+    // The border colour: a swatch button, because the colour itself is the
+    // control. Alpha is allowed, so a translucent mat is a real choice.
+    auto *colourTitle =
+        new QLabel(QCoreApplication::translate("PhotoPrint", "Szegély színe"), side);
+    colourTitle->setWordWrap(true);
+    layoutLayout->addWidget(colourTitle);
+    m_borderColourButton = new QPushButton(side);
+    m_borderColourButton->setObjectName(QStringLiteral("borderColourButton"));
+    m_borderColourButton->setAccessibleName(colourTitle->text());
+    m_borderColourButton->setIconSize(QSize(40, 16));
+    m_borderColourButton->setMinimumHeight(28);
+    layoutLayout->addWidget(m_borderColourButton);
+    connect(m_borderColourButton, &QPushButton::clicked, this,
+            &MainWindow::chooseSlotBorderColour);
+
+    const auto radius = addLength(
+        QCoreApplication::translate("PhotoPrint", "Sarok lekerekítése"),
+        QStringLiteral("radiusSpin"), QString(), SlotGeometry::kMaxCornerRadiusMm, 1.0);
+    m_radiusSpin = radius.first;
+
+    // The two cell actions sit on their own rows: at the narrowest side column a
+    // pair of buttons would have to clip its own label.
+    m_addSlotButton =
+        new QPushButton(QCoreApplication::translate("PhotoPrint", "Hely hozzáadása"), side);
+    m_addSlotButton->setObjectName(QStringLiteral("addSlotButton"));
+    layoutLayout->addWidget(m_addSlotButton);
+    connect(m_addSlotButton, &QPushButton::clicked, this, &MainWindow::addSlotToPage);
+
+    m_removeSlotButton =
+        new QPushButton(QCoreApplication::translate("PhotoPrint", "Hely eltávolítása"), side);
+    m_removeSlotButton->setObjectName(QStringLiteral("removeSlotButton"));
+    m_removeSlotButton->setToolTip(
+        QCoreApplication::translate("PhotoPrint", "Válaszd ki a helyet a lapon."));
+    layoutLayout->addWidget(m_removeSlotButton);
+    connect(m_removeSlotButton, &QPushButton::clicked, this, &MainWindow::removeSlotFromPage);
+
+    m_dissolveLayoutButton = new QPushButton(
+        QCoreApplication::translate("PhotoPrint", "Elrendezés megszüntetése"), side);
+    m_dissolveLayoutButton->setObjectName(QStringLiteral("dissolveLayoutButton"));
+    m_dissolveLayoutButton->setToolTip(
+        QCoreApplication::translate("PhotoPrint", "A fotók megmaradnak a helyükön."));
+    layoutLayout->addWidget(m_dissolveLayoutButton);
+    connect(m_dissolveLayoutButton, &QPushButton::clicked, this,
+            &MainWindow::dissolvePageLayout);
+
+    m_layoutTemplatesButton =
+        new QPushButton(QCoreApplication::translate("PhotoPrint", "Sablonok…"), side);
+    m_layoutTemplatesButton->setObjectName(QStringLiteral("layoutTemplatesButton"));
+    m_layoutTemplatesButton->setAccessibleName(
+        QCoreApplication::translate("PhotoPrint", "Sablonok"));
+    m_layoutTemplatesButton->setToolTip(
+        QCoreApplication::translate("PhotoPrint", "Sablonok ehhez a laphoz"));
+    layoutLayout->addWidget(m_layoutTemplatesButton);
+    connect(m_layoutTemplatesButton, &QPushButton::clicked, this,
+            &MainWindow::openTemplateBrowser);
+
+    for (QDoubleSpinBox *spin : {m_marginSpin, m_gutterSpin, m_borderSpin, m_radiusSpin})
+        connect(spin, &QDoubleSpinBox::editingFinished, this, &MainWindow::applySlotStyle);
+    connect(m_marginAutoCheck, &QCheckBox::toggled, this, [this](bool automatic) {
+        // The spin follows the switch immediately; the document change that
+        // follows confirms it.
+        m_marginSpin->setEnabled(!automatic);
+        applySlotStyle();
+    });
+    connect(m_gutterAutoCheck, &QCheckBox::toggled, this, [this](bool automatic) {
+        m_gutterSpin->setEnabled(!automatic);
+        applySlotStyle();
+    });
+    layoutPanel->setVisible(false);
+    sideLayout->addWidget(layoutPanel);
+
+    // --- Kiválasztott fotó and Effekt: the photograph's own inspector --------
+    // One container, hidden as a whole when no photograph is selected, so a
+    // laid-out page with an empty selection shows the layout panel alone.
+    m_photoPanel = new QWidget(side);
+    m_photoPanel->setObjectName(QStringLiteral("photoPanel"));
+    auto *photoLayout = new QVBoxLayout(m_photoPanel);
+    photoLayout->setContentsMargins(0, 0, 0, 0);
+    sideLayout->addWidget(m_photoPanel);
+
+    addSectionTo(photoLayout, QCoreApplication::translate("PhotoPrint", "Kiválasztott fotó"));
     auto *fitRow = new QHBoxLayout;
     m_fitButton = new QPushButton(QCoreApplication::translate("PhotoPrint", "Teljes kép"), side);
     m_fillButton = new QPushButton(QCoreApplication::translate("PhotoPrint", "Kép kitöltése"), side);
     fitRow->addWidget(m_fitButton);
     fitRow->addWidget(m_fillButton);
-    sideLayout->addLayout(fitRow);
+    photoLayout->addLayout(fitRow);
     connect(m_fitButton, &QPushButton::clicked, this, [this] { applyFit(FitMode::Full); });
     connect(m_fillButton, &QPushButton::clicked, this, [this] { applyFit(FitMode::Fill); });
 
@@ -2166,7 +2328,7 @@ void MainWindow::buildUi()
     m_deleteButton = new QPushButton(QCoreApplication::translate("PhotoPrint", "Eltávolítás"), side);
     actionRow->addWidget(m_cropButton);
     actionRow->addWidget(m_deleteButton);
-    sideLayout->addLayout(actionRow);
+    photoLayout->addLayout(actionRow);
     connect(m_cropButton, &QPushButton::toggled, this, &MainWindow::toggleCrop);
     connect(m_deleteButton, &QPushButton::clicked, this, &MainWindow::deleteSelected);
 
@@ -2175,7 +2337,7 @@ void MainWindow::buildUi()
     m_backwardButton = new QPushButton(QCoreApplication::translate("PhotoPrint", "Háttérbe"), side);
     layerRow->addWidget(m_forwardButton);
     layerRow->addWidget(m_backwardButton);
-    sideLayout->addLayout(layerRow);
+    photoLayout->addLayout(layerRow);
     connect(m_forwardButton, &QPushButton::clicked, this, [this] { reorderFrame(1); });
     connect(m_backwardButton, &QPushButton::clicked, this, [this] { reorderFrame(-1); });
 
@@ -2201,7 +2363,7 @@ void MainWindow::buildUi()
     toneRow->addLayout(toneText);
     toneRow->addStretch(1);
     toneRow->addWidget(m_originalButton);
-    sideLayout->addLayout(toneRow);
+    photoLayout->addLayout(toneRow);
     connect(m_autoCheck, &QAbstractButton::toggled, this, &MainWindow::toggleAutoTone);
     connect(m_originalButton, &QPushButton::pressed, this, [this] { showOriginalPressed(true); });
     connect(m_originalButton, &QPushButton::released, this, [this] { showOriginalPressed(false); });
@@ -2211,33 +2373,33 @@ void MainWindow::buildUi()
     m_brightnessSlider->setRange(kBrightnessSliderMin, kBrightnessSliderMax);
     m_brightnessSlider->setValue(kBrightnessSliderNeutral);
     m_brightnessSlider->setTracking(false);
-    sideLayout->addWidget(new QLabel(QCoreApplication::translate("PhotoPrint", "Világosítás"), side));
-    sideLayout->addWidget(m_brightnessSlider);
+    photoLayout->addWidget(new QLabel(QCoreApplication::translate("PhotoPrint", "Világosítás"), side));
+    photoLayout->addWidget(m_brightnessSlider);
     connect(m_brightnessSlider, &QSlider::valueChanged, this, &MainWindow::brightnessChanged);
 
-    addSection(QCoreApplication::translate("PhotoPrint", "Effekt"));
+    addSectionTo(photoLayout, QCoreApplication::translate("PhotoPrint", "Effekt"));
     m_effectButton = new QPushButton(QCoreApplication::translate("PhotoPrint", "Eredeti"), side);
     m_effectButton->setObjectName(QStringLiteral("effectButton"));
     m_effectButton->setAccessibleName(QCoreApplication::translate("PhotoPrint", "Effekt"));
     m_effectButton->setToolTip(QCoreApplication::translate("PhotoPrint", "Effekt kiválasztása"));
-    sideLayout->addWidget(m_effectButton);
+    photoLayout->addWidget(m_effectButton);
     m_legacyHint = new QLabel(QCoreApplication::translate("PhotoPrint", "Új effekt választása"), side);
     m_legacyHint->setObjectName(QStringLiteral("legacyEffectHint"));
     m_legacyHint->setWordWrap(true);
     m_legacyHint->setStyleSheet(QStringLiteral("color: #6e6e73; font-size: 11px;"));
     m_legacyHint->setVisible(false);
-    sideLayout->addWidget(m_legacyHint);
+    photoLayout->addWidget(m_legacyHint);
     connect(m_effectButton, &QPushButton::clicked, this, &MainWindow::openEffectBrowser);
 
     m_strengthLabel = new QLabel(QCoreApplication::translate("PhotoPrint", "Effekt erőssége"), side);
     m_strengthLabel->setObjectName(QStringLiteral("effectStrengthLabel"));
-    sideLayout->addWidget(m_strengthLabel);
+    photoLayout->addWidget(m_strengthLabel);
     m_filterStrength = new QSlider(Qt::Horizontal, side);    m_filterStrength->setObjectName(QStringLiteral("effectStrength"));
     m_filterStrength->setAccessibleName(QCoreApplication::translate("PhotoPrint", "Effekt erőssége"));
     m_filterStrength->setRange(0, 100);
     m_filterStrength->setValue(100);
     m_filterStrength->setTracking(false);
-    sideLayout->addWidget(m_filterStrength);
+    photoLayout->addWidget(m_filterStrength);
     connect(m_filterStrength, &QSlider::valueChanged, this, &MainWindow::applyFilterSettings);
 
     m_strengthHint = new QLabel(side);
@@ -2245,25 +2407,25 @@ void MainWindow::buildUi()
     m_strengthHint->setWordWrap(true);
     m_strengthHint->setStyleSheet(QStringLiteral("color: #6e6e73; font-size: 11px;"));
     m_strengthHint->setVisible(false);
-    sideLayout->addWidget(m_strengthHint);
+    photoLayout->addWidget(m_strengthHint);
 
     m_upscaleCheck = new QCheckBox(QCoreApplication::translate("PhotoPrint", "Kép nagyítása 2×"), side);
     m_upscaleCheck->setToolTip(
         QCoreApplication::translate("PhotoPrint", "A nyomtatási felbontást növeli; az előnézet nem változik."));
-    sideLayout->addWidget(m_upscaleCheck);
+    photoLayout->addWidget(m_upscaleCheck);
     auto *upscaleHint = new QLabel(QCoreApplication::translate("PhotoPrint", "A nyomtatási felbontást növeli."), side);
     upscaleHint->setStyleSheet(QStringLiteral("color: #6e6e73; font-size: 11px;"));
     upscaleHint->setWordWrap(true);
-    sideLayout->addWidget(upscaleHint);
+    photoLayout->addWidget(upscaleHint);
     connect(m_upscaleCheck, &QCheckBox::toggled, this, &MainWindow::applyFilterSettings);
 
     m_trialButton = new QPushButton(QCoreApplication::translate("PhotoPrint", "Próbanyomat"), side);
-    sideLayout->addWidget(m_trialButton);
+    photoLayout->addWidget(m_trialButton);
     connect(m_trialButton, &QPushButton::clicked, this, &MainWindow::showTrialSheet);
 
     m_advancedToggle = new QPushButton(QCoreApplication::translate("PhotoPrint", "További beállítások"), side);
     m_advancedToggle->setCheckable(true);
-    sideLayout->addWidget(m_advancedToggle);
+    photoLayout->addWidget(m_advancedToggle);
     auto *advancedContent = new QWidget(side);
     auto *grid = new QGridLayout(advancedContent);
     grid->setContentsMargins(0, 0, 0, 0);
@@ -2290,14 +2452,14 @@ void MainWindow::buildUi()
     grid->addWidget(m_angleSpin, 2, 1);
     advancedContent->setVisible(false);
     connect(m_advancedToggle, &QPushButton::toggled, advancedContent, &QWidget::setVisible);
-    sideLayout->addWidget(advancedContent);
+    photoLayout->addWidget(advancedContent);
     for (QDoubleSpinBox *spin : {m_widthSpin, m_heightSpin, m_angleSpin})
         connect(spin, &QDoubleSpinBox::editingFinished, this, &MainWindow::applySizeFromControls);
 
     m_resolutionHint = new QLabel(side);
     m_resolutionHint->setWordWrap(true);
     m_resolutionHint->setStyleSheet(QStringLiteral("color: #8a5a00;"));
-    sideLayout->addWidget(m_resolutionHint);
+    photoLayout->addWidget(m_resolutionHint);
 
     m_pageInfo = new QLabel(side);
     m_pageInfo->setWordWrap(true);
@@ -2630,6 +2792,8 @@ void MainWindow::rebuildUi()
     m_pagesPanel = nullptr;
     m_noticeBar = nullptr;
     m_inspectorPanel = nullptr;
+    m_layoutPanel = nullptr;
+    m_photoPanel = nullptr;
     m_printButton = nullptr;
     m_printerCombo = nullptr;
 
@@ -3791,8 +3955,17 @@ void MainWindow::syncFrameControls()
     const Frame *frame =
         m_selectedId.isEmpty() ? nullptr : findFrame(document, m_selectedId);
     const bool hasSelection = frame != nullptr;
+    // The side column carries two inspectors: the page's layout panel (visible
+    // whenever the page has slots) and the selected photograph's. Neither hides
+    // the other, and a laid-out page with an empty selection is a real state,
+    // not a reason to hide the column.
+    const Page *currentPage =
+        document.pages.isEmpty() ? nullptr : &document.pages.at(document.currentPage);
+    const bool pageHasLayout = currentPage && currentPage->hasLayout();
+    if (m_photoPanel)
+        m_photoPanel->setVisible(hasSelection);
     if (m_inspectorPanel)
-        m_inspectorPanel->setVisible(hasSelection);
+        m_inspectorPanel->setVisible(hasSelection || pageHasLayout);
     m_fitButton->setEnabled(hasSelection);
     m_fillButton->setEnabled(hasSelection);
     m_cropButton->setEnabled(hasSelection);
@@ -3855,6 +4028,255 @@ void MainWindow::syncFrameControls()
         m_strengthHint->setVisible(false);
     }
     m_syncing = false;
+    syncLayoutPanel();
+}
+
+QString MainWindow::layoutDisplayName(const Page &page) const
+{
+    if (page.layoutId.isEmpty())
+        return QCoreApplication::translate("PhotoPrint", "Saját elrendezés");
+    if (const CollageTemplate *chosen = CollageTemplates::instance().find(page.layoutId))
+        return chosen->nameEn.isEmpty() ? chosen->name : chosen->nameEn;
+    // The label is kept verbatim: an unknown id is still what the page was saved
+    // with, and renaming a catalogue entry must not rename a project.
+    return page.layoutId;
+}
+
+void MainWindow::syncLayoutPanel()
+{
+    if (!m_layoutPanel)
+        return;
+    const DocumentSnapshot document = m_controller.document();
+    const Page *page = document.pages.isEmpty() ? nullptr
+                                                : &document.pages.at(document.currentPage);
+    const bool hasLayout = page && page->hasLayout();
+    m_layoutPanel->setVisible(hasLayout);
+    if (!hasLayout)
+        return;
+
+    // Every control shows the value the page can actually use: a value that was
+    // too large for this paper is displayed clamped, not silently kept.
+    const QSizeF sheet = pageSizeMm(*page);
+    const double shortSide = std::min(sheet.width(), sheet.height());
+    const double marginLimit = std::max(
+        0.0, std::min(SlotGeometry::kMaxMarginMm, shortSide / 2.0 - 2.0));
+    // The border and the radius are clamped per cell, so the smallest cell on
+    // the page is the one that limits them.
+    double shortestCell = 0.0;
+    for (const QRectF &cell : SlotGeometry::cellsMm(*page)) {
+        const double side = std::min(cell.width(), cell.height());
+        if (!(side > 0.0))
+            continue;
+        shortestCell = shortestCell <= 0.0 ? side : std::min(shortestCell, side);
+    }
+    const double borderLimit =
+        std::max(0.0, std::min(SlotGeometry::kMaxBorderMm, 0.45 * shortestCell));
+    const double radiusLimit =
+        std::max(0.0, std::min(SlotGeometry::kMaxCornerRadiusMm, shortestCell / 2.0));
+
+    const SlotStyle style = SlotGeometry::sanitiseStyle(page->slotStyle);
+    const bool wasSyncing = m_syncing;
+    m_syncing = true;
+    m_layoutNameLabel->setText(layoutDisplayName(*page));
+    m_layoutCountLabel->setText(QCoreApplication::translate("PhotoPrint", "%n hely", nullptr,
+                                                            page->slotList.size()));
+
+    const bool automaticMargin = !style.marginMm.has_value();
+    m_marginAutoCheck->setChecked(automaticMargin);
+    m_marginSpin->setEnabled(!automaticMargin);
+    m_marginSpin->setMaximum(marginLimit);
+    m_marginSpin->setValue(
+        style.marginMm.value_or(SlotGeometry::effectiveMarginMm(style, sheet)));
+
+    const bool automaticGutter = !style.gutterMm.has_value();
+    m_gutterAutoCheck->setChecked(automaticGutter);
+    m_gutterSpin->setEnabled(!automaticGutter);
+    m_gutterSpin->setMaximum(marginLimit);
+    m_gutterSpin->setValue(
+        style.gutterMm.value_or(SlotGeometry::effectiveGutterMm(style, sheet)));
+
+    m_borderSpin->setMaximum(borderLimit);
+    m_borderSpin->setValue(style.borderMm);
+    m_radiusSpin->setMaximum(radiusLimit);
+    m_radiusSpin->setValue(style.cornerRadiusMm);
+
+    // The swatch is the mat's own colour, drawn over a light and a dark half so
+    // a translucent choice reads as translucent instead of as a flat tint.
+    QPixmap swatch(40, 16);
+    {
+        QPainter painter(&swatch);
+        swatch.fill(QColor(255, 255, 255));
+        painter.fillRect(QRectF(0, 0, 20, 16), QColor(0xd0, 0xd0, 0xd4));
+        painter.fillRect(QRectF(0, 0, 40, 16), style.borderColor);
+        painter.setPen(QColor(0, 0, 0, 60));
+        painter.drawRect(QRectF(0.5, 0.5, 39.0, 15.0));
+    }
+    m_borderColourButton->setIcon(QIcon(swatch));
+    m_borderColourButton->setToolTip(style.borderColor.name(QColor::HexArgb));
+
+    m_addSlotButton->setEnabled(page->slotList.size() < SlotGeometry::kMaxSlotsPerPage);
+    m_removeSlotButton->setEnabled(
+        !m_selectedSlotId.isEmpty() && SlotGeometry::slotById(*page, m_selectedSlotId));
+    m_syncing = wasSyncing;
+}
+
+void MainWindow::applySlotStyle()
+{
+    if (m_syncing)
+        return;
+    const DocumentSnapshot document = m_controller.document();
+    if (document.pages.isEmpty())
+        return;
+    const Page &page = document.pages.at(document.currentPage);
+    if (!page.hasLayout())
+        return;
+
+    SlotStyle style = page.slotStyle;
+    // An unchecked box pins the value in the spin, so 0 mm is a real choice and
+    // "automatic" is the absence of one.
+    style.marginMm = m_marginAutoCheck->isChecked()
+        ? std::nullopt
+        : std::optional<double>(m_marginSpin->value());
+    style.gutterMm = m_gutterAutoCheck->isChecked()
+        ? std::nullopt
+        : std::optional<double>(m_gutterSpin->value());
+    style.borderMm = m_borderSpin->value();
+    style.cornerRadiusMm = m_radiusSpin->value();
+    if (style == page.slotStyle) {
+        // A focus loss on an untouched spin is not an edit: no undo entry, and
+        // the control still settles on the value the page actually uses.
+        syncLayoutPanel();
+        return;
+    }
+    auto restyled = SlotLayoutEngine::setStyle(page, style);
+    if (!restyled) {
+        showProblem(restyled.error().message);
+        syncLayoutPanel();
+        return;
+    }
+    const bool spacing = style.marginMm != page.slotStyle.marginMm
+        || style.gutterMm != page.slotStyle.gutterMm;
+    const auto published = m_controller.publishPage(
+        restyled.value(),
+        spacing ? QCoreApplication::translate("PhotoPrint", "Margó beállítása")
+                : QCoreApplication::translate("PhotoPrint", "Szegély beállítása"));
+    if (!published) {
+        showProblem(published.error().message);
+        syncLayoutPanel();
+    }
+}
+
+void MainWindow::applySlotBorderColour(const QColor &colour)
+{
+    if (m_syncing || !colour.isValid())
+        return;
+    const DocumentSnapshot document = m_controller.document();
+    if (document.pages.isEmpty())
+        return;
+    const Page &page = document.pages.at(document.currentPage);
+    if (!page.hasLayout())
+        return;
+    SlotStyle style = page.slotStyle;
+    style.borderColor = colour; // alpha included: a translucent mat is a choice
+    if (style == page.slotStyle)
+        return;
+    auto restyled = SlotLayoutEngine::setStyle(page, style);
+    if (!restyled) {
+        showProblem(restyled.error().message);
+        return;
+    }
+    const auto published = m_controller.publishPage(
+        restyled.value(), QCoreApplication::translate("PhotoPrint", "Szegély beállítása"));
+    if (!published)
+        showProblem(published.error().message);
+}
+
+void MainWindow::chooseSlotBorderColour()
+{
+    const DocumentSnapshot document = m_controller.document();
+    if (document.pages.isEmpty())
+        return;
+    const Page &page = document.pages.at(document.currentPage);
+    if (!page.hasLayout())
+        return;
+    const QColor chosen = QColorDialog::getColor(
+        page.slotStyle.borderColor, this,
+        QCoreApplication::translate("PhotoPrint", "Szegély színe"),
+        QColorDialog::ShowAlphaChannel);
+    if (chosen.isValid())
+        applySlotBorderColour(chosen);
+}
+
+void MainWindow::addSlotToPage()
+{
+    const DocumentSnapshot document = m_controller.document();
+    if (document.pages.isEmpty())
+        return;
+    const Page &page = document.pages.at(document.currentPage);
+    if (!page.hasLayout())
+        return;
+    // The selected cell is split; without a selection the largest cell is. The
+    // engine owns the 15 mm floor and the 12-cell cap, so the refusal is the same
+    // sentence wherever it is attempted.
+    auto added = SlotLayoutEngine::addSlot(page, m_selectedSlotId);
+    if (!added) {
+        showProblem(added.error().message);
+        return;
+    }
+    const auto published = m_controller.publishPage(
+        added.value(), QCoreApplication::translate("PhotoPrint", "Hely hozzáadása"));
+    if (!published)
+        showProblem(published.error().message);
+}
+
+void MainWindow::removeSlotFromPage()
+{
+    const DocumentSnapshot document = m_controller.document();
+    if (document.pages.isEmpty())
+        return;
+    const Page page = document.pages.at(document.currentPage);
+    const QString slotId = m_selectedSlotId;
+    if (!page.hasLayout() || slotId.isEmpty() || !SlotGeometry::slotById(page, slotId))
+        return;
+    auto removed = SlotLayoutEngine::removeSlot(page, slotId);
+    if (!removed) {
+        showProblem(removed.error().message);
+        return;
+    }
+    const auto published = m_controller.publishPage(
+        removed.value(), QCoreApplication::translate("PhotoPrint", "Hely eltávolítása"));
+    if (!published) {
+        showProblem(published.error().message);
+        return;
+    }
+    // The other cells keep their rectangles: the neighbours do not slide
+    // together, so the space the removed cell leaves stays empty. Say it,
+    // because that is the one thing the result does not show by itself.
+    statusBar()->showMessage(
+        QCoreApplication::translate("PhotoPrint", "A többi hely a helyén marad."), 6000);
+}
+
+void MainWindow::dissolvePageLayout()
+{
+    const DocumentSnapshot document = m_controller.document();
+    if (document.pages.isEmpty())
+        return;
+    const Page &page = document.pages.at(document.currentPage);
+    if (!page.hasLayout())
+        return;
+    const auto answer = QMessageBox::question(
+        this, QCoreApplication::translate("PhotoPrint", "Elrendezés megszüntetése"),
+        QCoreApplication::translate(
+            "PhotoPrint", "Az elrendezés megszűnik, a fotók szabadon maradnak a helyükön."),
+        QMessageBox::Yes | QMessageBox::No, QMessageBox::No);
+    if (answer != QMessageBox::Yes)
+        return;
+    // The photographs stay exactly where they are and become free frames again.
+    const auto published = m_controller.publishPage(
+        SlotLayoutEngine::dissolve(page),
+        QCoreApplication::translate("PhotoPrint", "Elrendezés megszüntetése"));
+    if (!published)
+        showProblem(published.error().message);
 }
 
 void MainWindow::applyFit(FitMode fit)

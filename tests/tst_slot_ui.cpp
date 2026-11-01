@@ -1,4 +1,5 @@
 #include "Document.h"
+#include "CollageTemplates.h"
 #include "ImageSource.h"
 #include "MainWindow.h"
 #include "ProjectStore.h"
@@ -7,6 +8,7 @@
 
 #include <QAction>
 #include <QApplication>
+#include <QCheckBox>
 #include <QDir>
 #include <QDoubleSpinBox>
 #include <QDragEnterEvent>
@@ -16,17 +18,21 @@
 #include <QFile>
 #include <QImage>
 #include <QImageWriter>
+#include <QLabel>
 #include <QListWidget>
+#include <QMessageBox>
 #include <QMimeData>
 #include <QPushButton>
 #include <QStatusBar>
 #include <QTemporaryDir>
+#include <QTimer>
 #include <QUrl>
 #include <QWheelEvent>
 #include <QtTest>
 
 #include <algorithm>
 #include <cmath>
+#include <memory>
 
 using namespace pp;
 
@@ -42,6 +48,30 @@ PaperSpec a4Paper()
     paper.physicalWidthMm = 210.0;
     paper.physicalHeightMm = 297.0;
     paper.type = PaperType::Plain;
+    return paper;
+}
+
+/// The smallest catalogue sheet: every clamp in the layout panel has a visible
+/// effect on it.
+PaperSpec tenByFifteenPaper()
+{
+    PaperSpec paper;
+    paper.name = QStringLiteral("10 × 15 cm");
+    paper.physicalWidthMm = 100.0;
+    paper.physicalHeightMm = 150.0;
+    paper.type = PaperType::Glossy;
+    return paper;
+}
+
+/// A sheet small enough that a 15 mm half-cell is impossible: the split refuses.
+PaperSpec tinyPaper()
+{
+    PaperSpec paper;
+    paper.name = QStringLiteral("40 × 60 mm");
+    paper.physicalWidthMm = 40.0;
+    paper.physicalHeightMm = 60.0;
+    paper.type = PaperType::Plain;
+    paper.custom = true;
     return paper;
 }
 
@@ -80,12 +110,13 @@ QList<Slot> gridSlots(int count)
 /// A page with a real layout: `slotCount` cells and the first photographs
 /// assigned to the first cells, in fill order. Geometry comes from the engine,
 /// exactly as it would on a page loaded from a project.
-DocumentSnapshot documentWithLayout(const QStringList &photos, int slotCount)
+DocumentSnapshot documentWithLayout(const QStringList &photos, int slotCount,
+                                    const PaperSpec &paper = a4Paper())
 {
     DocumentSnapshot document;
     Page page;
     page.id = QStringLiteral("page-test");
-    page.paper = a4Paper();
+    page.paper = paper;
     page.slotList = gridSlots(slotCount);
     page.layoutId = QStringLiteral("hand-made");
     document.pages.append(page);
@@ -221,6 +252,65 @@ const Frame *frameInSlot(const Page &page, const QString &slotId)
     return SlotGeometry::frameInSlot(page, slotId);
 }
 
+/// One of the layout panel's spin boxes, by object name.
+QDoubleSpinBox *spinNamed(MainWindow &window, const char *name)
+{
+    return window.findChild<QDoubleSpinBox *>(QString::fromLatin1(name));
+}
+
+/// Finishes a spin edit the way the panel commits one: the editing finished,
+/// not every keystroke. A test cannot type, so it delivers the same signal.
+void commitSpin(QDoubleSpinBox *spin)
+{
+    if (!spin)
+        return;
+    QMetaObject::invokeMethod(spin, "editingFinished");
+}
+
+/// The undo action's text for one command: the stack prefixes its own title.
+bool undoLabelIs(MainWindow &window, const QString &label)
+{
+    QAction *action = undoAction(window);
+    return action && action->text() == QStringLiteral("Vissza ") + label;
+}
+
+/// Answers the next modal question with `button`. A modal dialog runs its own
+/// event loop, so a timer is what reaches into it; the flag is on the heap
+/// because the timer may outlive this call's frame when no dialog ever appears.
+void answerNextQuestionWith(QMessageBox::StandardButton button)
+{
+    auto tries = std::make_shared<int>(0);
+    auto *timer = new QTimer;
+    timer->setInterval(10);
+    QObject::connect(timer, &QTimer::timeout, timer, [timer, button, tries] {
+        if (auto *box = qobject_cast<QMessageBox *>(QApplication::activeModalWidget())) {
+            if (QAbstractButton *target = box->button(button))
+                target->click();
+            timer->stop();
+            timer->deleteLater();
+            return;
+        }
+        if (++*tries > 1000) {
+            timer->stop();
+            timer->deleteLater();
+        }
+    });
+    timer->start();
+}
+
+/// The linear layer the window's preview job prepares for the page raster, so
+/// the canvas can be compared with the print raster of the same page.
+QImage preparedPixels(const QString &path)
+{
+    ImageStore store;
+    const auto source = store.load(path, ImportPolicy{});
+    if (!source)
+        return {};
+    const auto pixels = store.preparedLinear(source.value(), ColorRecipe{},
+                                             QStringLiteral("original"), 100, false, 1600);
+    return pixels ? pixels.value() : QImage();
+}
+
 } // namespace
 
 class TestSlotUi : public QObject
@@ -255,6 +345,16 @@ private slots:
     void templateApplyKeepsSlotsOnALaidOutPage();
     void deleteClearsSelectedSlot();
     void invalidDropChangesNothing();
+    void layoutPanelSurvivesAnEmptySelection();
+    void layoutNameIsTheEnglishCatalogueName();
+    void marginAndGutterAreAutomaticOrZero();
+    void styleValuesClampOnSmallPaper();
+    void borderColourWithAlphaRoundTrips();
+    void oneUndoPerStyleChange();
+    void addSlotSplitsAndRefusesAtTheCap();
+    void removeSlotLeavesTheGap();
+    void dissolveKeepsThePhotographs();
+    void borderPrintsAndTheCanvasAgrees();
 };
 
 void TestSlotUi::clickSelectsSlotAndEscapeClears()
@@ -797,9 +897,13 @@ void TestSlotUi::applyLayoutToAnEmptyPageThenFill()
     QVERIFY(SlotGeometry::layoutConsistent(page));
 
     // The four numbered cells are on the canvas immediately, all empty and all
-    // drop targets.
+    // drop targets. The page now has a layout, so its panel appears without a
+    // selection and without a reload.
     auto *view = window.findChild<PageView *>();
     QVERIFY(view);
+    auto *panel = window.findChild<QWidget *>(QStringLiteral("layoutPanel"));
+    QVERIFY(panel);
+    QVERIFY2(panel->isVisible(), "the layout panel did not appear with the layout");
     for (const Slot &slot : page.slotList) {
         QCOMPARE(view->slotState(slot.id), PageView::SlotState::Empty);
         QVERIFY(!view->slotRect(slot.id).isEmpty());
@@ -1505,6 +1609,706 @@ void TestSlotUi::invalidDropChangesNothing()
     QTest::keyClick(view, Qt::Key_Escape);
     QVERIFY(view->selectedSlot().isEmpty());
     QVERIFY(window.document() == before);
+}
+
+void TestSlotUi::layoutPanelSurvivesAnEmptySelection()
+{
+    QTemporaryDir dir;
+    QVERIFY(dir.isValid());
+    const QString photo = makePhoto(dir.path(), QStringLiteral("panel.png"), QColor(120, 90, 60));
+    QVERIFY(!photo.isEmpty());
+
+    MainWindow window;
+    window.resize(1280, 800);
+    window.show();
+    QTest::qWait(100);
+    QVERIFY(loadDocument(window, dir, documentWithLayout({photo}, 4),
+                         QStringLiteral("panel.ppj")));
+    QVERIFY(window.waitForPreview(15000));
+
+    auto *panel = window.findChild<QWidget *>(QStringLiteral("layoutPanel"));
+    auto *photoPanel = window.findChild<QWidget *>(QStringLiteral("photoPanel"));
+    QVERIFY(panel);
+    QVERIFY(photoPanel);
+    // Nothing is selected, and the page's own inspector is still there.
+    QVERIFY2(panel->isVisible(), "the layout panel hid with no photograph selected");
+    QVERIFY2(!photoPanel->isVisible(), "the photo inspector showed with nothing selected");
+
+    auto *view = window.findChild<PageView *>();
+    QVERIFY(view);
+    const Page page = window.document().pages.first();
+    const QString slotId = page.slotList.at(0).id;
+    QTest::mouseClick(view, Qt::LeftButton, Qt::NoModifier,
+                      view->slotRect(slotId).center().toPoint());
+    QCOMPARE(view->selectedFrame(), frameInSlot(page, slotId)->id);
+    // One frame selected: both inspectors coexist.
+    QVERIFY(panel->isVisible());
+    QVERIFY(photoPanel->isVisible());
+
+    QTest::keyClick(view, Qt::Key_Escape);
+    QVERIFY(view->selectedFrame().isEmpty());
+    QVERIFY(panel->isVisible());
+    QVERIFY(!photoPanel->isVisible());
+
+    // A free canvas has no layout, so it has no layout panel.
+    QTemporaryDir freeDir;
+    QVERIFY(freeDir.isValid());
+    MainWindow freeWindow;
+    freeWindow.resize(1280, 800);
+    freeWindow.show();
+    QTest::qWait(100);
+    QVERIFY(loadDocument(freeWindow, freeDir, documentWithFreeFrames({photo}),
+                         QStringLiteral("free.ppj")));
+    auto *freePanel = freeWindow.findChild<QWidget *>(QStringLiteral("layoutPanel"));
+    QVERIFY(freePanel);
+    QVERIFY2(!freePanel->isVisible(), "a free canvas showed a layout panel");
+}
+
+void TestSlotUi::layoutNameIsTheEnglishCatalogueName()
+{
+    const CollageTemplates &catalogue = CollageTemplates::instance();
+    QVERIFY(!catalogue.catalogue().isEmpty());
+    const CollageTemplate &chosen = catalogue.catalogue().first();
+    QVERIFY(!chosen.nameEn.isEmpty());
+
+    QTemporaryDir dir;
+    QVERIFY(dir.isValid());
+    DocumentSnapshot document = documentWithLayout({}, 4);
+    QVERIFY(!document.pages.isEmpty());
+    document.pages[0].layoutId = chosen.id;
+
+    MainWindow window;
+    window.resize(1280, 800);
+    window.show();
+    QTest::qWait(100);
+    QVERIFY(loadDocument(window, dir, document, QStringLiteral("name.ppj")));
+
+    auto *name = window.findChild<QLabel *>(QStringLiteral("layoutNameLabel"));
+    auto *count = window.findChild<QLabel *>(QStringLiteral("layoutCountLabel"));
+    QVERIFY(name);
+    QVERIFY(count);
+    QCOMPARE(name->text(), chosen.nameEn);
+    QCOMPARE(count->text(), QStringLiteral("4 hely"));
+
+    // A hand-made layout has no catalogue name, so the panel says so instead of
+    // showing an empty line or an internal id.
+    QTemporaryDir handmadeDir;
+    QVERIFY(handmadeDir.isValid());
+    DocumentSnapshot handmade = documentWithLayout({}, 3);
+    handmade.pages[0].layoutId.clear();
+    MainWindow handmadeWindow;
+    handmadeWindow.resize(1280, 800);
+    handmadeWindow.show();
+    QTest::qWait(100);
+    QVERIFY(loadDocument(handmadeWindow, handmadeDir, handmade,
+                         QStringLiteral("handmade.ppj")));
+    auto *handmadeName = handmadeWindow.findChild<QLabel *>(QStringLiteral("layoutNameLabel"));
+    auto *handmadeCount = handmadeWindow.findChild<QLabel *>(QStringLiteral("layoutCountLabel"));
+    QVERIFY(handmadeName);
+    QVERIFY(handmadeCount);
+    QCOMPARE(handmadeName->text(), QStringLiteral("Saját elrendezés"));
+    QCOMPARE(handmadeCount->text(), QStringLiteral("3 hely"));
+}
+
+void TestSlotUi::marginAndGutterAreAutomaticOrZero()
+{
+    QTemporaryDir dir;
+    QVERIFY(dir.isValid());
+    const QString photo = makePhoto(dir.path(), QStringLiteral("margin.png"), QColor(60, 120, 90));
+
+    MainWindow window;
+    window.resize(1280, 800);
+    window.show();
+    QTest::qWait(100);
+    QVERIFY(loadDocument(window, dir, documentWithLayout({photo}, 4),
+                         QStringLiteral("margin.ppj")));
+    QVERIFY(window.waitForPreview(15000));
+
+    auto *marginSpin = spinNamed(window, "marginSpin");
+    auto *marginAuto = window.findChild<QCheckBox *>(QStringLiteral("marginAutoCheck"));
+    auto *gutterSpin = spinNamed(window, "gutterSpin");
+    auto *gutterAuto = window.findChild<QCheckBox *>(QStringLiteral("gutterAutoCheck"));
+    QVERIFY(marginSpin);
+    QVERIFY(marginAuto);
+    QVERIFY(gutterSpin);
+    QVERIFY(gutterAuto);
+
+    // Automatic is the default, the spin is read-only and it shows the value the
+    // page actually uses: 5 % of A4's short side, capped at 10 mm.
+    QVERIFY(marginAuto->isChecked());
+    QVERIFY(gutterAuto->isChecked());
+    QVERIFY(!marginSpin->isEnabled());
+    QVERIFY(!gutterSpin->isEnabled());
+    QCOMPARE(marginSpin->value(), 10.0);
+    Page page = window.document().pages.first();
+    QVERIFY(!page.slotStyle.marginMm.has_value());
+    QVERIFY(!page.slotStyle.gutterMm.has_value());
+    const QRectF automaticCell = SlotGeometry::slotCellMm(page, page.slotList.at(0));
+    QCOMPARE(automaticCell.left(), 10.0);
+
+    // Turning the switch off pins the value that was showing, as one edit.
+    marginAuto->setChecked(false);
+    QTest::qWait(50);
+    QVERIFY(marginSpin->isEnabled());
+    page = window.document().pages.first();
+    QVERIFY(page.slotStyle.marginMm.has_value());
+    QCOMPARE(*page.slotStyle.marginMm, 10.0);
+    QAction *undo = undoAction(window);
+    QVERIFY(undo);
+    QVERIFY2(undoLabelIs(window, QStringLiteral("Margó beállítása")),
+             qPrintable(undo->text()));
+
+    // 0 mm is a real margin, not "automatic" again: the cells reach the edge.
+    marginSpin->setValue(0.0);
+    commitSpin(marginSpin);
+    QTest::qWait(50);
+    page = window.document().pages.first();
+    QVERIFY(page.slotStyle.marginMm.has_value());
+    QCOMPARE(*page.slotStyle.marginMm, 0.0);
+    QCOMPARE(SlotGeometry::slotCellMm(page, page.slotList.at(0)).left(), 0.0);
+
+    // The switch brings the automatic margin back, in one step.
+    marginAuto->setChecked(true);
+    QTest::qWait(50);
+    page = window.document().pages.first();
+    QVERIFY(!page.slotStyle.marginMm.has_value());
+    QCOMPARE(SlotGeometry::slotCellMm(page, page.slotList.at(0)).left(), 10.0);
+    undo->trigger();
+    QTest::qWait(50);
+    page = window.document().pages.first();
+    QVERIFY(page.slotStyle.marginMm.has_value());
+    QCOMPARE(*page.slotStyle.marginMm, 0.0);
+
+    // The gutter has its own switch and its own value.
+    gutterAuto->setChecked(false);
+    QTest::qWait(50);
+    page = window.document().pages.first();
+    QVERIFY(page.slotStyle.gutterMm.has_value());
+    gutterSpin->setValue(2.5);
+    commitSpin(gutterSpin);
+    QTest::qWait(50);
+    page = window.document().pages.first();
+    QVERIFY(page.slotStyle.gutterMm.has_value());
+    QCOMPARE(*page.slotStyle.gutterMm, 2.5);
+    QVERIFY(SlotGeometry::layoutConsistent(page));
+}
+
+void TestSlotUi::styleValuesClampOnSmallPaper()
+{
+    QTemporaryDir dir;
+    QVERIFY(dir.isValid());
+    const QString photo = makePhoto(dir.path(), QStringLiteral("clamp.png"), QColor(160, 100, 40));
+
+    MainWindow window;
+    window.resize(1280, 800);
+    window.show();
+    QTest::qWait(100);
+    QVERIFY(loadDocument(window, dir, documentWithLayout({photo}, 4, tenByFifteenPaper()),
+                         QStringLiteral("clamp.ppj")));
+    QVERIFY(window.waitForPreview(15000));
+
+    auto *marginSpin = spinNamed(window, "marginSpin");
+    auto *borderSpin = spinNamed(window, "borderSpin");
+    auto *radiusSpin = spinNamed(window, "radiusSpin");
+    auto *marginAuto = window.findChild<QCheckBox *>(QStringLiteral("marginAutoCheck"));
+    QVERIFY(marginSpin);
+    QVERIFY(borderSpin);
+    QVERIFY(radiusSpin);
+    QVERIFY(marginAuto);
+
+    Page page = window.document().pages.first();
+    // A margin may never eat the content box: half the short side minus 2 mm.
+    QCOMPARE(marginSpin->maximum(), 48.0);
+
+    // Asking for more than the paper allows stores the clamped value, and the
+    // control shows that value instead of the number that was typed.
+    marginAuto->setChecked(false);
+    QTest::qWait(30);
+    marginSpin->setValue(50.0);
+    commitSpin(marginSpin);
+    QTest::qWait(30);
+    page = window.document().pages.first();
+    QVERIFY(page.slotStyle.marginMm.has_value());
+    QCOMPARE(*page.slotStyle.marginMm, 48.0);
+    QCOMPARE(marginSpin->value(), 48.0);
+    // Back to automatic, so the cells are the full size again for the two
+    // per-cell clamps below.
+    marginAuto->setChecked(true);
+    QTest::qWait(30);
+    page = window.document().pages.first();
+    QVERIFY(!page.slotStyle.marginMm.has_value());
+
+    const QRectF cell = SlotGeometry::slotCellMm(page, page.slotList.at(0));
+    const double shortestCell = std::min(cell.width(), cell.height());
+    QVERIFY(shortestCell > 0.0);
+    // A border may never eat more than 45 % of a cell's shorter side, and a
+    // radius never more than half a cell. The spin is a tenth of a millimetre
+    // control, so the limit it shows is the clamp rounded to its own step.
+    QVERIFY(borderSpin->maximum() <= 0.45 * shortestCell + 1e-9);
+    QVERIFY(borderSpin->maximum() > 0.45 * shortestCell - 0.1);
+    QVERIFY(radiusSpin->maximum() <= shortestCell / 2.0 + 0.1);
+    QVERIFY(radiusSpin->maximum() > shortestCell / 2.0 - 0.1);
+
+    borderSpin->setValue(50.0);
+    commitSpin(borderSpin);
+    QTest::qWait(30);
+    radiusSpin->setValue(100.0);
+    commitSpin(radiusSpin);
+    QTest::qWait(60);
+
+    page = window.document().pages.first();
+    // What was stored is exactly what the control shows.
+    QCOMPARE(page.slotStyle.borderMm, borderSpin->maximum());
+    QCOMPARE(page.slotStyle.cornerRadiusMm, radiusSpin->maximum());
+    QCOMPARE(borderSpin->value(), borderSpin->maximum());
+    QCOMPARE(radiusSpin->value(), radiusSpin->maximum());
+    QVERIFY(SlotGeometry::layoutConsistent(page));
+    // A photograph keeps at least a tenth of its cell, and every cell survives.
+    for (const Slot &slot : page.slotList) {
+        const QRectF slotCell = SlotGeometry::slotCellMm(page, slot);
+        const QRectF photoRect = SlotGeometry::slotPhotoRectMm(page, slot);
+        QVERIFY(slotCell.width() >= 1.0);
+        QVERIFY(slotCell.height() >= 1.0);
+        QVERIFY(photoRect.width() >= slotCell.width() / 10.0 - 1e-9);
+        QVERIFY(photoRect.height() >= slotCell.height() / 10.0 - 1e-9);
+    }
+}
+
+void TestSlotUi::borderColourWithAlphaRoundTrips()
+{
+    QTemporaryDir dir;
+    QVERIFY(dir.isValid());
+    const QString photo = makePhoto(dir.path(), QStringLiteral("colour.png"), QColor(40, 90, 150));
+
+    MainWindow window;
+    window.resize(1280, 800);
+    window.show();
+    QTest::qWait(100);
+    QVERIFY(loadDocument(window, dir, documentWithLayout({photo}, 4),
+                         QStringLiteral("colour.ppj")));
+
+    // The colour dialog's answer arrives through one function, so the panel has
+    // one writer for the colour and the test needs no modal dialog.
+    const QColor chosen(20, 40, 60, 128);
+    QVERIFY(QMetaObject::invokeMethod(&window, "applySlotBorderColour",
+                                      Qt::DirectConnection, Q_ARG(QColor, chosen)));
+    QTest::qWait(50);
+    Page page = window.document().pages.first();
+    QCOMPARE(page.slotStyle.borderColor, chosen);
+    QCOMPARE(page.slotStyle.borderColor.alpha(), 128);
+    QAction *undo = undoAction(window);
+    QVERIFY(undo);
+    QVERIFY2(undoLabelIs(window, QStringLiteral("Szegély beállítása")),
+             qPrintable(undo->text()));
+
+    // Alpha survives the project file: a translucent mat is a saved choice.
+    const QString path = dir.filePath(QStringLiteral("colour-saved.ppj"));
+    ProjectStore store;
+    QVERIFY(store.save(path, window.document(), SaveMode::Normal).ok());
+    const auto loaded = store.load(path);
+    QVERIFY(loaded);
+    QCOMPARE(loaded.value().document.pages.first().slotStyle.borderColor, chosen);
+    QCOMPARE(loaded.value().document.pages.first().slotStyle.borderColor.alpha(), 128);
+
+    undo->trigger();
+    QTest::qWait(50);
+    page = window.document().pages.first();
+    QCOMPARE(page.slotStyle.borderColor, QColor(255, 255, 255));
+}
+
+void TestSlotUi::oneUndoPerStyleChange()
+{
+    QTemporaryDir dir;
+    QVERIFY(dir.isValid());
+    const QString photo = makePhoto(dir.path(), QStringLiteral("undo.png"), QColor(90, 60, 140));
+
+    MainWindow window;
+    window.resize(1280, 800);
+    window.show();
+    QTest::qWait(100);
+    QVERIFY(loadDocument(window, dir, documentWithLayout({photo}, 4),
+                         QStringLiteral("style-undo.ppj")));
+
+    auto *borderSpin = spinNamed(window, "borderSpin");
+    QVERIFY(borderSpin);
+    QAction *undo = undoAction(window);
+    QVERIFY(undo);
+
+    borderSpin->setValue(3.0);
+    commitSpin(borderSpin);
+    QTest::qWait(50);
+    const DocumentSnapshot afterThree = window.document();
+    QCOMPARE(afterThree.pages.first().slotStyle.borderMm, 3.0);
+    QVERIFY2(undoLabelIs(window, QStringLiteral("Szegély beállítása")),
+             qPrintable(undo->text()));
+
+    borderSpin->setValue(6.0);
+    commitSpin(borderSpin);
+    QTest::qWait(50);
+    QCOMPARE(window.document().pages.first().slotStyle.borderMm, 6.0);
+
+    // One step back is the 3 mm state, not the 0 mm one: one action, one entry.
+    undo->trigger();
+    QTest::qWait(50);
+    QVERIFY(window.document() == afterThree);
+
+    // A focus loss on an untouched spin is not an edit: no new entry.
+    const QString text = undo->text();
+    commitSpin(borderSpin);
+    QTest::qWait(30);
+    QVERIFY(window.document() == afterThree);
+    QCOMPARE(undo->text(), text);
+
+    // Radius and colour are their own single steps as well.
+    auto *radiusSpin = spinNamed(window, "radiusSpin");
+    QVERIFY(radiusSpin);
+    radiusSpin->setValue(4.0);
+    commitSpin(radiusSpin);
+    QTest::qWait(50);
+    const DocumentSnapshot afterRadius = window.document();
+    QCOMPARE(afterRadius.pages.first().slotStyle.cornerRadiusMm, 4.0);
+    undo->trigger();
+    QTest::qWait(50);
+    QVERIFY(window.document() == afterThree);
+
+    QVERIFY(QMetaObject::invokeMethod(&window, "applySlotBorderColour", Qt::DirectConnection,
+                                      Q_ARG(QColor, QColor(0, 0, 0))));
+    QTest::qWait(50);
+    undo->trigger();
+    QTest::qWait(50);
+    QVERIFY(window.document() == afterThree);
+}
+
+void TestSlotUi::addSlotSplitsAndRefusesAtTheCap()
+{
+    QTemporaryDir dir;
+    QVERIFY(dir.isValid());
+    const QString photoA = makePhoto(dir.path(), QStringLiteral("add-a.png"), QColor(200, 80, 80));
+    const QString photoB = makePhoto(dir.path(), QStringLiteral("add-b.png"), QColor(80, 80, 200));
+
+    MainWindow window;
+    window.resize(1280, 800);
+    window.show();
+    QTest::qWait(100);
+    QVERIFY(loadDocument(window, dir, documentWithLayout({photoA, photoB}, 2),
+                         QStringLiteral("add.ppj")));
+    QVERIFY(window.waitForPreview(15000));
+
+    auto *view = window.findChild<PageView *>();
+    auto *addButton = window.findChild<QPushButton *>(QStringLiteral("addSlotButton"));
+    auto *removeButton = window.findChild<QPushButton *>(QStringLiteral("removeSlotButton"));
+    QVERIFY(view);
+    QVERIFY(addButton);
+    QVERIFY(removeButton);
+    QVERIFY(addButton->isEnabled());
+    QVERIFY2(!removeButton->isEnabled(), "removing a cell needs a selected cell");
+
+    const DocumentSnapshot before = window.document();
+    const Page page = before.pages.first();
+    QCOMPARE(page.slotList.size(), 2);
+    const QString splitId = page.slotList.at(0).id;
+    QTest::mouseClick(view, Qt::LeftButton, Qt::NoModifier,
+                      view->slotRect(splitId).center().toPoint());
+    QCOMPARE(view->selectedSlot(), splitId);
+    QVERIFY(removeButton->isEnabled());
+
+    QVERIFY(QMetaObject::invokeMethod(&window, "addSlotToPage", Qt::DirectConnection));
+    QTest::qWait(50);
+    const Page added = window.document().pages.first();
+    QCOMPARE(added.slotList.size(), 3);
+    QVERIFY(SlotGeometry::layoutConsistent(added));
+    // The new cell follows the split one in fill order, so the order the panel
+    // fills and lists is still the order on the paper.
+    QCOMPARE(added.slotList.at(0).id, splitId);
+    QCOMPARE(added.slotList.at(2).id, page.slotList.at(1).id);
+    QVERIFY(added.slotList.at(1).id != splitId);
+    QVERIFY(added.slotList.at(1).id != page.slotList.at(1).id);
+    // Both halves are still big enough to read a photograph in.
+    const QSizeF sheet = pageSizeMm(added);
+    const double margin = SlotGeometry::effectiveMarginMm(added.slotStyle, sheet);
+    const double gutter = SlotGeometry::effectiveGutterMm(added.slotStyle, sheet);
+    for (const Slot &slot : added.slotList) {
+        const QRectF splitCell =
+            SlotGeometry::cellFromUnitRect(slot.unitRect, sheet, margin, gutter);
+        QVERIFY(splitCell.width() >= 15.0 - 1e-6);
+        QVERIFY(splitCell.height() >= 15.0 - 1e-6);
+    }
+    QAction *undo = undoAction(window);
+    QVERIFY(undo);
+    QVERIFY2(undoLabelIs(window, QStringLiteral("Hely hozzáadása")),
+             qPrintable(undo->text()));
+    undo->trigger();
+    QTest::qWait(50);
+    QVERIFY(window.document() == before);
+
+    // The 15 mm floor is refused on a sheet where a half cell would be smaller.
+    QTemporaryDir tinyDir;
+    QVERIFY(tinyDir.isValid());
+    MainWindow tinyWindow;
+    tinyWindow.resize(1280, 800);
+    tinyWindow.show();
+    QTest::qWait(100);
+    QVERIFY(loadDocument(tinyWindow, tinyDir, documentWithLayout({}, 4, tinyPaper()),
+                         QStringLiteral("tiny.ppj")));
+    const DocumentSnapshot tinyBefore = tinyWindow.document();
+    QVERIFY(QMetaObject::invokeMethod(&tinyWindow, "addSlotToPage", Qt::DirectConnection));
+    QTest::qWait(30);
+    QVERIFY2(tinyWindow.document() == tinyBefore, "a 15 mm floor was crossed");
+    QVERIFY2(tinyWindow.statusBar()->currentMessage().contains(QStringLiteral("túl kicsi")),
+             qPrintable(tinyWindow.statusBar()->currentMessage()));
+
+    // The 12-cell cap refuses the thirteenth and says why.
+    QTemporaryDir capDir;
+    QVERIFY(capDir.isValid());
+    MainWindow capWindow;
+    capWindow.resize(1280, 800);
+    capWindow.show();
+    QTest::qWait(100);
+    QVERIFY(loadDocument(capWindow, capDir, documentWithLayout({}, 12),
+                         QStringLiteral("cap.ppj")));
+    auto *capAdd = capWindow.findChild<QPushButton *>(QStringLiteral("addSlotButton"));
+    QVERIFY(capAdd);
+    QVERIFY2(!capAdd->isEnabled(), "the thirteenth cell was offered");
+    const DocumentSnapshot capBefore = capWindow.document();
+    QVERIFY(QMetaObject::invokeMethod(&capWindow, "addSlotToPage", Qt::DirectConnection));
+    QTest::qWait(30);
+    QVERIFY(capWindow.document() == capBefore);
+    QCOMPARE(capWindow.statusBar()->currentMessage(),
+             QStringLiteral("Egy lapon legfeljebb 12 hely lehet."));
+}
+
+void TestSlotUi::removeSlotLeavesTheGap()
+{
+    QTemporaryDir dir;
+    QVERIFY(dir.isValid());
+    const QString photo = makePhoto(dir.path(), QStringLiteral("remove.png"), QColor(70, 160, 120));
+
+    MainWindow window;
+    window.resize(1280, 800);
+    window.show();
+    QTest::qWait(100);
+    QVERIFY(loadDocument(window, dir, documentWithLayout({photo}, 4),
+                         QStringLiteral("remove.ppj")));
+    QVERIFY(window.waitForPreview(15000));
+
+    auto *view = window.findChild<PageView *>();
+    QVERIFY(view);
+    const DocumentSnapshot before = window.document();
+    const Page page = before.pages.first();
+    const QString removedId = page.slotList.at(0).id;
+    QVERIFY(frameInSlot(page, removedId));
+    QHash<QString, QRectF> cellsBefore;
+    const QList<QRectF> mapped = SlotGeometry::cellsMm(page);
+    for (int i = 0; i < page.slotList.size(); ++i)
+        cellsBefore.insert(page.slotList.at(i).id, mapped.at(i));
+
+    QTest::mouseClick(view, Qt::LeftButton, Qt::NoModifier,
+                      view->slotRect(removedId).center().toPoint());
+    QCOMPARE(view->selectedSlot(), removedId);
+    QVERIFY(QMetaObject::invokeMethod(&window, "removeSlotFromPage", Qt::DirectConnection));
+    QTest::qWait(50);
+
+    Page after = window.document().pages.first();
+    QCOMPARE(after.slotList.size(), 3);
+    QVERIFY(!SlotGeometry::slotById(after, removedId));
+    // The photograph went with its cell.
+    QCOMPARE(after.frames.size(), 0);
+    // Every other cell kept its rectangle: the neighbours did not slide
+    // together, so the space the removed cell leaves stays empty, and the panel
+    // says so.
+    QCOMPARE(window.statusBar()->currentMessage(),
+             QStringLiteral("A többi hely a helyén marad."));
+    const QList<QRectF> cellsAfter = SlotGeometry::cellsMm(after);
+    QCOMPARE(cellsAfter.size(), 3);
+    for (int i = 0; i < after.slotList.size(); ++i) {
+        const auto was = cellsBefore.constFind(after.slotList.at(i).id);
+        QVERIFY(was != cellsBefore.constEnd());
+        QCOMPARE(cellsAfter.at(i).left(), was->left());
+        QCOMPARE(cellsAfter.at(i).top(), was->top());
+        QCOMPARE(cellsAfter.at(i).width(), was->width());
+        QCOMPARE(cellsAfter.at(i).height(), was->height());
+    }
+    QVERIFY(SlotGeometry::layoutConsistent(after));
+
+    QAction *undo = undoAction(window);
+    QVERIFY(undo);
+    QVERIFY2(undoLabelIs(window, QStringLiteral("Hely eltávolítása")),
+             qPrintable(undo->text()));
+    undo->trigger();
+    QTest::qWait(50);
+    QVERIFY(window.document() == before);
+}
+
+void TestSlotUi::dissolveKeepsThePhotographs()
+{
+    QTemporaryDir dir;
+    QVERIFY(dir.isValid());
+    const QString photoA = makePhoto(dir.path(), QStringLiteral("dis-a.png"), QColor(180, 120, 60));
+    const QString photoB = makePhoto(dir.path(), QStringLiteral("dis-b.png"), QColor(60, 120, 180));
+
+    MainWindow window;
+    window.resize(1280, 800);
+    window.show();
+    QTest::qWait(100);
+    QVERIFY(loadDocument(window, dir, documentWithLayout({photoA, photoB}, 4),
+                         QStringLiteral("dissolve.ppj")));
+    QVERIFY(window.waitForPreview(15000));
+
+    auto *panel = window.findChild<QWidget *>(QStringLiteral("layoutPanel"));
+    QVERIFY(panel);
+    QVERIFY(panel->isVisible());
+    const DocumentSnapshot before = window.document();
+    const Page page = before.pages.first();
+    QCOMPARE(page.frames.size(), 2);
+
+    // "No" is a decision too: nothing changes.
+    answerNextQuestionWith(QMessageBox::No);
+    QVERIFY(QMetaObject::invokeMethod(&window, "dissolvePageLayout", Qt::DirectConnection));
+    QTest::qWait(30);
+    QVERIFY(window.document() == before);
+
+    // "Yes" removes the cells and keeps the photographs where they are.
+    answerNextQuestionWith(QMessageBox::Yes);
+    QVERIFY(QMetaObject::invokeMethod(&window, "dissolvePageLayout", Qt::DirectConnection));
+    QTest::qWait(50);
+
+    const Page dissolved = window.document().pages.first();
+    QVERIFY(!dissolved.hasLayout());
+    QVERIFY(dissolved.slotList.isEmpty());
+    QVERIFY(dissolved.layoutId.isEmpty());
+    QCOMPARE(dissolved.frames.size(), page.frames.size());
+    for (int i = 0; i < dissolved.frames.size(); ++i) {
+        const Frame &was = page.frames.at(i);
+        const Frame &now = dissolved.frames.at(i);
+        QCOMPARE(now.id, was.id);
+        QVERIFY(now.slotId.isEmpty());
+        QCOMPARE(now.cx, was.cx);
+        QCOMPARE(now.cy, was.cy);
+        QCOMPARE(now.width, was.width);
+        QCOMPARE(now.height, was.height);
+        QCOMPARE(now.angleDeg, 0.0);
+    }
+    // The panel followed the page: no layout, no layout panel.
+    QVERIFY(!panel->isVisible());
+
+    QAction *undo = undoAction(window);
+    QVERIFY(undo);
+    QVERIFY2(undoLabelIs(window, QStringLiteral("Elrendezés megszüntetése")),
+             qPrintable(undo->text()));
+    undo->trigger();
+    QTest::qWait(50);
+    QVERIFY(window.document() == before);
+    QVERIFY(panel->isVisible());
+}
+
+void TestSlotUi::borderPrintsAndTheCanvasAgrees()
+{
+    QTemporaryDir dir;
+    QVERIFY(dir.isValid());
+    const QString photo = makePhoto(dir.path(), QStringLiteral("mat.png"), QColor(128, 128, 128));
+
+    DocumentSnapshot document = documentWithLayout({photo}, 4);
+    QVERIFY(!document.pages.isEmpty());
+    const Frame *firstFrame =
+        frameInSlot(document.pages.first(), document.pages.first().slotList.at(0).id);
+    QVERIFY(firstFrame);
+    const QString frameId = firstFrame->id;
+
+    // A 3 mm black mat, chosen through the engine by the same page the panel
+    // builds, so this test measures the style and not the panel.
+    SlotStyle style;
+    style.borderMm = 3.0;
+    style.borderColor = QColor(0, 0, 0);
+    auto styled = SlotLayoutEngine::setStyle(document.pages.first(), style);
+    QVERIFY(styled);
+    document.pages[0] = styled.value();
+    const Page page = document.pages.first();
+    const Slot &filled = page.slotList.at(0);
+    const Slot &empty = page.slotList.at(1);
+    const QRectF filledCell = SlotGeometry::slotCellMm(page, filled);
+    const QRectF filledPhoto = SlotGeometry::slotPhotoRectMm(page, filled);
+    const QRectF emptyCell = SlotGeometry::slotCellMm(page, empty);
+    // 1.5 mm inside a cell edge is inside the mat and outside the photograph.
+    const QPointF matPoint(filledCell.left() + 1.5, filledCell.center().y());
+    const QPointF photoPoint = filledPhoto.center();
+    const QPointF emptyMatPoint(emptyCell.left() + 1.5, emptyCell.center().y());
+    QVERIFY(filledPhoto.width() < filledCell.width());
+    QVERIFY(filledCell.contains(matPoint));
+
+    // The print path.
+    ImageStore store;
+    PageRenderer renderer(store);
+    const double ppi = 150.0;
+    const auto rendered = renderer.renderPage(document, 0, ppi);
+    if (!rendered)
+        QFAIL(qPrintable(rendered.error().message));
+    const QImage printed = rendered.value();
+    QVERIFY(!printed.isNull());
+    const QSizeF sheet = pageSizeMm(page);
+    const auto printedAt = [&](const QPointF &mm) {
+        const int x = std::clamp(int(mm.x() / sheet.width() * printed.width()), 0,
+                                 printed.width() - 1);
+        const int y = std::clamp(int(mm.y() / sheet.height() * printed.height()), 0,
+                                 printed.height() - 1);
+        return printed.pixel(x, y);
+    };
+    const auto isDark = [](QRgb pixel) {
+        return qRed(pixel) <= 30 && qGreen(pixel) <= 30 && qBlue(pixel) <= 30;
+    };
+    const auto isGrey = [](QRgb pixel) {
+        return qRed(pixel) >= 95 && qRed(pixel) <= 165 && qGreen(pixel) >= 95
+            && qGreen(pixel) <= 165 && qBlue(pixel) >= 95 && qBlue(pixel) <= 165;
+    };
+
+    QVERIFY2(isDark(printedAt(matPoint)),
+             qPrintable(QStringLiteral("the 3 mm mat printed %1/%2/%3")
+                            .arg(qRed(printedAt(matPoint)))
+                            .arg(qGreen(printedAt(matPoint)))
+                            .arg(qBlue(printedAt(matPoint)))));
+    QVERIFY2(isGrey(printedAt(photoPoint)), "the photograph must print inside its mat");
+    // An empty cell prints its mat and nothing else: the ring is there, the
+    // middle is paper, and no placeholder reaches the raster.
+    QVERIFY2(isDark(printedAt(emptyMatPoint)), "an empty cell must still print its mat");
+    const QRgb emptyCentre = printedAt(emptyCell.center());
+    QVERIFY2(qRed(emptyCentre) >= 245 && qGreen(emptyCentre) >= 245 && qBlue(emptyCentre) >= 245,
+             qPrintable(QStringLiteral("an empty cell printed %1/%2/%3 in its middle")
+                            .arg(qRed(emptyCentre))
+                            .arg(qGreen(emptyCentre))
+                            .arg(qBlue(emptyCentre))));
+
+    // The canvas raster is made by the same painter at the same millimetres, so
+    // what the screen shows and what the printer gets cannot drift apart.
+    const QImage pixels = preparedPixels(photo);
+    QVERIFY(!pixels.isNull());
+    PageView view;
+    view.resize(900, 700);
+    view.setDocument(document);
+    view.setFrameImages({{frameId, pixels}});
+    view.show();
+    QVERIFY(QTest::qWaitForWindowExposed(&view));
+    const QImage canvas = view.composedImage();
+    QVERIFY(!canvas.isNull());
+    const auto canvasAt = [&](const QPointF &mm) {
+        return rasterPixelAtMm(canvas, view.pageMm(), mm);
+    };
+    for (const QPointF &probe : {matPoint, photoPoint, emptyMatPoint, emptyCell.center()}) {
+        const QRgb onScreen = canvasAt(probe);
+        const QRgb ink = printedAt(probe);
+        const int distance = std::max({std::abs(qRed(onScreen) - qRed(ink)),
+                                       std::abs(qGreen(onScreen) - qGreen(ink)),
+                                       std::abs(qBlue(onScreen) - qBlue(ink))});
+        QVERIFY2(distance <= 4,
+                 qPrintable(QStringLiteral("screen %1/%2/%3 and print %4/%5/%6 differ at %7,%8 by %9")
+                                .arg(qRed(onScreen))
+                                .arg(qGreen(onScreen))
+                                .arg(qBlue(onScreen))
+                                .arg(qRed(ink))
+                                .arg(qGreen(ink))
+                                .arg(qBlue(ink))
+                                .arg(probe.x())
+                                .arg(probe.y())
+                                .arg(distance)));
+    }
 }
 
 QTEST_MAIN(TestSlotUi)

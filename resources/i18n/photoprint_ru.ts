@@ -1227,5 +1227,77 @@
             <numerusform>%n фото останутся свободными.</numerusform>
         </translation>
     </message>
+    <message>
+        <source>Saját elrendezés</source>
+        <translation>Своя раскладка</translation>
+    </message>
+    <message>
+        <source>Külső margó</source>
+        <translation>Внешнее поле</translation>
+    </message>
+    <message>
+        <source>Képek közti hézag</source>
+        <translation>Расстояние между фото</translation>
+    </message>
+    <message>
+        <source>Automatikus</source>
+        <translation>Автоматически</translation>
+    </message>
+    <message>
+        <source>Szegély</source>
+        <translation>Окантовка</translation>
+    </message>
+    <message>
+        <source>Szegély színe</source>
+        <translation>Цвет окантовки</translation>
+    </message>
+    <message>
+        <source>Sarok lekerekítése</source>
+        <translation>Скругление углов</translation>
+    </message>
+    <message>
+        <source>Hely hozzáadása</source>
+        <translation>Добавить ячейку</translation>
+    </message>
+    <message>
+        <source>Hely eltávolítása</source>
+        <translation>Удалить ячейку</translation>
+    </message>
+    <message>
+        <source>Elrendezés megszüntetése</source>
+        <translation>Убрать раскладку</translation>
+    </message>
+    <message>
+        <source>Válaszd ki a helyet a lapon.</source>
+        <translation>Выбери ячейку на странице.</translation>
+    </message>
+    <message>
+        <source>A fotók megmaradnak a helyükön.</source>
+        <translation>Фотографии останутся на своих местах.</translation>
+    </message>
+    <message>
+        <source>A többi hely a helyén marad.</source>
+        <translation>Остальные ячейки останутся на своих местах.</translation>
+    </message>
+    <message>
+        <source>Az elrendezés megszűnik, a fotók szabadon maradnak a helyükön.</source>
+        <translation>Раскладка исчезнет, фотографии останутся на своих местах как свободные фотографии.</translation>
+    </message>
+    <message>
+        <source>Margó beállítása</source>
+        <translation>Задать поле</translation>
+    </message>
+    <message>
+        <source>Szegély beállítása</source>
+        <translation>Задать окантовку</translation>
+    </message>
+    <message numerus="yes">
+        <source>%n hely</source>
+        <translation>
+            <numerusform>%n ячейка</numerusform>
+            <numerusform>%n ячейки</numerusform>
+            <numerusform>%n ячеек</numerusform>
+        </translation>
+    </message>
 </context>
 </TS>

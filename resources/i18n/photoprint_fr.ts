@@ -1220,5 +1220,76 @@
             <numerusform>%n photos restent libres.</numerusform>
         </translation>
     </message>
+    <message>
+        <source>Saját elrendezés</source>
+        <translation>Disposition personnalisée</translation>
+    </message>
+    <message>
+        <source>Külső margó</source>
+        <translation>Marge extérieure</translation>
+    </message>
+    <message>
+        <source>Képek közti hézag</source>
+        <translation>Espace entre les photos</translation>
+    </message>
+    <message>
+        <source>Automatikus</source>
+        <translation>Automatique</translation>
+    </message>
+    <message>
+        <source>Szegély</source>
+        <translation>Bordure</translation>
+    </message>
+    <message>
+        <source>Szegély színe</source>
+        <translation>Couleur de la bordure</translation>
+    </message>
+    <message>
+        <source>Sarok lekerekítése</source>
+        <translation>Rayon des coins</translation>
+    </message>
+    <message>
+        <source>Hely hozzáadása</source>
+        <translation>Ajouter une case</translation>
+    </message>
+    <message>
+        <source>Hely eltávolítása</source>
+        <translation>Retirer la case</translation>
+    </message>
+    <message>
+        <source>Elrendezés megszüntetése</source>
+        <translation>Supprimer la disposition</translation>
+    </message>
+    <message>
+        <source>Válaszd ki a helyet a lapon.</source>
+        <translation>Sélectionne la case sur la page.</translation>
+    </message>
+    <message>
+        <source>A fotók megmaradnak a helyükön.</source>
+        <translation>Les photos restent à leur place.</translation>
+    </message>
+    <message>
+        <source>A többi hely a helyén marad.</source>
+        <translation>Les autres cases restent à leur place.</translation>
+    </message>
+    <message>
+        <source>Az elrendezés megszűnik, a fotók szabadon maradnak a helyükön.</source>
+        <translation>La disposition disparaît et les photos restent à leur place, libres.</translation>
+    </message>
+    <message>
+        <source>Margó beállítása</source>
+        <translation>Régler la marge</translation>
+    </message>
+    <message>
+        <source>Szegély beállítása</source>
+        <translation>Régler la bordure</translation>
+    </message>
+    <message numerus="yes">
+        <source>%n hely</source>
+        <translation>
+            <numerusform>%n case</numerusform>
+            <numerusform>%n cases</numerusform>
+        </translation>
+    </message>
 </context>
 </TS>

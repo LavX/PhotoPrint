@@ -376,6 +376,18 @@ private slots:
     void brightnessChanged(int value);
     void showOriginalPressed(bool pressed);
     void applySizeFromControls();
+    /// The page-level layout panel. Each of these reads the controls (or the
+    /// chosen colour) and publishes one finished page, so one user action is one
+    /// undo step: a spin's editingFinished, a checkbox, one colour choice.
+    void applySlotStyle();
+    /// The colour dialog's answer, in one function, so the panel has one writer
+    /// for the border colour and a test can deliver a colour without a modal
+    /// dialog.
+    void applySlotBorderColour(const QColor &colour);
+    void chooseSlotBorderColour();
+    void addSlotToPage();
+    void removeSlotFromPage();
+    void dissolvePageLayout();
     void showDiagnostics();
     void saveSettings();
     void restoreSettings();
@@ -429,6 +441,10 @@ private:
     void openEffectBrowser();
     void applyEffectChoice(const QString &key, int version, int strength);
     void syncFrameControls();
+    void syncLayoutPanel();
+    /// The page's layout name for the panel: the English catalogue name when the
+    /// layout came from the catalogue, a neutral label for a hand-made one.
+    QString layoutDisplayName(const Page &page) const;
     void syncListSelection();
     void showProblem(const QString &message);
     void exportPdf(bool allPages);
@@ -524,6 +540,24 @@ private:
     QDoubleSpinBox *m_widthSpin = nullptr;
     QDoubleSpinBox *m_heightSpin = nullptr;
     QDoubleSpinBox *m_angleSpin = nullptr;
+    /// The page's own inspector: visible whenever the page has slots, even with
+    /// no photograph selected. The selected-photo sections live in
+    /// m_photoPanel, so the two can coexist without hiding each other.
+    QWidget *m_layoutPanel = nullptr;
+    QWidget *m_photoPanel = nullptr;
+    QLabel *m_layoutNameLabel = nullptr;
+    QLabel *m_layoutCountLabel = nullptr;
+    QDoubleSpinBox *m_marginSpin = nullptr;
+    QCheckBox *m_marginAutoCheck = nullptr;
+    QDoubleSpinBox *m_gutterSpin = nullptr;
+    QCheckBox *m_gutterAutoCheck = nullptr;
+    QDoubleSpinBox *m_borderSpin = nullptr;
+    QPushButton *m_borderColourButton = nullptr;
+    QDoubleSpinBox *m_radiusSpin = nullptr;
+    QPushButton *m_addSlotButton = nullptr;
+    QPushButton *m_removeSlotButton = nullptr;
+    QPushButton *m_dissolveLayoutButton = nullptr;
+    QPushButton *m_layoutTemplatesButton = nullptr;
     PagesPanel *m_pagesPanel = nullptr;
     QLabel *m_pageInfo = nullptr;
     QWidget *m_noticeBar = nullptr;
