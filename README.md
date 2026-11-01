@@ -19,8 +19,21 @@ MagickWand.
   crop mode; keyboard nudging and undo/redo.
 - Multiple photos and pages, layer order, page copy/delete/reorder.
 - Photo-library sidebar, canvas and context-sensitive inspector.
-- Automatic, conservative tone correction plus a manual brightness slider and
-  eight filter presets with strength control.
+- Automatic, conservative tone correction plus a manual brightness slider.
+- 120 effects in 12 categories with a preview browser, search and a strength
+  slider. Looks are graded recipes, not single filter primitives; the browser
+  previews on the selected photo (or a bundled sample) and the print matches the
+  preview. Legacy projects keep their original looks.
+- 55 collage layouts for 2 to 10 photos. A layout creates numbered sections you
+  can drop photos into, pan and zoom inside, and clip to the section; empty
+  sections are visible on screen and print as mat only. Margin, gutter, border
+  width, border colour and corner radius are adjustable per page.
+- Batch portrait sheets: 35 × 45 mm passport copies and custom sizes, fill the
+  sheet or choose a count, overflow on new pages, optional cut guides, exact
+  print size without borderless enlargement. Auto align into equal cells or
+  distribute existing photos without resizing.
+- The canvas keeps a cached composition, so pan, zoom and dragging stay
+  responsive; previews are rendered in the background.
 - 2x Lanczos enlargement for print (with a light sharpen; it is not an AI model).
 - Paper sizes in centimetres: A4, A5, A6, 9 × 13, 10 × 15 and 13 × 18 cm, plus
   saved custom paper profiles and glossy/matte/plain types.
