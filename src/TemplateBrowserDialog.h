@@ -109,7 +109,9 @@ public:
     bool templateMarkedChosen(const QString &id) const; ///< the check mark
     bool templateMapped(const QString &id) const;       ///< slotsMm() on this paper
     /// The layout the page currently uses, and whether a tile is that layout.
-    QString currentLayoutId() const { return m_request.layoutId; }
+    /// Empty when the page's cells no longer match the named layout, so the
+    /// label cannot claim a layout the page has lost.
+    QString currentLayoutId() const;
     bool templateIsCurrent(const QString &id) const;
     QString currentLayoutText() const; ///< the visible current-layout line, or empty
     QString gridAccessibleName() const;
@@ -154,6 +156,10 @@ private:
     /// The chip the page asks for: the current layout's count when it names a
     /// catalogue layout, otherwise the page's photo count. Clamped to the chips.
     int preferredCount() const;
+    /// The layout label the page can honestly claim: the stored id only while
+    /// the page's cells still match that catalogue layout. An added, removed or
+    /// re-mapped cell makes it a hand-made layout, and the label goes away.
+    QString effectiveLayoutId() const;
     /// The page as the picker's engine copy sees it, with the current slots,
     /// style and layout label, so a top-up prediction is the real one.
     Page requestPage() const;

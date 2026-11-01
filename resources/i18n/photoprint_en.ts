@@ -1162,5 +1162,63 @@
         <source>A margó, a hézag vagy a szegély értéke érvénytelen.</source>
         <translation>The margin, gutter or border value is invalid.</translation>
     </message>
+    <message>
+        <source>Húzd ide a fotót</source>
+        <translation>Drag a photo here</translation>
+    </message>
+    <message>
+        <source>Fotó beillesztése</source>
+        <translation>Insert photo</translation>
+    </message>
+    <message>
+        <source>Fotó áthelyezése</source>
+        <translation>Move photo</translation>
+    </message>
+    <message>
+        <source>Képek cseréje</source>
+        <translation>Swap photos</translation>
+    </message>
+    <message>
+        <source>Fotó leválasztása</source>
+        <translation>Detach photo</translation>
+    </message>
+    <message>
+        <source>Hely ürítése</source>
+        <translation>Clear cell</translation>
+    </message>
+    <message>
+        <source>Jelenlegi elrendezés: %1</source>
+        <translation>Current layout: %1</translation>
+    </message>
+    <message>
+        <source>Jelenlegi elrendezés</source>
+        <translation>Current layout</translation>
+    </message>
+    <message>
+        <source>Ez az elrendezés már a lapon van.</source>
+        <translation>This layout is already on the page.</translation>
+    </message>
+    <message>
+        <source>A többi fotó új lapra került.</source>
+        <translation>The remaining photos were placed on a new page.</translation>
+    </message>
+    <message>
+        <source>Csere</source>
+        <translation>Replace</translation>
+    </message>
+    <message numerus="yes">
+        <source>%n hely üresen marad.</source>
+        <translation>
+            <numerusform>%n empty cell remains.</numerusform>
+            <numerusform>%n empty cells remain.</numerusform>
+        </translation>
+    </message>
+    <message numerus="yes">
+        <source>%n fotó szabadon marad.</source>
+        <translation>
+            <numerusform>%n photo stays free.</numerusform>
+            <numerusform>%n photos stay free.</numerusform>
+        </translation>
+    </message>
 </context>
 </TS>

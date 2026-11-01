@@ -33,6 +33,7 @@ class QCheckBox;
 class QComboBox;
 class QDoubleSpinBox;
 class QDragEnterEvent;
+class QDragLeaveEvent;
 class QDragMoveEvent;
 class QDropEvent;
 class QLabel;
@@ -105,11 +106,15 @@ public:
     QRectF slotRect(const QString &slotId) const;
     /// The slot under a widget point, or an empty id.
     QString slotAtWidget(const QPointF &widgetPoint) const;
+    /// While a drag hovers a filled cell this is the cue the canvas shows and
+    /// announces (`Csere`); empty otherwise. Test hook and accessibility aid.
+    QString dropCue() const { return m_dropCue; }
     /// Test hooks: run the platform's drag handlers without a live drag
     /// manager, which the offscreen platform does not have. The handlers are
     /// the same code the window sees in use.
     void dragEnterForTest(QDragEnterEvent *event) { dragEnterEvent(event); }
     void dragMoveForTest(QDragMoveEvent *event) { dragMoveEvent(event); }
+    void dragLeaveForTest(QDragLeaveEvent *event) { dragLeaveEvent(event); }
     void dropForTest(QDropEvent *event) { dropEvent(event); }
     void setCropMode(bool enabled);
     bool cropMode() const { return m_cropMode; }
@@ -153,9 +158,10 @@ public:
     std::function<void()> onCropModeExited;
     /// Files from the file manager (second argument: the slot under the cursor,
     /// empty for the page background) and one frame dragged out of the library
-    /// (frame id, slot id or empty when dropped outside every slot).
+    /// (frame id, slot id or empty when dropped outside every slot, and the drop
+    /// point in page millimetres so a layout-free page can place it there).
     std::function<void(const QStringList &, const QString &)> onFilesDroppedAt;
-    std::function<void(const QString &, const QString &)> onFrameDroppedAt;
+    std::function<void(const QString &, const QString &, const QPointF &)> onFrameDroppedAt;
     std::function<void(double)> onViewZoomChanged;
     std::function<void(bool)> onCropModeChanged;
     std::function<void()> onCancelBusy;
@@ -224,6 +230,9 @@ private:
     SlotState slotStateFor(const Slot &slot) const;
     void paintSlotOverlays(QPainter &painter, const Page &page) const;
     void clearSelection();
+    /// Recomputes the drag cue for the cell under the pointer and updates the
+    /// accessible description with it, restoring the base text afterwards.
+    void updateDropCue();
     void beginDrag(DragKind kind, int handle, const QPointF &pagePoint, const Frame &frame);
     void ensureComposed() const;
     void startCompose() const;
@@ -257,6 +266,8 @@ private:
     QString m_selectedId;
     QString m_selectedSlotId;
     QString m_dropSlotId;
+    QString m_dropCue;
+    QString m_accessibleBeforeDrag;
     QString m_emptyHint;
     bool m_cropMode = false;
     double m_viewZoom = 1.0;
@@ -395,9 +406,10 @@ private:
     /// sends them there, an empty one is the page background (first empty slot
     /// on a laid-out page). One edit, one undo.
     void addFilesAt(const QStringList &paths, const QString &slotId);
-    /// One photo dragged out of the library: move or swap into a slot, or
-    /// detach to a free frame when dropped outside every slot.
-    void dropFrameAt(const QString &frameId, const QString &slotId);
+    /// One photo dragged out of the library: move or swap into a slot, detach to
+    /// a free frame outside the layout, or place it on a layout-free page at the
+    /// drop point.
+    void dropFrameAt(const QString &frameId, const QString &slotId, const QPointF &pagePoint);
     /// Removes the photograph in a cell and keeps the cell empty.
     void clearSlot(const QString &slotId);
     /// Selects a cell; a filled cell selects its photograph instead.

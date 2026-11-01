@@ -1162,5 +1162,63 @@
         <source>A margó, a hézag vagy a szegély értéke érvénytelen.</source>
         <translation>Der Wert für Rand, Abstand oder Rahmen ist ungültig.</translation>
     </message>
+    <message>
+        <source>Húzd ide a fotót</source>
+        <translation>Foto hierher ziehen</translation>
+    </message>
+    <message>
+        <source>Fotó beillesztése</source>
+        <translation>Foto einfügen</translation>
+    </message>
+    <message>
+        <source>Fotó áthelyezése</source>
+        <translation>Foto verschieben</translation>
+    </message>
+    <message>
+        <source>Képek cseréje</source>
+        <translation>Fotos tauschen</translation>
+    </message>
+    <message>
+        <source>Fotó leválasztása</source>
+        <translation>Foto lösen</translation>
+    </message>
+    <message>
+        <source>Hely ürítése</source>
+        <translation>Zelle leeren</translation>
+    </message>
+    <message>
+        <source>Jelenlegi elrendezés: %1</source>
+        <translation>Aktuelles Layout: %1</translation>
+    </message>
+    <message>
+        <source>Jelenlegi elrendezés</source>
+        <translation>Aktuelles Layout</translation>
+    </message>
+    <message>
+        <source>Ez az elrendezés már a lapon van.</source>
+        <translation>Dieses Layout ist bereits auf der Seite.</translation>
+    </message>
+    <message>
+        <source>A többi fotó új lapra került.</source>
+        <translation>Die übrigen Fotos wurden auf einer neuen Seite platziert.</translation>
+    </message>
+    <message>
+        <source>Csere</source>
+        <translation>Ersetzen</translation>
+    </message>
+    <message numerus="yes">
+        <source>%n hely üresen marad.</source>
+        <translation>
+            <numerusform>%n leere Zelle bleibt übrig.</numerusform>
+            <numerusform>%n leere Zellen bleiben übrig.</numerusform>
+        </translation>
+    </message>
+    <message numerus="yes">
+        <source>%n fotó szabadon marad.</source>
+        <translation>
+            <numerusform>%n Foto bleibt frei.</numerusform>
+            <numerusform>%n Fotos bleiben frei.</numerusform>
+        </translation>
+    </message>
 </context>
 </TS>

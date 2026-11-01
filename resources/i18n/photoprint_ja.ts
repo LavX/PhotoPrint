@@ -1157,5 +1157,61 @@
         <source>A margó, a hézag vagy a szegély értéke érvénytelen.</source>
         <translation>余白、間隔、または枠線の値が無効です。</translation>
     </message>
+    <message>
+        <source>Húzd ide a fotót</source>
+        <translation>ここに写真をドラッグ</translation>
+    </message>
+    <message>
+        <source>Fotó beillesztése</source>
+        <translation>写真を挿入</translation>
+    </message>
+    <message>
+        <source>Fotó áthelyezése</source>
+        <translation>写真を移動</translation>
+    </message>
+    <message>
+        <source>Képek cseréje</source>
+        <translation>写真を入れ替え</translation>
+    </message>
+    <message>
+        <source>Fotó leválasztása</source>
+        <translation>写真を切り離す</translation>
+    </message>
+    <message>
+        <source>Hely ürítése</source>
+        <translation>セルを空にする</translation>
+    </message>
+    <message>
+        <source>Jelenlegi elrendezés: %1</source>
+        <translation>現在のレイアウト: %1</translation>
+    </message>
+    <message>
+        <source>Jelenlegi elrendezés</source>
+        <translation>現在のレイアウト</translation>
+    </message>
+    <message>
+        <source>Ez az elrendezés már a lapon van.</source>
+        <translation>このレイアウトはすでにページにあります。</translation>
+    </message>
+    <message>
+        <source>A többi fotó új lapra került.</source>
+        <translation>残りの写真は新しいページに配置されました。</translation>
+    </message>
+    <message>
+        <source>Csere</source>
+        <translation>置き換え</translation>
+    </message>
+    <message numerus="yes">
+        <source>%n hely üresen marad.</source>
+        <translation>
+            <numerusform>%n 個の空きセルが残ります。</numerusform>
+        </translation>
+    </message>
+    <message numerus="yes">
+        <source>%n fotó szabadon marad.</source>
+        <translation>
+            <numerusform>%n 枚の写真が空きのまま残ります。</numerusform>
+        </translation>
+    </message>
 </context>
 </TS>

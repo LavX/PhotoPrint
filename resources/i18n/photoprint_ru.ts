@@ -1167,5 +1167,65 @@
         <source>A margó, a hézag vagy a szegély értéke érvénytelen.</source>
         <translation>Значение поля, промежутка или рамки недопустимо.</translation>
     </message>
+    <message>
+        <source>Húzd ide a fotót</source>
+        <translation>Перетащите фото сюда</translation>
+    </message>
+    <message>
+        <source>Fotó beillesztése</source>
+        <translation>Вставить фото</translation>
+    </message>
+    <message>
+        <source>Fotó áthelyezése</source>
+        <translation>Переместить фото</translation>
+    </message>
+    <message>
+        <source>Képek cseréje</source>
+        <translation>Поменять фото местами</translation>
+    </message>
+    <message>
+        <source>Fotó leválasztása</source>
+        <translation>Отделить фото</translation>
+    </message>
+    <message>
+        <source>Hely ürítése</source>
+        <translation>Очистить ячейку</translation>
+    </message>
+    <message>
+        <source>Jelenlegi elrendezés: %1</source>
+        <translation>Текущий макет: %1</translation>
+    </message>
+    <message>
+        <source>Jelenlegi elrendezés</source>
+        <translation>Текущий макет</translation>
+    </message>
+    <message>
+        <source>Ez az elrendezés már a lapon van.</source>
+        <translation>Этот макет уже на странице.</translation>
+    </message>
+    <message>
+        <source>A többi fotó új lapra került.</source>
+        <translation>Остальные фото размещены на новой странице.</translation>
+    </message>
+    <message>
+        <source>Csere</source>
+        <translation>Заменить</translation>
+    </message>
+    <message numerus="yes">
+        <source>%n hely üresen marad.</source>
+        <translation>
+            <numerusform>%n пустая ячейка останется.</numerusform>
+            <numerusform>%n пустые ячейки останутся.</numerusform>
+            <numerusform>%n пустых ячеек останется.</numerusform>
+        </translation>
+    </message>
+    <message numerus="yes">
+        <source>%n fotó szabadon marad.</source>
+        <translation>
+            <numerusform>%n фото останется свободным.</numerusform>
+            <numerusform>%n фото останутся свободными.</numerusform>
+            <numerusform>%n фото останутся свободными.</numerusform>
+        </translation>
+    </message>
 </context>
 </TS>
