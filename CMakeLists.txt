@@ -61,6 +61,7 @@ add_library(photoprint_core STATIC
   src/EffectEngine.cpp
   src/CollageTemplates.cpp
   src/SheetLayout.cpp
+  src/SheetToolsDialog.cpp
   src/SlotGeometry.cpp
   src/SlotLayoutEngine.cpp
   src/EffectStages.cpp
@@ -159,6 +160,7 @@ photoprint_test(tst_effect_engine)
 photoprint_test(tst_effect_browser)
 photoprint_test(tst_collage_templates)
 photoprint_test(tst_sheet_layout)
+photoprint_test(tst_sheet_ui)
 photoprint_test(tst_slot_layout)
 photoprint_test(tst_slot_ui)
 photoprint_test(tst_template_browser)

@@ -3,6 +3,7 @@
 #include "ColorPipeline.h"
 #include "EffectEngine.h"
 #include "LayoutEngine.h"
+#include "SheetLayout.h"
 #include "SlotGeometry.h"
 
 #include <QCoreApplication>
@@ -510,8 +511,75 @@ void paintFrameLabels(QPainter &painter, const DocumentSnapshot &snapshot, int p
     painter.restore();
 }
 
+bool requiresCutGuideConfirmation(const DocumentSnapshot &document)
+{
+    for (const Page &page : document.pages) {
+        if (page.cutGuides == CutGuides::Print)
+            return true;
+    }
+    return false;
+}
+
+QList<int> pagesPrintingCutGuides(const DocumentSnapshot &document)
+{
+    QList<int> pages;
+    for (int i = 0; i < document.pages.size(); ++i) {
+        if (document.pages.at(i).cutGuides == CutGuides::Print)
+            pages.append(i + 1);
+    }
+    return pages;
+}
+
+void paintCutGuideInk(QImage &srgbPage, const Page &page, double ppi)
+{
+    if (page.cutGuides != CutGuides::Print || srgbPage.isNull())
+        return;
+    if (!(ppi > 0.0) || !std::isfinite(ppi))
+        return;
+    const QList<QLineF> lines = SheetLayout::cutGuideLinesMm(page);
+    if (lines.isEmpty())
+        return;
+
+    QPainter painter(&srgbPage);
+    painter.setRenderHint(QPainter::Antialiasing, true);
+    QTransform pageScale;
+    pageScale.scale(ppi / 25.4, ppi / 25.4);
+    painter.setTransform(pageScale);
+    // 0.2 mm at 300 ppi is 2.4 px: thin enough not to eat the photograph and
+    // thick enough for the printer to render. Flat caps keep the corner joins
+    // from growing a blob, and the miter join closes the rectangle cleanly.
+    QPen pen(QColor(127, 127, 127), 0.2, Qt::SolidLine, Qt::FlatCap, Qt::MiterJoin);
+    painter.setPen(pen);
+    painter.setBrush(Qt::NoBrush);
+    for (const QLineF &line : lines)
+        painter.drawLine(line);
+}
+
+namespace {
+
+/// The `path + sha` identity one verification covers. Copies share both, so a
+/// hundred of them produce one key and one file read.
+QString verificationKey(const Frame &frame)
+{
+    return frame.sourcePath + QLatin1Char('\n')
+        + QString::fromLatin1(frame.sourceSha256.toHex());
+}
+
+} // namespace
+
 Result<QImage> PageRenderer::renderPage(const DocumentSnapshot &snapshot, int pageIndex, double ppi,
                                         std::stop_token token, const RenderOptions &options) const
+{
+    // A single call still verifies a source once: a page of copies is one job
+    // as far as the identity check is concerned.
+    QSet<QString> verified;
+    return renderPageUsing(snapshot, pageIndex, ppi, token, options, &verified);
+}
+
+Result<QImage> PageRenderer::renderPageUsing(const DocumentSnapshot &snapshot, int pageIndex,
+                                             double ppi, std::stop_token token,
+                                             const RenderOptions &options,
+                                             QSet<QString> *verified) const
 {
     if (pageIndex < 0 || pageIndex >= snapshot.pages.size())
         return error(QStringLiteral("page-index"), QCoreApplication::translate("PhotoPrint", "Ez az oldal nem található."));
@@ -522,6 +590,9 @@ Result<QImage> PageRenderer::renderPage(const DocumentSnapshot &snapshot, int pa
     const QSizeF pageSize = pageSizeMm(page);
     if (!(pageSize.width() > 0.0) || !(pageSize.height() > 0.0))
         return error(QStringLiteral("page-size"), QCoreApplication::translate("PhotoPrint", "A papírméret érvénytelen."));
+
+    QSet<QString> localVerified;
+    QSet<QString> *alreadyVerified = verified ? verified : &localVerified;
 
     QHash<QString, QImage> images;
     // The snapshot may come straight from a project file or from a caller that
@@ -534,9 +605,37 @@ Result<QImage> PageRenderer::renderPage(const DocumentSnapshot &snapshot, int pa
             return error(QStringLiteral("cancelled"), QCoreApplication::translate("PhotoPrint", "A művelet megszakadt."));
         if (!LayoutEngine::validFrame(frame))
             continue;
-        Result<SourceImage> source = options.verifySources
-            ? m_store.reloadVerified(frame.sourcePath, frame.sourceSha256, token)
-            : m_store.load(frame.sourcePath, ImportPolicy{}, token);
+        // The file is hashed once per identity per job, not once per copy: a
+        // hundred 5 MB JPEGs would otherwise read and hash half a gigabyte
+        // before the first page is drawn.
+        const auto loadSource = [&]() -> Result<SourceImage> {
+            if (!options.verifySources)
+                return m_store.load(frame.sourcePath, ImportPolicy{}, token);
+            const QString key = verificationKey(frame);
+            if (alreadyVerified->contains(key)) {
+                // The identity was checked earlier in this job. A file replaced
+                // in the meantime must still fail closed: load() re-reads a
+                // changed file, so compare what it found with what was promised.
+                Result<SourceImage> cached =
+                    m_store.load(frame.sourcePath, ImportPolicy{}, token);
+                if (cached && cached.value().sha256 != frame.sourceSha256) {
+                    return error(QStringLiteral("source-changed"),
+                                 QCoreApplication::translate(
+                                     "PhotoPrint",
+                                     "Ez a fotó megváltozott. Add meg újra, ha ezt szeretnéd "
+                                     "nyomtatni."));
+                }
+                return cached;
+            }
+            Result<SourceImage> checked =
+                m_store.reloadVerified(frame.sourcePath, frame.sourceSha256, token);
+            if (checked) {
+                alreadyVerified->insert(key);
+                ++m_verificationCount;
+            }
+            return checked;
+        };
+        Result<SourceImage> source = loadSource();
         if (!source)
             return source.error();
         ColorRecipe recipe = baseRecipe;
@@ -580,10 +679,14 @@ Result<QImage> PageRenderer::renderPage(const DocumentSnapshot &snapshot, int pa
     paintFrameLabels(painter, snapshot, pageIndex, pageScale, ppi);
     painter.end();
 
-    const QImage srgb = ColorPipeline::linearToSrgb(canvas, snapshot.recipe.grayscale, token);
+    QImage srgb = ColorPipeline::linearToSrgb(canvas, snapshot.recipe.grayscale, token);
     if (srgb.isNull())
         return error(QStringLiteral("colour-conversion"),
                      QCoreApplication::translate("PhotoPrint", "A lapot most nem tudjuk elkészíteni. Próbáld újra."));
+    // The ink goes on after the conversion on purpose: writing #7F7F7F into the
+    // linear working space would print it at about 188. A screen overlay never
+    // reaches this function, so `Screen` leaves the raster untouched.
+    paintCutGuideInk(srgb, page, ppi);
     return srgb;
 }
 
@@ -602,9 +705,12 @@ Result<ExportArtifact> PageRenderer::writePdf(const DocumentSnapshot &snapshot, 
     const double ppi = options.printPpi > 0.0 && std::isfinite(options.printPpi)
         ? options.printPpi
         : 300.0;
+    // One job-wide identity cache: a four-page batch of one photograph verifies
+    // the file on page one and loads the cached decode on every later copy.
+    QSet<QString> verified;
 
     for (int i = 0; i < snapshot.pages.size(); ++i) {
-        Result<QImage> rendered = renderPage(snapshot, i, ppi, token, options);
+        Result<QImage> rendered = renderPageUsing(snapshot, i, ppi, token, options, &verified);
         if (!rendered)
             return rendered.error();
         pageImages.append(rendered.value());

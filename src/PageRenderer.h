@@ -7,7 +7,9 @@
 #include <QByteArray>
 #include <QHash>
 #include <QImage>
+#include <QList>
 #include <QPointF>
+#include <QSet>
 #include <QSizeF>
 #include <QString>
 #include <QTransform>
@@ -52,6 +54,21 @@ void paintPageContent(QPainter &painter, const DocumentSnapshot &snapshot, int p
 void paintFrameLabels(QPainter &painter, const DocumentSnapshot &snapshot, int pageIndex,
                       const QTransform &pageTransform, double ppi);
 
+/// Whether any page carries cut guides that reach the print. A page set to
+/// `Screen` shows the overlay only, so it never asks for a confirmation; both
+/// the print path and the PDF export call this before they start.
+bool requiresCutGuideConfirmation(const DocumentSnapshot &document);
+
+/// The pages whose printed guides reach paper, 1-based, in page order. The
+/// confirmation names them so a multi-page job says which sheets carry marks.
+QList<int> pagesPrintingCutGuides(const DocumentSnapshot &document);
+
+/// Draws the printed cut-guide ink onto an already converted sRGB page. A 0.2 mm
+/// solid 50 % grey line at the frame edges: solid beats dashed at print
+/// resolution, and drawing after the conversion is what makes #7F7F7F print as
+/// #7F7F7F instead of a linear-space approximation of it.
+void paintCutGuideInk(QImage &srgbPage, const Page &page, double ppi);
+
 /// Draws the documented millimetre model into pixels. Screen previews and the
 /// PDF use the same page recipe; the PDF raster is never a screen capture.
 class PageRenderer
@@ -74,8 +91,22 @@ public:
     /// capped layer into place.
     static QSize effectLayerSize(const Frame &frame, const QSize &sourceSize, double ppi);
 
+    /// How many sources this renderer verified in total. A batch job verifies
+    /// one source once however many copies share it, and this is the seam a
+    /// test counts instead of trusting the wall clock.
+    int verificationCount() const { return m_verificationCount; }
+    void resetVerificationCount() { m_verificationCount = 0; }
+
 private:
+    /// The shared implementation. `verified` is the job-wide set of
+    /// `path + sha` pairs already checked; a null set gives this call its own,
+    /// so even a direct multi-copy render verifies each source once.
+    Result<QImage> renderPageUsing(const DocumentSnapshot &snapshot, int pageIndex, double ppi,
+                                   std::stop_token token, const RenderOptions &options,
+                                   QSet<QString> *verified) const;
+
     ImageStore &m_store;
+    mutable int m_verificationCount = 0;
 };
 
 } // namespace pp

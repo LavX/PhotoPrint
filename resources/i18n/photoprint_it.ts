@@ -1307,5 +1307,271 @@
         <source>Az elrendezés megszűnt, a fotó a lapon marad.</source>
         <translation>Il layout è sparito e la foto resta sulla pagina.</translation>
     </message>
+    <message>
+        <source>Képek sokszorosítása</source>
+        <translation>Duplica foto</translation>
+    </message>
+    <message>
+        <source>Fotók rendezése</source>
+        <translation>Disponi le foto</translation>
+    </message>
+    <message>
+        <source>Előnézet</source>
+        <translation>Anteprima</translation>
+    </message>
+    <message>
+        <source>Ugyanaz a fotó több példányban, egyenes rácsban.</source>
+        <translation>La stessa foto più volte, in una griglia regolare.</translation>
+    </message>
+    <message>
+        <source>Fotó: %1</source>
+        <translation>Foto: %1</translation>
+    </message>
+    <message>
+        <source>Válassz ki egy fotót a sokszorosításhoz.</source>
+        <translation>Seleziona una foto da duplicare.</translation>
+    </message>
+    <message>
+        <source>Méret</source>
+        <translation>Dimensione</translation>
+    </message>
+    <message>
+        <source>Egyedi méret</source>
+        <translation>Dimensione personalizzata</translation>
+    </message>
+    <message>
+        <source>Szélesség és magasság cseréje</source>
+        <translation>Scambia larghezza e altezza</translation>
+    </message>
+    <message>
+        <source>A 35 × 45 mm az igazolványkép szokásos mérete. Ez az eszköz csak a helyét állítja be, azt nem ellenőrzi, hogy a fotó megfelel-e az előírásoknak.</source>
+        <translation>35 × 45 mm è la dimensione abituale per una foto tessera. Questo strumento posiziona solo le copie; non controlla se la foto rispetta le regole.</translation>
+    </message>
+    <message>
+        <source>Térköz</source>
+        <translation>Spazio</translation>
+    </message>
+    <message>
+        <source>Legkisebb margó</source>
+        <translation>Margine minimo</translation>
+    </message>
+    <message>
+        <source>A nyomtató a lap szélétől 3 mm-t nem nyomtat ki, ezért a margó legalább 3,5 mm.</source>
+        <translation>La stampante non stampa gli ultimi 3 mm dal bordo della carta, quindi il margine è di almeno 3,5 mm.</translation>
+    </message>
+    <message>
+        <source>Darabszám</source>
+        <translation>Numero</translation>
+    </message>
+    <message>
+        <source>Amennyi befér</source>
+        <translation>Quante ne stanno</translation>
+    </message>
+    <message>
+        <source>Vágójelek</source>
+        <translation>Segni di taglio</translation>
+    </message>
+    <message>
+        <source>Nincs</source>
+        <translation>Nessuno</translation>
+    </message>
+    <message>
+        <source>Képernyőn</source>
+        <translation>A schermo</translation>
+    </message>
+    <message>
+        <source>A nyomtatott jel vékony szürke vonal a példányok szélén. Alapból nincs a nyomaton.</source>
+        <translation>Il segno stampato è una linea grigia sottile sul bordo di ogni copia. Per impostazione predefinita è spento.</translation>
+    </message>
+    <message>
+        <source>Hely</source>
+        <translation>Posizione</translation>
+    </message>
+    <message>
+        <source>Az aktuális lapra</source>
+        <translation>Sulla pagina corrente</translation>
+    </message>
+    <message>
+        <source>Új lapokra</source>
+        <translation>Su nuove pagine</translation>
+    </message>
+    <message>
+        <source>A maradék az első kockáktól töltődik, hogy a lapok együtt vághatók legyenek.</source>
+        <translation>Il resto riempie dalle prime caselle, così i fogli si possono tagliare insieme.</translation>
+    </message>
+    <message>
+        <source>Összegzés</source>
+        <translation>Riepilogo</translation>
+    </message>
+    <message numerus="yes">
+        <source>%n példány fér el egy lapra.</source>
+        <translation>
+            <numerusform>%n copia sta su un foglio.</numerusform>
+            <numerusform>%n copie stanno su un foglio.</numerusform>
+        </translation>
+    </message>
+    <message numerus="yes">
+        <source>%n lapra kerül.</source>
+        <translation>
+            <numerusform>Occupa %n foglio.</numerusform>
+            <numerusform>Occupa %n fogli.</numerusform>
+        </translation>
+    </message>
+    <message>
+        <source>A kiválasztott fotó el van forgatva. A példányok egyenesen kerülnek a rácsba.</source>
+        <translation>La foto selezionata è ruotata. Le copie vengono messe dritte nella griglia.</translation>
+    </message>
+    <message>
+        <source>A kiválasztott fotó szélei lemaradnak.</source>
+        <translation>I bordi della foto selezionata verranno tagliati.</translation>
+    </message>
+    <message>
+        <source>Ilyen szoros margónál a nyomtató a szélső vágójelet levághatja.</source>
+        <translation>Con un margine così stretto la stampante può tagliare il segno di taglio esterno.</translation>
+    </message>
+    <message>
+        <source>A lap elrendezése megszűnik, a példányok szabadon kerülnek a lapra.</source>
+        <translation>Il layout della pagina viene rimosso e le copie sono libere sulla pagina.</translation>
+    </message>
+    <message numerus="yes">
+        <source>%n fotó helyére</source>
+        <translation>
+            <numerusform>Sostituisce %n immagine</numerusform>
+            <numerusform>Sostituisce %n immagini</numerusform>
+        </translation>
+    </message>
+    <message>
+        <source>Így kerül a lapra.</source>
+        <translation>Ecco come appare sul foglio.</translation>
+    </message>
+    <message>
+        <source>Szélek: %1 mm oldalt, %2 mm felül és alul.</source>
+        <translation>Margini: %1 mm ai lati, %2 mm sopra e sotto.</translation>
+    </message>
+    <message>
+        <source>Létrehozás</source>
+        <translation>Crea</translation>
+    </message>
+    <message>
+        <source>A lapon lévő fotók elrendezése. A sorrend nem változik.</source>
+        <translation>Disponi le foto della pagina. L'ordine non cambia.</translation>
+    </message>
+    <message>
+        <source>Rácsba</source>
+        <translation>In griglia</translation>
+    </message>
+    <message>
+        <source>Térköz kiegyenlítése</source>
+        <translation>Uniforma gli spazi</translation>
+    </message>
+    <message>
+        <source>A fotók egyforma cellákba kerülnek. A kép kitölti a cellát, a kilógó rész lemarad.</source>
+        <translation>Le foto vanno in celle uguali. Ogni foto riempie la cella, l'eccesso viene tagliato.</translation>
+    </message>
+    <message>
+        <source>Oszlopok</source>
+        <translation>Colonne</translation>
+    </message>
+    <message>
+        <source>A kép egésze látszódjon</source>
+        <translation>Mostra tutta la foto</translation>
+    </message>
+    <message>
+        <source>Bekapcsolva a kép nem tölti ki a cellát; a hiányzó rész fehér marad.</source>
+        <translation>Attivo, la foto non riempie la cella; la parte mancante resta bianca.</translation>
+    </message>
+    <message>
+        <source>Automatikus</source>
+        <translation>Automatico</translation>
+    </message>
+    <message>
+        <source>Egymás mellett</source>
+        <translation>Uno accanto all'altro</translation>
+    </message>
+    <message>
+        <source>Egymás alatt</source>
+        <translation>Uno sotto l'altro</translation>
+    </message>
+    <message>
+        <source>Irány</source>
+        <translation>Direzione</translation>
+    </message>
+    <message>
+        <source>Ha nem fér el, a program csökkenti.</source>
+        <translation>Se non ci sta, il programma riduce lo spazio.</translation>
+    </message>
+    <message numerus="yes">
+        <source>%n fotó: %1 oszlop × %2 sor. Egy cella %3 × %4 mm.</source>
+        <translation>
+            <numerusform>%n immagine: %1 colonne × %2 righe. Una cella è %3 × %4 mm.</numerusform>
+            <numerusform>%n immagini: %1 colonne × %2 righe. Una cella è %3 × %4 mm.</numerusform>
+        </translation>
+    </message>
+    <message>
+        <source>A fotók egy része erősen lemarad. Kapcsold be a »A kép egésze látszódjon« opciót, vagy oszd el őket több lapon.</source>
+        <translation>Alcune foto perdono molto. Attiva «Mostra tutta la foto» o distribuiscile su più pagine.</translation>
+    </message>
+    <message>
+        <source>A fotók megtartják a méretüket. A köztük lévő hely lesz egyenlő.</source>
+        <translation>Le foto mantengono la loro dimensione. Lo spazio tra loro diventa uguale.</translation>
+    </message>
+    <message numerus="yes">
+        <source>%n fotó, %1 mm térköz. A margó %2 mm.</source>
+        <translation>
+            <numerusform>%n immagine, %1 mm di spazio. Il margine è %2 mm.</numerusform>
+            <numerusform>%n immagini, %1 mm di spazio. Il margine è %2 mm.</numerusform>
+        </translation>
+    </message>
+    <message>
+        <source>A térköz %1 mm lett, hogy a fotók elférjenek.</source>
+        <translation>Lo spazio è diventato %1 mm perché le foto entrino.</translation>
+    </message>
+    <message>
+        <source>Egy fotó van a lapon. Csak középre igazítjuk, a mérete nem változik.</source>
+        <translation>C'è una foto sulla pagina. Viene solo centrata, la dimensione non cambia.</translation>
+    </message>
+    <message>
+        <source>Ehhez a laphoz elrendezés tartozik. Szüntesd meg az elrendezést az igazításhoz.</source>
+        <translation>Questa pagina ha un layout. Rimuovi il layout per disporre le foto.</translation>
+    </message>
+    <message>
+        <source>Rendezés</source>
+        <translation>Disponi</translation>
+    </message>
+    <message>
+        <source>Sokszorosítás…</source>
+        <translation>Duplica…</translation>
+    </message>
+    <message>
+        <source>Lap</source>
+        <translation>Pagina</translation>
+    </message>
+    <message>
+        <source>Fotók rendezése…</source>
+        <translation>Disponi le foto…</translation>
+    </message>
+    <message>
+        <source>A nyomtatott vágójel a példányok szélén jelenik meg.</source>
+        <translation>Il segno di taglio stampato appare sul bordo delle copie.</translation>
+    </message>
+    <message>
+        <source>Fotók cseréje</source>
+        <translation>Sostituisci le foto</translation>
+    </message>
+    <message numerus="yes">
+        <source>A lapon most %n fotó van. A példányok ezek helyére kerülnek. Egy lépésben visszavonható.</source>
+        <translation>
+            <numerusform>C'è %n foto sulla pagina. Le copie prenderanno il suo posto. Un solo passo, annullabile.</numerusform>
+            <numerusform>Ci sono %n foto sulla pagina. Le copie prenderanno il loro posto. Un solo passo, annullabile.</numerusform>
+        </translation>
+    </message>
+    <message>
+        <source>Vágójelek a nyomaton</source>
+        <translation>Segni di taglio sulla stampa</translation>
+    </message>
+    <message>
+        <source>A nyomatra vágójelek kerülnek a következő lapokon: %1. Folytatod?</source>
+        <translation>I segni di taglio verranno stampati su queste pagine: %1. Continuare?</translation>
+    </message>
 </context>
 </TS>

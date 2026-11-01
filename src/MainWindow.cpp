@@ -9,6 +9,8 @@
 #include "JobJournal.h"
 #include "SlotGeometry.h"
 #include "SlotLayoutEngine.h"
+#include "SheetLayout.h"
+#include "SheetToolsDialog.h"
 #include "TemplateBrowserDialog.h"
 #include "Translation.h"
 #include "TrialSheetBuilder.h"
@@ -1205,6 +1207,27 @@ void PageView::paintEvent(QPaintEvent *)
     if (!m_composed.isNull())
         painter.drawImage(page, m_composed);
 
+    // Cut guides are not part of the page composition: the raster, the PDF and
+    // the printer share one painter that never draws them, and the screen adds
+    // its own copy here. Both sides take the geometry from
+    // SheetLayout::cutGuideLinesMm, so they cannot drift apart.
+    if (const Page *cutPage = currentPage()) {
+        if (cutPage->cutGuides != CutGuides::None) {
+            QPen guidePen = cutPage->cutGuides == CutGuides::Print
+                ? QPen(QColor(0x7f, 0x7f, 0x7f), 1.0, Qt::SolidLine)
+                : QPen(palette().color(QPalette::Highlight), 1.0, Qt::DashLine);
+            // 1 device pixel at every zoom: the marks are furniture, not a
+            // hairline the zoom is supposed to thicken.
+            guidePen.setCosmetic(true);
+            painter.setPen(guidePen);
+            painter.setBrush(Qt::NoBrush);
+            painter.setTransform(pageToWidget());
+            for (const QLineF &line : SheetLayout::cutGuideLinesMm(*cutPage))
+                painter.drawLine(line);
+            painter.resetTransform();
+        }
+    }
+
     painter.setPen(QPen(m_pageBorderColor, 1));
     painter.setBrush(Qt::NoBrush);
     painter.drawRect(page);
@@ -2334,6 +2357,46 @@ void MainWindow::buildUi()
     layoutPanel->setVisible(false);
     sideLayout->addWidget(layoutPanel);
 
+    // --- Lap: tools that belong to the sheet, not to one photograph ---------
+    // Always visible: a page with no layout and no selection can still be
+    // tidied, and the cut guide state is a page property.
+    auto *pageTools = new QWidget(side);
+    pageTools->setObjectName(QStringLiteral("pageToolsPanel"));
+    auto *pageToolsLayout = new QVBoxLayout(pageTools);
+    pageToolsLayout->setContentsMargins(0, 0, 0, 0);
+    addSectionTo(pageToolsLayout, QCoreApplication::translate("PhotoPrint", "Lap"));
+
+    m_alignButton =
+        new QPushButton(QCoreApplication::translate("PhotoPrint", "Fotók rendezése…"), side);
+    m_alignButton->setObjectName(QStringLiteral("alignPhotosButton"));
+    m_alignButton->setToolTip(QCoreApplication::translate(
+        "PhotoPrint", "A lapon lévő fotók elrendezése. A sorrend nem változik."));
+    pageToolsLayout->addWidget(m_alignButton);
+    connect(m_alignButton, &QPushButton::clicked, this, &MainWindow::openAlignPhotos);
+
+    auto *guideTitle = new QLabel(QCoreApplication::translate("PhotoPrint", "Vágójelek"), side);
+    guideTitle->setWordWrap(true);
+    pageToolsLayout->addWidget(guideTitle);
+    m_guidesCombo = new QComboBox(pageTools);
+    m_guidesCombo->setObjectName(QStringLiteral("cutGuidesCombo"));
+    m_guidesCombo->setAccessibleName(guideTitle->text());
+    m_guidesCombo->addItem(QCoreApplication::translate("PhotoPrint", "Nincs"),
+                           int(CutGuides::None));
+    m_guidesCombo->addItem(QCoreApplication::translate("PhotoPrint", "Képernyőn"),
+                           int(CutGuides::Screen));
+    m_guidesCombo->addItem(QCoreApplication::translate("PhotoPrint", "Nyomtatás"),
+                           int(CutGuides::Print));
+    pageToolsLayout->addWidget(m_guidesCombo);
+    connect(m_guidesCombo, &QComboBox::currentIndexChanged, this, &MainWindow::guidesChanged);
+    m_guidesHint = new QLabel(
+        QCoreApplication::translate("PhotoPrint",
+                                    "A nyomtatott vágójel a példányok szélén jelenik meg."),
+        side);
+    m_guidesHint->setWordWrap(true);
+    m_guidesHint->setStyleSheet(QStringLiteral("color: #6e6e73; font-size: 11px;"));
+    pageToolsLayout->addWidget(m_guidesHint);
+    sideLayout->addWidget(pageTools);
+
     // --- Kiválasztott fotó and Effekt: the photograph's own inspector --------
     // One container, hidden as a whole when no photograph is selected, so a
     // laid-out page with an empty selection shows the layout panel alone.
@@ -2453,6 +2516,16 @@ void MainWindow::buildUi()
     m_trialButton = new QPushButton(QCoreApplication::translate("PhotoPrint", "Próbanyomat"), side);
     photoLayout->addWidget(m_trialButton);
     connect(m_trialButton, &QPushButton::clicked, this, &MainWindow::showTrialSheet);
+
+    // Many identical copies of the selected photograph. It sits under the test
+    // sheet because both answer "how will this photo come out of the printer".
+    m_batchButton =
+        new QPushButton(QCoreApplication::translate("PhotoPrint", "Sokszorosítás…"), side);
+    m_batchButton->setObjectName(QStringLiteral("batchCopiesButton"));
+    m_batchButton->setToolTip(QCoreApplication::translate(
+        "PhotoPrint", "Ugyanaz a fotó több példányban, egyenes rácsban."));
+    photoLayout->addWidget(m_batchButton);
+    connect(m_batchButton, &QPushButton::clicked, this, &MainWindow::openBatchCopies);
 
     m_advancedToggle = new QPushButton(QCoreApplication::translate("PhotoPrint", "További beállítások"), side);
     m_advancedToggle->setCheckable(true);
@@ -3385,6 +3458,7 @@ void MainWindow::onDocumentChanged()
     if (m_pagesPanel)
         m_pagesPanel->setPages(document.pages, document.currentPage);
     syncFrameControls();
+    syncPageTools();
     syncPrintControls();
     if (m_templateDialog && !document.pages.isEmpty()) {
         const Page &page = document.pages.at(document.currentPage);
@@ -3885,7 +3959,7 @@ void MainWindow::refreshPhotoList()
             hint = QCoreApplication::translate(
                 "PhotoPrint", "A matt papírt a nyomtató tintasugaras papírként kezeli.");
         }
-        if (page.paper.isPhotoPaper() && !wantBorderless(page.paper)) {
+        if (page.paper.isPhotoPaper() && !wantBorderless(page)) {
             if (!hint.isEmpty())
                 hint += QLatin1Char(' ');
             hint += QCoreApplication::translate("PhotoPrint", "Ennél a papírnál keskeny fehér szél maradhat.");
@@ -4006,7 +4080,7 @@ void MainWindow::syncFrameControls()
     if (m_photoPanel)
         m_photoPanel->setVisible(hasSelection);
     if (m_inspectorPanel)
-        m_inspectorPanel->setVisible(hasSelection || pageHasLayout);
+        m_inspectorPanel->setVisible(hasSelection || pageHasLayout || !document.pages.isEmpty());
     m_fitButton->setEnabled(hasSelection);
     m_fillButton->setEnabled(hasSelection);
     m_cropButton->setEnabled(hasSelection);
@@ -4023,6 +4097,8 @@ void MainWindow::syncFrameControls()
     m_upscaleCheck->setEnabled(hasSelection);
     m_originalButton->setEnabled(hasSelection);
     m_advancedToggle->setEnabled(hasSelection);
+    if (m_batchButton)
+        m_batchButton->setEnabled(hasSelection);
     // A slot owns the rectangle: width, height and angle are not the user's to
     // change on a laid-out page. Moving the photo is a crop pan instead.
     const bool slotted = frame && !frame->slotId.isEmpty();
@@ -4165,6 +4241,34 @@ void MainWindow::syncLayoutPanel()
     m_addSlotButton->setEnabled(page->slotList.size() < SlotGeometry::kMaxSlotsPerPage);
     m_removeSlotButton->setEnabled(
         !m_selectedSlotId.isEmpty() && SlotGeometry::slotById(*page, m_selectedSlotId));
+    m_syncing = wasSyncing;
+}
+
+void MainWindow::syncPageTools()
+{
+    if (!m_guidesCombo || !m_alignButton)
+        return;
+    const DocumentSnapshot document = m_controller.document();
+    const Page *page = document.pages.isEmpty() ? nullptr
+                                                : &document.pages.at(document.currentPage);
+    m_alignButton->setEnabled(page && !page->frames.isEmpty() && !page->hasLayout());
+    m_alignButton->setToolTip(
+        page && page->hasLayout()
+            ? QCoreApplication::translate(
+                  "PhotoPrint",
+                  "Ehhez a laphoz elrendezés tartozik. Szüntesd meg az elrendezést az "
+                  "igazításhoz.")
+            : QCoreApplication::translate(
+                  "PhotoPrint", "A lapon lévő fotók elrendezése. A sorrend nem változik."));
+
+    const int index = page ? (page->cutGuides == CutGuides::Print
+                                  ? 2
+                                  : (page->cutGuides == CutGuides::Screen ? 1 : 0))
+                           : 0;
+    const bool wasSyncing = m_syncing;
+    m_syncing = true;
+    m_guidesCombo->setCurrentIndex(index);
+    m_guidesCombo->setEnabled(page != nullptr);
     m_syncing = wasSyncing;
 }
 
@@ -4544,14 +4648,32 @@ void MainWindow::syncPrintControls()
     m_syncing = wasSyncing;
 }
 
-bool MainWindow::wantBorderless(const PaperSpec &paper) const
+bool resolvedBorderless(const Page &page, bool printerBorderless)
 {
-    if (!paper.isPhotoPaper() || !isFixedPhotoSize(paper))
+    switch (page.borderlessOverride) {
+    case BorderlessOverride::Off:
         return false;
-    if (paper.custom && !paper.borderlessSupported)
-        return false;
-    const PrinterCapabilities *capabilities = printerByQueue(m_queue);
-    return capabilities && capabilities->borderlessSupported();
+    case BorderlessOverride::On:
+        return true;
+    case BorderlessOverride::Auto:
+        break;
+    }
+    return printerBorderless;
+}
+
+bool MainWindow::wantBorderless(const Page &page) const
+{
+    const PaperSpec &paper = page.paper;
+    bool printerBorderless = false;
+    if (paper.isPhotoPaper() && isFixedPhotoSize(paper)
+        && (!paper.custom || paper.borderlessSupported)) {
+        const PrinterCapabilities *capabilities = printerByQueue(m_queue);
+        printerBorderless = capabilities && capabilities->borderlessSupported();
+    }
+    // The page's own choice decides; the printer only supplies the automatic
+    // answer. A batch sheet pins Off, so a 35 × 45 copy prints exactly 35 × 45
+    // instead of the 1.6 % larger bleed composition.
+    return resolvedBorderless(page, printerBorderless);
 }
 
 void MainWindow::manageCustomPapers()
@@ -4975,6 +5097,10 @@ void MainWindow::exportPdf(bool allPages)
         single.currentPage = 0;
         document = single;
     }
+    // A PDF is a print proof: printed guides reach it exactly as they reach
+    // paper, so it asks the same question, naming the sheets in this file.
+    if (!confirmCutGuides(document))
+        return;
     const QString path = QFileDialog::getSaveFileName(this, QCoreApplication::translate("PhotoPrint", "Mentés PDF-ként"),
                                                      QStringLiteral("photoprint.pdf"),
                                                      QStringLiteral("PDF (*.pdf)"));
@@ -4995,7 +5121,7 @@ void MainWindow::exportPdf(bool allPages)
         selection.queueName = m_queue;
         selection.paper = page.paper;
         selection.landscape = page.landscape;
-        selection.borderless = wantBorderless(page.paper);
+        selection.borderless = wantBorderless(page);
         selection.fineQuality = document.fineQuality;
         selection.color = !document.recipe.grayscale;
         const auto ticket = PrinterAdapter::resolve(*capabilities, selection);
@@ -5193,7 +5319,7 @@ void MainWindow::printNow()
     selection.queueName = m_queue;
     selection.paper = page.paper;
     selection.landscape = page.landscape;
-    selection.borderless = wantBorderless(page.paper);
+    selection.borderless = wantBorderless(page);
     selection.fineQuality = document.fineQuality;
     selection.color = !document.recipe.grayscale;
     selection.copies = m_copiesSpin->value();
@@ -5207,6 +5333,11 @@ void MainWindow::printNow()
     const PrintContext context = PrinterAdapter::contextFor(value);
     if (const auto preset = m_presets.match(context))
         document.recipe.paperStrength = preset->paperEv;
+    // Ask before the spool is written and before CUPS sees anything: a No must
+    // leave no trace, and the printed marks are the one thing a person may not
+    // expect from a layout tool.
+    if (!confirmCutGuides(document))
+        return;
     submitPrint(document, value);
 }
 
@@ -5267,7 +5398,7 @@ void MainWindow::showTrialSheet()
     selection.queueName = m_queue;
     selection.paper = page.paper;
     selection.landscape = page.landscape;
-    selection.borderless = wantBorderless(page.paper);
+    selection.borderless = wantBorderless(page);
     selection.fineQuality = document.fineQuality;
     selection.color = !document.recipe.grayscale;
     const auto ticket = PrinterAdapter::resolve(*capabilities, selection);
@@ -5363,6 +5494,125 @@ void MainWindow::updatePrintButton()
     m_printButton->setText(pages > 1
                                ? QCoreApplication::translate("PhotoPrint", "%n oldal nyomtatása", nullptr, pages)
                                : QCoreApplication::translate("PhotoPrint", "Nyomtatás"));
+}
+
+Result<void> MainWindow::applySheetEdit(const ApplyLayoutEdit &edit)
+{
+    return m_controller.apply(edit);
+}
+
+void MainWindow::openBatchCopies()
+{
+    const DocumentSnapshot document = m_controller.document();
+    if (document.pages.isEmpty())
+        return;
+    const std::optional<Frame> source = selectedFrame();
+    if (!source) {
+        showProblem(QCoreApplication::translate("PhotoPrint",
+                                                "Válassz ki egy fotót a sokszorosításhoz."));
+        return;
+    }
+
+    SheetToolsDialog dialog(SheetToolsDialog::Mode::Batch, document, document.currentPage,
+                            source, m_previewImages, this);
+    if (dialog.exec() != QDialog::Accepted || !dialog.hasEdit())
+        return;
+
+    // Replacing the page's photographs is destructive in one step even though it
+    // is undoable, so the count is named before anything changes. New pages
+    // leave the current one alone and need no question.
+    if (dialog.replacesCurrentPage()) {
+        const int frames = document.pages.at(document.currentPage).frames.size();
+        if (frames > 0) {
+            const auto answer = QMessageBox::question(
+                this, QCoreApplication::translate("PhotoPrint", "Fotók cseréje"),
+                QCoreApplication::translate(
+                    "PhotoPrint",
+                    "A lapon most %n fotó van. A példányok ezek helyére kerülnek. Egy "
+                    "lépésben visszavonható.",
+                    nullptr, frames),
+                QMessageBox::Yes | QMessageBox::No, QMessageBox::No);
+            if (answer != QMessageBox::Yes)
+                return;
+        }
+    }
+
+    const auto applied = applySheetEdit(dialog.edit());
+    if (!applied) {
+        showProblem(applied.error().message);
+        return;
+    }
+    // The source frame is gone after a replacement, so the selection would fall
+    // back to nothing. The first copy is what the next action should act on.
+    const DocumentSnapshot after = m_controller.document();
+    if (!after.pages.isEmpty()) {
+        const Page &page = after.pages.at(after.currentPage);
+        if (!page.frames.isEmpty())
+            selectFrame(page.frames.first().id, false);
+    }
+}
+
+void MainWindow::openAlignPhotos()
+{
+    const DocumentSnapshot document = m_controller.document();
+    if (document.pages.isEmpty())
+        return;
+    SheetToolsDialog dialog(SheetToolsDialog::Mode::Align, document, document.currentPage,
+                            std::nullopt, m_previewImages, this);
+    if (dialog.exec() != QDialog::Accepted || !dialog.hasEdit())
+        return;
+    const auto applied = applySheetEdit(dialog.edit());
+    if (!applied)
+        showProblem(applied.error().message);
+}
+
+void MainWindow::guidesChanged(int index)
+{
+    if (m_syncing || index < 0)
+        return;
+    const DocumentSnapshot document = m_controller.document();
+    if (document.pages.isEmpty())
+        return;
+    const CutGuides guides =
+        static_cast<CutGuides>(m_guidesCombo->itemData(index).toInt());
+    if (document.pages.at(document.currentPage).cutGuides == guides)
+        return;
+
+    ApplyLayoutEdit edit;
+    PageLayout change;
+    change.pageIndex = document.currentPage;
+    change.cutGuides = guides;
+    edit.pages.append(change);
+    edit.selectPage = document.currentPage;
+    edit.actionText = QCoreApplication::translate("PhotoPrint", "Vágójelek");
+    const auto applied = applySheetEdit(edit);
+    if (!applied) {
+        showProblem(applied.error().message);
+        syncPageTools();
+    }
+}
+
+bool MainWindow::confirmCutGuides()
+{
+    return confirmCutGuides(m_controller.document());
+}
+
+bool MainWindow::confirmCutGuides(const DocumentSnapshot &document)
+{
+    if (!requiresCutGuideConfirmation(document))
+        return true;
+    const QList<int> pages = pagesPrintingCutGuides(document);
+    QStringList numbers;
+    for (const int page : pages)
+        numbers << QString::number(page);
+    const auto answer = QMessageBox::question(
+        this, QCoreApplication::translate("PhotoPrint", "Vágójelek a nyomaton"),
+        QCoreApplication::translate(
+            "PhotoPrint",
+            "A nyomatra vágójelek kerülnek a következő lapokon: %1. Folytatod?")
+            .arg(numbers.join(QStringLiteral(", "))),
+        QMessageBox::Yes | QMessageBox::No, QMessageBox::No);
+    return answer == QMessageBox::Yes;
 }
 
 void MainWindow::updateNoticeBar()

@@ -1307,5 +1307,271 @@
         <source>Az elrendezés megszűnt, a fotó a lapon marad.</source>
         <translation>लेआउट हट गया और फ़ोटो पेज पर रह जाएगी।</translation>
     </message>
+    <message>
+        <source>Képek sokszorosítása</source>
+        <translation>फ़ोटो की कई प्रतियाँ</translation>
+    </message>
+    <message>
+        <source>Fotók rendezése</source>
+        <translation>फ़ोटो व्यवस्थित करें</translation>
+    </message>
+    <message>
+        <source>Előnézet</source>
+        <translation>पूर्वावलोकन</translation>
+    </message>
+    <message>
+        <source>Ugyanaz a fotó több példányban, egyenes rácsban.</source>
+        <translation>एक ही फ़ोटो कई बार, सीधे ग्रिड में।</translation>
+    </message>
+    <message>
+        <source>Fotó: %1</source>
+        <translation>फ़ोटो: %1</translation>
+    </message>
+    <message>
+        <source>Válassz ki egy fotót a sokszorosításhoz.</source>
+        <translation>कई प्रतियाँ बनाने के लिए एक फ़ोटो चुनें।</translation>
+    </message>
+    <message>
+        <source>Méret</source>
+        <translation>आकार</translation>
+    </message>
+    <message>
+        <source>Egyedi méret</source>
+        <translation>कस्टम आकार</translation>
+    </message>
+    <message>
+        <source>Szélesség és magasság cseréje</source>
+        <translation>चौड़ाई और ऊँचाई बदलें</translation>
+    </message>
+    <message>
+        <source>A 35 × 45 mm az igazolványkép szokásos mérete. Ez az eszköz csak a helyét állítja be, azt nem ellenőrzi, hogy a fotó megfelel-e az előírásoknak.</source>
+        <translation>35 × 45 मिमी पासपोर्ट फ़ोटो का सामान्य आकार है। यह टूल केवल प्रतियों को रखता है, यह नहीं जाँचता कि फ़ोटो नियमों के अनुरूप है या नहीं।</translation>
+    </message>
+    <message>
+        <source>Térköz</source>
+        <translation>अंतर</translation>
+    </message>
+    <message>
+        <source>Legkisebb margó</source>
+        <translation>न्यूनतम हाशिया</translation>
+    </message>
+    <message>
+        <source>A nyomtató a lap szélétől 3 mm-t nem nyomtat ki, ezért a margó legalább 3,5 mm.</source>
+        <translation>प्रिंटर कागज़ के किनारे से 3 मिमी तक नहीं छापता, इसलिए हाशिया कम से कम 3.5 मिमी है।</translation>
+    </message>
+    <message>
+        <source>Darabszám</source>
+        <translation>गिनती</translation>
+    </message>
+    <message>
+        <source>Amennyi befér</source>
+        <translation>जितनी फ़िट हों</translation>
+    </message>
+    <message>
+        <source>Vágójelek</source>
+        <translation>कटाई के निशान</translation>
+    </message>
+    <message>
+        <source>Nincs</source>
+        <translation>कोई नहीं</translation>
+    </message>
+    <message>
+        <source>Képernyőn</source>
+        <translation>स्क्रीन पर</translation>
+    </message>
+    <message>
+        <source>A nyomtatott jel vékony szürke vonal a példányok szélén. Alapból nincs a nyomaton.</source>
+        <translation>छपा हुआ निशान हर प्रति के किनारे एक पतली भूरी रेखा है। यह डिफ़ॉल्ट रूप से बंद है।</translation>
+    </message>
+    <message>
+        <source>Hely</source>
+        <translation>स्थान</translation>
+    </message>
+    <message>
+        <source>Az aktuális lapra</source>
+        <translation>मौजूदा पेज पर</translation>
+    </message>
+    <message>
+        <source>Új lapokra</source>
+        <translation>नए पेजों पर</translation>
+    </message>
+    <message>
+        <source>A maradék az első kockáktól töltődik, hogy a lapok együtt vághatók legyenek.</source>
+        <translation>बाकी हिस्सा पहले खानों से भरता है, ताकि शीटें एक साथ काटी जा सकें।</translation>
+    </message>
+    <message>
+        <source>Összegzés</source>
+        <translation>सारांश</translation>
+    </message>
+    <message numerus="yes">
+        <source>%n példány fér el egy lapra.</source>
+        <translation>
+            <numerusform>एक शीट पर %n प्रति फ़िट होती है।</numerusform>
+            <numerusform>एक शीट पर %n प्रतियाँ फ़िट होती हैं।</numerusform>
+        </translation>
+    </message>
+    <message numerus="yes">
+        <source>%n lapra kerül.</source>
+        <translation>
+            <numerusform>%n शीट पर जाएँगी।</numerusform>
+            <numerusform>%n शीटों पर जाएँगी।</numerusform>
+        </translation>
+    </message>
+    <message>
+        <source>A kiválasztott fotó el van forgatva. A példányok egyenesen kerülnek a rácsba.</source>
+        <translation>चुनी गई फ़ोटो घुमी हुई है। प्रतियाँ ग्रिड में सीधी रखी जाएँगी।</translation>
+    </message>
+    <message>
+        <source>A kiválasztott fotó szélei lemaradnak.</source>
+        <translation>चुनी गई फ़ोटो के किनारे कट जाएँगे।</translation>
+    </message>
+    <message>
+        <source>Ilyen szoros margónál a nyomtató a szélső vágójelet levághatja.</source>
+        <translation>इतने कम हाशिये पर प्रिंटर बाहरी कटाई निशान काट सकता है।</translation>
+    </message>
+    <message>
+        <source>A lap elrendezése megszűnik, a példányok szabadon kerülnek a lapra.</source>
+        <translation>पेज का लेआउट हट जाएगा और प्रतियाँ पेज पर खुली रहेंगी।</translation>
+    </message>
+    <message numerus="yes">
+        <source>%n fotó helyére</source>
+        <translation>
+            <numerusform>%n फ़ोटो की जगह लेती है</numerusform>
+            <numerusform>%n फ़ोटो की जगह लेती हैं</numerusform>
+        </translation>
+    </message>
+    <message>
+        <source>Így kerül a lapra.</source>
+        <translation>शीट पर ऐसे आएगा।</translation>
+    </message>
+    <message>
+        <source>Szélek: %1 mm oldalt, %2 mm felül és alul.</source>
+        <translation>हाशिया: किनारों पर %1 मिमी, ऊपर-नीचे %2 मिमी।</translation>
+    </message>
+    <message>
+        <source>Létrehozás</source>
+        <translation>बनाएँ</translation>
+    </message>
+    <message>
+        <source>A lapon lévő fotók elrendezése. A sorrend nem változik.</source>
+        <translation>पेज की फ़ोटो व्यवस्थित करें। क्रम नहीं बदलेगा।</translation>
+    </message>
+    <message>
+        <source>Rácsba</source>
+        <translation>ग्रिड में</translation>
+    </message>
+    <message>
+        <source>Térköz kiegyenlítése</source>
+        <translation>अंतर बराबर करें</translation>
+    </message>
+    <message>
+        <source>A fotók egyforma cellákba kerülnek. A kép kitölti a cellát, a kilógó rész lemarad.</source>
+        <translation>फ़ोटो बराबर खानों में जाती हैं। हर फ़ोटो अपना खाना भरती है, बाहर का हिस्सा कट जाता है।</translation>
+    </message>
+    <message>
+        <source>Oszlopok</source>
+        <translation>स्तंभ</translation>
+    </message>
+    <message>
+        <source>A kép egésze látszódjon</source>
+        <translation>पूरी फ़ोटो दिखाएँ</translation>
+    </message>
+    <message>
+        <source>Bekapcsolva a kép nem tölti ki a cellát; a hiányzó rész fehér marad.</source>
+        <translation>चालू होने पर फ़ोटो खाना नहीं भरती; बचा हिस्सा सफ़ेद रहता है।</translation>
+    </message>
+    <message>
+        <source>Automatikus</source>
+        <translation>स्वचालित</translation>
+    </message>
+    <message>
+        <source>Egymás mellett</source>
+        <translation>साथ-साथ</translation>
+    </message>
+    <message>
+        <source>Egymás alatt</source>
+        <translation>एक के नीचे एक</translation>
+    </message>
+    <message>
+        <source>Irány</source>
+        <translation>दिशा</translation>
+    </message>
+    <message>
+        <source>Ha nem fér el, a program csökkenti.</source>
+        <translation>अगर फ़िट न हो, प्रोग्राम अंतर कम कर देता है।</translation>
+    </message>
+    <message numerus="yes">
+        <source>%n fotó: %1 oszlop × %2 sor. Egy cella %3 × %4 mm.</source>
+        <translation>
+            <numerusform>%n फ़ोटो: %1 स्तंभ × %2 पंक्तियाँ। एक खाना %3 × %4 मिमी है।</numerusform>
+            <numerusform>%n फ़ोटो: %1 स्तंभ × %2 पंक्तियाँ। एक खाना %3 × %4 मिमी हैं।</numerusform>
+        </translation>
+    </message>
+    <message>
+        <source>A fotók egy része erősen lemarad. Kapcsold be a »A kép egésze látszódjon« opciót, vagy oszd el őket több lapon.</source>
+        <translation>कुछ फ़ोटो बहुत कट रही हैं। “पूरी फ़ोटो दिखाएँ” चालू करें या उन्हें कई पेजों में बाँटें।</translation>
+    </message>
+    <message>
+        <source>A fotók megtartják a méretüket. A köztük lévő hely lesz egyenlő.</source>
+        <translation>फ़ोटो अपना आकार रखती हैं। उनके बीच की जगह बराबर हो जाती है।</translation>
+    </message>
+    <message numerus="yes">
+        <source>%n fotó, %1 mm térköz. A margó %2 mm.</source>
+        <translation>
+            <numerusform>%n फ़ोटो, %1 मिमी अंतर। हाशिया %2 मिमी है।</numerusform>
+            <numerusform>%n फ़ोटो, %1 मिमी अंतर। हाशिया %2 मिमी हैं।</numerusform>
+        </translation>
+    </message>
+    <message>
+        <source>A térköz %1 mm lett, hogy a fotók elférjenek.</source>
+        <translation>फ़ोटो फ़िट होने के लिए अंतर %1 मिमी हो गया।</translation>
+    </message>
+    <message>
+        <source>Egy fotó van a lapon. Csak középre igazítjuk, a mérete nem változik.</source>
+        <translation>पेज पर एक फ़ोटो है। उसे केवल मध्य में रखा जाता है, आकार नहीं बदलता।</translation>
+    </message>
+    <message>
+        <source>Ehhez a laphoz elrendezés tartozik. Szüntesd meg az elrendezést az igazításhoz.</source>
+        <translation>इस पेज पर लेआउट है। फ़ोटो व्यवस्थित करने के लिए लेआउट हटाएँ।</translation>
+    </message>
+    <message>
+        <source>Rendezés</source>
+        <translation>व्यवस्थित करें</translation>
+    </message>
+    <message>
+        <source>Sokszorosítás…</source>
+        <translation>कई प्रतियाँ…</translation>
+    </message>
+    <message>
+        <source>Lap</source>
+        <translation>पेज</translation>
+    </message>
+    <message>
+        <source>Fotók rendezése…</source>
+        <translation>फ़ोटो व्यवस्थित करें…</translation>
+    </message>
+    <message>
+        <source>A nyomtatott vágójel a példányok szélén jelenik meg.</source>
+        <translation>छपा हुआ कटाई निशान प्रतियों के किनारे दिखाई देता है।</translation>
+    </message>
+    <message>
+        <source>Fotók cseréje</source>
+        <translation>फ़ोटो बदलें</translation>
+    </message>
+    <message numerus="yes">
+        <source>A lapon most %n fotó van. A példányok ezek helyére kerülnek. Egy lépésben visszavonható.</source>
+        <translation>
+            <numerusform>पेज पर %n फ़ोटो है। प्रतियाँ उनकी जगह लेंगी। एक कदम, पूर्ववत किया जा सकता है।</numerusform>
+            <numerusform>पेज पर %n फ़ोटो हैं। प्रतियाँ उनकी जगह लेंगी। एक कदम, पूर्ववत किया जा सकता है।</numerusform>
+        </translation>
+    </message>
+    <message>
+        <source>Vágójelek a nyomaton</source>
+        <translation>प्रिंट पर कटाई के निशान</translation>
+    </message>
+    <message>
+        <source>A nyomatra vágójelek kerülnek a következő lapokon: %1. Folytatod?</source>
+        <translation>इन पेजों पर कटाई के निशान छपेंगे: %1। जारी रखें?</translation>
+    </message>
 </context>
 </TS>

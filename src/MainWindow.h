@@ -46,7 +46,14 @@ class QTimer;
 namespace pp {
 
 class EffectBrowserDialog;
+class SheetToolsDialog;
 class TemplateBrowserDialog;
+
+/// The page's borderless decision. `Auto` follows the printer's own default;
+/// `Off` and `On` pin it per page, so a saved batch sheet prints at its exact
+/// copy size even when the printer would offer a bleed. `On` is still checked
+/// against what the printer accepts further down the print path.
+bool resolvedBorderless(const Page &page, bool printerBorderless);
 
 /// The drag payload a photo in the library publishes. The frame id travels as
 /// the data, so the canvas knows exactly which photo to move instead of guessing
@@ -338,6 +345,22 @@ public:
     bool waitForOriginalPreview(int timeoutMs = 5000);
     int originalRenderCountForTest() const { return m_originalRenderCount; }
 
+    /// The confirmation the print path and the PDF export both show when a page
+    /// carries printed cut guides. Public so a test can answer the box without a
+    /// printer queue. Returns true when the job may proceed.
+    bool confirmCutGuides();
+    /// The same question for a document that is already narrowed to what will be
+    /// exported (the current-page PDF, for instance), so the page numbers name
+    /// the sheets in that file.
+    bool confirmCutGuides(const DocumentSnapshot &document);
+    /// Applies one sheet-tool edit through the normal controller, one undo step.
+    /// The same path the dialogs take, exposed so a test can drive it.
+    Result<void> applySheetEdit(const ApplyLayoutEdit &edit);
+    QUndoStack *undoStackForTest() { return m_controller.undoStack(); }
+    /// Test hook: the sRGB previews the canvas is showing, keyed by frame id, so
+    /// a test can build a sheet-tool dialog that paints real photographs.
+    QHash<QString, QImage> previewImagesForTest() const { return m_previewImages; }
+
 protected:
     void closeEvent(QCloseEvent *event) override;
 
@@ -413,6 +436,13 @@ private slots:
     /// The collage template picker for the current page. Browsing never touches
     /// the document; the chosen template comes back to applyTemplate().
     void openTemplateBrowser();
+    /// The two sheet tools. Browsing is dialog-local; accepting one edit lands
+    /// through applySheetEdit and one undo step restores the page list.
+    void openBatchCopies();
+    void openAlignPhotos();
+    /// The per-page cut guide state. Changing it is an undoable edit, so the
+    /// state a project was printed with can always be recovered.
+    void guidesChanged(int index);
     /// Applies one catalogue template to the current page as one page edit, so
     /// one undo restores the layout. The slot engine creates the cells (and the
     /// layout label) and assigns the photographs in display order; the page's
@@ -457,6 +487,9 @@ private:
     void applyEffectChoice(const QString &key, int version, int strength);
     void syncFrameControls();
     void syncLayoutPanel();
+    /// The page-level sheet controls: the align button and the cut guide combo,
+    /// plus the batch entry's enabled state.
+    void syncPageTools();
     /// The page's layout name for the panel: the English catalogue name when the
     /// layout came from the catalogue, a neutral label for a hand-made one.
     QString layoutDisplayName(const Page &page) const;
@@ -470,7 +503,7 @@ private:
     void rebuildPaperCombo(const QString &selectedName);
     void ensurePaperInCombo(const PaperSpec &paper);
     void syncPrintControls();
-    bool wantBorderless(const PaperSpec &paper) const;
+    bool wantBorderless(const Page &page) const;
     void promptMissingSources();
     void checkpointNow();
     void updateTitle();
@@ -550,6 +583,10 @@ private:
     QSpinBox *m_copiesSpin = nullptr;
     QPushButton *m_printButton = nullptr;
     QPushButton *m_trialButton = nullptr;
+    QPushButton *m_batchButton = nullptr;
+    QPushButton *m_alignButton = nullptr;
+    QComboBox *m_guidesCombo = nullptr;
+    QLabel *m_guidesHint = nullptr;
     QPushButton *m_backwardButton = nullptr;
     QPushButton *m_advancedToggle = nullptr;
     QDoubleSpinBox *m_widthSpin = nullptr;

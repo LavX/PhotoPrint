@@ -1299,5 +1299,265 @@
         <source>Az elrendezés megszűnt, a fotó a lapon marad.</source>
         <translation>布局已清除，照片留在页面上。</translation>
     </message>
+    <message>
+        <source>Képek sokszorosítása</source>
+        <translation>复制多份照片</translation>
+    </message>
+    <message>
+        <source>Fotók rendezése</source>
+        <translation>排列照片</translation>
+    </message>
+    <message>
+        <source>Előnézet</source>
+        <translation>预览</translation>
+    </message>
+    <message>
+        <source>Ugyanaz a fotó több példányban, egyenes rácsban.</source>
+        <translation>同一张照片多份，排成整齐的网格。</translation>
+    </message>
+    <message>
+        <source>Fotó: %1</source>
+        <translation>照片：%1</translation>
+    </message>
+    <message>
+        <source>Válassz ki egy fotót a sokszorosításhoz.</source>
+        <translation>请选择要复制的照片。</translation>
+    </message>
+    <message>
+        <source>Méret</source>
+        <translation>尺寸</translation>
+    </message>
+    <message>
+        <source>Egyedi méret</source>
+        <translation>自定义尺寸</translation>
+    </message>
+    <message>
+        <source>Szélesség és magasság cseréje</source>
+        <translation>交换宽度和高度</translation>
+    </message>
+    <message>
+        <source>A 35 × 45 mm az igazolványkép szokásos mérete. Ez az eszköz csak a helyét állítja be, azt nem ellenőrzi, hogy a fotó megfelel-e az előírásoknak.</source>
+        <translation>35 × 45 毫米是证件照的常见尺寸。此工具只负责摆放位置，不检查照片是否符合规定。</translation>
+    </message>
+    <message>
+        <source>Térköz</source>
+        <translation>间距</translation>
+    </message>
+    <message>
+        <source>Legkisebb margó</source>
+        <translation>最小边距</translation>
+    </message>
+    <message>
+        <source>A nyomtató a lap szélétől 3 mm-t nem nyomtat ki, ezért a margó legalább 3,5 mm.</source>
+        <translation>打印机不会打印纸张边缘 3 毫米以内的区域，因此边距至少为 3.5 毫米。</translation>
+    </message>
+    <message>
+        <source>Darabszám</source>
+        <translation>份数</translation>
+    </message>
+    <message>
+        <source>Amennyi befér</source>
+        <translation>尽量多放</translation>
+    </message>
+    <message>
+        <source>Vágójelek</source>
+        <translation>裁切标记</translation>
+    </message>
+    <message>
+        <source>Nincs</source>
+        <translation>无</translation>
+    </message>
+    <message>
+        <source>Képernyőn</source>
+        <translation>仅屏幕</translation>
+    </message>
+    <message>
+        <source>A nyomtatott jel vékony szürke vonal a példányok szélén. Alapból nincs a nyomaton.</source>
+        <translation>打印标记是每份照片边缘的一条细灰线，默认关闭。</translation>
+    </message>
+    <message>
+        <source>Hely</source>
+        <translation>位置</translation>
+    </message>
+    <message>
+        <source>Az aktuális lapra</source>
+        <translation>当前页</translation>
+    </message>
+    <message>
+        <source>Új lapokra</source>
+        <translation>新页面</translation>
+    </message>
+    <message>
+        <source>A maradék az első kockáktól töltődik, hogy a lapok együtt vághatók legyenek.</source>
+        <translation>剩余部分从最前面的格子开始填，以便多张纸一起裁切。</translation>
+    </message>
+    <message>
+        <source>Összegzés</source>
+        <translation>摘要</translation>
+    </message>
+    <message numerus="yes">
+        <source>%n példány fér el egy lapra.</source>
+        <translation>
+            <numerusform>一张纸可放 %n 份。</numerusform>
+        </translation>
+    </message>
+    <message numerus="yes">
+        <source>%n lapra kerül.</source>
+        <translation>
+            <numerusform>共 %n 张。</numerusform>
+        </translation>
+    </message>
+    <message>
+        <source>A kiválasztott fotó el van forgatva. A példányok egyenesen kerülnek a rácsba.</source>
+        <translation>所选照片已旋转。副本会正向放入网格。</translation>
+    </message>
+    <message>
+        <source>A kiválasztott fotó szélei lemaradnak.</source>
+        <translation>所选照片的边缘会被裁掉。</translation>
+    </message>
+    <message>
+        <source>Ilyen szoros margónál a nyomtató a szélső vágójelet levághatja.</source>
+        <translation>边距这么窄时，打印机可能会裁掉最外侧的裁切标记。</translation>
+    </message>
+    <message>
+        <source>A lap elrendezése megszűnik, a példányok szabadon kerülnek a lapra.</source>
+        <translation>页面版式会被取消，副本将自由放置。</translation>
+    </message>
+    <message numerus="yes">
+        <source>%n fotó helyére</source>
+        <translation>
+            <numerusform>替换 %n 张照片</numerusform>
+        </translation>
+    </message>
+    <message>
+        <source>Így kerül a lapra.</source>
+        <translation>纸张上的效果就是这样。</translation>
+    </message>
+    <message>
+        <source>Szélek: %1 mm oldalt, %2 mm felül és alul.</source>
+        <translation>边距：两侧 %1 毫米，上下 %2 毫米。</translation>
+    </message>
+    <message>
+        <source>Létrehozás</source>
+        <translation>创建</translation>
+    </message>
+    <message>
+        <source>A lapon lévő fotók elrendezése. A sorrend nem változik.</source>
+        <translation>排列页面上的照片。顺序不变。</translation>
+    </message>
+    <message>
+        <source>Rácsba</source>
+        <translation>排成网格</translation>
+    </message>
+    <message>
+        <source>Térköz kiegyenlítése</source>
+        <translation>均分间距</translation>
+    </message>
+    <message>
+        <source>A fotók egyforma cellákba kerülnek. A kép kitölti a cellát, a kilógó rész lemarad.</source>
+        <translation>照片放入相同的格子。照片填满格子，超出的部分被裁掉。</translation>
+    </message>
+    <message>
+        <source>Oszlopok</source>
+        <translation>列</translation>
+    </message>
+    <message>
+        <source>A kép egésze látszódjon</source>
+        <translation>显示完整照片</translation>
+    </message>
+    <message>
+        <source>Bekapcsolva a kép nem tölti ki a cellát; a hiányzó rész fehér marad.</source>
+        <translation>开启后照片不填满格子，缺少的部分保持白色。</translation>
+    </message>
+    <message>
+        <source>Automatikus</source>
+        <translation>自动</translation>
+    </message>
+    <message>
+        <source>Egymás mellett</source>
+        <translation>并排</translation>
+    </message>
+    <message>
+        <source>Egymás alatt</source>
+        <translation>上下排列</translation>
+    </message>
+    <message>
+        <source>Irány</source>
+        <translation>方向</translation>
+    </message>
+    <message>
+        <source>Ha nem fér el, a program csökkenti.</source>
+        <translation>如果放不下，程序会缩小间距。</translation>
+    </message>
+    <message numerus="yes">
+        <source>%n fotó: %1 oszlop × %2 sor. Egy cella %3 × %4 mm.</source>
+        <translation>
+            <numerusform>%n 张：%1 列 × %2 行。每格 %3 × %4 毫米。</numerusform>
+        </translation>
+    </message>
+    <message>
+        <source>A fotók egy része erősen lemarad. Kapcsold be a »A kép egésze látszódjon« opciót, vagy oszd el őket több lapon.</source>
+        <translation>部分照片裁掉较多。请开启“显示完整照片”，或分到多页。</translation>
+    </message>
+    <message>
+        <source>A fotók megtartják a méretüket. A köztük lévő hely lesz egyenlő.</source>
+        <translation>照片保持原尺寸，之间的间距变得相等。</translation>
+    </message>
+    <message numerus="yes">
+        <source>%n fotó, %1 mm térköz. A margó %2 mm.</source>
+        <translation>
+            <numerusform>%n 张，间距 %1 毫米。边距 %2 毫米。</numerusform>
+        </translation>
+    </message>
+    <message>
+        <source>A térköz %1 mm lett, hogy a fotók elférjenek.</source>
+        <translation>为了让照片放得下，间距变为 %1 毫米。</translation>
+    </message>
+    <message>
+        <source>Egy fotó van a lapon. Csak középre igazítjuk, a mérete nem változik.</source>
+        <translation>页面上只有一张照片。只做居中，尺寸不变。</translation>
+    </message>
+    <message>
+        <source>Ehhez a laphoz elrendezés tartozik. Szüntesd meg az elrendezést az igazításhoz.</source>
+        <translation>此页面有版式。请先取消版式再排列照片。</translation>
+    </message>
+    <message>
+        <source>Rendezés</source>
+        <translation>排列</translation>
+    </message>
+    <message>
+        <source>Sokszorosítás…</source>
+        <translation>复制多份…</translation>
+    </message>
+    <message>
+        <source>Lap</source>
+        <translation>页面</translation>
+    </message>
+    <message>
+        <source>Fotók rendezése…</source>
+        <translation>排列照片…</translation>
+    </message>
+    <message>
+        <source>A nyomtatott vágójel a példányok szélén jelenik meg.</source>
+        <translation>打印的裁切标记出现在副本边缘。</translation>
+    </message>
+    <message>
+        <source>Fotók cseréje</source>
+        <translation>替换照片</translation>
+    </message>
+    <message numerus="yes">
+        <source>A lapon most %n fotó van. A példányok ezek helyére kerülnek. Egy lépésben visszavonható.</source>
+        <translation>
+            <numerusform>页面上有 %n 张照片。副本会取代它们。一步即可撤销。</numerusform>
+        </translation>
+    </message>
+    <message>
+        <source>Vágójelek a nyomaton</source>
+        <translation>打印上的裁切标记</translation>
+    </message>
+    <message>
+        <source>A nyomatra vágójelek kerülnek a következő lapokon: %1. Folytatod?</source>
+        <translation>以下页面将打印裁切标记：%1。要继续吗？</translation>
+    </message>
 </context>
 </TS>

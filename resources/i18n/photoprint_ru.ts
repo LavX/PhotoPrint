@@ -1315,5 +1315,277 @@
         <source>Az elrendezés megszűnt, a fotó a lapon marad.</source>
         <translation>Раскладка убрана, фотография остаётся на странице.</translation>
     </message>
+    <message>
+        <source>Képek sokszorosítása</source>
+        <translation>Размножить фотографии</translation>
+    </message>
+    <message>
+        <source>Fotók rendezése</source>
+        <translation>Упорядочить фотографии</translation>
+    </message>
+    <message>
+        <source>Előnézet</source>
+        <translation>Предпросмотр</translation>
+    </message>
+    <message>
+        <source>Ugyanaz a fotó több példányban, egyenes rácsban.</source>
+        <translation>Одна и та же фотография много раз, ровной сеткой.</translation>
+    </message>
+    <message>
+        <source>Fotó: %1</source>
+        <translation>Фото: %1</translation>
+    </message>
+    <message>
+        <source>Válassz ki egy fotót a sokszorosításhoz.</source>
+        <translation>Выберите фотографию для размножения.</translation>
+    </message>
+    <message>
+        <source>Méret</source>
+        <translation>Размер</translation>
+    </message>
+    <message>
+        <source>Egyedi méret</source>
+        <translation>Свой размер</translation>
+    </message>
+    <message>
+        <source>Szélesség és magasság cseréje</source>
+        <translation>Поменять ширину и высоту</translation>
+    </message>
+    <message>
+        <source>A 35 × 45 mm az igazolványkép szokásos mérete. Ez az eszköz csak a helyét állítja be, azt nem ellenőrzi, hogy a fotó megfelel-e az előírásoknak.</source>
+        <translation>35 × 45 мм — обычный размер фотографии на документы. Этот инструмент только размещает копии и не проверяет, соответствует ли фото требованиям.</translation>
+    </message>
+    <message>
+        <source>Térköz</source>
+        <translation>Отступ</translation>
+    </message>
+    <message>
+        <source>Legkisebb margó</source>
+        <translation>Минимальное поле</translation>
+    </message>
+    <message>
+        <source>A nyomtató a lap szélétől 3 mm-t nem nyomtat ki, ezért a margó legalább 3,5 mm.</source>
+        <translation>Принтер не печатает 3 мм от края бумаги, поэтому поле не меньше 3,5 мм.</translation>
+    </message>
+    <message>
+        <source>Darabszám</source>
+        <translation>Штук</translation>
+    </message>
+    <message>
+        <source>Amennyi befér</source>
+        <translation>Сколько поместится</translation>
+    </message>
+    <message>
+        <source>Vágójelek</source>
+        <translation>Метки реза</translation>
+    </message>
+    <message>
+        <source>Nincs</source>
+        <translation>Нет</translation>
+    </message>
+    <message>
+        <source>Képernyőn</source>
+        <translation>На экране</translation>
+    </message>
+    <message>
+        <source>A nyomtatott jel vékony szürke vonal a példányok szélén. Alapból nincs a nyomaton.</source>
+        <translation>Печатная метка — тонкая серая линия по краю каждой копии. По умолчанию она выключена.</translation>
+    </message>
+    <message>
+        <source>Hely</source>
+        <translation>Размещение</translation>
+    </message>
+    <message>
+        <source>Az aktuális lapra</source>
+        <translation>На текущую страницу</translation>
+    </message>
+    <message>
+        <source>Új lapokra</source>
+        <translation>На новые страницы</translation>
+    </message>
+    <message>
+        <source>A maradék az első kockáktól töltődik, hogy a lapok együtt vághatók legyenek.</source>
+        <translation>Остаток заполняется с первых ячеек, чтобы листы можно было резать вместе.</translation>
+    </message>
+    <message>
+        <source>Összegzés</source>
+        <translation>Итог</translation>
+    </message>
+    <message numerus="yes">
+        <source>%n példány fér el egy lapra.</source>
+        <translation>
+            <numerusform>%n копия помещается на лист.</numerusform>
+            <numerusform>%n копии помещаются на лист.</numerusform>
+            <numerusform>%n копий помещаются на лист.</numerusform>
+        </translation>
+    </message>
+    <message numerus="yes">
+        <source>%n lapra kerül.</source>
+        <translation>
+            <numerusform>Занимает %n лист.</numerusform>
+            <numerusform>Занимает %n листа.</numerusform>
+            <numerusform>Занимает %n листов.</numerusform>
+        </translation>
+    </message>
+    <message>
+        <source>A kiválasztott fotó el van forgatva. A példányok egyenesen kerülnek a rácsba.</source>
+        <translation>Выбранная фотография повёрнута. Копии размещаются прямо в сетке.</translation>
+    </message>
+    <message>
+        <source>A kiválasztott fotó szélei lemaradnak.</source>
+        <translation>Края выбранной фотографии будут обрезаны.</translation>
+    </message>
+    <message>
+        <source>Ilyen szoros margónál a nyomtató a szélső vágójelet levághatja.</source>
+        <translation>При таком узком поле принтер может обрезать внешнюю метку реза.</translation>
+    </message>
+    <message>
+        <source>A lap elrendezése megszűnik, a példányok szabadon kerülnek a lapra.</source>
+        <translation>Раскладка страницы снимается, копии свободно размещаются на странице.</translation>
+    </message>
+    <message numerus="yes">
+        <source>%n fotó helyére</source>
+        <translation>
+            <numerusform>Заменяет %n фотографию</numerusform>
+            <numerusform>Заменяет %n фотографии</numerusform>
+            <numerusform>Заменяет %n фотографий</numerusform>
+        </translation>
+    </message>
+    <message>
+        <source>Így kerül a lapra.</source>
+        <translation>Так это будет на листе.</translation>
+    </message>
+    <message>
+        <source>Szélek: %1 mm oldalt, %2 mm felül és alul.</source>
+        <translation>Поля: %1 мм по бокам, %2 мм сверху и снизу.</translation>
+    </message>
+    <message>
+        <source>Létrehozás</source>
+        <translation>Создать</translation>
+    </message>
+    <message>
+        <source>A lapon lévő fotók elrendezése. A sorrend nem változik.</source>
+        <translation>Упорядочить фотографии на странице. Порядок не меняется.</translation>
+    </message>
+    <message>
+        <source>Rácsba</source>
+        <translation>В сетку</translation>
+    </message>
+    <message>
+        <source>Térköz kiegyenlítése</source>
+        <translation>Выровнять отступы</translation>
+    </message>
+    <message>
+        <source>A fotók egyforma cellákba kerülnek. A kép kitölti a cellát, a kilógó rész lemarad.</source>
+        <translation>Фотографии встают в одинаковые ячейки. Фото заполняет ячейку, лишнее обрезается.</translation>
+    </message>
+    <message>
+        <source>Oszlopok</source>
+        <translation>Столбцы</translation>
+    </message>
+    <message>
+        <source>A kép egésze látszódjon</source>
+        <translation>Показать фото целиком</translation>
+    </message>
+    <message>
+        <source>Bekapcsolva a kép nem tölti ki a cellát; a hiányzó rész fehér marad.</source>
+        <translation>Если включено, фото не заполняет ячейку, недостающая часть остаётся белой.</translation>
+    </message>
+    <message>
+        <source>Automatikus</source>
+        <translation>Автоматически</translation>
+    </message>
+    <message>
+        <source>Egymás mellett</source>
+        <translation>Рядом</translation>
+    </message>
+    <message>
+        <source>Egymás alatt</source>
+        <translation>Друг под другом</translation>
+    </message>
+    <message>
+        <source>Irány</source>
+        <translation>Направление</translation>
+    </message>
+    <message>
+        <source>Ha nem fér el, a program csökkenti.</source>
+        <translation>Если не помещается, программа уменьшает отступ.</translation>
+    </message>
+    <message numerus="yes">
+        <source>%n fotó: %1 oszlop × %2 sor. Egy cella %3 × %4 mm.</source>
+        <translation>
+            <numerusform>%n фото: %1 столбцов × %2 строк. Ячейка %3 × %4 мм.</numerusform>
+            <numerusform>%n фото: %1 столбца × %2 строки. Ячейка %3 × %4 мм.</numerusform>
+            <numerusform>%n фото: %1 столбцов × %2 строк. Ячейка %3 × %4 мм.</numerusform>
+        </translation>
+    </message>
+    <message>
+        <source>A fotók egy része erősen lemarad. Kapcsold be a »A kép egésze látszódjon« opciót, vagy oszd el őket több lapon.</source>
+        <translation>Некоторые фото теряют много. Включите «Показать фото целиком» или распределите их по страницам.</translation>
+    </message>
+    <message>
+        <source>A fotók megtartják a méretüket. A köztük lévő hely lesz egyenlő.</source>
+        <translation>Фотографии сохраняют размер. Расстояние между ними становится равным.</translation>
+    </message>
+    <message numerus="yes">
+        <source>%n fotó, %1 mm térköz. A margó %2 mm.</source>
+        <translation>
+            <numerusform>%n фотография, отступ %1 мм. Поле %2 мм.</numerusform>
+            <numerusform>%n фотографии, отступ %1 мм. Поле %2 мм.</numerusform>
+            <numerusform>%n фотографий, отступ %1 мм. Поле %2 мм.</numerusform>
+        </translation>
+    </message>
+    <message>
+        <source>A térköz %1 mm lett, hogy a fotók elférjenek.</source>
+        <translation>Отступ стал %1 мм, чтобы фотографии поместились.</translation>
+    </message>
+    <message>
+        <source>Egy fotó van a lapon. Csak középre igazítjuk, a mérete nem változik.</source>
+        <translation>На странице одна фотография. Она только центрируется, размер не меняется.</translation>
+    </message>
+    <message>
+        <source>Ehhez a laphoz elrendezés tartozik. Szüntesd meg az elrendezést az igazításhoz.</source>
+        <translation>У этой страницы есть раскладка. Снимите её, чтобы упорядочить фотографии.</translation>
+    </message>
+    <message>
+        <source>Rendezés</source>
+        <translation>Упорядочить</translation>
+    </message>
+    <message>
+        <source>Sokszorosítás…</source>
+        <translation>Размножить…</translation>
+    </message>
+    <message>
+        <source>Lap</source>
+        <translation>Страница</translation>
+    </message>
+    <message>
+        <source>Fotók rendezése…</source>
+        <translation>Упорядочить фотографии…</translation>
+    </message>
+    <message>
+        <source>A nyomtatott vágójel a példányok szélén jelenik meg.</source>
+        <translation>Печатная метка реза появляется по краю копий.</translation>
+    </message>
+    <message>
+        <source>Fotók cseréje</source>
+        <translation>Заменить фотографии</translation>
+    </message>
+    <message numerus="yes">
+        <source>A lapon most %n fotó van. A példányok ezek helyére kerülnek. Egy lépésben visszavonható.</source>
+        <translation>
+            <numerusform>На странице %n фотография. Копии займут её место. Один шаг, можно отменить.</numerusform>
+            <numerusform>На странице %n фотографии. Копии займут их место. Один шаг, можно отменить.</numerusform>
+            <numerusform>На странице %n фотографий. Копии займут их место. Один шаг, можно отменить.</numerusform>
+        </translation>
+    </message>
+    <message>
+        <source>Vágójelek a nyomaton</source>
+        <translation>Метки реза на печати</translation>
+    </message>
+    <message>
+        <source>A nyomatra vágójelek kerülnek a következő lapokon: %1. Folytatod?</source>
+        <translation>Метки реза будут напечатаны на этих страницах: %1. Продолжить?</translation>
+    </message>
 </context>
 </TS>

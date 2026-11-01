@@ -123,6 +123,10 @@ private slots:
     void everyCatalogueTranslatesTheSlotUiMessages();
     void everyCataloguePluralisesTheSlotCounts_data();
     void everyCataloguePluralisesTheSlotCounts();
+    void everyCatalogueTranslatesTheSheetToolMessages_data();
+    void everyCatalogueTranslatesTheSheetToolMessages();
+    void everyCataloguePluralisesTheSheetToolCounts_data();
+    void everyCataloguePluralisesTheSheetToolCounts();
     void sourceLanguageInstallsTheQtCatalogue();
     void hungarianSourceSubstitutesTheCount();
     void repeatedLanguageSwitchingLeavesTranslatorsUnparented();
@@ -658,9 +662,128 @@ void TestI18n::everyCataloguePluralisesTheSlotCounts()
     }
 }
 
-void TestI18n::sourceLanguageInstallsTheQtCatalogue()
+void TestI18n::everyCatalogueTranslatesTheSheetToolMessages_data()
 {
-    // Hungarian is the source language, so PhotoPrint needs no catalogue of its
+    QTest::addColumn<QString>("code");
+    for (const QString &code : i18n::targetCodes())
+        QTest::newRow(qPrintable(code)) << code;
+}
+
+void TestI18n::everyCatalogueTranslatesTheSheetToolMessages()
+{
+    QFETCH(QString, code);
+
+    InstalledCatalogue catalogue(code);
+    QVERIFY2(catalogue.loaded(), qPrintable(code));
+
+    // Every sentence the two sheet tools and the cut-guide control add: dialog
+    // labels, hints, refusals, the print guard and the page panel.
+    for (const QString &source : {
+             QStringLiteral("Képek sokszorosítása"),
+             QStringLiteral("Fotók rendezése"),
+             QStringLiteral("Előnézet"),
+             QStringLiteral("Ugyanaz a fotó több példányban, egyenes rácsban."),
+             QStringLiteral("Fotó: %1"),
+             QStringLiteral("Válassz ki egy fotót a sokszorosításhoz."),
+             QStringLiteral("Méret"),
+             QStringLiteral("Egyedi méret"),
+             QStringLiteral("Szélesség és magasság cseréje"),
+             QStringLiteral("Legkisebb margó"),
+             QStringLiteral("Darabszám"),
+             QStringLiteral("Amennyi befér"),
+             QStringLiteral("Vágójelek"),
+             QStringLiteral("Nincs"),
+             QStringLiteral("Képernyőn"),
+             QStringLiteral("Hely"),
+             QStringLiteral("Az aktuális lapra"),
+             QStringLiteral("Új lapokra"),
+             QStringLiteral("Összegzés"),
+             QStringLiteral("Létrehozás"),
+             QStringLiteral("Rácsba"),
+             QStringLiteral("Térköz kiegyenlítése"),
+             QStringLiteral("Oszlopok"),
+             QStringLiteral("A kép egésze látszódjon"),
+             QStringLiteral("Automatikus"),
+             QStringLiteral("Egymás mellett"),
+             QStringLiteral("Egymás alatt"),
+             QStringLiteral("Irány"),
+             QStringLiteral("Rendezés"),
+             QStringLiteral("Sokszorosítás…"),
+             QStringLiteral("Lap"),
+             QStringLiteral("Fotók rendezése…"),
+             QStringLiteral("Fotók cseréje"),
+             QStringLiteral("Vágójelek a nyomaton"),
+             QStringLiteral("A nyomtatott vágójel a példányok szélén jelenik meg."),
+             QStringLiteral("A kiválasztott fotó szélei lemaradnak."),
+             QStringLiteral("Egy fotó van a lapon. Csak középre igazítjuk, a mérete nem változik."),
+             QStringLiteral("Ehhez a laphoz elrendezés tartozik. Szüntesd meg az elrendezést az "
+                            "igazításhoz."),
+             QStringLiteral("Így kerül a lapra."),
+             QStringLiteral("Szélek: %1 mm oldalt, %2 mm felül és alul."),
+             QStringLiteral("A nyomatra vágójelek kerülnek a következő lapokon: %1. Folytatod?"),
+             QStringLiteral("A térköz %1 mm lett, hogy a fotók elférjenek."),
+         }) {
+        const QString text = translated("PhotoPrint", source);
+        const QString where = QStringLiteral("%1: %2").arg(code, source);
+        QVERIFY2(!text.isEmpty(), qPrintable(where + QStringLiteral(" is empty")));
+        QVERIFY2(text != source,
+                 qPrintable(where + QStringLiteral(" is still the Hungarian source")));
+    }
+}
+
+void TestI18n::everyCataloguePluralisesTheSheetToolCounts_data()
+{
+    QTest::addColumn<QString>("code");
+    for (const QString &code : i18n::targetCodes())
+        QTest::newRow(qPrintable(code)) << code;
+}
+
+void TestI18n::everyCataloguePluralisesTheSheetToolCounts()
+{
+    QFETCH(QString, code);
+
+    InstalledCatalogue catalogue(code);
+    QVERIFY2(catalogue.loaded(), qPrintable(code));
+
+    // The sheet tools count copies, sheets, photos and cells. All of them are
+    // %n messages with numerus entries in every catalogue.
+    for (const QString &source : {
+             QStringLiteral("%n példány fér el egy lapra."),
+             QStringLiteral("%n lapra kerül."),
+             QStringLiteral("%n fotó helyére"),
+             QStringLiteral("%n fotó: %1 oszlop × %2 sor. Egy cella %3 × %4 mm."),
+             QStringLiteral("%n fotó, %1 mm térköz. A margó %2 mm."),
+             QStringLiteral("A lapon most %n fotó van. A példányok ezek helyére kerülnek. Egy "
+                            "lépésben visszavonható."),
+         }) {
+        for (const int count : {1, 2, 5}) {
+            const QString text = translatedWithCount("PhotoPrint", source, count);
+            const QString where =
+                QStringLiteral("%1, count %2, %3").arg(code).arg(count).arg(source);
+            QVERIFY2(!text.isEmpty(), qPrintable(where + QStringLiteral(": empty")));
+            QVERIFY2(text != hungarianFallback(source, count),
+                     qPrintable(where + QStringLiteral(": still the Hungarian fallback")));
+            QVERIFY2(text.contains(QString::number(count)),
+                     qPrintable(where + QStringLiteral(": the count is missing")));
+            QVERIFY2(!text.contains(QStringLiteral("%n")),
+                     qPrintable(where + QStringLiteral(": %n was left in the text")));
+            // The source's %1 placeholders must survive in the same shape.
+            QCOMPARE(text.contains(QStringLiteral("%1")),
+                     source.contains(QStringLiteral("%1")));
+        }
+        const bool hasPluralForms =
+            code != QStringLiteral("ja") && code != QStringLiteral("zh_CN");
+        if (hasPluralForms) {
+            QVERIFY2(translatedWithCount("PhotoPrint", source, 1)
+                         != translatedWithCount("PhotoPrint", source, 2),
+                     qPrintable(QStringLiteral("%1: %2 has no numerus difference")
+                                    .arg(code, source)));
+        }
+    }
+}
+
+void TestI18n::sourceLanguageInstallsTheQtCatalogue()
+{    // Hungarian is the source language, so PhotoPrint needs no catalogue of its
     // own. Qt's stock strings do, or every standard dialog button and the colour
     // picker would stay English in a Hungarian window.
     QVERIFY(i18n::installLanguage(QString()));
