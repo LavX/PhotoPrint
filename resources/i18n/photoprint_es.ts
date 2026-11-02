@@ -72,10 +72,6 @@
         <translation>Añadir fotos…</translation>
     </message>
     <message>
-        <source>Kiválasztott fotó</source>
-        <translation>Foto seleccionada</translation>
-    </message>
-    <message>
         <source>Teljes kép</source>
         <translation>Foto completa</translation>
     </message>
@@ -138,10 +134,6 @@
     <message>
         <source>Próbanyomat</source>
         <translation>Impresión de prueba</translation>
-    </message>
-    <message>
-        <source>További beállítások</source>
-        <translation>Más ajustes</translation>
     </message>
     <message>
         <source>Szélesség</source>
@@ -1158,10 +1150,6 @@
         <translation>Eliminar el diseño</translation>
     </message>
     <message>
-        <source>Válaszd ki a helyet a lapon.</source>
-        <translation>Selecciona la celda en la página.</translation>
-    </message>
-    <message>
         <source>A fotók megmaradnak a helyükön.</source>
         <translation>Las fotos se quedan donde están.</translation>
     </message>
@@ -1640,6 +1628,26 @@
     <message>
         <source>Az üres hely a lap egy kivágott része; ide egy fotó kerül.</source>
         <translation>Una ubicación vacía es un recorte de la página; aquí va una foto.</translation>
+    </message>
+    <message>
+        <source>Állapot</source>
+        <translation>Estado</translation>
+    </message>
+    <message>
+        <source>Üres</source>
+        <translation>Vacía</translation>
+    </message>
+    <message>
+        <source>Foglalt</source>
+        <translation>Ocupada</translation>
+    </message>
+    <message>
+        <source>Levágás</source>
+        <translation>Recorte</translation>
+    </message>
+    <message>
+        <source>Elrendezés: %1</source>
+        <translation>Disposición: %1</translation>
     </message>
 </context>
 </TS>

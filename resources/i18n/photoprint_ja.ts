@@ -72,10 +72,6 @@
         <translation>写真を追加…</translation>
     </message>
     <message>
-        <source>Kiválasztott fotó</source>
-        <translation>選択中の写真</translation>
-    </message>
-    <message>
         <source>Teljes kép</source>
         <translation>写真全体</translation>
     </message>
@@ -138,10 +134,6 @@
     <message>
         <source>Próbanyomat</source>
         <translation>試し印刷</translation>
-    </message>
-    <message>
-        <source>További beállítások</source>
-        <translation>詳細設定</translation>
     </message>
     <message>
         <source>Szélesség</source>
@@ -1152,10 +1144,6 @@
         <translation>レイアウトを解除</translation>
     </message>
     <message>
-        <source>Válaszd ki a helyet a lapon.</source>
-        <translation>ページ上のセルを選んでください。</translation>
-    </message>
-    <message>
         <source>A fotók megmaradnak a helyükön.</source>
         <translation>写真はそのままの位置に残ります。</translation>
     </message>
@@ -1626,6 +1614,26 @@
     <message>
         <source>Az üres hely a lap egy kivágott része; ide egy fotó kerül.</source>
         <translation>空の配置はページの切り抜きです。ここに写真が入ります。</translation>
+    </message>
+    <message>
+        <source>Állapot</source>
+        <translation>状態</translation>
+    </message>
+    <message>
+        <source>Üres</source>
+        <translation>空き</translation>
+    </message>
+    <message>
+        <source>Foglalt</source>
+        <translation>使用中</translation>
+    </message>
+    <message>
+        <source>Levágás</source>
+        <translation>切り取り</translation>
+    </message>
+    <message>
+        <source>Elrendezés: %1</source>
+        <translation>レイアウト: %1</translation>
     </message>
 </context>
 </TS>

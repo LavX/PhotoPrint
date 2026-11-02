@@ -72,10 +72,6 @@
         <translation>Fotos hinzufügen…</translation>
     </message>
     <message>
-        <source>Kiválasztott fotó</source>
-        <translation>Ausgewähltes Foto</translation>
-    </message>
-    <message>
         <source>Teljes kép</source>
         <translation>Ganzes Foto</translation>
     </message>
@@ -138,10 +134,6 @@
     <message>
         <source>Próbanyomat</source>
         <translation>Probedruck</translation>
-    </message>
-    <message>
-        <source>További beállítások</source>
-        <translation>Weitere Einstellungen</translation>
     </message>
     <message>
         <source>Szélesség</source>
@@ -1158,10 +1150,6 @@
         <translation>Layout auflösen</translation>
     </message>
     <message>
-        <source>Válaszd ki a helyet a lapon.</source>
-        <translation>Wähle die Zelle auf der Seite aus.</translation>
-    </message>
-    <message>
         <source>A fotók megmaradnak a helyükön.</source>
         <translation>Die Fotos bleiben, wo sie sind.</translation>
     </message>
@@ -1640,6 +1628,26 @@
     <message>
         <source>Az üres hely a lap egy kivágott része; ide egy fotó kerül.</source>
         <translation>Ein leerer Platz ist ein Ausschnitt der Seite; hierhin kommt ein Foto.</translation>
+    </message>
+    <message>
+        <source>Állapot</source>
+        <translation>Status</translation>
+    </message>
+    <message>
+        <source>Üres</source>
+        <translation>Leer</translation>
+    </message>
+    <message>
+        <source>Foglalt</source>
+        <translation>Belegt</translation>
+    </message>
+    <message>
+        <source>Levágás</source>
+        <translation>Beschnitt</translation>
+    </message>
+    <message>
+        <source>Elrendezés: %1</source>
+        <translation>Anordnung: %1</translation>
     </message>
 </context>
 </TS>

@@ -72,10 +72,6 @@
         <translation>Ajouter des photos…</translation>
     </message>
     <message>
-        <source>Kiválasztott fotó</source>
-        <translation>Photo sélectionnée</translation>
-    </message>
-    <message>
         <source>Teljes kép</source>
         <translation>Photo entière</translation>
     </message>
@@ -138,10 +134,6 @@
     <message>
         <source>Próbanyomat</source>
         <translation>Impression test</translation>
-    </message>
-    <message>
-        <source>További beállítások</source>
-        <translation>Plus d&apos;options</translation>
     </message>
     <message>
         <source>Szélesség</source>
@@ -1158,10 +1150,6 @@
         <translation>Supprimer la disposition</translation>
     </message>
     <message>
-        <source>Válaszd ki a helyet a lapon.</source>
-        <translation>Sélectionne la case sur la page.</translation>
-    </message>
-    <message>
         <source>A fotók megmaradnak a helyükön.</source>
         <translation>Les photos restent à leur place.</translation>
     </message>
@@ -1640,6 +1628,26 @@
     <message>
         <source>Az üres hely a lap egy kivágott része; ide egy fotó kerül.</source>
         <translation>Un emplacement vide est une découpe de la page ; une photo vient ici.</translation>
+    </message>
+    <message>
+        <source>Állapot</source>
+        <translation>État</translation>
+    </message>
+    <message>
+        <source>Üres</source>
+        <translation>Vide</translation>
+    </message>
+    <message>
+        <source>Foglalt</source>
+        <translation>Occupée</translation>
+    </message>
+    <message>
+        <source>Levágás</source>
+        <translation>Découpe</translation>
+    </message>
+    <message>
+        <source>Elrendezés: %1</source>
+        <translation>Disposition : %1</translation>
     </message>
 </context>
 </TS>

@@ -72,10 +72,6 @@
         <translation>फ़ोटो जोड़ें…</translation>
     </message>
     <message>
-        <source>Kiválasztott fotó</source>
-        <translation>चुनी गई फ़ोटो</translation>
-    </message>
-    <message>
         <source>Teljes kép</source>
         <translation>पूरी तस्वीर</translation>
     </message>
@@ -138,10 +134,6 @@
     <message>
         <source>Próbanyomat</source>
         <translation>परीक्षण प्रिंट</translation>
-    </message>
-    <message>
-        <source>További beállítások</source>
-        <translation>अधिक विकल्प</translation>
     </message>
     <message>
         <source>Szélesség</source>
@@ -1158,10 +1150,6 @@
         <translation>लेआउट हटाएँ</translation>
     </message>
     <message>
-        <source>Válaszd ki a helyet a lapon.</source>
-        <translation>पेज पर सेल चुनें।</translation>
-    </message>
-    <message>
         <source>A fotók megmaradnak a helyükön.</source>
         <translation>फ़ोटो अपनी जगह पर रहेंगी।</translation>
     </message>
@@ -1640,6 +1628,26 @@
     <message>
         <source>Az üres hely a lap egy kivágott része; ide egy fotó kerül.</source>
         <translation>खाली स्थान पृष्ठ का कटा हुआ भाग है; यहाँ एक फ़ोटो आती है।</translation>
+    </message>
+    <message>
+        <source>Állapot</source>
+        <translation>स्थिति</translation>
+    </message>
+    <message>
+        <source>Üres</source>
+        <translation>खाली</translation>
+    </message>
+    <message>
+        <source>Foglalt</source>
+        <translation>भरा हुआ</translation>
+    </message>
+    <message>
+        <source>Levágás</source>
+        <translation>कटाई</translation>
+    </message>
+    <message>
+        <source>Elrendezés: %1</source>
+        <translation>लेआउट: %1</translation>
     </message>
 </context>
 </TS>

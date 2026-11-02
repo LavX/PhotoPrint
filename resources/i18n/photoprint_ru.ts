@@ -72,10 +72,6 @@
         <translation>Добавить фотографии…</translation>
     </message>
     <message>
-        <source>Kiválasztott fotó</source>
-        <translation>Выбранная фотография</translation>
-    </message>
-    <message>
         <source>Teljes kép</source>
         <translation>Вся фотография</translation>
     </message>
@@ -138,10 +134,6 @@
     <message>
         <source>Próbanyomat</source>
         <translation>Пробная печать</translation>
-    </message>
-    <message>
-        <source>További beállítások</source>
-        <translation>Дополнительно</translation>
     </message>
     <message>
         <source>Szélesség</source>
@@ -1164,10 +1156,6 @@
         <translation>Убрать раскладку</translation>
     </message>
     <message>
-        <source>Válaszd ki a helyet a lapon.</source>
-        <translation>Выбери ячейку на странице.</translation>
-    </message>
-    <message>
         <source>A fotók megmaradnak a helyükön.</source>
         <translation>Фотографии останутся на своих местах.</translation>
     </message>
@@ -1654,6 +1642,26 @@
     <message>
         <source>Az üres hely a lap egy kivágott része; ide egy fotó kerül.</source>
         <translation>Пустое место: вырез на странице, сюда помещается фото.</translation>
+    </message>
+    <message>
+        <source>Állapot</source>
+        <translation>Состояние</translation>
+    </message>
+    <message>
+        <source>Üres</source>
+        <translation>Пусто</translation>
+    </message>
+    <message>
+        <source>Foglalt</source>
+        <translation>Занято</translation>
+    </message>
+    <message>
+        <source>Levágás</source>
+        <translation>Обрезка</translation>
+    </message>
+    <message>
+        <source>Elrendezés: %1</source>
+        <translation>Раскладка: %1</translation>
     </message>
 </context>
 </TS>

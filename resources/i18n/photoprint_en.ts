@@ -72,10 +72,6 @@
         <translation>Add photos…</translation>
     </message>
     <message>
-        <source>Kiválasztott fotó</source>
-        <translation>Selected photo</translation>
-    </message>
-    <message>
         <source>Teljes kép</source>
         <translation>Whole photo</translation>
     </message>
@@ -138,10 +134,6 @@
     <message>
         <source>Próbanyomat</source>
         <translation>Test print</translation>
-    </message>
-    <message>
-        <source>További beállítások</source>
-        <translation>More options</translation>
     </message>
     <message>
         <source>Szélesség</source>
@@ -1158,10 +1150,6 @@
         <translation>Dissolve layout</translation>
     </message>
     <message>
-        <source>Válaszd ki a helyet a lapon.</source>
-        <translation>Select the cell on the page.</translation>
-    </message>
-    <message>
         <source>A fotók megmaradnak a helyükön.</source>
         <translation>The photos stay where they are.</translation>
     </message>
@@ -1640,6 +1628,26 @@
     <message>
         <source>Az üres hely a lap egy kivágott része; ide egy fotó kerül.</source>
         <translation>An empty section is a cut-out on the page; a photo goes here.</translation>
+    </message>
+    <message>
+        <source>Állapot</source>
+        <translation>Status</translation>
+    </message>
+    <message>
+        <source>Üres</source>
+        <translation>Empty</translation>
+    </message>
+    <message>
+        <source>Foglalt</source>
+        <translation>Occupied</translation>
+    </message>
+    <message>
+        <source>Levágás</source>
+        <translation>Clipping</translation>
+    </message>
+    <message>
+        <source>Elrendezés: %1</source>
+        <translation>Layout: %1</translation>
     </message>
 </context>
 </TS>

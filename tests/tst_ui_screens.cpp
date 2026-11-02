@@ -94,6 +94,16 @@ bool loadDocument(MainWindow &window, const QTemporaryDir &dir, const DocumentSn
     return window.waitForPreview(15000);
 }
 
+/// The scroll area of the open inspector tab. Each page owns one, and the tab
+/// bar above them never scrolls.
+QScrollArea *currentInspectorScroll(MainWindow &window)
+{
+    auto *tabs = window.findChild<QTabWidget *>(QStringLiteral("inspectorTabs"));
+    if (!tabs)
+        return nullptr;
+    return qobject_cast<QScrollArea *>(tabs->currentWidget());
+}
+
 /// Answers the next modal question with `button`. A modal dialog runs its own
 /// event loop, so a timer is what reaches into it.
 void answerNextQuestionWith(QMessageBox::StandardButton button)
@@ -233,13 +243,13 @@ void TestUiScreens::captureStates()
     sampleBrowser.close();
     QTest::qWait(120);
 
-    if (auto *scroll = window.findChild<QScrollArea *>()) {
+    if (auto *scroll = currentInspectorScroll(window)) {
         scroll->verticalScrollBar()->setValue(scroll->verticalScrollBar()->maximum());
         QTest::qWait(120);
     }
     QVERIFY(window.grab().save(evidenceDir() + QStringLiteral("/ui-controls-bottom.png")));
 
-    if (auto *scroll = window.findChild<QScrollArea *>())
+    if (auto *scroll = currentInspectorScroll(window))
         scroll->verticalScrollBar()->setValue(0);
     QComboBox *paper = nullptr;
     QComboBox *orientation = nullptr;
@@ -561,15 +571,14 @@ void TestUiScreens::captureSectionComposition()
                               QStringLiteral("/ui-section-composition-canvas.png")));
 
     // The compact photo inspector: the image rotation control and the section
-    // reset sit together, so the capture shows the restored controls.
-    auto *photoPanel = window.findChild<QWidget *>(QStringLiteral("photoPanel"));
-    QVERIFY(photoPanel);
-    for (QScrollArea *area : window.findChildren<QScrollArea *>()) {
-        if (area->widget() && area->widget()->isAncestorOf(photoPanel)) {
-            area->ensureWidgetVisible(photoPanel);
-            QTest::qWait(150);
-        }
-    }
+    // reset sit together, so the capture shows the restored controls in the
+    // Fotó page's own scroll area.
+    auto *photoScroll = window.findChild<QScrollArea *>(QStringLiteral("photoScroll"));
+    auto *rotation = window.findChild<QWidget *>(QStringLiteral("imageRotationSlider"));
+    QVERIFY(photoScroll);
+    QVERIFY(rotation);
+    photoScroll->ensureWidgetVisible(rotation, 0, 60);
+    QTest::qWait(150);
     QVERIFY(window.grab().save(evidenceDir() +
                                QStringLiteral("/ui-section-photo-controls.png")));
 }
@@ -606,8 +615,14 @@ void TestUiScreens::captureInspectorTabs()
     QTest::qWait(150);
     QVERIFY(window.grab().save(evidenceDir() + QStringLiteral("/ui-inspector-photo.png")));
 
-    // Hely: an empty section selected. The explanation, the drop hint, the two
-    // actions that need it, and nothing else.
+    // The tab strip's own focus ring, drawn over the stylesheet tabs.
+    tabs->tabBar()->setFocus();
+    QTest::qWait(120);
+    QVERIFY(window.grab().save(evidenceDir() +
+                               QStringLiteral("/ui-inspector-tab-focus.png")));
+
+    // Hely: an empty section selected. The section's facts, the explanation, and
+    // the two actions that need it, and nothing else.
     QTest::mouseClick(view, Qt::LeftButton, Qt::NoModifier,
                       view->slotRect(page.slotList.at(1).id).center().toPoint());
     QCOMPARE(tabs->currentIndex(), 1);
@@ -619,6 +634,24 @@ void TestUiScreens::captureInspectorTabs()
     QCOMPARE(tabs->currentIndex(), 2);
     QTest::qWait(150);
     QVERIFY(window.grab().save(evidenceDir() + QStringLiteral("/ui-inspector-page.png")));
+
+    // The end of the Lap page: the tab strip stays put while the page scrolls.
+    auto *lapScroll = currentInspectorScroll(window);
+    QVERIFY(lapScroll);
+    lapScroll->verticalScrollBar()->setValue(lapScroll->verticalScrollBar()->maximum());
+    QTest::qWait(150);
+    QVERIFY(window.grab().save(evidenceDir() + QStringLiteral("/ui-inspector-page-scrolled.png")));
+
+    // The end of the Fotó page: Méret, Próbanyomat and Sokszorosítás are reachable
+    // by scrolling, not lost under the fold.
+    QTest::mouseClick(view, Qt::LeftButton, Qt::NoModifier,
+                      view->slotRect(page.slotList.at(0).id).center().toPoint());
+    QCOMPARE(tabs->currentIndex(), 0);
+    auto *photoScroll = currentInspectorScroll(window);
+    QVERIFY(photoScroll);
+    photoScroll->verticalScrollBar()->setValue(photoScroll->verticalScrollBar()->maximum());
+    QTest::qWait(150);
+    QVERIFY(window.grab().save(evidenceDir() + QStringLiteral("/ui-inspector-photo-end.png")));
 
     // The same three tabs at a 1.35x system font in a 1280 x 720 window: the
     // contract size where the labels, the column and the canvas must not clip.
@@ -650,10 +683,24 @@ void TestUiScreens::captureInspectorTabs()
         QTest::qWait(150);
         QVERIFY(largeWindow.grab().save(
             evidenceDir() + QStringLiteral("/ui-inspector-photo-large-font.png")));
+        auto *largePhotoScroll = currentInspectorScroll(largeWindow);
+        QVERIFY(largePhotoScroll);
+        largePhotoScroll->verticalScrollBar()->setValue(
+            largePhotoScroll->verticalScrollBar()->maximum());
+        QTest::qWait(150);
+        QVERIFY(largeWindow.grab().save(
+            evidenceDir() + QStringLiteral("/ui-inspector-photo-end-large-font.png")));
         QTest::keyClick(largeView, Qt::Key_Escape);
         QTest::qWait(150);
         QVERIFY(largeWindow.grab().save(
             evidenceDir() + QStringLiteral("/ui-inspector-page-large-font.png")));
+        auto *largeLapScroll = currentInspectorScroll(largeWindow);
+        QVERIFY(largeLapScroll);
+        largeLapScroll->verticalScrollBar()->setValue(
+            largeLapScroll->verticalScrollBar()->maximum());
+        QTest::qWait(150);
+        QVERIFY(largeWindow.grab().save(
+            evidenceDir() + QStringLiteral("/ui-inspector-page-end-large-font.png")));
         QApplication::setFont(saved);
     }
 }

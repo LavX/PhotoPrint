@@ -184,9 +184,12 @@ speaker review, especially Hindi and Russian.
 ## Usage
 
 The photo library is on the left, the paper is in the centre, and the inspector
-for the selected photo is on the right. Printer, paper and orientation are in
-the top bar. The bottom bar holds page handling, print quality, colour mode,
-copies and the Print button. PDF export is available from the File menu.
+is on the right. The inspector has one tab per context: Fotó for the selected
+photograph, Hely for the selected section and Lap for the page and its layout.
+A tab with no selection is disabled, and each page scrolls on its own under a
+fixed tab strip. Printer, paper and orientation are in the top bar. The bottom
+bar holds page handling, print quality, colour mode, copies and the Print
+button. PDF export is available from the File menu.
 
 A project file (`.ppj`) stores the pages, paper, geometry, crop, tone, filters
 and source identities. Saving is atomic; the recovery snapshots are separate

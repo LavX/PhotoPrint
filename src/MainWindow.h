@@ -399,6 +399,13 @@ private:
 
 private slots:
     void addPhotos();
+    /// Fills the selected empty section with the pictures the picker returns. The
+    /// panel is talking about that section, so the file lands there and not in
+    /// whichever cell happens to be first.
+    void addPhotosToSelectedSlot();
+    /// The part of the fill that a test can drive without a file dialog: the
+    /// paths go into the selected section, exactly as the button does.
+    void addFilesToSelectedSlot(const QStringList &paths);
     void addDroppedFiles(const QStringList &paths);
     void paperChanged(int index);
     void orientationChanged(int index);
@@ -520,16 +527,24 @@ private:
     void applyEffectChoice(const QString &key, int version, int strength);
     void syncFrameControls();
     void syncLayoutPanel();
+    /// Writes the selected section's facts into the Hely tab: its cell size, its
+    /// position on the page, whether it holds a photograph and whether that
+    /// photograph is clipped. The panel shows the same section the canvas has
+    /// selected, so these are the numbers it is talking about.
+    void syncSlotFacts(const Page &page, const QString &slotId);
     /// The contextual inspector: Fotó, Hely and Lap. Only the selected photo's
-    /// tab, only the selected empty section's tab, otherwise Lap. The selection
-    /// context decides; a manual tab choice survives until that context changes,
-    /// so a slider never flips the panel under the pointer. `frameId` is the
-    /// selected photograph, `slotId` the selected empty section (both may be
-    /// empty). Tabs without content are disabled, Lap never is.
-    void updateInspectorTabs(const QString &frameId, const QString &slotId);
-    /// Switches the inspector tab. `byUser` records a manual choice; a
-    /// programmatic switch never counts as one.
-    void setInspectorTab(int index, bool byUser);
+    /// tab, only the selected section's tab, otherwise Lap. `frameId` is the
+    /// selected photograph, `slotId` the selected section (a photograph also
+    /// selects its own cell, so Hely can describe it), `emptySection` says
+    /// whether that section has no photograph yet. The selection context decides;
+    /// a manual tab choice survives until that context changes, so a slider never
+    /// flips the panel under the pointer. Tabs without content are disabled, Lap
+    /// never is.
+    void updateInspectorTabs(const QString &frameId, const QString &slotId,
+                             bool emptySection);
+    /// Switches the inspector tab programmatically. A user switch goes through
+    /// QTabWidget itself, which is what records the manual choice.
+    void setInspectorTab(int index);
     /// Writes the photograph's own rotation into the slider and its readout,
     /// skipping the slider while the user is dragging it.
     void syncImageRotationControls(const Frame &frame);
@@ -658,22 +673,22 @@ private:
     /// no photograph selected. It is the content of the Lap tab, so it cannot
     /// coexist with the selected-photograph sections any more.
     QWidget *m_layoutPanel = nullptr;
-    QWidget *m_photoPanel = nullptr;
     /// The contextual inspector. Three stable indices: Fotó (0), Hely (1) and
     /// Lap (2). The selection decides which one opens; a tab with no content is
     /// disabled instead of removed, so the indices and the tab order stay put.
+    /// The tab strip is outside the pages; each page owns its scroll area.
     QTabWidget *m_inspectorTabs = nullptr;
-    QWidget *m_slotPanel = nullptr;
-    QWidget *m_pagePanel = nullptr;
-    /// The Lap tab's no-layout state: the page summary and the template entry
-    /// instead of a stack of controls that would only clamp to zero.
+    /// The Lap tab's no-layout state: one line saying the page has no layout, so
+    /// a free page is not a stack of controls that would only clamp to zero.
     QWidget *m_pageSummaryPanel = nullptr;
-    QLabel *m_pageLayoutHint = nullptr;
-    QLabel *m_slotExplanation = nullptr;
-    QLabel *m_slotDropHint = nullptr;
-    QPushButton *m_slotAddPhotosButton = nullptr;
+    /// The Hely tab's section facts: size in millimetres, position, occupancy and
+    /// clipping state of the selected cell.
+    QLabel *m_slotSizeValue = nullptr;
+    QLabel *m_slotPositionValue = nullptr;
+    QLabel *m_slotStateValue = nullptr;
+    QLabel *m_slotClipValue = nullptr;
+    QPushButton *m_slotFillButton = nullptr;
     QPushButton *m_slotRemoveButton = nullptr;
-    QPushButton *m_pageTemplatesButton = nullptr;
     /// What the inspector was showing last: the selected photograph, the
     /// selected empty section, or nothing. A change re-opens the matching tab;
     /// a manual choice holds until then.
@@ -689,9 +704,7 @@ private:
     QLabel *m_gutterHint = nullptr;
     QDoubleSpinBox *m_radiusSpin = nullptr;
     QPushButton *m_addSlotButton = nullptr;
-    QPushButton *m_removeSlotButton = nullptr;
     QPushButton *m_dissolveLayoutButton = nullptr;
-    QPushButton *m_layoutTemplatesButton = nullptr;
     /// The live style burst: every value change restarts the timer, and the page
     /// is updated once the user stops, so a spin that is held down is one undo.
     QTimer *m_styleTimer = nullptr;

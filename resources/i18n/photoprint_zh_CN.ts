@@ -72,10 +72,6 @@
         <translation>添加照片…</translation>
     </message>
     <message>
-        <source>Kiválasztott fotó</source>
-        <translation>选中的照片</translation>
-    </message>
-    <message>
         <source>Teljes kép</source>
         <translation>整张照片</translation>
     </message>
@@ -138,10 +134,6 @@
     <message>
         <source>Próbanyomat</source>
         <translation>试印</translation>
-    </message>
-    <message>
-        <source>További beállítások</source>
-        <translation>更多选项</translation>
     </message>
     <message>
         <source>Szélesség</source>
@@ -1152,10 +1144,6 @@
         <translation>清除布局</translation>
     </message>
     <message>
-        <source>Válaszd ki a helyet a lapon.</source>
-        <translation>请选择页面上的单元格。</translation>
-    </message>
-    <message>
         <source>A fotók megmaradnak a helyükön.</source>
         <translation>照片会留在原位。</translation>
     </message>
@@ -1626,6 +1614,26 @@
     <message>
         <source>Az üres hely a lap egy kivágott része; ide egy fotó kerül.</source>
         <translation>空位置是页面上的裁切区域，照片会放在这里。</translation>
+    </message>
+    <message>
+        <source>Állapot</source>
+        <translation>状态</translation>
+    </message>
+    <message>
+        <source>Üres</source>
+        <translation>空</translation>
+    </message>
+    <message>
+        <source>Foglalt</source>
+        <translation>已占用</translation>
+    </message>
+    <message>
+        <source>Levágás</source>
+        <translation>裁切</translation>
+    </message>
+    <message>
+        <source>Elrendezés: %1</source>
+        <translation>布局：%1</translation>
     </message>
 </context>
 </TS>
