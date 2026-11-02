@@ -1629,5 +1629,17 @@
         <source>Levágva</source>
         <translation>Coupée</translation>
     </message>
+    <message>
+        <source>Fotó</source>
+        <translation>Photo</translation>
+    </message>
+    <message>
+        <source>Beállítások</source>
+        <translation>Réglages</translation>
+    </message>
+    <message>
+        <source>Az üres hely a lap egy kivágott része; ide egy fotó kerül.</source>
+        <translation>Un emplacement vide est une découpe de la page ; une photo vient ici.</translation>
+    </message>
 </context>
 </TS>

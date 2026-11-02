@@ -1615,5 +1615,17 @@
         <source>Levágva</source>
         <translation>已裁切</translation>
     </message>
+    <message>
+        <source>Fotó</source>
+        <translation>照片</translation>
+    </message>
+    <message>
+        <source>Beállítások</source>
+        <translation>设置</translation>
+    </message>
+    <message>
+        <source>Az üres hely a lap egy kivágott része; ide egy fotó kerül.</source>
+        <translation>空位置是页面上的裁切区域，照片会放在这里。</translation>
+    </message>
 </context>
 </TS>

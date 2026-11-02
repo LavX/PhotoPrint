@@ -62,6 +62,8 @@
 #include <QStandardPaths>
 #include <QSettings>
 #include <QStatusBar>
+#include <QTabBar>
+#include <QTabWidget>
 #include <QTimer>
 #include <QThread>
 #include <QToolBar>
@@ -204,6 +206,11 @@ QString themedStyleSheet(const ThemeColors &c)
 QMainWindow { background: @window; }
 QWidget#library { background: @panel; border-right: 1px solid @border; }
 QWidget#inspector { background: @panel; border-left: 1px solid @border; }
+QTabWidget#inspectorTabs::pane { border: none; }
+QTabWidget#inspectorTabs QTabBar::tab { background: transparent; color: @secondary; padding: 5px 9px; margin-right: 2px; border: none; border-bottom: 2px solid transparent; }
+QTabWidget#inspectorTabs QTabBar::tab:selected { color: @accent; border-bottom: 2px solid @accent; font-weight: 600; }
+QTabWidget#inspectorTabs QTabBar::tab:hover:!selected { color: @text; }
+QTabWidget#inspectorTabs QTabBar::tab:disabled { color: @border; }
 QToolBar { background: @window; border: none; border-bottom: 1px solid @border; spacing: 7px; padding: 3px 10px; }
 QToolBar QLabel { color: @secondary; font-size: 11px; }
 QMenuBar { background: @window; color: @text; }
@@ -2183,11 +2190,12 @@ void MainWindow::buildUi()
     side->setMaximumWidth(560);
     auto *sideLayout = new QVBoxLayout(side);
     sideLayout->setContentsMargins(12, 12, 12, 12);
-    // A section header for one of the side column's two containers: the page's
-    // own inspector and the selected-photograph inspector. They are separate
-    // widgets so the layout panel can stay on screen with nothing selected.
-    const auto addSectionTo = [side](QVBoxLayout *into, const QString &text) {
-        auto *label = new QLabel(text, side);
+    // A section header for one of the inspector's tabs. The parent follows the
+    // layout it is added to, so a header inside the Fotó tab never lives in the
+    // column behind it.
+    const auto addSectionTo = [](QVBoxLayout *into, const QString &text) {
+        QWidget *parent = into->parentWidget();
+        auto *label = new QLabel(text, parent);
         label->setObjectName(QStringLiteral("sectionHeader"));
         QFont font = label->font();
         font.setBold(true);
@@ -2245,17 +2253,62 @@ void MainWindow::buildUi()
                 selectFrame(current->data(Qt::UserRole).toString(), true);
             });
 
-    // --- Elrendezés: the page's own inspector -------------------------------
+    // --- A jobb oldali vizsgáló: three contextual tabs -----------------------
+    // The inspector used to be one long stack of layout and photo controls, most
+    // of them irrelevant to whatever was selected. It is now three pages, one per
+    // context: the selected photograph (Fotó), the selected empty section (Hely)
+    // and the page itself (Lap). Only the active context's controls are on
+    // screen. The indices are fixed, so a tab without content is disabled rather
+    // than removed and the tab order never jumps around.
+    m_inspectorTabs = new QTabWidget(side);
+    m_inspectorTabs->setObjectName(QStringLiteral("inspectorTabs"));
+    m_inspectorTabs->setAccessibleName(QCoreApplication::translate("PhotoPrint", "Beállítások"));
+    m_inspectorTabs->setDocumentMode(true);
+    m_inspectorTabs->tabBar()->setExpanding(false);
+    m_inspectorTabs->tabBar()->setDrawBase(false);
+    m_inspectorTabs->tabBar()->setFocusPolicy(Qt::StrongFocus);
+    connect(m_inspectorTabs, &QTabWidget::currentChanged, this, [this](int index) {
+        if (m_settingInspectorTab || index < 0)
+            return;
+        // A click, Ctrl+Tab or an arrow key: the user's choice holds until the
+        // selection context changes, so a slider never flips the panel away.
+        m_inspectorTabChosen = true;
+    });
+
+    auto *photoTab = new QWidget(m_inspectorTabs);
+    photoTab->setObjectName(QStringLiteral("photoPanel"));
+    photoTab->setAccessibleName(QCoreApplication::translate("PhotoPrint", "Fotó"));
+    m_photoPanel = photoTab;
+    auto *photoLayout = new QVBoxLayout(photoTab);
+    photoLayout->setContentsMargins(0, 8, 0, 0);
+
+    auto *slotTab = new QWidget(m_inspectorTabs);
+    slotTab->setObjectName(QStringLiteral("slotPanel"));
+    slotTab->setAccessibleName(QCoreApplication::translate("PhotoPrint", "Hely"));
+    m_slotPanel = slotTab;
+    auto *slotLayout = new QVBoxLayout(slotTab);
+    slotLayout->setContentsMargins(0, 8, 0, 0);
+
+    auto *pageTab = new QWidget(m_inspectorTabs);
+    pageTab->setObjectName(QStringLiteral("pagePanel"));
+    pageTab->setAccessibleName(QCoreApplication::translate("PhotoPrint", "Lap"));
+    m_pagePanel = pageTab;
+    auto *pageTabLayout = new QVBoxLayout(pageTab);
+    pageTabLayout->setContentsMargins(0, 8, 0, 0);
+
+    m_inspectorTabs->addTab(photoTab, QCoreApplication::translate("PhotoPrint", "Fotó"));
+    m_inspectorTabs->addTab(slotTab, QCoreApplication::translate("PhotoPrint", "Hely"));
+    m_inspectorTabs->addTab(pageTab, QCoreApplication::translate("PhotoPrint", "Lap"));
+
+    // --- Lap: the page's own layout -----------------------------------------
     // A laid-out page is dressed as a whole, so these controls belong to the
-    // page and not to one photograph. The block is visible whenever the current
-    // page has slots, even with nothing selected, and it never hides the
-    // selected-photograph sections below it.
-    auto *layoutPanel = new QWidget(side);
+    // page and not to one photograph. They live in the Lap tab, never next to
+    // the photo controls: the layout is invisible while a photo is being edited.
+    auto *layoutPanel = new QWidget(pageTab);
     layoutPanel->setObjectName(QStringLiteral("layoutPanel"));
     auto *layoutLayout = new QVBoxLayout(layoutPanel);
     layoutLayout->setContentsMargins(0, 0, 0, 0);
     m_layoutPanel = layoutPanel;
-    addSectionTo(layoutLayout, QCoreApplication::translate("PhotoPrint", "Elrendezés"));
 
     // The layout's name and how many cells it has. The name is the catalogue's
     // English suggestion, so it reads the same in every language, exactly as the
@@ -2277,16 +2330,16 @@ void MainWindow::buildUi()
     // fields share the same shape: a named group title, an "Automatikus" switch
     // and the value below it. The title names the field, so the switch never has
     // to repeat it.
-    const auto addTitle = [side, layoutLayout](const QString &text, const QString &name) {
-        auto *title = new QLabel(text, side);
+    const auto addTitle = [layoutPanel, layoutLayout](const QString &text, const QString &name) {
+        auto *title = new QLabel(text, layoutPanel);
         title->setObjectName(name);
         title->setWordWrap(true);
         layoutLayout->addWidget(title);
     };
-    const auto addLength = [side, layoutLayout](const QString &spinName,
-                                                const QString &accessibleName, double maximum,
-                                                double step) {
-        auto *spin = new QDoubleSpinBox(side);
+    const auto addLength = [layoutPanel, layoutLayout](const QString &spinName,
+                                                       const QString &accessibleName,
+                                                       double maximum, double step) {
+        auto *spin = new QDoubleSpinBox(layoutPanel);
         spin->setObjectName(spinName);
         spin->setAccessibleName(accessibleName);
         spin->setDecimals(1);
@@ -2297,8 +2350,9 @@ void MainWindow::buildUi()
         layoutLayout->addWidget(spin);
         return spin;
     };
-    const auto addAutomatic = [side, layoutLayout](const QString &text, const QString &name) {
-        auto *check = new QCheckBox(text, side);
+    const auto addAutomatic = [layoutPanel, layoutLayout](const QString &text,
+                                                          const QString &name) {
+        auto *check = new QCheckBox(text, layoutPanel);
         check->setObjectName(name);
         layoutLayout->addWidget(check);
         return check;
@@ -2343,13 +2397,13 @@ void MainWindow::buildUi()
     // The two cell actions sit on their own rows: at the narrowest side column a
     // pair of buttons would have to clip its own label.
     m_addSlotButton =
-        new QPushButton(QCoreApplication::translate("PhotoPrint", "Hely hozzáadása"), side);
+        new QPushButton(QCoreApplication::translate("PhotoPrint", "Hely hozzáadása"), layoutPanel);
     m_addSlotButton->setObjectName(QStringLiteral("addSlotButton"));
     layoutLayout->addWidget(m_addSlotButton);
     connect(m_addSlotButton, &QPushButton::clicked, this, &MainWindow::addSlotToPage);
 
     m_removeSlotButton =
-        new QPushButton(QCoreApplication::translate("PhotoPrint", "Hely törlése"), side);
+        new QPushButton(QCoreApplication::translate("PhotoPrint", "Hely törlése"), layoutPanel);
     m_removeSlotButton->setObjectName(QStringLiteral("removeSlotButton"));
     m_removeSlotButton->setToolTip(
         QCoreApplication::translate("PhotoPrint", "Válaszd ki a helyet a lapon."));
@@ -2357,7 +2411,7 @@ void MainWindow::buildUi()
     connect(m_removeSlotButton, &QPushButton::clicked, this, &MainWindow::removeSlotFromPage);
 
     m_dissolveLayoutButton = new QPushButton(
-        QCoreApplication::translate("PhotoPrint", "Elrendezés megszüntetése"), side);
+        QCoreApplication::translate("PhotoPrint", "Elrendezés megszüntetése"), layoutPanel);
     m_dissolveLayoutButton->setObjectName(QStringLiteral("dissolveLayoutButton"));
     m_dissolveLayoutButton->setToolTip(
         QCoreApplication::translate("PhotoPrint", "A fotók megmaradnak a helyükön."));
@@ -2366,7 +2420,7 @@ void MainWindow::buildUi()
             &MainWindow::dissolvePageLayout);
 
     m_layoutTemplatesButton =
-        new QPushButton(QCoreApplication::translate("PhotoPrint", "Sablonok…"), side);
+        new QPushButton(QCoreApplication::translate("PhotoPrint", "Sablonok…"), layoutPanel);
     m_layoutTemplatesButton->setObjectName(QStringLiteral("layoutTemplatesButton"));
     m_layoutTemplatesButton->setAccessibleName(
         QCoreApplication::translate("PhotoPrint", "Sablonok"));
@@ -2415,26 +2469,52 @@ void MainWindow::buildUi()
         applySlotStyleField(SlotStyleField::Gutter);
     });
     layoutPanel->setVisible(false);
-    sideLayout->addWidget(layoutPanel);
+    pageTabLayout->addWidget(layoutPanel);
+
+    // --- Lap: the page summary for a page without a layout -------------------
+    // A free page has no dress to edit. Instead of a column of controls that
+    // would only clamp to zero, the tab shows what the page is and the way to
+    // give it a layout. The page tools below stay available either way.
+    m_pageSummaryPanel = new QWidget(pageTab);
+    m_pageSummaryPanel->setObjectName(QStringLiteral("pageSummaryPanel"));
+    auto *summaryLayout = new QVBoxLayout(m_pageSummaryPanel);
+    summaryLayout->setContentsMargins(0, 0, 0, 0);
+    m_pageLayoutHint = new QLabel(
+        QCoreApplication::translate("PhotoPrint", "Ehhez a laphoz még nincs elrendezés."),
+        m_pageSummaryPanel);
+    m_pageLayoutHint->setObjectName(QStringLiteral("pageLayoutHint"));
+    m_pageLayoutHint->setWordWrap(true);
+    markSecondaryText(m_pageLayoutHint);
+    summaryLayout->addWidget(m_pageLayoutHint);
+    m_pageTemplatesButton = new QPushButton(
+        QCoreApplication::translate("PhotoPrint", "Sablonok…"), m_pageSummaryPanel);
+    m_pageTemplatesButton->setObjectName(QStringLiteral("pageTemplatesButton"));
+    m_pageTemplatesButton->setAccessibleName(
+        QCoreApplication::translate("PhotoPrint", "Sablonok"));
+    m_pageTemplatesButton->setToolTip(
+        QCoreApplication::translate("PhotoPrint", "Sablonok ehhez a laphoz"));
+    summaryLayout->addWidget(m_pageTemplatesButton);
+    connect(m_pageTemplatesButton, &QPushButton::clicked, this,
+            &MainWindow::openTemplateBrowser);
+    pageTabLayout->addWidget(m_pageSummaryPanel);
 
     // --- Lap: tools that belong to the sheet, not to one photograph ---------
-    // Always visible: a page with no layout and no selection can still be
+    // Always in the Lap tab: a page with no layout and no selection can still be
     // tidied, and the cut guide state is a page property.
-    auto *pageTools = new QWidget(side);
+    auto *pageTools = new QWidget(pageTab);
     pageTools->setObjectName(QStringLiteral("pageToolsPanel"));
     auto *pageToolsLayout = new QVBoxLayout(pageTools);
     pageToolsLayout->setContentsMargins(0, 0, 0, 0);
-    addSectionTo(pageToolsLayout, QCoreApplication::translate("PhotoPrint", "Lap"));
 
     m_alignButton =
-        new QPushButton(QCoreApplication::translate("PhotoPrint", "Fotók rendezése…"), side);
+        new QPushButton(QCoreApplication::translate("PhotoPrint", "Fotók rendezése…"), pageTools);
     m_alignButton->setObjectName(QStringLiteral("alignPhotosButton"));
     m_alignButton->setToolTip(QCoreApplication::translate(
         "PhotoPrint", "A lapon lévő fotók elrendezése. A sorrend nem változik."));
     pageToolsLayout->addWidget(m_alignButton);
     connect(m_alignButton, &QPushButton::clicked, this, &MainWindow::openAlignPhotos);
 
-    auto *guideTitle = new QLabel(QCoreApplication::translate("PhotoPrint", "Vágójelek"), side);
+    auto *guideTitle = new QLabel(QCoreApplication::translate("PhotoPrint", "Vágójelek"), pageTools);
     guideTitle->setWordWrap(true);
     pageToolsLayout->addWidget(guideTitle);
     m_guidesCombo = new QComboBox(pageTools);
@@ -2448,14 +2528,14 @@ void MainWindow::buildUi()
                            int(CutGuides::Print));
     pageToolsLayout->addWidget(m_guidesCombo);
     connect(m_guidesCombo, &QComboBox::currentIndexChanged, this, &MainWindow::guidesChanged);
-    m_guidesHint = new QLabel(side);
+    m_guidesHint = new QLabel(pageTools);
     m_guidesHint->setObjectName(QStringLiteral("cutGuidesHint"));
     m_guidesHint->setWordWrap(true);
     markSecondaryText(m_guidesHint);
     pageToolsLayout->addWidget(m_guidesHint);
 
     auto *borderlessTitle =
-        new QLabel(QCoreApplication::translate("PhotoPrint", "Szélig nyomtatás"), side);
+        new QLabel(QCoreApplication::translate("PhotoPrint", "Szélig nyomtatás"), pageTools);
     borderlessTitle->setWordWrap(true);
     pageToolsLayout->addWidget(borderlessTitle);
     m_borderlessCombo = new QComboBox(pageTools);
@@ -2475,25 +2555,69 @@ void MainWindow::buildUi()
                        "PhotoPrint",
                        "A példányok pontosan a választott méretben nyomtatódnak, nagyítás "
                        "nélkül."),
-                   side);
+                   pageTools);
     m_borderlessHint->setWordWrap(true);
     markSecondaryText(m_borderlessHint);
     pageToolsLayout->addWidget(m_borderlessHint);
-    sideLayout->addWidget(pageTools);
+    pageToolsLayout->addStretch(1);
+    pageTabLayout->addWidget(pageTools);
 
-    // --- Kiválasztott fotó and Effekt: the photograph's own inspector --------
-    // One container, hidden as a whole when no photograph is selected, so a
-    // laid-out page with an empty selection shows the layout panel alone.
-    m_photoPanel = new QWidget(side);
-    m_photoPanel->setObjectName(QStringLiteral("photoPanel"));
-    auto *photoLayout = new QVBoxLayout(m_photoPanel);
-    photoLayout->setContentsMargins(0, 0, 0, 0);
-    sideLayout->addWidget(m_photoPanel);
+    // The page's own summary line: paper and size. It heads the Lap tab, so the
+    // page is identified before either the layout or the no-layout state talks
+    // about it.
+    m_pageInfo = new QLabel(pageTab);
+    m_pageInfo->setWordWrap(true);
+    m_pageInfo->setObjectName(QStringLiteral("pageInfoLabel"));
+    pageTabLayout->insertWidget(0, m_pageInfo);
 
-    addSectionTo(photoLayout, QCoreApplication::translate("PhotoPrint", "Kiválasztott fotó"));
+    // --- Hely: the selected empty section ------------------------------------
+    // An empty section is a selection of its own. This tab says what the section
+    // is, how to fill it, and offers the one action that needs the selection.
+    // No layout numbers, no photo controls, no page tools.
+    m_slotExplanation = new QLabel(
+        QCoreApplication::translate(
+            "PhotoPrint",
+            "Az üres hely a lap egy kivágott része; ide egy fotó kerül."),
+        slotTab);
+    m_slotExplanation->setObjectName(QStringLiteral("slotExplanation"));
+    m_slotExplanation->setWordWrap(true);
+    markSecondaryText(m_slotExplanation);
+    slotLayout->addWidget(m_slotExplanation);
+
+    m_slotDropHint =
+        new QLabel(QCoreApplication::translate("PhotoPrint", "Húzd ide a fotót"), slotTab);
+    m_slotDropHint->setObjectName(QStringLiteral("slotDropHint"));
+    m_slotDropHint->setWordWrap(true);
+    QFont slotHintFont = m_slotDropHint->font();
+    slotHintFont.setWeight(QFont::DemiBold);
+    m_slotDropHint->setFont(slotHintFont);
+    slotLayout->addWidget(m_slotDropHint);
+
+    m_slotAddPhotosButton = new QPushButton(
+        QCoreApplication::translate("PhotoPrint", "Fotók hozzáadása"), slotTab);
+    m_slotAddPhotosButton->setObjectName(QStringLiteral("slotAddPhotosButton"));
+    slotLayout->addWidget(m_slotAddPhotosButton);
+    connect(m_slotAddPhotosButton, &QPushButton::clicked, this, &MainWindow::addPhotos);
+
+    // Removing a section needs a selected section, so this is the tab that owns
+    // it. The Lap tab keeps its own remove entry next to "Hely hozzáadása", so a
+    // layout can be edited without leaving the page.
+    m_slotRemoveButton = new QPushButton(
+        QCoreApplication::translate("PhotoPrint", "Hely törlése"), slotTab);
+    m_slotRemoveButton->setObjectName(QStringLiteral("slotRemoveButton"));
+    slotLayout->addWidget(m_slotRemoveButton);
+    connect(m_slotRemoveButton, &QPushButton::clicked, this, &MainWindow::removeSlotFromPage);
+    slotLayout->addStretch(1);
+
+    // --- Fotó: the selected photograph ---------------------------------------
+    // One tab, one context. The old "Kiválasztott fotó" header is gone: the tab
+    // is named Fotó, and the controls are ordered the way a photograph is worked
+    // on, with the size and angle spins visible instead of collapsed away.
     auto *fitRow = new QHBoxLayout;
-    m_fitButton = new QPushButton(QCoreApplication::translate("PhotoPrint", "Teljes kép"), side);
-    m_fillButton = new QPushButton(QCoreApplication::translate("PhotoPrint", "Kép kitöltése"), side);
+    m_fitButton = new QPushButton(QCoreApplication::translate("PhotoPrint", "Teljes kép"), photoTab);
+    m_fitButton->setObjectName(QStringLiteral("fitButton"));
+    m_fillButton = new QPushButton(QCoreApplication::translate("PhotoPrint", "Kép kitöltése"), photoTab);
+    m_fillButton->setObjectName(QStringLiteral("fillButton"));
     fitRow->addWidget(m_fitButton);
     fitRow->addWidget(m_fillButton);
     photoLayout->addLayout(fitRow);
@@ -2501,9 +2625,11 @@ void MainWindow::buildUi()
     connect(m_fillButton, &QPushButton::clicked, this, [this] { applyFit(FitMode::Fill); });
 
     auto *actionRow = new QHBoxLayout;
-    m_cropButton = new QPushButton(QCoreApplication::translate("PhotoPrint", "Kivágás"), side);
+    m_cropButton = new QPushButton(QCoreApplication::translate("PhotoPrint", "Kivágás"), photoTab);
+    m_cropButton->setObjectName(QStringLiteral("cropButton"));
     m_cropButton->setCheckable(true);
-    m_deleteButton = new QPushButton(QCoreApplication::translate("PhotoPrint", "Eltávolítás"), side);
+    m_deleteButton = new QPushButton(QCoreApplication::translate("PhotoPrint", "Eltávolítás"), photoTab);
+    m_deleteButton->setObjectName(QStringLiteral("deleteButton"));
     actionRow->addWidget(m_cropButton);
     actionRow->addWidget(m_deleteButton);
     photoLayout->addLayout(actionRow);
@@ -2511,8 +2637,10 @@ void MainWindow::buildUi()
     connect(m_deleteButton, &QPushButton::clicked, this, &MainWindow::deleteSelected);
 
     auto *layerRow = new QHBoxLayout;
-    m_forwardButton = new QPushButton(QCoreApplication::translate("PhotoPrint", "Előtérbe"), side);
-    m_backwardButton = new QPushButton(QCoreApplication::translate("PhotoPrint", "Háttérbe"), side);
+    m_forwardButton = new QPushButton(QCoreApplication::translate("PhotoPrint", "Előtérbe"), photoTab);
+    m_forwardButton->setObjectName(QStringLiteral("forwardButton"));
+    m_backwardButton = new QPushButton(QCoreApplication::translate("PhotoPrint", "Háttérbe"), photoTab);
+    m_backwardButton->setObjectName(QStringLiteral("backwardButton"));
     layerRow->addWidget(m_forwardButton);
     layerRow->addWidget(m_backwardButton);
     photoLayout->addLayout(layerRow);
@@ -2520,21 +2648,22 @@ void MainWindow::buildUi()
     connect(m_backwardButton, &QPushButton::clicked, this, [this] { reorderFrame(-1); });
 
     auto *toneRow = new QHBoxLayout;
-    m_autoCheck = new ToggleSwitch(side);
+    m_autoCheck = new ToggleSwitch(photoTab);
+    m_autoCheck->setObjectName(QStringLiteral("autoToneSwitch"));
     m_autoCheck->setAccessibleName(QCoreApplication::translate("PhotoPrint", "Automatikus javítás"));
     m_autoCheck->setToolTip(
         QCoreApplication::translate("PhotoPrint", "Finoman igazítja a fényt és a színt a nyomtatáshoz."));
     auto *toneText = new QVBoxLayout;
-    auto *toneTitle = new QLabel(QCoreApplication::translate("PhotoPrint", "Automatikus javítás"), side);
+    auto *toneTitle = new QLabel(QCoreApplication::translate("PhotoPrint", "Automatikus javítás"), photoTab);
     QFont toneFont = toneTitle->font();
     toneFont.setWeight(QFont::DemiBold);
     toneTitle->setFont(toneFont);
-    m_autoHint = new QLabel(QCoreApplication::translate("PhotoPrint", "Finom fény- és színjavítás"), side);
+    m_autoHint = new QLabel(QCoreApplication::translate("PhotoPrint", "Finom fény- és színjavítás"), photoTab);
     markSecondaryText(m_autoHint);
     m_autoHint->setWordWrap(true);
     toneText->addWidget(toneTitle);
     toneText->addWidget(m_autoHint);
-    m_originalButton = new QPushButton(QCoreApplication::translate("PhotoPrint", "Eredeti"), side);
+    m_originalButton = new QPushButton(QCoreApplication::translate("PhotoPrint", "Eredeti"), photoTab);
     m_originalButton->setObjectName(QStringLiteral("originalButton"));
     m_originalButton->setToolTip(QCoreApplication::translate("PhotoPrint", "Tartsd nyomva az eredeti képhez."));
     toneRow->addWidget(m_autoCheck);
@@ -2546,22 +2675,23 @@ void MainWindow::buildUi()
     connect(m_originalButton, &QPushButton::pressed, this, [this] { showOriginalPressed(true); });
     connect(m_originalButton, &QPushButton::released, this, [this] { showOriginalPressed(false); });
 
-    m_brightnessSlider = new QSlider(Qt::Horizontal, side);
+    m_brightnessSlider = new QSlider(Qt::Horizontal, photoTab);
+    m_brightnessSlider->setObjectName(QStringLiteral("brightnessSlider"));
     m_brightnessSlider->setAccessibleName(QCoreApplication::translate("PhotoPrint", "Világosítás"));
     m_brightnessSlider->setRange(kBrightnessSliderMin, kBrightnessSliderMax);
     m_brightnessSlider->setValue(kBrightnessSliderNeutral);
     m_brightnessSlider->setTracking(false);
-    photoLayout->addWidget(new QLabel(QCoreApplication::translate("PhotoPrint", "Világosítás"), side));
+    photoLayout->addWidget(new QLabel(QCoreApplication::translate("PhotoPrint", "Világosítás"), photoTab));
     photoLayout->addWidget(m_brightnessSlider);
     connect(m_brightnessSlider, &QSlider::valueChanged, this, &MainWindow::brightnessChanged);
 
     addSectionTo(photoLayout, QCoreApplication::translate("PhotoPrint", "Effekt"));
-    m_effectButton = new QPushButton(QCoreApplication::translate("PhotoPrint", "Eredeti"), side);
+    m_effectButton = new QPushButton(QCoreApplication::translate("PhotoPrint", "Eredeti"), photoTab);
     m_effectButton->setObjectName(QStringLiteral("effectButton"));
     m_effectButton->setAccessibleName(QCoreApplication::translate("PhotoPrint", "Effekt"));
     m_effectButton->setToolTip(QCoreApplication::translate("PhotoPrint", "Effekt kiválasztása"));
     photoLayout->addWidget(m_effectButton);
-    m_legacyHint = new QLabel(QCoreApplication::translate("PhotoPrint", "Új effekt választása"), side);
+    m_legacyHint = new QLabel(QCoreApplication::translate("PhotoPrint", "Új effekt választása"), photoTab);
     m_legacyHint->setObjectName(QStringLiteral("legacyEffectHint"));
     m_legacyHint->setWordWrap(true);
     markSecondaryText(m_legacyHint);
@@ -2569,10 +2699,11 @@ void MainWindow::buildUi()
     photoLayout->addWidget(m_legacyHint);
     connect(m_effectButton, &QPushButton::clicked, this, &MainWindow::openEffectBrowser);
 
-    m_strengthLabel = new QLabel(QCoreApplication::translate("PhotoPrint", "Effekt erőssége"), side);
+    m_strengthLabel = new QLabel(QCoreApplication::translate("PhotoPrint", "Effekt erőssége"), photoTab);
     m_strengthLabel->setObjectName(QStringLiteral("effectStrengthLabel"));
     photoLayout->addWidget(m_strengthLabel);
-    m_filterStrength = new QSlider(Qt::Horizontal, side);    m_filterStrength->setObjectName(QStringLiteral("effectStrength"));
+    m_filterStrength = new QSlider(Qt::Horizontal, photoTab);
+    m_filterStrength->setObjectName(QStringLiteral("effectStrength"));
     m_filterStrength->setAccessibleName(QCoreApplication::translate("PhotoPrint", "Effekt erőssége"));
     m_filterStrength->setRange(0, 100);
     m_filterStrength->setValue(100);
@@ -2580,77 +2711,30 @@ void MainWindow::buildUi()
     photoLayout->addWidget(m_filterStrength);
     connect(m_filterStrength, &QSlider::valueChanged, this, &MainWindow::applyFilterSettings);
 
-    m_strengthHint = new QLabel(side);
+    m_strengthHint = new QLabel(photoTab);
     m_strengthHint->setObjectName(QStringLiteral("effectStrengthHint"));
     m_strengthHint->setWordWrap(true);
     markSecondaryText(m_strengthHint);
     m_strengthHint->setVisible(false);
     photoLayout->addWidget(m_strengthHint);
 
-    m_upscaleCheck = new QCheckBox(QCoreApplication::translate("PhotoPrint", "Kép nagyítása 2×"), side);
+    m_upscaleCheck = new QCheckBox(QCoreApplication::translate("PhotoPrint", "Kép nagyítása 2×"), photoTab);
+    m_upscaleCheck->setObjectName(QStringLiteral("upscaleCheck"));
     m_upscaleCheck->setToolTip(
         QCoreApplication::translate("PhotoPrint", "A nyomtatási felbontást növeli; az előnézet nem változik."));
     photoLayout->addWidget(m_upscaleCheck);
-    auto *upscaleHint = new QLabel(QCoreApplication::translate("PhotoPrint", "A nyomtatási felbontást növeli."), side);
+    auto *upscaleHint = new QLabel(QCoreApplication::translate("PhotoPrint", "A nyomtatási felbontást növeli."), photoTab);
     markSecondaryText(upscaleHint);
     upscaleHint->setWordWrap(true);
     photoLayout->addWidget(upscaleHint);
     connect(m_upscaleCheck, &QCheckBox::toggled, this, &MainWindow::applyFilterSettings);
 
-    m_trialButton = new QPushButton(QCoreApplication::translate("PhotoPrint", "Próbanyomat"), side);
-    photoLayout->addWidget(m_trialButton);
-    connect(m_trialButton, &QPushButton::clicked, this, &MainWindow::showTrialSheet);
-
-    // Many identical copies of the selected photograph. It sits under the test
-    // sheet because both answer "how will this photo come out of the printer".
-    m_batchButton =
-        new QPushButton(QCoreApplication::translate("PhotoPrint", "Sokszorosítás…"), side);
-    m_batchButton->setObjectName(QStringLiteral("batchCopiesButton"));
-    m_batchButton->setToolTip(QCoreApplication::translate(
-        "PhotoPrint", "Ugyanaz a fotó több példányban, egyenes rácsban."));
-    photoLayout->addWidget(m_batchButton);
-    connect(m_batchButton, &QPushButton::clicked, this, &MainWindow::openBatchCopies);
-
-    m_advancedToggle = new QPushButton(QCoreApplication::translate("PhotoPrint", "További beállítások"), side);
-    m_advancedToggle->setCheckable(true);
-    photoLayout->addWidget(m_advancedToggle);
-    auto *advancedContent = new QWidget(side);
-    auto *grid = new QGridLayout(advancedContent);
-    grid->setContentsMargins(0, 0, 0, 0);
-    m_widthSpin = new QDoubleSpinBox(advancedContent);
-    m_heightSpin = new QDoubleSpinBox(advancedContent);
-    m_angleSpin = new QDoubleSpinBox(advancedContent);
-    m_widthSpin->setObjectName(QStringLiteral("widthSpin"));
-    m_heightSpin->setObjectName(QStringLiteral("heightSpin"));
-    m_angleSpin->setObjectName(QStringLiteral("angleSpin"));
-    for (QDoubleSpinBox *spin : {m_widthSpin, m_heightSpin}) {
-        spin->setRange(0.5, 100.0);
-        spin->setDecimals(2);
-        spin->setSuffix(QStringLiteral(" cm"));
-        spin->setSingleStep(0.1);
-    }
-    m_angleSpin->setRange(-180.0, 180.0);
-    m_angleSpin->setDecimals(1);
-    m_angleSpin->setSuffix(QStringLiteral("°"));
-    grid->addWidget(new QLabel(QCoreApplication::translate("PhotoPrint", "Szélesség")), 0, 0);
-    grid->addWidget(m_widthSpin, 0, 1);
-    grid->addWidget(new QLabel(QCoreApplication::translate("PhotoPrint", "Magasság")), 1, 0);
-    grid->addWidget(m_heightSpin, 1, 1);
-    grid->addWidget(new QLabel(QCoreApplication::translate("PhotoPrint", "Szög")), 2, 0);
-    grid->addWidget(m_angleSpin, 2, 1);
-    advancedContent->setVisible(false);
-    connect(m_advancedToggle, &QPushButton::toggled, advancedContent, &QWidget::setVisible);
-    photoLayout->addWidget(advancedContent);
-    for (QDoubleSpinBox *spin : {m_widthSpin, m_heightSpin, m_angleSpin})
-        connect(spin, &QDoubleSpinBox::editingFinished, this, &MainWindow::applySizeFromControls);
-
     // --- Kép forgatása: the photograph's own rotation inside its frame --------
-    // The frame angle above turns the window; this turns the picture inside it.
-    // Kept compact for the contextual tabs that come next: one slider, the two
-    // quarter turns and a reset, each one undo step.
+    // The frame angle below turns the window; this turns the picture inside it.
+    // One slider, the two quarter turns and a reset, each one undo step.
     addSectionTo(photoLayout, QCoreApplication::translate("PhotoPrint", "Kép forgatása"));
     auto *imageRotationRow = new QHBoxLayout;
-    m_imageRotationSlider = new QSlider(Qt::Horizontal, side);
+    m_imageRotationSlider = new QSlider(Qt::Horizontal, photoTab);
     m_imageRotationSlider->setObjectName(QStringLiteral("imageRotationSlider"));
     m_imageRotationSlider->setAccessibleName(
         QCoreApplication::translate("PhotoPrint", "Kép forgatása"));
@@ -2659,7 +2743,7 @@ void MainWindow::buildUi()
     m_imageRotationSlider->setPageStep(15);
     // Tracking off: the release is the action, so one drag is one undo step.
     m_imageRotationSlider->setTracking(false);
-    m_imageRotationValue = new QLabel(QStringLiteral("0°"), side);
+    m_imageRotationValue = new QLabel(QStringLiteral("0°"), photoTab);
     m_imageRotationValue->setObjectName(QStringLiteral("imageRotationValue"));
     m_imageRotationValue->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
     markSecondaryText(m_imageRotationValue);
@@ -2671,13 +2755,13 @@ void MainWindow::buildUi()
 
     auto *imageTurnRow = new QHBoxLayout;
     m_imageRotateLeftButton =
-        new QPushButton(QCoreApplication::translate("PhotoPrint", "Balra 90°"), side);
+        new QPushButton(QCoreApplication::translate("PhotoPrint", "Balra 90°"), photoTab);
     m_imageRotateLeftButton->setObjectName(QStringLiteral("imageRotateLeft"));
     m_imageRotateRightButton =
-        new QPushButton(QCoreApplication::translate("PhotoPrint", "Jobbra 90°"), side);
+        new QPushButton(QCoreApplication::translate("PhotoPrint", "Jobbra 90°"), photoTab);
     m_imageRotateRightButton->setObjectName(QStringLiteral("imageRotateRight"));
     m_imageResetButton =
-        new QPushButton(QCoreApplication::translate("PhotoPrint", "Alaphelyzet"), side);
+        new QPushButton(QCoreApplication::translate("PhotoPrint", "Alaphelyzet"), photoTab);
     m_imageResetButton->setObjectName(QStringLiteral("imageRotationReset"));
     m_imageResetButton->setToolTip(QCoreApplication::translate(
         "PhotoPrint", "Visszaállítja a kép nagyítását, helyét és forgatását."));
@@ -2692,11 +2776,40 @@ void MainWindow::buildUi()
     connect(m_imageResetButton, &QPushButton::clicked, this,
             &MainWindow::resetImageInsideFrame);
 
+    // --- Méret: visible, not folded under a toggle ---------------------------
+    addSectionTo(photoLayout, QCoreApplication::translate("PhotoPrint", "Méret"));
+    auto *grid = new QGridLayout;
+    grid->setContentsMargins(0, 0, 0, 0);
+    m_widthSpin = new QDoubleSpinBox(photoTab);
+    m_heightSpin = new QDoubleSpinBox(photoTab);
+    m_angleSpin = new QDoubleSpinBox(photoTab);
+    m_widthSpin->setObjectName(QStringLiteral("widthSpin"));
+    m_heightSpin->setObjectName(QStringLiteral("heightSpin"));
+    m_angleSpin->setObjectName(QStringLiteral("angleSpin"));
+    for (QDoubleSpinBox *spin : {m_widthSpin, m_heightSpin}) {
+        spin->setRange(0.5, 100.0);
+        spin->setDecimals(2);
+        spin->setSuffix(QStringLiteral(" cm"));
+        spin->setSingleStep(0.1);
+    }
+    m_angleSpin->setRange(-180.0, 180.0);
+    m_angleSpin->setDecimals(1);
+    m_angleSpin->setSuffix(QStringLiteral("°"));
+    grid->addWidget(new QLabel(QCoreApplication::translate("PhotoPrint", "Szélesség"), photoTab), 0, 0);
+    grid->addWidget(m_widthSpin, 0, 1);
+    grid->addWidget(new QLabel(QCoreApplication::translate("PhotoPrint", "Magasság"), photoTab), 1, 0);
+    grid->addWidget(m_heightSpin, 1, 1);
+    grid->addWidget(new QLabel(QCoreApplication::translate("PhotoPrint", "Szög"), photoTab), 2, 0);
+    grid->addWidget(m_angleSpin, 2, 1);
+    photoLayout->addLayout(grid);
+    for (QDoubleSpinBox *spin : {m_widthSpin, m_heightSpin, m_angleSpin})
+        connect(spin, &QDoubleSpinBox::editingFinished, this, &MainWindow::applySizeFromControls);
+
     // A slotted frame can be moved, resized or turned out of its window. The
     // reset puts it back on the cell; the hint says when part of the picture is
     // clipped away.
     m_replaceInSlotButton =
-        new QPushButton(QCoreApplication::translate("PhotoPrint", "Kép visszahelyezése"), side);
+        new QPushButton(QCoreApplication::translate("PhotoPrint", "Kép visszahelyezése"), photoTab);
     m_replaceInSlotButton->setObjectName(QStringLiteral("replaceInSlotButton"));
     m_replaceInSlotButton->setToolTip(
         QCoreApplication::translate("PhotoPrint", "A fotót a helyére igazítja."));
@@ -2706,21 +2819,35 @@ void MainWindow::buildUi()
             &MainWindow::replaceFrameInSlot);
 
     m_clippedHint = new QLabel(
-        QCoreApplication::translate("PhotoPrint", "A kép egy része le van vágva."), side);
+        QCoreApplication::translate("PhotoPrint", "A kép egy része le van vágva."), photoTab);
     m_clippedHint->setObjectName(QStringLiteral("clippedHint"));
     m_clippedHint->setWordWrap(true);
     markSecondaryText(m_clippedHint);
     m_clippedHint->setVisible(false);
     photoLayout->addWidget(m_clippedHint);
 
-    m_resolutionHint = new QLabel(side);
+    m_resolutionHint = new QLabel(photoTab);
     m_resolutionHint->setWordWrap(true);
     m_resolutionHint->setStyleSheet(QStringLiteral("color: #8a5a00;"));
     photoLayout->addWidget(m_resolutionHint);
 
-    m_pageInfo = new QLabel(side);
-    m_pageInfo->setWordWrap(true);
-    sideLayout->addWidget(m_pageInfo);
+    m_trialButton = new QPushButton(QCoreApplication::translate("PhotoPrint", "Próbanyomat"), photoTab);
+    m_trialButton->setObjectName(QStringLiteral("trialSheetButton"));
+    photoLayout->addWidget(m_trialButton);
+    connect(m_trialButton, &QPushButton::clicked, this, &MainWindow::showTrialSheet);
+
+    // Many identical copies of the selected photograph. It sits under the test
+    // sheet because both answer "how will this photo come out of the printer".
+    m_batchButton =
+        new QPushButton(QCoreApplication::translate("PhotoPrint", "Sokszorosítás…"), photoTab);
+    m_batchButton->setObjectName(QStringLiteral("batchCopiesButton"));
+    m_batchButton->setToolTip(QCoreApplication::translate(
+        "PhotoPrint", "Ugyanaz a fotó több példányban, egyenes rácsban."));
+    photoLayout->addWidget(m_batchButton);
+    connect(m_batchButton, &QPushButton::clicked, this, &MainWindow::openBatchCopies);
+    photoLayout->addStretch(1);
+
+    sideLayout->addWidget(m_inspectorTabs);
 
     m_noticeBar = new QWidget(central);
     auto *noticeLayout = new QHBoxLayout(m_noticeBar);
@@ -2823,9 +2950,24 @@ void MainWindow::buildUi()
     // The column is never narrower than its own content. At the default font
     // that is the old 240 px; at a larger system font the buttons and labels need
     // more, and a horizontal scroll bar is switched off, so without this they
-    // would be clipped instead of laid out.
+    // would be clipped instead of laid out. The tab pages are measured one by
+    // one: only the active page is laid out, and the tab bar must never squeeze
+    // the page just because a wider tab is behind it.
     sideLayout->activate();
-    const int contentWidth = side->minimumSizeHint().width();
+    int contentWidth = std::max(240, side->minimumSizeHint().width());
+    if (m_inspectorTabs) {
+        contentWidth = std::max(contentWidth, m_inspectorTabs->minimumSizeHint().width());
+        for (int index = 0; index < m_inspectorTabs->count(); ++index) {
+            QWidget *page = m_inspectorTabs->widget(index);
+            if (!page)
+                continue;
+            if (QLayout *pageLayout = page->layout())
+                pageLayout->activate();
+            // The tab frame and the page's own margins sit outside the page's
+            // own minimum, so they are added once here.
+            contentWidth = std::max(contentWidth, page->minimumSizeHint().width() + 24);
+        }
+    }
     sideScroll->setMinimumWidth(std::max(240, contentWidth));
     sideScroll->setMaximumWidth(std::max(330, contentWidth + 40));
     m_inspectorPanel = sideScroll;
@@ -3013,12 +3155,15 @@ void MainWindow::rebuildUi()
         m_templateDialog->close();
         m_templateDialog = nullptr;
     }
-    // Everything the user was looking at survives the language change.
+    // Everything the user was looking at survives the language change, including
+    // which inspector tab was open and whether it was a manual choice.
     const QString selected = m_selectedId;
     const bool dirty = m_dirty;
     const int copies = m_copiesSpin ? m_copiesSpin->value() : 1;
     const double zoom = m_pageView ? m_pageView->viewZoom() : 1.0;
     const bool landscape = m_landscape;
+    const int inspectorTab = m_inspectorTabs ? m_inspectorTabs->currentIndex() : -1;
+    const bool inspectorTabChosen = m_inspectorTabChosen;
     if (!currentPaper().name.isEmpty())
         m_paperName = currentPaper().name;
 
@@ -3055,8 +3200,22 @@ void MainWindow::rebuildUi()
     m_pagesPanel = nullptr;
     m_noticeBar = nullptr;
     m_inspectorPanel = nullptr;
+    m_inspectorTabs = nullptr;
     m_layoutPanel = nullptr;
     m_photoPanel = nullptr;
+    m_slotPanel = nullptr;
+    m_pagePanel = nullptr;
+    m_pageSummaryPanel = nullptr;
+    m_pageLayoutHint = nullptr;
+    m_pageInfo = nullptr;
+    m_slotExplanation = nullptr;
+    m_slotDropHint = nullptr;
+    m_slotAddPhotosButton = nullptr;
+    m_slotRemoveButton = nullptr;
+    m_pageTemplatesButton = nullptr;
+    m_inspectorContext.clear();
+    m_inspectorTabChosen = false;
+    m_settingInspectorTab = false;
     m_printButton = nullptr;
     m_printerCombo = nullptr;
 
@@ -3070,6 +3229,14 @@ void MainWindow::rebuildUi()
     m_restoringProject = true;
     onDocumentChanged();
     m_restoringProject = wasRestoring;
+    // The rebuilt tabs start on the auto-selected page. Put the one the user was
+    // reading back, when it still has content; a manual choice survives the
+    // language change just like it survives a slider drag.
+    if (m_inspectorTabs && inspectorTab >= 0
+        && m_inspectorTabs->isTabEnabled(inspectorTab)) {
+        setInspectorTab(inspectorTab, false);
+        m_inspectorTabChosen = inspectorTabChosen;
+    }
     m_dirty = dirty;
     updateBusyOverlay();
 
@@ -4225,17 +4392,20 @@ void MainWindow::syncFrameControls()
     const Frame *frame =
         m_selectedId.isEmpty() ? nullptr : findFrame(document, m_selectedId);
     const bool hasSelection = frame != nullptr;
-    // The side column carries two inspectors: the page's layout panel (visible
-    // whenever the page has slots) and the selected photograph's. Neither hides
-    // the other, and a laid-out page with an empty selection is a real state,
-    // not a reason to hide the column.
+    // The selected empty section: a real state of its own, with its own tab. A
+    // selected photograph also names its cell, so only an empty cell counts.
     const Page *currentPage =
         document.pages.isEmpty() ? nullptr : &document.pages.at(document.currentPage);
-    const bool pageHasLayout = currentPage && currentPage->hasLayout();
-    if (m_photoPanel)
-        m_photoPanel->setVisible(hasSelection);
+    const QString emptySlotId =
+        (!hasSelection && currentPage && !m_selectedSlotId.isEmpty()
+         && SlotGeometry::slotById(*currentPage, m_selectedSlotId))
+            ? m_selectedSlotId
+            : QString();
     if (m_inspectorPanel)
-        m_inspectorPanel->setVisible(hasSelection || pageHasLayout || !document.pages.isEmpty());
+        m_inspectorPanel->setVisible(!document.pages.isEmpty());
+    updateInspectorTabs(hasSelection ? frame->id : QString(), emptySlotId);
+    if (m_slotRemoveButton)
+        m_slotRemoveButton->setEnabled(!emptySlotId.isEmpty());
     m_fitButton->setEnabled(hasSelection);
     m_fillButton->setEnabled(hasSelection);
     m_cropButton->setEnabled(hasSelection);
@@ -4251,7 +4421,6 @@ void MainWindow::syncFrameControls()
     m_strengthLabel->setEnabled(hasSelection && !original && !dither);
     m_upscaleCheck->setEnabled(hasSelection);
     m_originalButton->setEnabled(hasSelection);
-    m_advancedToggle->setEnabled(hasSelection);
     if (m_batchButton)
         m_batchButton->setEnabled(hasSelection);
     m_widthSpin->setEnabled(hasSelection);
@@ -4321,6 +4490,63 @@ void MainWindow::syncFrameControls()
     syncLayoutPanel();
 }
 
+void MainWindow::setInspectorTab(int index, bool byUser)
+{
+    if (!m_inspectorTabs || index < 0 || index >= m_inspectorTabs->count())
+        return;
+    if (!m_inspectorTabs->isTabEnabled(index))
+        return;
+    if (byUser)
+        m_inspectorTabChosen = true;
+    if (m_inspectorTabs->currentIndex() == index)
+        return;
+    // The signal below is what normally records a manual choice; this switch is
+    // the programmatic one, so it must not be mistaken for the user.
+    const bool wasSetting = m_settingInspectorTab;
+    m_settingInspectorTab = true;
+    m_inspectorTabs->setCurrentIndex(index);
+    m_settingInspectorTab = wasSetting;
+}
+
+void MainWindow::updateInspectorTabs(const QString &frameId, const QString &slotId)
+{
+    if (!m_inspectorTabs)
+        return;
+
+    const bool hasPhoto = !frameId.isEmpty();
+    const bool hasSection = !slotId.isEmpty();
+    // The context is the thing that changes the meaning of the panel: the same
+    // photograph after a slider edit is not a new context, another photograph or
+    // another empty section is. Without this a value change would drag the
+    // panel back from Lap while the user is reading it.
+    const QString context = hasPhoto
+        ? QStringLiteral("photo:") + frameId
+        : (hasSection ? QStringLiteral("section:") + slotId : QStringLiteral("page"));
+    const bool contextChanged = context != m_inspectorContext;
+    m_inspectorContext = context;
+
+    // Fotó and Hely are disabled without their selection, never removed: the
+    // indices stay fixed and the Lap tab is always reachable.
+    const int previous = m_inspectorTabs->currentIndex();
+    m_inspectorTabs->setTabEnabled(0, hasPhoto);
+    m_inspectorTabs->setTabEnabled(1, hasSection);
+    m_inspectorTabs->setTabEnabled(2, true);
+
+    if (contextChanged)
+        m_inspectorTabChosen = false;
+
+    int wanted = previous;
+    const bool previousUsable =
+        previous >= 0 && m_inspectorTabs->isTabEnabled(previous);
+    if (!previousUsable || (!m_inspectorTabChosen)) {
+        // The automatic page, in the order a document is worked on: the photo
+        // that was picked, the empty section that was picked, the sheet itself.
+        wanted = hasPhoto ? 0 : (hasSection ? 1 : 2);
+    }
+    if (wanted != m_inspectorTabs->currentIndex())
+        setInspectorTab(wanted, false);
+}
+
 QString MainWindow::layoutDisplayName(const Page &page) const
 {
     if (page.layoutId.isEmpty())
@@ -4341,6 +4567,10 @@ void MainWindow::syncLayoutPanel()
                                                 : &document.pages.at(document.currentPage);
     const bool hasLayout = page && page->hasLayout();
     m_layoutPanel->setVisible(hasLayout);
+    // A page without a layout shows its summary and the template entry instead
+    // of a column of controls that could only clamp to zero.
+    if (m_pageSummaryPanel)
+        m_pageSummaryPanel->setVisible(page && !hasLayout);
     if (!hasLayout)
         return;
 

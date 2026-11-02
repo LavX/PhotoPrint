@@ -17,6 +17,7 @@
 #include <QDragMoveEvent>
 #include <QDropEvent>
 #include <QFile>
+#include <QFontMetrics>
 #include <QImage>
 #include <QImageWriter>
 #include <QLabel>
@@ -28,6 +29,8 @@
 #include <QSettings>
 #include <QSlider>
 #include <QStatusBar>
+#include <QTabBar>
+#include <QTabWidget>
 #include <QTemporaryDir>
 #include <QTimer>
 #include <QUrl>
@@ -341,6 +344,17 @@ void commitSpin(QDoubleSpinBox *spin)
     QMetaObject::invokeMethod(spin, "editingFinished");
 }
 
+/// The window's contextual inspector: Fotó (0), Hely (1) and Lap (2).
+QTabWidget *inspectorTabs(MainWindow &window)
+{
+    return window.findChild<QTabWidget *>(QStringLiteral("inspectorTabs"));
+}
+
+bool insideTab(QWidget *tabPage, QWidget *widget)
+{
+    return tabPage && widget && tabPage != widget && tabPage->isAncestorOf(widget);
+}
+
 /// The undo action's text for one command: the stack prefixes its own title.
 bool undoLabelIs(MainWindow &window, const QString &label)
 {
@@ -522,6 +536,12 @@ private slots:
     void removeTheLastCellDissolvesTheLayout();
     void roundedCornersClipThePrint();
     void panelFitsALargerSystemFont();
+    void inspectorTabsFollowTheSelection();
+    void inspectorTabsHoldTheRightControls();
+    void inspectorTabsManualChoicePersists();
+    void inspectorTabsKeyboardSwitching();
+    void inspectorTabsSwitchWithoutDocumentChanges();
+    void inspectorTabsFitAt1280By720();
 
 private:
     QTemporaryDir m_settingsDir;
@@ -2905,11 +2925,18 @@ void TestSlotUi::layoutPanelSurvivesAnEmptySelection()
 
     auto *panel = window.findChild<QWidget *>(QStringLiteral("layoutPanel"));
     auto *photoPanel = window.findChild<QWidget *>(QStringLiteral("photoPanel"));
+    auto *tabs = inspectorTabs(window);
     QVERIFY(panel);
     QVERIFY(photoPanel);
-    // Nothing is selected, and the page's own inspector is still there.
+    QVERIFY(tabs);
+    // Nothing is selected, so the Lap tab is open and its layout panel is on
+    // screen. The Fotó tab has no content and is disabled rather than hidden.
+    QCOMPARE(tabs->currentIndex(), 2);
     QVERIFY2(panel->isVisible(), "the layout panel hid with no photograph selected");
     QVERIFY2(!photoPanel->isVisible(), "the photo inspector showed with nothing selected");
+    QVERIFY(!tabs->isTabEnabled(0));
+    QVERIFY(!tabs->isTabEnabled(1));
+    QVERIFY(tabs->isTabEnabled(2));
 
     auto *view = window.findChild<PageView *>();
     QVERIFY(view);
@@ -2918,12 +2945,16 @@ void TestSlotUi::layoutPanelSurvivesAnEmptySelection()
     QTest::mouseClick(view, Qt::LeftButton, Qt::NoModifier,
                       view->slotRect(slotId).center().toPoint());
     QCOMPARE(view->selectedFrame(), frameInSlot(page, slotId)->id);
-    // One frame selected: both inspectors coexist.
-    QVERIFY(panel->isVisible());
+    // One frame selected: the Fotó tab opens. The layout panel lives on Lap, so
+    // it is off screen, but the tab that holds it stays available.
+    QCOMPARE(tabs->currentIndex(), 0);
+    QVERIFY(!panel->isVisible());
+    QVERIFY(tabs->isTabEnabled(2));
     QVERIFY(photoPanel->isVisible());
 
     QTest::keyClick(view, Qt::Key_Escape);
     QVERIFY(view->selectedFrame().isEmpty());
+    QCOMPARE(tabs->currentIndex(), 2);
     QVERIFY(panel->isVisible());
     QVERIFY(!photoPanel->isVisible());
 
@@ -3540,6 +3571,14 @@ void TestSlotUi::removeTheLastCellDissolvesTheLayout()
     undo->trigger();
     QTest::qWait(50);
     QVERIFY(window.document() == before);
+    // The photograph kept the selection through remove and undo, so the Fotó tab
+    // is still the open one. Opening Lap again shows the restored layout panel.
+    auto *tabs = inspectorTabs(window);
+    QVERIFY(tabs);
+    QCOMPARE(tabs->currentIndex(), 0);
+    QVERIFY(tabs->isTabEnabled(2));
+    tabs->setCurrentIndex(2);
+    QTest::qWait(30);
     QVERIFY(panel->isVisible());
 }
 
@@ -3917,21 +3956,31 @@ void TestSlotUi::emptyCellSelectionShowsThePagePanel()
     auto *panel = window.findChild<QWidget *>(QStringLiteral("layoutPanel"));
     auto *photoPanel = window.findChild<QWidget *>(QStringLiteral("photoPanel"));
     auto *removeButton = window.findChild<QPushButton *>(QStringLiteral("removeSlotButton"));
+    auto *contextRemove = window.findChild<QPushButton *>(QStringLiteral("slotRemoveButton"));
+    auto *tabs = inspectorTabs(window);
     QVERIFY(view);
     QVERIFY(panel);
     QVERIFY(photoPanel);
     QVERIFY(removeButton);
+    QVERIFY(contextRemove);
+    QVERIFY(tabs);
 
-    // An empty cell is a first-class selection: the page panel is there, the
-    // photograph panel is not, and the cell can be deleted.
+    // An empty cell is a first-class selection: it opens the Hely tab, the
+    // photograph panel is gone, and the cell can be deleted from there.
     const Page page = window.document().pages.first();
     const QString emptyId = page.slotList.at(1).id;
     QTest::mouseClick(view, Qt::LeftButton, Qt::NoModifier,
                       view->slotRect(emptyId).center().toPoint());
     QCOMPARE(view->selectedSlot(), emptyId);
     QVERIFY(view->selectedFrame().isEmpty());
-    QVERIFY(panel->isVisible());
+    QCOMPARE(tabs->currentIndex(), 1);
+    QVERIFY(tabs->isTabEnabled(1));
+    QVERIFY(!tabs->isTabEnabled(0));
     QVERIFY(!photoPanel->isVisible());
+    // The layout panel is the Lap tab's content, so it is not on screen here;
+    // the remove action that needs this selection is.
+    QVERIFY(!panel->isVisible());
+    QVERIFY(contextRemove->isEnabled());
     QVERIFY(removeButton->isEnabled());
     QCOMPARE(window.findChild<QLabel *>(QStringLiteral("layoutCountLabel"))->text(),
              QStringLiteral("4 hely"));
@@ -4131,6 +4180,457 @@ void TestSlotUi::panelFitsALargerSystemFont()
                                 .arg(button->width())
                                 .arg(button->minimumSizeHint().width())));
     }
+}
+
+void TestSlotUi::inspectorTabsFollowTheSelection()
+{
+    // An empty page: there is no photograph and no section to show, so only the
+    // Lap tab has content and the other two are disabled.
+    MainWindow emptyWindow;
+    emptyWindow.resize(1280, 800);
+    emptyWindow.show();
+    QTest::qWait(80);
+    auto *emptyTabs = inspectorTabs(emptyWindow);
+    QVERIFY(emptyTabs);
+    QCOMPARE(emptyTabs->count(), 3);
+    QCOMPARE(emptyTabs->currentIndex(), 2);
+    QVERIFY(!emptyTabs->isTabEnabled(0));
+    QVERIFY(!emptyTabs->isTabEnabled(1));
+    QVERIFY(emptyTabs->isTabEnabled(2));
+
+    QTemporaryDir dir;
+    QVERIFY(dir.isValid());
+    const QString photo = makePhoto(dir.path(), QStringLiteral("tabs.png"), QColor(90, 140, 200));
+    QVERIFY(!photo.isEmpty());
+
+    MainWindow window;
+    window.resize(1280, 800);
+    window.show();
+    QTest::qWait(80);
+    QVERIFY(loadDocument(window, dir, documentWithLayout({photo}, 4),
+                         QStringLiteral("tabs.ppj")));
+    QVERIFY(window.waitForPreview(15000));
+
+    auto *tabs = inspectorTabs(window);
+    QVERIFY(tabs);
+    QCOMPARE(tabs->count(), 3);
+    QCOMPARE(tabs->tabText(0), QStringLiteral("Fotó"));
+    QCOMPARE(tabs->tabText(1), QStringLiteral("Hely"));
+    QCOMPARE(tabs->tabText(2), QStringLiteral("Lap"));
+    QCOMPARE(tabs->accessibleName(), QStringLiteral("Beállítások"));
+    QCOMPARE(tabs->widget(0)->accessibleName(), QStringLiteral("Fotó"));
+    QCOMPARE(tabs->widget(1)->accessibleName(), QStringLiteral("Hely"));
+    QCOMPARE(tabs->widget(2)->accessibleName(), QStringLiteral("Lap"));
+    // A laid-out page with nothing selected opens on Lap.
+    QCOMPARE(tabs->currentIndex(), 2);
+    QVERIFY(!tabs->isTabEnabled(0));
+    QVERIFY(!tabs->isTabEnabled(1));
+
+    auto *view = window.findChild<PageView *>();
+    QVERIFY(view);
+    const Page page = window.document().pages.first();
+    const QString filledSlot = page.slotList.at(0).id;
+    const QString emptySlot = page.slotList.at(1).id;
+
+    // A photograph opens Fotó; its own cell does not make Hely relevant.
+    QTest::mouseClick(view, Qt::LeftButton, Qt::NoModifier,
+                      view->slotRect(filledSlot).center().toPoint());
+    QCOMPARE(tabs->currentIndex(), 0);
+    QVERIFY(tabs->isTabEnabled(0));
+    QVERIFY(!tabs->isTabEnabled(1));
+
+    // An empty section opens Hely.
+    QTest::mouseClick(view, Qt::LeftButton, Qt::NoModifier,
+                      view->slotRect(emptySlot).center().toPoint());
+    QCOMPARE(tabs->currentIndex(), 1);
+    QVERIFY(!tabs->isTabEnabled(0));
+    QVERIFY(tabs->isTabEnabled(1));
+
+    // Nothing selected opens Lap.
+    QTest::keyClick(view, Qt::Key_Escape);
+    QCOMPARE(tabs->currentIndex(), 2);
+    QVERIFY(!tabs->isTabEnabled(0));
+    QVERIFY(!tabs->isTabEnabled(1));
+
+    // A free canvas is the same story: Lap until a photo is picked, and no Hely
+    // tab at all because a free page has no sections.
+    QTemporaryDir freeDir;
+    QVERIFY(freeDir.isValid());
+    MainWindow freeWindow;
+    freeWindow.resize(1280, 800);
+    freeWindow.show();
+    QTest::qWait(80);
+    QVERIFY(loadDocument(freeWindow, freeDir, documentWithFreeFrames({photo}),
+                         QStringLiteral("tabs-free.ppj")));
+    QVERIFY(freeWindow.waitForPreview(15000));
+    auto *freeTabs = inspectorTabs(freeWindow);
+    QVERIFY(freeTabs);
+    QCOMPARE(freeTabs->currentIndex(), 2);
+    QVERIFY(!freeTabs->isTabEnabled(0));
+    QVERIFY(!freeTabs->isTabEnabled(1));
+    // The no-layout Lap page is a summary and the template entry, not a stack of
+    // layout controls that could only clamp to zero.
+    auto *layoutPanel = freeWindow.findChild<QWidget *>(QStringLiteral("layoutPanel"));
+    auto *summary = freeWindow.findChild<QWidget *>(QStringLiteral("pageSummaryPanel"));
+    auto *hint = freeWindow.findChild<QLabel *>(QStringLiteral("pageLayoutHint"));
+    auto *templates = freeWindow.findChild<QPushButton *>(QStringLiteral("pageTemplatesButton"));
+    QVERIFY(layoutPanel);
+    QVERIFY(summary);
+    QVERIFY(hint);
+    QVERIFY(templates);
+    QVERIFY(!layoutPanel->isVisible());
+    QVERIFY(summary->isVisible());
+    QVERIFY(hint->isVisible());
+    QVERIFY(templates->isVisible());
+
+    QVERIFY(QMetaObject::invokeMethod(&freeWindow, "selectFrame", Qt::DirectConnection,
+                                      Q_ARG(QString, QStringLiteral("frame-free-0")),
+                                      Q_ARG(bool, false)));
+    QTest::qWait(30);
+    QCOMPARE(freeTabs->currentIndex(), 0);
+    QVERIFY(freeTabs->isTabEnabled(0));
+}
+
+void TestSlotUi::inspectorTabsHoldTheRightControls()
+{
+    QTemporaryDir dir;
+    QVERIFY(dir.isValid());
+    const QString photo = makePhoto(dir.path(), QStringLiteral("tabs-controls.png"),
+                                    QColor(70, 150, 110));
+    QVERIFY(!photo.isEmpty());
+
+    MainWindow window;
+    window.resize(1280, 800);
+    window.show();
+    QTest::qWait(80);
+    QVERIFY(loadDocument(window, dir, documentWithLayout({photo}, 4),
+                         QStringLiteral("tabs-controls.ppj")));
+    QVERIFY(window.waitForPreview(15000));
+
+    auto *tabs = inspectorTabs(window);
+    auto *view = window.findChild<PageView *>();
+    QVERIFY(tabs);
+    QVERIFY(view);
+    QWidget *photoTab = tabs->widget(0);
+    QWidget *slotTab = tabs->widget(1);
+    QWidget *pageTab = tabs->widget(2);
+    QVERIFY(photoTab);
+    QVERIFY(slotTab);
+    QVERIFY(pageTab);
+
+    const Page page = window.document().pages.first();
+    QTest::mouseClick(view, Qt::LeftButton, Qt::NoModifier,
+                      view->slotRect(page.slotList.at(0).id).center().toPoint());
+    QCOMPARE(tabs->currentIndex(), 0);
+
+    // Everything a photograph is edited with is in Fotó.
+    for (const char *name : {"fitButton", "fillButton", "cropButton", "deleteButton",
+                             "forwardButton", "backwardButton", "autoToneSwitch",
+                             "brightnessSlider", "originalButton", "effectButton",
+                             "effectStrength", "upscaleCheck", "imageRotationSlider",
+                             "imageRotateLeft", "imageRotateRight", "imageRotationReset",
+                             "widthSpin", "heightSpin", "angleSpin", "replaceInSlotButton",
+                             "trialSheetButton", "batchCopiesButton"}) {
+        auto *widget = window.findChild<QWidget *>(QString::fromLatin1(name));
+        QVERIFY2(widget, name);
+        QVERIFY2(insideTab(photoTab, widget),
+                 qPrintable(QStringLiteral("%1 is not in the Fotó tab").arg(QString::fromLatin1(name))));
+        QVERIFY2(!insideTab(pageTab, widget),
+                 qPrintable(QStringLiteral("%1 leaked into the Lap tab").arg(QString::fromLatin1(name))));
+        QVERIFY2(!insideTab(slotTab, widget),
+                 qPrintable(QStringLiteral("%1 leaked into the Hely tab").arg(QString::fromLatin1(name))));
+    }
+    // No layout or page control is duplicated into Fotó.
+    for (const char *name : {"layoutNameLabel", "layoutCountLabel", "marginSpin", "gutterSpin",
+                             "radiusSpin", "addSlotButton", "removeSlotButton",
+                             "dissolveLayoutButton", "layoutTemplatesButton",
+                             "alignPhotosButton", "cutGuidesCombo", "borderlessCombo",
+                             "slotRemoveButton", "slotAddPhotosButton"}) {
+        auto *widget = window.findChild<QWidget *>(QString::fromLatin1(name));
+        QVERIFY2(widget, name);
+        QVERIFY2(!insideTab(photoTab, widget),
+                 qPrintable(QStringLiteral("%1 is in the Fotó tab").arg(QString::fromLatin1(name))));
+    }
+
+    // Layout controls are Lap's, not the photo's.
+    for (const char *name : {"layoutNameLabel", "layoutCountLabel", "marginSpin", "gutterSpin",
+                             "radiusSpin", "addSlotButton", "removeSlotButton",
+                             "dissolveLayoutButton", "layoutTemplatesButton",
+                             "alignPhotosButton", "cutGuidesCombo", "borderlessCombo"}) {
+        auto *widget = window.findChild<QWidget *>(QString::fromLatin1(name));
+        QVERIFY2(insideTab(pageTab, widget),
+                 qPrintable(QStringLiteral("%1 is not in the Lap tab").arg(QString::fromLatin1(name))));
+    }
+    // Section actions are Hely's.
+    for (const char *name : {"slotExplanation", "slotDropHint", "slotAddPhotosButton",
+                             "slotRemoveButton"}) {
+        auto *widget = window.findChild<QWidget *>(QString::fromLatin1(name));
+        QVERIFY2(insideTab(slotTab, widget),
+                 qPrintable(QStringLiteral("%1 is not in the Hely tab").arg(QString::fromLatin1(name))));
+    }
+
+    // Only the active tab is on screen, so the old long stack is gone.
+    QVERIFY(photoTab->isVisible());
+    QVERIFY(!slotTab->isVisible());
+    QVERIFY(!pageTab->isVisible());
+    QVERIFY(!window.findChild<QWidget *>(QStringLiteral("layoutPanel"))->isVisible());
+    QVERIFY(!window.findChild<QWidget *>(QStringLiteral("pageToolsPanel"))->isVisible());
+
+    QTest::mouseClick(view, Qt::LeftButton, Qt::NoModifier,
+                      view->slotRect(page.slotList.at(1).id).center().toPoint());
+    QCOMPARE(tabs->currentIndex(), 1);
+    QVERIFY(slotTab->isVisible());
+    QVERIFY(!photoTab->isVisible());
+    QVERIFY(window.findChild<QPushButton *>(QStringLiteral("slotRemoveButton"))->isEnabled());
+    QVERIFY(!window.findChild<QSlider *>(QStringLiteral("brightnessSlider"))->isVisible());
+}
+
+void TestSlotUi::inspectorTabsManualChoicePersists()
+{
+    QTemporaryDir dir;
+    QVERIFY(dir.isValid());
+    const QString photoA = makePhoto(dir.path(), QStringLiteral("manual-a.png"), QColor(180, 90, 70));
+    const QString photoB = makePhoto(dir.path(), QStringLiteral("manual-b.png"), QColor(70, 90, 180));
+    QVERIFY(!photoA.isEmpty());
+    QVERIFY(!photoB.isEmpty());
+
+    MainWindow window;
+    window.resize(1280, 800);
+    window.show();
+    QTest::qWait(80);
+    QVERIFY(loadDocument(window, dir, documentWithLayout({photoA, photoB}, 4),
+                         QStringLiteral("tabs-manual.ppj")));
+    QVERIFY(window.waitForPreview(15000));
+
+    auto *tabs = inspectorTabs(window);
+    auto *view = window.findChild<PageView *>();
+    QVERIFY(tabs);
+    QVERIFY(view);
+    const Page page = window.document().pages.first();
+    const QString slotA = page.slotList.at(0).id;
+    const QString slotB = page.slotList.at(1).id;
+    const QString frameA = frameInSlot(page, slotA)->id;
+
+    QTest::mouseClick(view, Qt::LeftButton, Qt::NoModifier,
+                      view->slotRect(slotA).center().toPoint());
+    QCOMPARE(tabs->currentIndex(), 0);
+
+    // A click on the Lap tab is a deliberate choice. It survives the same
+    // selection arriving again and a document change that keeps it.
+    QTest::mouseClick(tabs->tabBar(), Qt::LeftButton, Qt::NoModifier,
+                      tabs->tabBar()->tabRect(2).center());
+    QCOMPARE(tabs->currentIndex(), 2);
+
+    QVERIFY(QMetaObject::invokeMethod(&window, "selectFrame", Qt::DirectConnection,
+                                      Q_ARG(QString, frameA), Q_ARG(bool, false)));
+    QTest::qWait(20);
+    QCOMPARE(tabs->currentIndex(), 2);
+
+    // A document change that keeps the same photograph is still the same
+    // context: the open Lap tab must not be pulled back to Fotó.
+    QVERIFY(QMetaObject::invokeMethod(&window, "rotateImageBy", Qt::DirectConnection,
+                                      Q_ARG(double, 90.0)));
+    QTest::qWait(30);
+    QCOMPARE(tabs->currentIndex(), 2);
+
+    QTest::mouseClick(view, Qt::LeftButton, Qt::NoModifier,
+                      view->slotRect(slotA).center().toPoint());
+    QCOMPARE(tabs->currentIndex(), 2);
+
+    // A different selection is a new context: the automatic tab takes over.
+    QTest::mouseClick(view, Qt::LeftButton, Qt::NoModifier,
+                      view->slotRect(slotB).center().toPoint());
+    QCOMPARE(tabs->currentIndex(), 0);
+    QCOMPARE(view->selectedFrame(), frameInSlot(page, slotB)->id);
+
+    // The same rule applies to a section: a manual Lap choice holds, and the
+    // next different selection opens its own tab again.
+    QTest::mouseClick(tabs->tabBar(), Qt::LeftButton, Qt::NoModifier,
+                      tabs->tabBar()->tabRect(2).center());
+    QCOMPARE(tabs->currentIndex(), 2);
+    QTest::mouseClick(view, Qt::LeftButton, Qt::NoModifier,
+                      view->slotRect(page.slotList.at(2).id).center().toPoint());
+    QCOMPARE(tabs->currentIndex(), 1);
+}
+
+void TestSlotUi::inspectorTabsKeyboardSwitching()
+{
+    QTemporaryDir dir;
+    QVERIFY(dir.isValid());
+    const QString photo = makePhoto(dir.path(), QStringLiteral("tabs-keys.png"), QColor(140, 110, 60));
+    QVERIFY(!photo.isEmpty());
+
+    MainWindow window;
+    window.resize(1280, 800);
+    window.show();
+    QTest::qWait(80);
+    QVERIFY(loadDocument(window, dir, documentWithLayout({photo}, 4),
+                         QStringLiteral("tabs-keys.ppj")));
+    QVERIFY(window.waitForPreview(15000));
+
+    auto *tabs = inspectorTabs(window);
+    auto *view = window.findChild<PageView *>();
+    QVERIFY(tabs);
+    QVERIFY(view);
+    QVERIFY2(tabs->focusPolicy() != Qt::NoFocus, "the tab widget is not in the tab order");
+    QVERIFY2(tabs->tabBar()->focusPolicy() != Qt::NoFocus,
+             "the tab bar cannot take keyboard focus");
+
+    const Page page = window.document().pages.first();
+    QTest::mouseClick(view, Qt::LeftButton, Qt::NoModifier,
+                      view->slotRect(page.slotList.at(0).id).center().toPoint());
+    QCOMPARE(tabs->currentIndex(), 0);
+
+    // Ctrl+Tab and Ctrl+Shift+Tab walk the enabled tabs. Hely is disabled here,
+    // so the pair swaps Fotó and Lap.
+    QTest::keyClick(tabs, Qt::Key_Tab, Qt::ControlModifier);
+    QCOMPARE(tabs->currentIndex(), 2);
+    QTest::keyClick(tabs, Qt::Key_Backtab, Qt::ControlModifier);
+    QCOMPARE(tabs->currentIndex(), 0);
+
+    // Arrow keys do the same while the tab bar has focus.
+    tabs->tabBar()->setFocus();
+    QTest::keyClick(tabs->tabBar(), Qt::Key_Right);
+    QCOMPARE(tabs->currentIndex(), 2);
+    QTest::keyClick(tabs->tabBar(), Qt::Key_Left);
+    QCOMPARE(tabs->currentIndex(), 0);
+    QVERIFY(tabs->currentWidget() == tabs->widget(0));
+    QVERIFY(tabs->widget(0)->isVisible());
+
+    // The controls of the open page follow the tab strip in the focus chain, so
+    // Tab from the tab bar enters the panel instead of skipping over it.
+    bool reachedPage = false;
+    QWidget *walker = tabs->tabBar();
+    for (int step = 0; step < 200; ++step) {
+        walker = walker->nextInFocusChain();
+        if (!walker || walker == tabs->tabBar())
+            break;
+        if ((walker->focusPolicy() & Qt::TabFocus)
+            && tabs->currentWidget()->isAncestorOf(walker)) {
+            reachedPage = true;
+            break;
+        }
+        if (walker != tabs && !tabs->isAncestorOf(walker))
+            break;
+    }
+    QVERIFY2(reachedPage, "Tab from the tab strip never reaches the open page");
+}
+
+void TestSlotUi::inspectorTabsSwitchWithoutDocumentChanges()
+{
+    QTemporaryDir dir;
+    QVERIFY(dir.isValid());
+    const QString photo = makePhoto(dir.path(), QStringLiteral("tabs-doc.png"), QColor(60, 120, 160));
+    QVERIFY(!photo.isEmpty());
+
+    MainWindow window;
+    window.resize(1280, 800);
+    window.show();
+    QTest::qWait(80);
+    QVERIFY(loadDocument(window, dir, documentWithLayout({photo}, 4),
+                         QStringLiteral("tabs-doc.ppj")));
+    QVERIFY(window.waitForPreview(15000));
+
+    auto *tabs = inspectorTabs(window);
+    auto *view = window.findChild<PageView *>();
+    QVERIFY(tabs);
+    QVERIFY(view);
+    const Page page = window.document().pages.first();
+    QTest::mouseClick(view, Qt::LeftButton, Qt::NoModifier,
+                      view->slotRect(page.slotList.at(0).id).center().toPoint());
+    QVERIFY(window.waitForPreview(15000));
+
+    const DocumentSnapshot before = window.document();
+    const int undoIndex = window.undoStackForTest()->index();
+    const int undoCount = window.undoStackForTest()->count();
+
+    QTest::mouseClick(tabs->tabBar(), Qt::LeftButton, Qt::NoModifier,
+                      tabs->tabBar()->tabRect(2).center());
+    QTest::mouseClick(tabs->tabBar(), Qt::LeftButton, Qt::NoModifier,
+                      tabs->tabBar()->tabRect(0).center());
+    QTest::mouseClick(view, Qt::LeftButton, Qt::NoModifier,
+                      view->slotRect(page.slotList.at(1).id).center().toPoint());
+    QTest::mouseClick(tabs->tabBar(), Qt::LeftButton, Qt::NoModifier,
+                      tabs->tabBar()->tabRect(2).center());
+    QTest::qWait(30);
+
+    QVERIFY(window.document() == before);
+    QCOMPARE(window.undoStackForTest()->index(), undoIndex);
+    QCOMPARE(window.undoStackForTest()->count(), undoCount);
+}
+
+void TestSlotUi::inspectorTabsFitAt1280By720()
+{
+    QTemporaryDir dir;
+    QVERIFY(dir.isValid());
+    const QString photo = makePhoto(dir.path(), QStringLiteral("tabs-small.png"), QColor(100, 80, 170));
+    QVERIFY(!photo.isEmpty());
+
+    // The interface contract is a 1280 x 720 window at a 1.35x system font: the
+    // tab labels, the column and the buttons must not clip, and the tab bar must
+    // not squeeze the canvas away.
+    FontScale scale(1.35);
+    MainWindow window;
+    window.resize(1280, 720);
+    window.show();
+    QTest::qWait(120);
+    QVERIFY(loadDocument(window, dir, documentWithLayout({photo}, 4),
+                         QStringLiteral("tabs-small.ppj")));
+    QVERIFY(window.waitForPreview(15000));
+    QTest::qWait(120);
+
+    auto *tabs = inspectorTabs(window);
+    auto *view = window.findChild<PageView *>();
+    auto *scroll = window.findChild<QScrollArea *>();
+    QVERIFY(tabs);
+    QVERIFY(view);
+    QVERIFY(scroll);
+    QVERIFY2(view->width() >= 320,
+             qPrintable(QStringLiteral("the canvas is only %1 px wide").arg(view->width())));
+
+    const auto checkTab = [&](int index) {
+        QVERIFY(tabs->isTabEnabled(index));
+        tabs->setCurrentIndex(index);
+        QTest::qWait(40);
+        QCOMPARE(tabs->currentIndex(), index);
+        // Every tab label fits its own tab button.
+        const QFontMetrics metrics(tabs->tabBar()->font());
+        for (int i = 0; i < tabs->count(); ++i) {
+            const QString text = tabs->tabText(i);
+            QVERIFY2(tabs->tabBar()->tabRect(i).width() >= metrics.horizontalAdvance(text),
+                     qPrintable(QStringLiteral("tab %1 (%2) is %3 px wide and needs %4")
+                                    .arg(i)
+                                    .arg(text)
+                                    .arg(tabs->tabBar()->tabRect(i).width())
+                                    .arg(metrics.horizontalAdvance(text))));
+        }
+        // The side column is never narrower than its own content.
+        QVERIFY2(scroll->viewport()->width() >= scroll->widget()->minimumSizeHint().width(),
+                 qPrintable(QStringLiteral("the side column needs %1 px and got %2")
+                                .arg(scroll->widget()->minimumSizeHint().width())
+                                .arg(scroll->viewport()->width())));
+        // No visible button on the open page clips its own label.
+        QWidget *page = tabs->widget(index);
+        for (QPushButton *button : page->findChildren<QPushButton *>()) {
+            if (!button->isVisible())
+                continue;
+            QVERIFY2(button->width() >= button->minimumSizeHint().width(),
+                     qPrintable(QStringLiteral("%1 is %2 px wide and needs %3")
+                                    .arg(button->objectName())
+                                    .arg(button->width())
+                                    .arg(button->minimumSizeHint().width())));
+        }
+    };
+
+    // Lap with a layout, nothing selected.
+    checkTab(2);
+    const Page page = window.document().pages.first();
+    QTest::mouseClick(view, Qt::LeftButton, Qt::NoModifier,
+                      view->slotRect(page.slotList.at(0).id).center().toPoint());
+    checkTab(0);
+    QTest::mouseClick(view, Qt::LeftButton, Qt::NoModifier,
+                      view->slotRect(page.slotList.at(1).id).center().toPoint());
+    checkTab(1);
 }
 
 QTEST_MAIN(TestSlotUi)

@@ -250,7 +250,9 @@ void TestDailyFlow::smallWindowKeepsPrintVisible()
     for (QPushButton *button : window.findChildren<QPushButton *>()) {
         if (button->text() == QStringLiteral("Nyomtatás"))
             printButton = button;
-        if (button->text() == QStringLiteral("Fotók hozzáadása"))
+        // The Hely tab has an add-photos entry of its own; this is the library
+        // button, which must stay on screen whatever the inspector is showing.
+        if (button->objectName() == QStringLiteral("addButton"))
             addButton = button;
     }
     QVERIFY(printButton);

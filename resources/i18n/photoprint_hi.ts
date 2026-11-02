@@ -1629,5 +1629,17 @@
         <source>Levágva</source>
         <translation>कटा हुआ</translation>
     </message>
+    <message>
+        <source>Fotó</source>
+        <translation>फ़ोटो</translation>
+    </message>
+    <message>
+        <source>Beállítások</source>
+        <translation>सेटिंग्स</translation>
+    </message>
+    <message>
+        <source>Az üres hely a lap egy kivágott része; ide egy fotó kerül.</source>
+        <translation>खाली स्थान पृष्ठ का कटा हुआ भाग है; यहाँ एक फ़ोटो आती है।</translation>
+    </message>
 </context>
 </TS>

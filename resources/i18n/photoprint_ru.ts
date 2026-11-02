@@ -1643,5 +1643,17 @@
         <source>Levágva</source>
         <translation>Обрезано</translation>
     </message>
+    <message>
+        <source>Fotó</source>
+        <translation>Фото</translation>
+    </message>
+    <message>
+        <source>Beállítások</source>
+        <translation>Настройки</translation>
+    </message>
+    <message>
+        <source>Az üres hely a lap egy kivágott része; ide egy fotó kerül.</source>
+        <translation>Пустое место: вырез на странице, сюда помещается фото.</translation>
+    </message>
 </context>
 </TS>

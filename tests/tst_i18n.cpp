@@ -590,6 +590,11 @@ void TestI18n::everyCatalogueTranslatesTheSlotUiMessages()
              QStringLiteral("A többi fotó új lapra került."),
              QStringLiteral("Csere"),
              QStringLiteral("Elrendezés"),
+             // The contextual inspector: its tabs, the section explanation and
+             // the accessible name of the whole tab strip.
+             QStringLiteral("Fotó"),
+             QStringLiteral("Beállítások"),
+             QStringLiteral("Az üres hely a lap egy kivágott része; ide egy fotó kerül."),
              QStringLiteral("Saját elrendezés"),
              QStringLiteral("Külső margó"),
              QStringLiteral("Automatikus"),

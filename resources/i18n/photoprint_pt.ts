@@ -1629,5 +1629,17 @@
         <source>Levágva</source>
         <translation>Cortada</translation>
     </message>
+    <message>
+        <source>Fotó</source>
+        <translation>Foto</translation>
+    </message>
+    <message>
+        <source>Beállítások</source>
+        <translation>Definições</translation>
+    </message>
+    <message>
+        <source>Az üres hely a lap egy kivágott része; ide egy fotó kerül.</source>
+        <translation>Uma posição vazia é um recorte da página; aqui vai uma foto.</translation>
+    </message>
 </context>
 </TS>

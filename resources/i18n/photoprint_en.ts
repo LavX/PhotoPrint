@@ -1629,5 +1629,17 @@
         <source>Levágva</source>
         <translation>Clipped</translation>
     </message>
+    <message>
+        <source>Fotó</source>
+        <translation>Photo</translation>
+    </message>
+    <message>
+        <source>Beállítások</source>
+        <translation>Settings</translation>
+    </message>
+    <message>
+        <source>Az üres hely a lap egy kivágott része; ide egy fotó kerül.</source>
+        <translation>An empty section is a cut-out on the page; a photo goes here.</translation>
+    </message>
 </context>
 </TS>

@@ -23,6 +23,7 @@
 #include <QScrollBar>
 #include <QSlider>
 #include <QSettings>
+#include <QTabWidget>
 #include <QTimer>
 #include <QtTest>
 
@@ -128,6 +129,7 @@ private slots:
     void captureSlotInteraction();
     void captureLayoutPanel();
     void captureSectionComposition();
+    void captureInspectorTabs();
 
 private:
     QTemporaryDir m_settingsDir;
@@ -570,6 +572,90 @@ void TestUiScreens::captureSectionComposition()
     }
     QVERIFY(window.grab().save(evidenceDir() +
                                QStringLiteral("/ui-section-photo-controls.png")));
+}
+
+void TestUiScreens::captureInspectorTabs()
+{
+    QTemporaryDir dir;
+    QVERIFY(dir.isValid());
+    const QString photo =
+        makePhoto(dir.path(), QStringLiteral("tab-photo.png"), QColor(70, 140, 180), QSize(900, 600));
+    QVERIFY(!photo.isEmpty());
+
+    MainWindow window;
+    window.resize(1280, 800);
+    window.show();
+    QTest::qWait(120);
+    QVERIFY(loadDocument(window, dir, fourEmptySlots()));
+    QVERIFY(QMetaObject::invokeMethod(&window, "addDroppedFiles", Qt::DirectConnection,
+                                      Q_ARG(QStringList, QStringList{photo})));
+    QVERIFY(window.waitForPreview(15000));
+    QTest::qWait(250);
+
+    auto *tabs = window.findChild<QTabWidget *>(QStringLiteral("inspectorTabs"));
+    auto *view = window.findChild<PageView *>();
+    QVERIFY(tabs);
+    QVERIFY(view);
+    const Page page = window.document().pages.first();
+    QCOMPARE(page.slotList.size(), 4);
+
+    // Fotó: one photograph selected. Only its own controls, in one column.
+    QTest::mouseClick(view, Qt::LeftButton, Qt::NoModifier,
+                      view->slotRect(page.slotList.at(0).id).center().toPoint());
+    QCOMPARE(tabs->currentIndex(), 0);
+    QTest::qWait(150);
+    QVERIFY(window.grab().save(evidenceDir() + QStringLiteral("/ui-inspector-photo.png")));
+
+    // Hely: an empty section selected. The explanation, the drop hint, the two
+    // actions that need it, and nothing else.
+    QTest::mouseClick(view, Qt::LeftButton, Qt::NoModifier,
+                      view->slotRect(page.slotList.at(1).id).center().toPoint());
+    QCOMPARE(tabs->currentIndex(), 1);
+    QTest::qWait(150);
+    QVERIFY(window.grab().save(evidenceDir() + QStringLiteral("/ui-inspector-slot.png")));
+
+    // Lap: nothing selected. The layout and the page tools, no photo controls.
+    QTest::keyClick(view, Qt::Key_Escape);
+    QCOMPARE(tabs->currentIndex(), 2);
+    QTest::qWait(150);
+    QVERIFY(window.grab().save(evidenceDir() + QStringLiteral("/ui-inspector-page.png")));
+
+    // The same three tabs at a 1.35x system font in a 1280 x 720 window: the
+    // contract size where the labels, the column and the canvas must not clip.
+    {
+        const QFont saved = QApplication::font();
+        QFont large = saved;
+        if (large.pointSizeF() > 0.0)
+            large.setPointSizeF(saved.pointSizeF() * 1.35);
+        else
+            large.setPixelSize(int(std::lround(saved.pixelSize() * 1.35)));
+        QApplication::setFont(large);
+        MainWindow largeWindow;
+        largeWindow.resize(1280, 720);
+        largeWindow.show();
+        QTest::qWait(150);
+        QVERIFY(loadDocument(largeWindow, dir, fourEmptySlots()));
+        QVERIFY(QMetaObject::invokeMethod(&largeWindow, "addDroppedFiles", Qt::DirectConnection,
+                                          Q_ARG(QStringList, QStringList{photo})));
+        QVERIFY(largeWindow.waitForPreview(15000));
+        QTest::qWait(250);
+        auto *largeTabs = largeWindow.findChild<QTabWidget *>(QStringLiteral("inspectorTabs"));
+        auto *largeView = largeWindow.findChild<PageView *>();
+        QVERIFY(largeTabs);
+        QVERIFY(largeView);
+        const Page largePage = largeWindow.document().pages.first();
+        QTest::mouseClick(largeView, Qt::LeftButton, Qt::NoModifier,
+                          largeView->slotRect(largePage.slotList.at(0).id).center().toPoint());
+        QCOMPARE(largeTabs->currentIndex(), 0);
+        QTest::qWait(150);
+        QVERIFY(largeWindow.grab().save(
+            evidenceDir() + QStringLiteral("/ui-inspector-photo-large-font.png")));
+        QTest::keyClick(largeView, Qt::Key_Escape);
+        QTest::qWait(150);
+        QVERIFY(largeWindow.grab().save(
+            evidenceDir() + QStringLiteral("/ui-inspector-page-large-font.png")));
+        QApplication::setFont(saved);
+    }
 }
 
 QTEST_MAIN(TestUiScreens)

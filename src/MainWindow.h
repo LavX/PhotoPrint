@@ -41,6 +41,7 @@ class QMenu;
 class QPushButton;
 class QSlider;
 class QSpinBox;
+class QTabWidget;
 class QTimer;
 
 namespace pp {
@@ -519,6 +520,16 @@ private:
     void applyEffectChoice(const QString &key, int version, int strength);
     void syncFrameControls();
     void syncLayoutPanel();
+    /// The contextual inspector: Fotó, Hely and Lap. Only the selected photo's
+    /// tab, only the selected empty section's tab, otherwise Lap. The selection
+    /// context decides; a manual tab choice survives until that context changes,
+    /// so a slider never flips the panel under the pointer. `frameId` is the
+    /// selected photograph, `slotId` the selected empty section (both may be
+    /// empty). Tabs without content are disabled, Lap never is.
+    void updateInspectorTabs(const QString &frameId, const QString &slotId);
+    /// Switches the inspector tab. `byUser` records a manual choice; a
+    /// programmatic switch never counts as one.
+    void setInspectorTab(int index, bool byUser);
     /// Writes the photograph's own rotation into the slider and its readout,
     /// skipping the slider while the user is dragging it.
     void syncImageRotationControls(const Frame &frame);
@@ -628,13 +639,12 @@ private:
     QComboBox *m_borderlessCombo = nullptr;
     QLabel *m_borderlessHint = nullptr;
     QPushButton *m_backwardButton = nullptr;
-    QPushButton *m_advancedToggle = nullptr;
     QDoubleSpinBox *m_widthSpin = nullptr;
     QDoubleSpinBox *m_heightSpin = nullptr;
     QDoubleSpinBox *m_angleSpin = nullptr;
-    /// The photograph's own rotation inside its frame, kept compact for the
-    /// contextual tabs that come next. The frame angle is the separate spin
-    /// above; this one turns the picture, not the window.
+    /// The photograph's own rotation inside its frame, kept compact inside the
+    /// Fotó tab. The frame angle is the separate spin above; this one turns the
+    /// picture, not the window.
     QSlider *m_imageRotationSlider = nullptr;
     QLabel *m_imageRotationValue = nullptr;
     QPushButton *m_imageRotateLeftButton = nullptr;
@@ -645,10 +655,31 @@ private:
     /// Says that part of the photograph is outside its cell and is clipped.
     QLabel *m_clippedHint = nullptr;
     /// The page's own inspector: visible whenever the page has slots, even with
-    /// no photograph selected. The selected-photo sections live in
-    /// m_photoPanel, so the two can coexist without hiding each other.
+    /// no photograph selected. It is the content of the Lap tab, so it cannot
+    /// coexist with the selected-photograph sections any more.
     QWidget *m_layoutPanel = nullptr;
     QWidget *m_photoPanel = nullptr;
+    /// The contextual inspector. Three stable indices: Fotó (0), Hely (1) and
+    /// Lap (2). The selection decides which one opens; a tab with no content is
+    /// disabled instead of removed, so the indices and the tab order stay put.
+    QTabWidget *m_inspectorTabs = nullptr;
+    QWidget *m_slotPanel = nullptr;
+    QWidget *m_pagePanel = nullptr;
+    /// The Lap tab's no-layout state: the page summary and the template entry
+    /// instead of a stack of controls that would only clamp to zero.
+    QWidget *m_pageSummaryPanel = nullptr;
+    QLabel *m_pageLayoutHint = nullptr;
+    QLabel *m_slotExplanation = nullptr;
+    QLabel *m_slotDropHint = nullptr;
+    QPushButton *m_slotAddPhotosButton = nullptr;
+    QPushButton *m_slotRemoveButton = nullptr;
+    QPushButton *m_pageTemplatesButton = nullptr;
+    /// What the inspector was showing last: the selected photograph, the
+    /// selected empty section, or nothing. A change re-opens the matching tab;
+    /// a manual choice holds until then.
+    QString m_inspectorContext;
+    bool m_inspectorTabChosen = false;
+    bool m_settingInspectorTab = false;
     QLabel *m_layoutNameLabel = nullptr;
     QLabel *m_layoutCountLabel = nullptr;
     QDoubleSpinBox *m_marginSpin = nullptr;
