@@ -294,13 +294,16 @@ private slots:
     void persistenceRoundTrip();
     void layoutFreeProjectStaysByteIdentical();
     void oldProjectsLoadWithoutALayout();
+    void legacyMatMigratesToGap();
     void loaderSanitisesBrokenLayouts();
 
     void oneEditPerAction();
     void validatorRefusesBrokenSlotEdits();
 
-    void emptySlotMatRenders();
-    void borderColourIsLinearNotSrgb();
+    void emptySlotPrintsPaper();
+    void photoFillsItsCellWithoutAMat();
+    void gapIsTheWhitePaperBetweenPhotos();
+    void gapChangesSpacingNotThePhotoInset();
     void roundedCornersClipThePhoto();
 
     void placePhotoOnEmptySlot();
@@ -326,8 +329,7 @@ private slots:
 
     void repairSanitisesTheStyle();
     void removeLastSlotClearsDanglingIds();
-    void translucentBorderBlendsWithPaper();
-    void layoutPageWithoutFramesPrintsMats();
+    void layoutPageWithoutFramesPrintsPaper();
     void layoutFreeSaveBytesAreStable();
     void nanUnitRectIsDropped();
     void twelveSlotsRoundTrip();
@@ -476,34 +478,20 @@ void TestSlotLayout::styleAndGeometryClamps()
     SlotStyle style;
     style.marginMm = 500.0;
     style.gutterMm = 500.0;
-    style.borderMm = 500.0;
     style.cornerRadiusMm = 500.0;
-    style.borderColor = QColor(); // invalid
     const SlotStyle sane = SlotGeometry::sanitiseStyle(style);
     QCOMPARE(sane.marginMm.value_or(-1.0), SlotGeometry::kMaxMarginMm);
     QCOMPARE(sane.gutterMm.value_or(-1.0), SlotGeometry::kMaxGutterMm);
-    QCOMPARE(sane.borderMm, SlotGeometry::kMaxBorderMm);
     QCOMPARE(sane.cornerRadiusMm, SlotGeometry::kMaxCornerRadiusMm);
-    QCOMPARE(sane.borderColor, QColor(255, 255, 255));
 
     SlotStyle broken;
     broken.marginMm = std::numeric_limits<double>::quiet_NaN();
     broken.gutterMm = std::numeric_limits<double>::infinity();
-    broken.borderMm = -std::numeric_limits<double>::infinity();
     broken.cornerRadiusMm = std::numeric_limits<double>::quiet_NaN();
     const SlotStyle defaults = SlotGeometry::sanitiseStyle(broken);
     QVERIFY(!defaults.marginMm.has_value());
     QVERIFY(!defaults.gutterMm.has_value());
-    QCOMPARE(defaults.borderMm, 0.0);
     QCOMPARE(defaults.cornerRadiusMm, 0.0);
-
-    // A border can never eat more than 45 % of the shorter side.
-    const QRectF cell(0.0, 0.0, 20.0, 20.0);
-    QVERIFY(nearRect(SlotGeometry::photoRectMm(cell, 50.0), QRectF(9.0, 9.0, 2.0, 2.0)));
-    QVERIFY(nearRect(SlotGeometry::photoRectMm(cell, 3.0), QRectF(3.0, 3.0, 14.0, 14.0)));
-    QVERIFY(nearRect(SlotGeometry::photoRectMm(cell,
-                                               std::numeric_limits<double>::quiet_NaN()),
-                     cell));
 
     // A radius is clamped by the cell, not only by its own maximum.
     SlotStyle radius;
@@ -535,16 +523,12 @@ void TestSlotLayout::hugeMarginOnTenByFifteen()
     page.slotList.append(slot);
     page.slotStyle.marginMm = 500.0;
     page.slotStyle.gutterMm = 500.0;
-    page.slotStyle.borderMm = 500.0;
     page.slotStyle.cornerRadiusMm = 500.0;
 
     const QRectF cell = SlotGeometry::slotCellMm(page, slot);
     QVERIFY(nearRect(cell, QRectF(48.0, 48.0, 4.0, 54.0)));
-    const QRectF photo = SlotGeometry::slotPhotoRectMm(page, slot);
-    QVERIFY(photo.width() > 0.0 && photo.height() > 0.0);
-    QVERIFY(near(photo.width(), 0.4));
-    QVERIFY(photo.left() >= cell.left() - 1e-9);
-    QVERIFY(photo.right() <= cell.right() + 1e-9);
+    // The photograph is the cell: no mat eats into it.
+    QVERIFY(nearRect(SlotGeometry::slotPhotoRectMm(page, slot), cell));
     QVERIFY(SlotGeometry::layoutConsistent(page));
     QCOMPARE(SlotGeometry::cornerRadiusMm(page.slotStyle, cell), 2.0);
 }
@@ -785,8 +769,7 @@ void TestSlotLayout::dissolveKeepsFrames()
 {
     Page page = layoutPage(templateNamed(QStringLiteral("n05-three-two")), photoPaper(), false, 3);
     SlotStyle style;
-    style.borderMm = 3.0;
-    style.borderColor = QColor(20, 40, 60);
+    style.gutterMm = 3.0;
     style.cornerRadiusMm = 2.0;
     auto styled = SlotLayoutEngine::setStyle(page, style);
     QVERIFY(styled.ok());
@@ -1011,8 +994,6 @@ void TestSlotLayout::persistenceRoundTrip()
     SlotStyle style;
     style.marginMm = 8.0;
     style.gutterMm = 4.0;
-    style.borderMm = 3.5;
-    style.borderColor = QColor(51, 102, 153);
     style.cornerRadiusMm = 2.0;
     auto styled = SlotLayoutEngine::setStyle(laidOut, style);
     QVERIFY(styled.ok());
@@ -1041,9 +1022,23 @@ void TestSlotLayout::persistenceRoundTrip()
     QCOMPARE(restoredLaidOut.layoutId, QStringLiteral("n04-grid-2x2"));
     QCOMPARE(restoredLaidOut.slotStyle.marginMm.value_or(-1.0), 8.0);
     QCOMPARE(restoredLaidOut.slotStyle.gutterMm.value_or(-1.0), 4.0);
-    QCOMPARE(restoredLaidOut.slotStyle.borderMm, 3.5);
-    QCOMPARE(restoredLaidOut.slotStyle.borderColor, QColor(51, 102, 153));
     QCOMPARE(restoredLaidOut.slotStyle.cornerRadiusMm, 2.0);
+
+    // The saved style carries the gap and the radius, never a mat.
+    const QByteArray savedJson = ProjectStore::serialize(document, QString());
+    const QJsonObject styleObject = QJsonDocument::fromJson(savedJson)
+                                        .object()
+                                        .value(QStringLiteral("pages"))
+                                        .toArray()
+                                        .at(0)
+                                        .toObject()
+                                        .value(QStringLiteral("layout"))
+                                        .toObject()
+                                        .value(QStringLiteral("style"))
+                                        .toObject();
+    QVERIFY(!styleObject.contains(QStringLiteral("borderMm")));
+    QVERIFY(!styleObject.contains(QStringLiteral("borderColor")));
+    QCOMPARE(styleObject.value(QStringLiteral("gutterMm")).toDouble(), 4.0);
     for (int i = 0; i < restoredLaidOut.slotList.size(); ++i) {
         QCOMPARE(restoredLaidOut.slotList.at(i).id, laidOut.slotList.at(i).id);
         QVERIFY(nearRect(restoredLaidOut.slotList.at(i).unitRect,
@@ -1116,6 +1111,81 @@ void TestSlotLayout::oldProjectsLoadWithoutALayout()
     }
 }
 
+void TestSlotLayout::legacyMatMigratesToGap()
+{
+    // A saved 3 mm mat inset each photo by 3 mm, so two neighbours were
+    // gutter + 6 mm apart. Migration turns that whole distance into the gap.
+    const auto parseWithStyle = [](const QJsonObject &styleObject) {
+        QJsonObject layout;
+        layout.insert(QStringLiteral("slots"),
+                      QJsonArray{slotJson(QStringLiteral("slot-a"),
+                                          QJsonArray{0.0, 0.0, 0.5, 1.0}),
+                                 slotJson(QStringLiteral("slot-b"),
+                                          QJsonArray{0.5, 0.0, 0.5, 1.0})});
+        layout.insert(QStringLiteral("style"), styleObject);
+        QJsonObject page = minimalPageJson(QStringLiteral("page-a"), QJsonArray{});
+        page.insert(QStringLiteral("layout"), layout);
+        return ProjectStore::deserialize(encoded(minimalProjectJson(page)));
+    };
+
+    QJsonObject style;
+    style.insert(QStringLiteral("marginMm"), 8.0);
+    style.insert(QStringLiteral("gutterMm"), 4.0);
+    style.insert(QStringLiteral("borderMm"), 3.0);
+    style.insert(QStringLiteral("borderColor"), QStringLiteral("#123456"));
+    style.insert(QStringLiteral("cornerRadiusMm"), 2.0);
+    const auto parsed = parseWithStyle(style);
+    QVERIFY(parsed.ok());
+    const Page &page = parsed.value().pages.at(0);
+    QCOMPARE(page.slotStyle.marginMm.value_or(-1.0), 8.0);
+    QCOMPARE(page.slotStyle.gutterMm.value_or(-1.0), 10.0);
+    QCOMPARE(page.slotStyle.cornerRadiusMm, 2.0);
+    const QList<QRectF> cells = SlotGeometry::cellsMm(page);
+    QVERIFY(near(cells.at(1).left() - cells.at(0).right(), 10.0));
+    QVERIFY(SlotGeometry::layoutConsistent(page));
+
+    // An automatic gutter was an absence, not a number: resolve it first.
+    QJsonObject automatic;
+    automatic.insert(QStringLiteral("borderMm"), 3.0);
+    const auto autoParsed = parseWithStyle(automatic);
+    QVERIFY(autoParsed.ok());
+    QCOMPARE(autoParsed.value().pages.at(0).slotStyle.gutterMm.value_or(-1.0),
+             SlotGeometry::automaticMarginMm(QSizeF(210.0, 297.0)) + 6.0);
+
+    // A zero mat changes nothing: the gutter stays automatic.
+    QJsonObject none;
+    none.insert(QStringLiteral("borderMm"), 0.0);
+    none.insert(QStringLiteral("borderColor"), QStringLiteral("#ffffff"));
+    const auto noneParsed = parseWithStyle(none);
+    QVERIFY(noneParsed.ok());
+    QVERIFY(!noneParsed.value().pages.at(0).slotStyle.gutterMm.has_value());
+
+    // The migrated value obeys the gutter range.
+    QJsonObject wide;
+    wide.insert(QStringLiteral("gutterMm"), 50.0);
+    wide.insert(QStringLiteral("borderMm"), 20.0);
+    const auto wideParsed = parseWithStyle(wide);
+    QVERIFY(wideParsed.ok());
+    QCOMPARE(wideParsed.value().pages.at(0).slotStyle.gutterMm.value_or(-1.0),
+             SlotGeometry::kMaxGutterMm);
+
+    // Saving the migrated page writes no mat keys.
+    const QByteArray saved = ProjectStore::serialize(parsed.value(), QString());
+    const QJsonObject savedStyle = QJsonDocument::fromJson(saved)
+                                       .object()
+                                       .value(QStringLiteral("pages"))
+                                       .toArray()
+                                       .at(0)
+                                       .toObject()
+                                       .value(QStringLiteral("layout"))
+                                       .toObject()
+                                       .value(QStringLiteral("style"))
+                                       .toObject();
+    QVERIFY(!savedStyle.contains(QStringLiteral("borderMm")));
+    QVERIFY(!savedStyle.contains(QStringLiteral("borderColor")));
+    QCOMPARE(savedStyle.value(QStringLiteral("gutterMm")).toDouble(), 10.0);
+}
+
 void TestSlotLayout::loaderSanitisesBrokenLayouts()
 {
     // An unknown slot id becomes a free frame.
@@ -1163,7 +1233,7 @@ void TestSlotLayout::loaderSanitisesBrokenLayouts()
                       QJsonArray{slotJson(QStringLiteral("slot-a"),
                                           QJsonArray{0.0, 0.0, 1.0})});
         QJsonObject styleObject;
-        styleObject.insert(QStringLiteral("borderMm"), 5.0);
+        styleObject.insert(QStringLiteral("gutterMm"), 5.0);
         layout.insert(QStringLiteral("style"), styleObject);
         QJsonObject page = minimalPageJson(QStringLiteral("page-a"), QJsonArray{});
         page.insert(QStringLiteral("layout"), layout);
@@ -1192,8 +1262,8 @@ void TestSlotLayout::loaderSanitisesBrokenLayouts()
     // A style without slots is dropped, exactly as the design requires.
     {
         QJsonObject styleObject;
-        styleObject.insert(QStringLiteral("borderMm"), 4.0);
-        styleObject.insert(QStringLiteral("borderColor"), QStringLiteral("#123456"));
+        styleObject.insert(QStringLiteral("gutterMm"), 4.0);
+        styleObject.insert(QStringLiteral("cornerRadiusMm"), 2.0);
         QJsonObject layout;
         layout.insert(QStringLiteral("style"), styleObject);
         QJsonObject page = minimalPageJson(QStringLiteral("page-a"), QJsonArray{});
@@ -1264,8 +1334,7 @@ void TestSlotLayout::oneEditPerAction()
 
     // A style change is one more step, and undo restores the previous page.
     SlotStyle style;
-    style.borderMm = 4.0;
-    style.borderColor = QColor(10, 20, 30);
+    style.gutterMm = 4.0;
     const auto styled = SlotLayoutEngine::setStyle(withLayout, style);
     QVERIFY(styled.ok());
     ApplyLayoutEdit styleEdit;
@@ -1339,7 +1408,7 @@ void TestSlotLayout::validatorRefusesBrokenSlotEdits()
     QVERIFY(!validateLayoutEdit(document, editWithSlots(page.slotList, doubled)).ok());
 }
 
-void TestSlotLayout::emptySlotMatRenders()
+void TestSlotLayout::emptySlotPrintsPaper()
 {
     QTemporaryDir dir;
     QVERIFY(dir.isValid());
@@ -1354,8 +1423,7 @@ void TestSlotLayout::emptySlotMatRenders()
     QVERIFY(applied.ok());
     page = applied.value();
     SlotStyle style;
-    style.borderMm = 4.0;
-    style.borderColor = QColor(0, 0, 0);
+    style.gutterMm = 4.0;
     auto styled = SlotLayoutEngine::setStyle(page, style);
     QVERIFY(styled.ok());
     page = styled.value();
@@ -1375,30 +1443,28 @@ void TestSlotLayout::emptySlotMatRenders()
     QCOMPARE(cells.size(), 4);
     for (int index : {2, 3}) {
         const QRectF &cell = cells.at(index);
-        const QRgb mat = pixelAtMm(image, 150.0, cell.left() + 1.0, cell.center().y());
-        QVERIFY2(isNear(mat, 0, 0, 0, 12),
-                 qPrintable(QStringLiteral("empty slot %1 mat is %2,%3,%4")
-                                .arg(index)
-                                .arg(qRed(mat))
-                                .arg(qGreen(mat))
-                                .arg(qBlue(mat))));
-        const QRgb inside = pixelAtMm(image, 150.0, cell.center().x(), cell.center().y());
-        QVERIFY2(isWhite(inside), "an empty slot printed something other than paper");
+        // An empty cell is paper edge to edge: no mat, no placeholder tint.
+        QVERIFY2(isWhite(pixelAtMm(image, 150.0, cell.left() + 1.0, cell.center().y())),
+                 "an empty cell printed a mat at its edge");
+        QVERIFY2(isWhite(pixelAtMm(image, 150.0, cell.center().x(), cell.center().y())),
+                 "an empty slot printed something other than paper");
     }
-    // A filled slot prints its photograph, not the mat, in the middle.
-    const QRgb filled = pixelAtMm(image, 150.0, cells.at(0).center().x(),
-                                  cells.at(0).center().y());
+    // A filled slot prints its photograph all the way to the cell edge.
+    const QRgb filled =
+        pixelAtMm(image, 150.0, cells.at(0).right() - 1.0, cells.at(0).center().y());
     QVERIFY(!isWhite(filled));
     QVERIFY(std::abs(qRed(filled) - 128) <= 25);
     // The sheet itself stays paper white outside the layout.
     QVERIFY(isWhite(pixelAtMm(image, 150.0, 1.0, 1.0)));
 }
 
-void TestSlotLayout::borderColourIsLinearNotSrgb()
+void TestSlotLayout::photoFillsItsCellWithoutAMat()
 {
-    // #808080 written straight into the linear canvas would come back around
-    // 188 after the sRGB conversion. Converted into the working space it comes
-    // back as the grey the user picked.
+    QTemporaryDir dir;
+    QVERIFY(dir.isValid());
+    const QString blue = writePhoto(dir, QStringLiteral("blue.png"), QColor(30, 30, 220));
+    QVERIFY(!blue.isEmpty());
+
     Page page = pageWith(a4Paper(), false);
     Slot slot;
     slot.id = QStringLiteral("slot-only");
@@ -1406,10 +1472,17 @@ void TestSlotLayout::borderColourIsLinearNotSrgb()
     page.slotList.append(slot);
     page.layoutId = QStringLiteral("hand");
     SlotStyle style;
-    style.borderMm = 6.0;
-    style.borderColor = QColor(128, 128, 128);
+    style.marginMm = 10.0;
+    style.gutterMm = 3.0;
     page.slotStyle = style;
+    Frame frame = frameFor(blue, QStringLiteral("photo-0"));
+    frame.slotId = slot.id;
+    SlotGeometry::applySlotGeometry(page, slot, frame);
+    page.frames.append(frame);
     QVERIFY(SlotGeometry::layoutConsistent(page));
+
+    const QRectF cell = SlotGeometry::slotCellMm(page, slot);
+    QVERIFY(nearRect(SlotGeometry::slotPhotoRectMm(page, slot), cell));
 
     DocumentSnapshot document;
     document.pages.append(page);
@@ -1420,14 +1493,109 @@ void TestSlotLayout::borderColourIsLinearNotSrgb()
         QFAIL(qPrintable(rendered.error().message));
     const QImage image = rendered.value();
 
-    const QRectF cell = SlotGeometry::slotCellMm(page, slot);
-    const QRgb mat = pixelAtMm(image, 150.0, cell.left() + 3.0, cell.center().y());
-    QVERIFY2(isNear(mat, 128, 128, 128, 5),
-             qPrintable(QStringLiteral("mat printed as %1,%2,%3")
-                            .arg(qRed(mat))
-                            .arg(qGreen(mat))
-                            .arg(qBlue(mat))));
-    QVERIFY(qRed(mat) < 150);
+    // Half a millimetre inside each edge is still the photograph: there is no
+    // inset and no ring. Half a millimetre outside the cell is paper.
+    const double inside = 0.5;
+    QVERIFY(isBluish(pixelAtMm(image, 150.0, cell.left() + inside, cell.center().y())));
+    QVERIFY(isBluish(pixelAtMm(image, 150.0, cell.right() - inside, cell.center().y())));
+    QVERIFY(isBluish(pixelAtMm(image, 150.0, cell.center().x(), cell.top() + inside)));
+    QVERIFY(isBluish(pixelAtMm(image, 150.0, cell.center().x(), cell.bottom() - inside)));
+    QVERIFY(isWhite(pixelAtMm(image, 150.0, cell.left() - inside, cell.center().y())));
+    QVERIFY(isWhite(pixelAtMm(image, 150.0, cell.center().x(), cell.top() - inside)));
+}
+
+void TestSlotLayout::gapIsTheWhitePaperBetweenPhotos()
+{
+    QTemporaryDir dir;
+    QVERIFY(dir.isValid());
+    const QString red = writePhoto(dir, QStringLiteral("red.png"), QColor(210, 30, 30));
+    const QString blue = writePhoto(dir, QStringLiteral("blue.png"), QColor(30, 30, 220));
+    QVERIFY(!red.isEmpty() && !blue.isEmpty());
+
+    Page page = pageWith(a4Paper(), false);
+    page.frames.append(frameFor(red, QStringLiteral("photo-0")));
+    page.frames.append(frameFor(blue, QStringLiteral("photo-1")));
+    auto applied = SlotLayoutEngine::applyTemplate(
+        page, templateNamed(QStringLiteral("n04-grid-2x2")));
+    QVERIFY(applied.ok());
+    page = applied.value();
+    SlotStyle style;
+    style.marginMm = 10.0;
+    style.gutterMm = 3.0;
+    auto styled = SlotLayoutEngine::setStyle(page, style);
+    QVERIFY(styled.ok());
+    page = styled.value();
+
+    const QList<QRectF> cells = SlotGeometry::cellsMm(page);
+    QCOMPARE(cells.size(), 4);
+    QVERIFY(near(cells.at(1).left() - cells.at(0).right(), 3.0));
+    QVERIFY(near(cells.at(2).top() - cells.at(0).bottom(), 3.0));
+
+    DocumentSnapshot document;
+    document.pages.append(page);
+    ImageStore store;
+    PageRenderer renderer(store);
+    const double ppi = 300.0;
+    const auto rendered = renderer.renderPage(document, 0, ppi);
+    if (!rendered.ok())
+        QFAIL(qPrintable(rendered.error().message));
+    const QImage image = rendered.value();
+    const double pxPerMm = ppi / 25.4;
+
+    // Measure the white run between the two photographs on the top row.
+    const int y = qRound(cells.at(0).center().y() * pxPerMm);
+    const int from = qRound(cells.at(0).left() * pxPerMm);
+    const int to = qRound(cells.at(1).right() * pxPerMm);
+    const int middle = qRound((cells.at(0).right() + cells.at(1).left()) / 2.0 * pxPerMm);
+    int lastPhoto = from;
+    int firstPhoto = to;
+    for (int x = from; x <= middle; ++x) {
+        if (!isWhite(image.pixel(x, y)))
+            lastPhoto = x;
+    }
+    for (int x = middle; x <= to; ++x) {
+        if (!isWhite(image.pixel(x, y))) {
+            firstPhoto = x;
+            break;
+        }
+    }
+    const double measuredGapMm = (firstPhoto - lastPhoto - 1) / pxPerMm;
+    QVERIFY2(std::abs(measuredGapMm - 3.0) <= 0.3,
+             qPrintable(QStringLiteral("a 3 mm gap measured %1 mm").arg(measuredGapMm)));
+
+    // No inset around either photograph: the ink reaches each cell edge.
+    QVERIFY(!isWhite(pixelAtMm(image, ppi, cells.at(0).right() - 0.5, cells.at(0).center().y())));
+    QVERIFY(!isWhite(pixelAtMm(image, ppi, cells.at(1).left() + 0.5, cells.at(1).center().y())));
+    // The gap itself is paper, not a coloured frame.
+    QVERIFY(isWhite(pixelAtMm(image, ppi, cells.at(0).right() + 1.5, cells.at(0).center().y())));
+    QVERIFY(isWhite(pixelAtMm(image, ppi, cells.at(1).left() - 1.5, cells.at(1).center().y())));
+}
+
+void TestSlotLayout::gapChangesSpacingNotThePhotoInset()
+{
+    Page page = pageWith(a4Paper(), false);
+    Slot slot;
+    slot.id = QStringLiteral("slot-only");
+    slot.unitRect = QRectF(0.0, 0.0, 0.5, 1.0);
+    page.slotList.append(slot);
+    page.layoutId = QStringLiteral("hand");
+
+    page.slotStyle.marginMm = 10.0;
+    page.slotStyle.gutterMm = 3.0;
+    const QRectF narrowCell = SlotGeometry::slotCellMm(page, slot);
+    const QRectF narrowPhoto = SlotGeometry::slotPhotoRectMm(page, slot);
+    QVERIFY(near(narrowCell.left(), 10.0));
+    QVERIFY(nearRect(narrowPhoto, narrowCell));
+
+    page.slotStyle.gutterMm = 6.0;
+    const QRectF wideCell = SlotGeometry::slotCellMm(page, slot);
+    const QRectF widePhoto = SlotGeometry::slotPhotoRectMm(page, slot);
+    // The cell gives up 1.5 mm on the shared edge, and the photograph follows
+    // the cell exactly. Nothing else is taken from the picture.
+    QVERIFY(near(wideCell.left(), 10.0));
+    QVERIFY(near(narrowCell.width() - wideCell.width(), 1.5));
+    QVERIFY(nearRect(widePhoto, wideCell));
+    QVERIFY(near(widePhoto.width(), wideCell.width()));
 }
 
 void TestSlotLayout::roundedCornersClipThePhoto()
@@ -1464,10 +1632,15 @@ void TestSlotLayout::roundedCornersClipThePhoto()
     const QRectF cell = SlotGeometry::slotCellMm(page, slot);
     // The rounded corner is the cell corner with a 15 mm radius: (left + 2,
     // top + 2) lies outside the arc and prints paper white; (left + 9, top + 9)
-    // is inside it and prints the photograph.
+    // is inside it and prints the photograph. There is no ring: the clip cuts
+    // the picture, and the paper shows through the cut corner.
     QVERIFY(isWhite(pixelAtMm(image, 150.0, cell.left() + 2.0, cell.top() + 2.0)));
     QVERIFY(isBluish(pixelAtMm(image, 150.0, cell.left() + 9.0, cell.top() + 9.0)));
     QVERIFY(isBluish(pixelAtMm(image, 150.0, cell.center().x(), cell.center().y())));
+    // At mid-edge the photograph reaches the cell edge, so the radius is a
+    // corner clip and not a band around the picture.
+    QVERIFY(isBluish(pixelAtMm(image, 150.0, cell.left() + 0.5, cell.center().y())));
+    QVERIFY(isBluish(pixelAtMm(image, 150.0, cell.center().x(), cell.top() + 0.5)));
 }
 
 void TestSlotLayout::placePhotoOnEmptySlot()
@@ -1827,8 +2000,7 @@ void TestSlotLayout::publishPageStyleOnly()
     QCOMPARE(controller.undoStack()->count(), 0);
 
     Page styled = controller.document().pages.at(0);
-    styled.slotStyle.borderMm = 4.0;
-    styled.slotStyle.borderColor = QColor(10, 20, 30);
+    styled.slotStyle.gutterMm = 4.0;
     const auto published = controller.publishPage(styled, QStringLiteral("Szegély beállítása"));
     if (!published.ok())
         QFAIL(qPrintable(published.error().message));
@@ -1836,9 +2008,10 @@ void TestSlotLayout::publishPageStyleOnly()
     const Page &after = controller.document().pages.at(0);
     QCOMPARE(after.slotList.size(), 4);
     QCOMPARE(after.frames.size(), 2);
-    QCOMPARE(after.slotStyle.borderMm, 4.0);
+    QCOMPARE(after.slotStyle.gutterMm.value_or(-1.0), 4.0);
     QVERIFY(SlotGeometry::layoutConsistent(after));
-    // The border changed the photograph rectangle, so repair re-derived it.
+    // The gap changed the cell size, so repair re-derived the photograph
+    // rectangle from the slot.
     for (const Frame &frame : after.frames) {
         QVERIFY(SlotGeometry::slotGeometryMatches(after, frame));
         QVERIFY(frame.width < 97.5);
@@ -1978,7 +2151,7 @@ void TestSlotLayout::validatorErrorCodes()
     big.marginMm = 500.0;
     QCOMPARE(codeOf(page.slotList, page.frames, big), QStringLiteral("layout-slot-style"));
     SlotStyle nan;
-    nan.borderMm = std::numeric_limits<double>::quiet_NaN();
+    nan.cornerRadiusMm = std::numeric_limits<double>::quiet_NaN();
     QCOMPARE(codeOf(page.slotList, page.frames, nan), QStringLiteral("layout-slot-style"));
 
     ApplyLayoutEdit badIndex;
@@ -2035,10 +2208,10 @@ void TestSlotLayout::zeroMarginIsNotAutomatic()
                      flush));
 
     // Auto persists as absent keys, even when the style object exists for a
-    // border, and loads back as automatic.
+    // corner radius, and loads back as automatic.
     Page autoPage = pageWith(a4Paper(), false);
     autoPage.slotList.append(slot);
-    autoPage.slotStyle.borderMm = 2.0;
+    autoPage.slotStyle.cornerRadiusMm = 2.0;
     DocumentSnapshot autoDoc;
     autoDoc.pages.append(autoPage);
     const QByteArray autoJson = ProjectStore::serialize(autoDoc, QString());
@@ -2168,25 +2341,21 @@ void TestSlotLayout::repairSanitisesTheStyle()
 
     page.slotStyle.marginMm = 500.0;
     page.slotStyle.gutterMm = -4.0;
-    page.slotStyle.borderMm = std::numeric_limits<double>::quiet_NaN();
     page.slotStyle.cornerRadiusMm = 100.0;
-    page.slotStyle.borderColor = QColor();
     const auto repaired = SlotLayoutEngine::repair(page);
     QVERIFY(repaired.ok());
     const Page &result = repaired.value();
     QCOMPARE(result.slotStyle.marginMm.value_or(-1.0), SlotGeometry::kMaxMarginMm);
     QCOMPARE(result.slotStyle.gutterMm.value_or(-1.0), 0.0);
-    QCOMPARE(result.slotStyle.borderMm, 0.0);
     QCOMPARE(result.slotStyle.cornerRadiusMm, SlotGeometry::kMaxCornerRadiusMm);
-    QCOMPARE(result.slotStyle.borderColor, QColor(255, 255, 255));
     QVERIFY(SlotGeometry::layoutConsistent(result));
 
-    // Alpha is a colour choice, not corruption: a translucent border survives.
+    // A non-finite gap is corruption, so it becomes automatic again.
     page.slotStyle = SlotStyle{};
-    page.slotStyle.borderColor = QColor(0, 0, 0, 128);
-    const auto alpha = SlotLayoutEngine::repair(page);
-    QVERIFY(alpha.ok());
-    QCOMPARE(alpha.value().slotStyle.borderColor.alpha(), 128);
+    page.slotStyle.gutterMm = std::numeric_limits<double>::quiet_NaN();
+    const auto nan = SlotLayoutEngine::repair(page);
+    QVERIFY(nan.ok());
+    QVERIFY(!nan.value().slotStyle.gutterMm.has_value());
 }
 
 void TestSlotLayout::removeLastSlotClearsDanglingIds()
@@ -2217,62 +2386,11 @@ void TestSlotLayout::removeLastSlotClearsDanglingIds()
     QVERIFY(SlotGeometry::layoutConsistent(result));
 }
 
-void TestSlotLayout::translucentBorderBlendsWithPaper()
-{
-    Page page = pageWith(a4Paper(), false);
-    Slot slot;
-    slot.id = QStringLiteral("slot-only");
-    slot.unitRect = QRectF(0.0, 0.0, 1.0, 1.0);
-    page.slotList.append(slot);
-    page.layoutId = QStringLiteral("hand");
-    SlotStyle style;
-    style.borderMm = 6.0;
-    style.borderColor = QColor(0, 0, 0, 128);
-    page.slotStyle = style;
-    QVERIFY(SlotGeometry::layoutConsistent(page));
-
-    DocumentSnapshot document;
-    document.pages.append(page);
-    ImageStore store;
-    PageRenderer renderer(store);
-    const auto rendered = renderer.renderPage(document, 0, 150.0);
-    if (!rendered.ok())
-        QFAIL(qPrintable(rendered.error().message));
-    const QImage image = rendered.value();
-    const QRectF cell = SlotGeometry::slotCellMm(page, slot);
-    const QRgb mat = pixelAtMm(image, 150.0, cell.left() + 3.0, cell.center().y());
-    // Black at half alpha over white paper, blended in the linear working space,
-    // comes back near 188, not 0 (opaque) and not 255 (alpha dropped).
-    QVERIFY2(std::abs(qRed(mat) - 188) <= 6,
-             qPrintable(QStringLiteral("translucent mat printed as %1").arg(qRed(mat))));
-    QVERIFY(qRed(mat) > 100);
-    QVERIFY(qGreen(mat) < 230);
-
-    // The alpha survives the project round trip.
-    const QByteArray json = ProjectStore::serialize(document, QString());
-    const QJsonObject styleObject = QJsonDocument::fromJson(json)
-                                        .object()
-                                        .value(QStringLiteral("pages"))
-                                        .toArray()
-                                        .at(0)
-                                        .toObject()
-                                        .value(QStringLiteral("layout"))
-                                        .toObject()
-                                        .value(QStringLiteral("style"))
-                                        .toObject();
-    QCOMPARE(styleObject.value(QStringLiteral("borderColor")).toString(),
-             QStringLiteral("#80000000"));
-    const auto reparsed = ProjectStore::deserialize(json);
-    QVERIFY(reparsed.ok());
-    QCOMPARE(reparsed.value().pages.at(0).slotStyle.borderColor.alpha(), 128);
-}
-
-void TestSlotLayout::layoutPageWithoutFramesPrintsMats()
+void TestSlotLayout::layoutPageWithoutFramesPrintsPaper()
 {
     Page page = layoutPage(templateNamed(QStringLiteral("n04-grid-2x2")), a4Paper(), false, 0);
     SlotStyle style;
-    style.borderMm = 3.0;
-    style.borderColor = QColor(0, 0, 0);
+    style.gutterMm = 3.0;
     const auto styled = SlotLayoutEngine::setStyle(page, style);
     QVERIFY(styled.ok());
     page = styled.value();
@@ -2287,8 +2405,8 @@ void TestSlotLayout::layoutPageWithoutFramesPrintsMats()
         QFAIL(qPrintable(rendered.error().message));
     const QImage image = rendered.value();
     for (const QRectF &cell : SlotGeometry::cellsMm(page)) {
-        QVERIFY(isNear(pixelAtMm(image, 150.0, cell.left() + 1.0, cell.center().y()), 0, 0, 0,
-                       12));
+        // An empty layout is blank paper: no mat, no placeholder, no tint.
+        QVERIFY(isWhite(pixelAtMm(image, 150.0, cell.left() + 1.0, cell.center().y())));
         QVERIFY(isWhite(pixelAtMm(image, 150.0, cell.center().x(), cell.center().y())));
     }
 }

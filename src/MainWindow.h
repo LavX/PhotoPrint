@@ -391,7 +391,7 @@ private:
     /// Which field of the page's layout style a control edits. A commit writes
     /// only this one, so an untouched control can never republish its clamped
     /// display over the stored value.
-    enum class SlotStyleField { Margin, Gutter, Border, Radius };
+    enum class SlotStyleField { Margin, Gutter, Radius };
 
 private slots:
     void addPhotos();
@@ -450,11 +450,6 @@ private slots:
     void flushSlotStyle();
     void cancelPendingStyle();
     void applySlotStyleField(SlotStyleField field);
-    /// The colour dialog's answer, in one function, so the panel has one writer
-    /// for the border colour and a test can deliver a colour without a modal
-    /// dialog.
-    void applySlotBorderColour(const QColor &colour);
-    void chooseSlotBorderColour();
     void addSlotToPage();
     void removeSlotFromPage();
     void dissolvePageLayout();
@@ -672,8 +667,7 @@ private:
     QCheckBox *m_marginAutoCheck = nullptr;
     QDoubleSpinBox *m_gutterSpin = nullptr;
     QCheckBox *m_gutterAutoCheck = nullptr;
-    QDoubleSpinBox *m_borderSpin = nullptr;
-    QPushButton *m_borderColourButton = nullptr;
+    QLabel *m_gutterHint = nullptr;
     QDoubleSpinBox *m_radiusSpin = nullptr;
     QPushButton *m_addSlotButton = nullptr;
     QPushButton *m_removeSlotButton = nullptr;

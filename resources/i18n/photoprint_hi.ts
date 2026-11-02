@@ -1072,8 +1072,8 @@
         <translation>दो फ़ोटो एक ही स्थान पर नहीं हो सकतीं।</translation>
     </message>
     <message>
-        <source>A margó, a hézag vagy a szegély értéke érvénytelen.</source>
-        <translation>मार्जिन, गैप या बॉर्डर का मान अमान्य है।</translation>
+        <source>A margó, a szegély vagy a sarok lekerekítése érvénytelen.</source>
+        <translation>मार्जिन, गैप या कोने की त्रिज्या का मान अमान्य है।</translation>
     </message>
     <message>
         <source>Húzd ide a fotót</source>
@@ -1142,16 +1142,8 @@
         <translation>बाहरी मार्जिन</translation>
     </message>
     <message>
-        <source>Képek közti hézag</source>
-        <translation>फ़ोटो के बीच की दूरी</translation>
-    </message>
-    <message>
         <source>Szegély</source>
-        <translation>किनारा</translation>
-    </message>
-    <message>
-        <source>Szegély színe</source>
-        <translation>किनारे का रंग</translation>
+        <translation>दूरी</translation>
     </message>
     <message>
         <source>Sarok lekerekítése</source>
@@ -1187,7 +1179,7 @@
     </message>
     <message>
         <source>Szegély beállítása</source>
-        <translation>किनारा सेट करें</translation>
+        <translation>दूरी सेट करें</translation>
     </message>
     <message numerus="yes">
         <source>%n hely</source>
@@ -1201,8 +1193,12 @@
         <translation>स्वचालित मार्जिन</translation>
     </message>
     <message>
-        <source>Automatikus hézag</source>
+        <source>Automatikus szegély</source>
         <translation>स्वचालित दूरी</translation>
+    </message>
+    <message>
+        <source>A szegély a fotók között maradó fehér papír, nem színes keret.</source>
+        <translation>अंतर फ़ोटो के बीच का सफ़ेद कागज़ है, रंगीन फ़्रेम नहीं।</translation>
     </message>
     <message>
         <source>Hely törlése</source>

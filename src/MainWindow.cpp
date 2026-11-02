@@ -20,7 +20,6 @@
 #include <QActionGroup>
 #include <QCloseEvent>
 #include <QCheckBox>
-#include <QColorDialog>
 #include <QComboBox>
 #include <QCoreApplication>
 #include <QDebug>
@@ -1580,8 +1579,8 @@ void PageView::mousePressEvent(QMouseEvent *event)
         return;
     }
 
-    // The mat of a cell is a hit too, so clicking the border of a photo or an
-    // empty cell selects the cell rather than falling through to the paper.
+    // The whole cell is a hit, so clicking a photograph or an empty cell
+    // selects the cell rather than falling through to the paper.
     const int slotIndex = hitSlot(event->position());
     if (slotIndex >= 0 && page) {
         const Slot &slot = page->slotList.at(slotIndex);
@@ -2301,33 +2300,25 @@ void MainWindow::buildUi()
     m_marginSpin = addLength(QStringLiteral("marginSpin"),
                              QCoreApplication::translate("PhotoPrint", "Külső margó"),
                              SlotGeometry::kMaxMarginMm, 0.5);
+    // The gap is the border: the white paper between two photographs. It is
+    // not a coloured frame around each picture, so there is no width and no
+    // colour to choose, only the distance.
+    addTitle(QCoreApplication::translate("PhotoPrint", "Szegély"));
     m_gutterAutoCheck = addAutomatic(
-        QCoreApplication::translate("PhotoPrint", "Automatikus hézag"),
+        QCoreApplication::translate("PhotoPrint", "Automatikus szegély"),
         QStringLiteral("gutterAutoCheck"));
     m_gutterSpin = addLength(QStringLiteral("gutterSpin"),
-                             QCoreApplication::translate("PhotoPrint", "Képek közti hézag"),
-                             SlotGeometry::kMaxGutterMm, 0.5);
-    addTitle(QCoreApplication::translate("PhotoPrint", "Szegély"));
-    m_borderSpin = addLength(QStringLiteral("borderSpin"),
                              QCoreApplication::translate("PhotoPrint", "Szegély"),
-                             SlotGeometry::kMaxBorderMm, 0.5);
-
-    // The border colour: a swatch button, because the colour itself is the
-    // control. Alpha is allowed, so a translucent mat is a real choice. With no
-    // border width there is nothing to colour, so the panel disables it instead
-    // of storing a colour nobody can see.
-    auto *colourTitle =
-        new QLabel(QCoreApplication::translate("PhotoPrint", "Szegély színe"), side);
-    colourTitle->setWordWrap(true);
-    layoutLayout->addWidget(colourTitle);
-    m_borderColourButton = new QPushButton(side);
-    m_borderColourButton->setObjectName(QStringLiteral("borderColourButton"));
-    m_borderColourButton->setAccessibleName(colourTitle->text());
-    m_borderColourButton->setIconSize(QSize(40, 16));
-    m_borderColourButton->setMinimumHeight(28);
-    layoutLayout->addWidget(m_borderColourButton);
-    connect(m_borderColourButton, &QPushButton::clicked, this,
-            &MainWindow::chooseSlotBorderColour);
+                             SlotGeometry::kMaxGutterMm, 0.5);
+    m_gutterHint = new QLabel(
+        QCoreApplication::translate(
+            "PhotoPrint",
+            "A szegély a fotók között maradó fehér papír, nem színes keret."),
+        side);
+    m_gutterHint->setObjectName(QStringLiteral("gutterHint"));
+    m_gutterHint->setWordWrap(true);
+    m_gutterHint->setStyleSheet(QStringLiteral("color: #6e6e73; font-size: 11px;"));
+    layoutLayout->addWidget(m_gutterHint);
 
     addTitle(QCoreApplication::translate("PhotoPrint", "Sarok lekerekítése"));
     m_radiusSpin = addLength(QStringLiteral("radiusSpin"),
@@ -2385,7 +2376,6 @@ void MainWindow::buildUi()
     } styleSpins[] = {
         {m_marginSpin, SlotStyleField::Margin},
         {m_gutterSpin, SlotStyleField::Gutter},
-        {m_borderSpin, SlotStyleField::Border},
         {m_radiusSpin, SlotStyleField::Radius},
     };
     for (const auto &entry : styleSpins) {
@@ -4392,8 +4382,8 @@ void MainWindow::syncLayoutPanel()
     // silently move the other.
     const double gutterLimit = std::max(
         0.0, std::min(SlotGeometry::kMaxGutterMm, shortSide / 2.0 - 2.0));
-    // The border and the radius are clamped per cell, so the smallest cell on
-    // the page is the one that limits them.
+    // The radius is clamped per cell, so the smallest cell on the page is the
+    // one that limits it.
     double shortestCell = 0.0;
     for (const QRectF &cell : SlotGeometry::cellsMm(*page)) {
         const double side = std::min(cell.width(), cell.height());
@@ -4401,8 +4391,6 @@ void MainWindow::syncLayoutPanel()
             continue;
         shortestCell = shortestCell <= 0.0 ? side : std::min(shortestCell, side);
     }
-    const double borderLimit =
-        std::max(0.0, std::min(SlotGeometry::kMaxBorderMm, 0.45 * shortestCell));
     const double radiusLimit =
         std::max(0.0, std::min(SlotGeometry::kMaxCornerRadiusMm, shortestCell / 2.0));
 
@@ -4427,27 +4415,8 @@ void MainWindow::syncLayoutPanel()
     m_gutterSpin->setValue(
         style.gutterMm.value_or(SlotGeometry::effectiveGutterMm(style, sheet)));
 
-    m_borderSpin->setMaximum(borderLimit);
-    m_borderSpin->setValue(style.borderMm);
     m_radiusSpin->setMaximum(radiusLimit);
     m_radiusSpin->setValue(style.cornerRadiusMm);
-
-    // The swatch is the mat's own colour, drawn over a light and a dark half so
-    // a translucent choice reads as translucent instead of as a flat tint.
-    QPixmap swatch(40, 16);
-    {
-        QPainter painter(&swatch);
-        swatch.fill(QColor(255, 255, 255));
-        painter.fillRect(QRectF(0, 0, 20, 16), QColor(0xd0, 0xd0, 0xd4));
-        painter.fillRect(QRectF(0, 0, 40, 16), style.borderColor);
-        painter.setPen(QColor(0, 0, 0, 60));
-        painter.drawRect(QRectF(0.5, 0.5, 39.0, 15.0));
-    }
-    m_borderColourButton->setIcon(QIcon(swatch));
-    m_borderColourButton->setToolTip(style.borderColor.name(QColor::HexArgb));
-    // With no border width there is nothing to colour: the button is the one
-    // control that would otherwise make an undo with no visible effect.
-    m_borderColourButton->setEnabled(style.borderMm > 0.0);
 
     m_addSlotButton->setEnabled(page->slotList.size() < SlotGeometry::kMaxSlotsPerPage);
     m_removeSlotButton->setEnabled(
@@ -4566,9 +4535,6 @@ void MainWindow::applySlotStyleField(SlotStyleField field)
             ? std::nullopt
             : std::optional<double>(m_gutterSpin->value());
         break;
-    case SlotStyleField::Border:
-        style.borderMm = m_borderSpin->value();
-        break;
     case SlotStyleField::Radius:
         style.cornerRadiusMm = m_radiusSpin->value();
         break;
@@ -4585,61 +4551,16 @@ void MainWindow::applySlotStyleField(SlotStyleField field)
         syncLayoutPanel();
         return;
     }
-    const bool spacing = field == SlotStyleField::Margin || field == SlotStyleField::Gutter;
-    const auto published = m_controller.publishPage(
-        restyled.value(),
-        spacing ? QCoreApplication::translate("PhotoPrint", "Margó beállítása")
-                : QCoreApplication::translate("PhotoPrint", "Szegély beállítása"));
+    const QString label = field == SlotStyleField::Margin
+        ? QCoreApplication::translate("PhotoPrint", "Margó beállítása")
+        : (field == SlotStyleField::Gutter
+               ? QCoreApplication::translate("PhotoPrint", "Szegély beállítása")
+               : QCoreApplication::translate("PhotoPrint", "Sarok lekerekítése"));
+    const auto published = m_controller.publishPage(restyled.value(), label);
     if (!published) {
         showProblem(published.error().message);
         syncLayoutPanel();
     }
-}
-
-void MainWindow::applySlotBorderColour(const QColor &colour)
-{
-    if (m_syncing || !colour.isValid())
-        return;
-    const DocumentSnapshot document = m_controller.document();
-    if (document.pages.isEmpty())
-        return;
-    const Page &page = document.pages.at(document.currentPage);
-    if (!page.hasLayout())
-        return;
-    // A colour with no border width paints nothing, so it is not an edit. The
-    // button is disabled in that state as well; this guard keeps a stray call
-    // from pushing an undo entry nobody can see.
-    if (!(SlotGeometry::sanitiseStyle(page.slotStyle).borderMm > 0.0))
-        return;
-    SlotStyle style = page.slotStyle;
-    style.borderColor = colour; // alpha included: a translucent mat is a choice
-    if (style == page.slotStyle)
-        return;
-    auto restyled = SlotLayoutEngine::setStyle(page, style);
-    if (!restyled) {
-        showProblem(restyled.error().message);
-        return;
-    }
-    const auto published = m_controller.publishPage(
-        restyled.value(), QCoreApplication::translate("PhotoPrint", "Szegély beállítása"));
-    if (!published)
-        showProblem(published.error().message);
-}
-
-void MainWindow::chooseSlotBorderColour()
-{
-    const DocumentSnapshot document = m_controller.document();
-    if (document.pages.isEmpty())
-        return;
-    const Page &page = document.pages.at(document.currentPage);
-    if (!page.hasLayout())
-        return;
-    const QColor chosen = QColorDialog::getColor(
-        page.slotStyle.borderColor, this,
-        QCoreApplication::translate("PhotoPrint", "Szegély színe"),
-        QColorDialog::ShowAlphaChannel);
-    if (chosen.isValid())
-        applySlotBorderColour(chosen);
 }
 
 void MainWindow::addSlotToPage()

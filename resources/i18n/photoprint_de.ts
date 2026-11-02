@@ -1072,8 +1072,8 @@
         <translation>Zwei Fotos können nicht denselben Platz belegen.</translation>
     </message>
     <message>
-        <source>A margó, a hézag vagy a szegély értéke érvénytelen.</source>
-        <translation>Der Wert für Rand, Abstand oder Rahmen ist ungültig.</translation>
+        <source>A margó, a szegély vagy a sarok lekerekítése érvénytelen.</source>
+        <translation>Der Wert für Rand, Abstand oder Eckenradius ist ungültig.</translation>
     </message>
     <message>
         <source>Húzd ide a fotót</source>
@@ -1142,16 +1142,8 @@
         <translation>Außenrand</translation>
     </message>
     <message>
-        <source>Képek közti hézag</source>
-        <translation>Abstand zwischen den Fotos</translation>
-    </message>
-    <message>
         <source>Szegély</source>
-        <translation>Fotorand</translation>
-    </message>
-    <message>
-        <source>Szegély színe</source>
-        <translation>Farbe des Fotorands</translation>
+        <translation>Abstand</translation>
     </message>
     <message>
         <source>Sarok lekerekítése</source>
@@ -1187,7 +1179,7 @@
     </message>
     <message>
         <source>Szegély beállítása</source>
-        <translation>Fotorand einstellen</translation>
+        <translation>Abstand festlegen</translation>
     </message>
     <message numerus="yes">
         <source>%n hely</source>
@@ -1201,8 +1193,12 @@
         <translation>Automatischer Außenrand</translation>
     </message>
     <message>
-        <source>Automatikus hézag</source>
+        <source>Automatikus szegély</source>
         <translation>Automatischer Abstand</translation>
+    </message>
+    <message>
+        <source>A szegély a fotók között maradó fehér papír, nem színes keret.</source>
+        <translation>Der Abstand ist das weiße Papier zwischen den Fotos, kein farbiger Rahmen.</translation>
     </message>
     <message>
         <source>Hely törlése</source>

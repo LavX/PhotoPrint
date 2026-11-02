@@ -549,7 +549,7 @@ void TestI18n::everyCatalogueTranslatesTheLayoutMessages()
              QStringLiteral("A hely a lapon kívülre esik."),
              QStringLiteral("Egy fotó olyan helyre hivatkozik, amely nem létezik."),
              QStringLiteral("Két fotó nem kerülhet ugyanabba a helybe."),
-             QStringLiteral("A margó, a hézag vagy a szegély értéke érvénytelen."),
+             QStringLiteral("A margó, a szegély vagy a sarok lekerekítése érvénytelen."),
          }) {
         const QString text = translated("PhotoPrint", source);
         const QString where = QStringLiteral("%1: %2").arg(code, source);
@@ -592,11 +592,10 @@ void TestI18n::everyCatalogueTranslatesTheSlotUiMessages()
              QStringLiteral("Elrendezés"),
              QStringLiteral("Saját elrendezés"),
              QStringLiteral("Külső margó"),
-             QStringLiteral("Képek közti hézag"),
              QStringLiteral("Automatikus margó"),
-             QStringLiteral("Automatikus hézag"),
              QStringLiteral("Szegély"),
-             QStringLiteral("Szegély színe"),
+             QStringLiteral("Automatikus szegély"),
+             QStringLiteral("A szegély a fotók között maradó fehér papír, nem színes keret."),
              QStringLiteral("Sarok lekerekítése"),
              QStringLiteral("Hely hozzáadása"),
              QStringLiteral("Hely törlése"),

@@ -1068,8 +1068,8 @@
         <translation>2枚の写真を同じ枠に置くことはできません。</translation>
     </message>
     <message>
-        <source>A margó, a hézag vagy a szegély értéke érvénytelen.</source>
-        <translation>余白、間隔、または枠線の値が無効です。</translation>
+        <source>A margó, a szegély vagy a sarok lekerekítése érvénytelen.</source>
+        <translation>余白、間隔、または角の丸みの値が無効です。</translation>
     </message>
     <message>
         <source>Húzd ide a fotót</source>
@@ -1136,16 +1136,8 @@
         <translation>外側の余白</translation>
     </message>
     <message>
-        <source>Képek közti hézag</source>
-        <translation>写真どうしの間隔</translation>
-    </message>
-    <message>
         <source>Szegély</source>
-        <translation>縁取り</translation>
-    </message>
-    <message>
-        <source>Szegély színe</source>
-        <translation>縁取りの色</translation>
+        <translation>間隔</translation>
     </message>
     <message>
         <source>Sarok lekerekítése</source>
@@ -1181,7 +1173,7 @@
     </message>
     <message>
         <source>Szegély beállítása</source>
-        <translation>縁取りを設定</translation>
+        <translation>間隔を設定</translation>
     </message>
     <message numerus="yes">
         <source>%n hely</source>
@@ -1194,8 +1186,12 @@
         <translation>余白を自動</translation>
     </message>
     <message>
-        <source>Automatikus hézag</source>
+        <source>Automatikus szegély</source>
         <translation>間隔を自動</translation>
+    </message>
+    <message>
+        <source>A szegély a fotók között maradó fehér papír, nem színes keret.</source>
+        <translation>間隔は写真のあいだの白い紙で、色付きの枠ではありません。</translation>
     </message>
     <message>
         <source>Hely törlése</source>

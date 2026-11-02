@@ -1072,8 +1072,8 @@
         <translation>Dos fotos no pueden ocupar la misma posición.</translation>
     </message>
     <message>
-        <source>A margó, a hézag vagy a szegély értéke érvénytelen.</source>
-        <translation>El valor del margen, la separación o el borde no es válido.</translation>
+        <source>A margó, a szegély vagy a sarok lekerekítése érvénytelen.</source>
+        <translation>El valor del margen, la separación o el radio de las esquinas no es válido.</translation>
     </message>
     <message>
         <source>Húzd ide a fotót</source>
@@ -1142,16 +1142,8 @@
         <translation>Margen exterior</translation>
     </message>
     <message>
-        <source>Képek közti hézag</source>
-        <translation>Separación entre fotos</translation>
-    </message>
-    <message>
         <source>Szegély</source>
-        <translation>Borde</translation>
-    </message>
-    <message>
-        <source>Szegély színe</source>
-        <translation>Color del borde</translation>
+        <translation>Separación</translation>
     </message>
     <message>
         <source>Sarok lekerekítése</source>
@@ -1187,7 +1179,7 @@
     </message>
     <message>
         <source>Szegély beállítása</source>
-        <translation>Ajustar el borde</translation>
+        <translation>Establecer separación</translation>
     </message>
     <message numerus="yes">
         <source>%n hely</source>
@@ -1201,8 +1193,12 @@
         <translation>Margen automático</translation>
     </message>
     <message>
-        <source>Automatikus hézag</source>
+        <source>Automatikus szegély</source>
         <translation>Separación automática</translation>
+    </message>
+    <message>
+        <source>A szegély a fotók között maradó fehér papír, nem színes keret.</source>
+        <translation>La separación es el papel blanco entre las fotos, no un marco de color.</translation>
     </message>
     <message>
         <source>Hely törlése</source>

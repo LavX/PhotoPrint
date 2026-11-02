@@ -614,9 +614,9 @@ Result<Page> remap(Page page)
 
 Result<Page> repair(Page page)
 {
-    // Style first: ranges, finiteness and colour validity are model rules, and a
-    // caller that filled the struct directly must not be able to print a
-    // negative margin or a NaN border.
+    // Style first: ranges and finiteness are model rules, and a caller that
+    // filled the struct directly must not be able to print a negative margin
+    // or a NaN gap.
     page.slotStyle = SlotGeometry::sanitiseStyle(page.slotStyle);
 
     // Slots next: a dropped or truncated slot must not keep a frame pointing at

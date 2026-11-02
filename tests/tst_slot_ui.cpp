@@ -477,12 +477,12 @@ private slots:
     void layoutNameIsTheEnglishCatalogueName();
     void marginAndGutterAreAutomaticOrZero();
     void styleValuesClampOnSmallPaper();
-    void borderColourWithAlphaRoundTrips();
+    void gapControlReplacesTheMatControls();
     void oneUndoPerStyleChange();
     void addSlotSplitsAndRefusesAtTheCap();
     void removeSlotLeavesTheGap();
     void dissolveKeepsThePhotographs();
-    void borderPrintsAndTheCanvasAgrees();
+    void gapPrintsAndTheCanvasAgrees();
     void styleWritesOnlyTheEditedField();
     void layoutStyleIsLiveAndOneUndo();
     void emptyCellSelectionShowsThePagePanel();
@@ -545,8 +545,7 @@ void TestSlotUi::clickSelectsSlotAndEscapeClears()
     QVERIFY(view.selectedSlot().isEmpty());
     QVERIFY(view.selectedFrame().isEmpty());
 
-    // Clicking the mat or the photograph of a filled cell selects the photo and
-    // its cell.
+    // Clicking the photograph of a filled cell selects the photo and its cell.
     QTest::mouseClick(&view, Qt::LeftButton, Qt::NoModifier,
                       view.slotRect(filledSlot).center().toPoint());
     QCOMPARE(view.selectedFrame(), frameId);
@@ -576,7 +575,7 @@ void TestSlotUi::selectionSurvivesDocumentChange()
 
     // A document change that keeps the cell keeps the selection.
     DocumentSnapshot moved = document;
-    moved.pages[0].slotStyle.borderMm = 3.0;
+    moved.pages[0].slotStyle.gutterMm = 3.0;
     auto restyled = SlotLayoutEngine::repair(moved.pages.at(0));
     QVERIFY(restyled.ok());
     moved.pages[0] = restyled.value();
@@ -2766,17 +2765,20 @@ void TestSlotUi::styleValuesClampOnSmallPaper()
     QVERIFY(window.waitForPreview(15000));
 
     auto *marginSpin = spinNamed(window, "marginSpin");
-    auto *borderSpin = spinNamed(window, "borderSpin");
+    auto *gutterSpin = spinNamed(window, "gutterSpin");
     auto *radiusSpin = spinNamed(window, "radiusSpin");
     auto *marginAuto = window.findChild<QCheckBox *>(QStringLiteral("marginAutoCheck"));
+    auto *gutterAuto = window.findChild<QCheckBox *>(QStringLiteral("gutterAutoCheck"));
     QVERIFY(marginSpin);
-    QVERIFY(borderSpin);
+    QVERIFY(gutterSpin);
     QVERIFY(radiusSpin);
     QVERIFY(marginAuto);
+    QVERIFY(gutterAuto);
 
     Page page = window.document().pages.first();
     // A margin may never eat the content box: half the short side minus 2 mm.
     QCOMPARE(marginSpin->maximum(), 48.0);
+    QCOMPARE(gutterSpin->maximum(), 48.0);
 
     // Asking for more than the paper allows stores the clamped value, and the
     // control shows that value instead of the number that was typed.
@@ -2789,108 +2791,107 @@ void TestSlotUi::styleValuesClampOnSmallPaper()
     QVERIFY(page.slotStyle.marginMm.has_value());
     QCOMPARE(*page.slotStyle.marginMm, 48.0);
     QCOMPARE(marginSpin->value(), 48.0);
-    // Back to automatic, so the cells are the full size again for the two
-    // per-cell clamps below.
     marginAuto->setChecked(true);
     QTest::qWait(30);
+
+    gutterAuto->setChecked(false);
+    QTest::qWait(30);
+    gutterSpin->setValue(50.0);
+    commitSpin(gutterSpin);
+    QTest::qWait(30);
     page = window.document().pages.first();
-    QVERIFY(!page.slotStyle.marginMm.has_value());
+    QVERIFY(page.slotStyle.gutterMm.has_value());
+    QCOMPARE(*page.slotStyle.gutterMm, 48.0);
+    QCOMPARE(gutterSpin->value(), 48.0);
 
     const QRectF cell = SlotGeometry::slotCellMm(page, page.slotList.at(0));
     const double shortestCell = std::min(cell.width(), cell.height());
     QVERIFY(shortestCell > 0.0);
-    // A border may never eat more than 45 % of a cell's shorter side, and a
-    // radius never more than half a cell. The spin is a tenth of a millimetre
-    // control, so the limit it shows is the clamp rounded to its own step.
-    QVERIFY(borderSpin->maximum() <= 0.45 * shortestCell + 1e-9);
-    QVERIFY(borderSpin->maximum() > 0.45 * shortestCell - 0.1);
+    // The radius never takes more than half a cell. The spin is a tenth of a
+    // millimetre control, so the limit it shows is the clamp rounded to its own
+    // step.
     QVERIFY(radiusSpin->maximum() <= shortestCell / 2.0 + 0.1);
     QVERIFY(radiusSpin->maximum() > shortestCell / 2.0 - 0.1);
-
-    borderSpin->setValue(50.0);
-    commitSpin(borderSpin);
-    QTest::qWait(30);
     radiusSpin->setValue(100.0);
     commitSpin(radiusSpin);
     QTest::qWait(60);
 
     page = window.document().pages.first();
     // What was stored is exactly what the control shows.
-    QCOMPARE(page.slotStyle.borderMm, borderSpin->maximum());
     QCOMPARE(page.slotStyle.cornerRadiusMm, radiusSpin->maximum());
-    QCOMPARE(borderSpin->value(), borderSpin->maximum());
     QCOMPARE(radiusSpin->value(), radiusSpin->maximum());
     QVERIFY(SlotGeometry::layoutConsistent(page));
-    // A photograph keeps at least a tenth of its cell, and every cell survives.
+    // The photograph is the cell: a gap never eats into it, and every cell
+    // survives.
     for (const Slot &slot : page.slotList) {
         const QRectF slotCell = SlotGeometry::slotCellMm(page, slot);
         const QRectF photoRect = SlotGeometry::slotPhotoRectMm(page, slot);
         QVERIFY(slotCell.width() >= 1.0);
         QVERIFY(slotCell.height() >= 1.0);
-        QVERIFY(photoRect.width() >= slotCell.width() / 10.0 - 1e-9);
-        QVERIFY(photoRect.height() >= slotCell.height() / 10.0 - 1e-9);
+        QCOMPARE(photoRect, slotCell);
     }
 }
 
-void TestSlotUi::borderColourWithAlphaRoundTrips()
+void TestSlotUi::gapControlReplacesTheMatControls()
 {
     QTemporaryDir dir;
     QVERIFY(dir.isValid());
-    const QString photo = makePhoto(dir.path(), QStringLiteral("colour.png"), QColor(40, 90, 150));
+    const QString photo = makePhoto(dir.path(), QStringLiteral("gap.png"), QColor(40, 90, 150));
 
     MainWindow window;
     window.resize(1280, 800);
     window.show();
     QTest::qWait(100);
     QVERIFY(loadDocument(window, dir, documentWithLayout({photo}, 4),
-                         QStringLiteral("colour.ppj")));
+                         QStringLiteral("gap.ppj")));
 
-    auto *colourButton = window.findChild<QPushButton *>(QStringLiteral("borderColourButton"));
-    auto *borderSpin = spinNamed(window, "borderSpin");
-    QVERIFY(colourButton);
-    QVERIFY(borderSpin);
-    // A colour with no border width paints nothing, so it is not offered and it
-    // is not an edit either.
-    QVERIFY2(!colourButton->isEnabled(), "the colour was offered with no border");
-    const QColor chosen(20, 40, 60, 128);
-    const DocumentSnapshot beforeColour = window.document();
-    QVERIFY(QMetaObject::invokeMethod(&window, "applySlotBorderColour",
-                                      Qt::DirectConnection, Q_ARG(QColor, chosen)));
+    // The gap is the border: one distance, no width and no colour.
+    auto *gutterSpin = spinNamed(window, "gutterSpin");
+    auto *gutterAuto = window.findChild<QCheckBox *>(QStringLiteral("gutterAutoCheck"));
+    auto *hint = window.findChild<QLabel *>(QStringLiteral("gutterHint"));
+    QVERIFY(gutterSpin);
+    QVERIFY(gutterAuto);
+    QVERIFY(hint);
+    QCOMPARE(gutterSpin->accessibleName(), QStringLiteral("Szegély"));
+    QCOMPARE(gutterSpin->suffix(), QStringLiteral(" mm"));
+    QCOMPARE(gutterSpin->minimum(), 0.0);
+    QCOMPARE(gutterSpin->maximum(), SlotGeometry::kMaxGutterMm);
+    QCOMPARE(gutterAuto->text(), QStringLiteral("Automatikus szegély"));
+    QVERIFY2(hint->text().contains(QStringLiteral("fehér papír")),
+             qPrintable(hint->text()));
+    QVERIFY2(!window.findChild<QDoubleSpinBox *>(QStringLiteral("borderSpin")),
+             "the mat width control survived");
+    QVERIFY2(!window.findChild<QPushButton *>(QStringLiteral("borderColourButton")),
+             "the mat colour control survived");
+
+    // The rest of the page panel is still there.
+    QVERIFY(spinNamed(window, "marginSpin"));
+    QVERIFY(spinNamed(window, "radiusSpin"));
+    QVERIFY(window.findChild<QPushButton *>(QStringLiteral("addSlotButton")));
+    QVERIFY(window.findChild<QPushButton *>(QStringLiteral("removeSlotButton")));
+    QVERIFY(window.findChild<QPushButton *>(QStringLiteral("dissolveLayoutButton")));
+    QVERIFY(window.findChild<QPushButton *>(QStringLiteral("layoutTemplatesButton")));
+
+    // Automatic and an explicit zero are both reachable, and the gap change is
+    // one undo step named after the gap.
+    QVERIFY(gutterAuto->isChecked());
+    gutterAuto->setChecked(false);
     QTest::qWait(50);
-    QVERIFY2(window.document() == beforeColour, "a colour with no border made an edit");
-
-    borderSpin->setValue(3.0);
-    commitSpin(borderSpin);
-    QTest::qWait(50);
-    QVERIFY(colourButton->isEnabled());
-
-    // The colour dialog's answer arrives through one function, so the panel has
-    // one writer for the colour and the test needs no modal dialog.
-    QVERIFY(QMetaObject::invokeMethod(&window, "applySlotBorderColour",
-                                      Qt::DirectConnection, Q_ARG(QColor, chosen)));
+    gutterSpin->setValue(0.0);
+    commitSpin(gutterSpin);
     QTest::qWait(50);
     Page page = window.document().pages.first();
-    QCOMPARE(page.slotStyle.borderColor, chosen);
-    QCOMPARE(page.slotStyle.borderColor.alpha(), 128);
+    QVERIFY(page.slotStyle.gutterMm.has_value());
+    QCOMPARE(*page.slotStyle.gutterMm, 0.0);
     QAction *undo = undoAction(window);
     QVERIFY(undo);
     QVERIFY2(undoLabelIs(window, QStringLiteral("Szegély beállítása")),
              qPrintable(undo->text()));
 
-    // Alpha survives the project file: a translucent mat is a saved choice.
-    const QString path = dir.filePath(QStringLiteral("colour-saved.ppj"));
-    ProjectStore store;
-    QVERIFY(store.save(path, window.document(), SaveMode::Normal).ok());
-    const auto loaded = store.load(path);
-    QVERIFY(loaded);
-    QCOMPARE(loaded.value().document.pages.first().slotStyle.borderColor, chosen);
-    QCOMPARE(loaded.value().document.pages.first().slotStyle.borderColor.alpha(), 128);
-
-    undo->trigger();
+    gutterAuto->setChecked(true);
     QTest::qWait(50);
     page = window.document().pages.first();
-    QCOMPARE(page.slotStyle.borderColor, QColor(255, 255, 255));
-    QCOMPARE(page.slotStyle.borderMm, 3.0);
+    QVERIFY(!page.slotStyle.gutterMm.has_value());
 }
 
 void TestSlotUi::oneUndoPerStyleChange()
@@ -2906,23 +2907,27 @@ void TestSlotUi::oneUndoPerStyleChange()
     QVERIFY(loadDocument(window, dir, documentWithLayout({photo}, 4),
                          QStringLiteral("style-undo.ppj")));
 
-    auto *borderSpin = spinNamed(window, "borderSpin");
-    QVERIFY(borderSpin);
+    auto *gutterSpin = spinNamed(window, "gutterSpin");
+    auto *gutterAuto = window.findChild<QCheckBox *>(QStringLiteral("gutterAutoCheck"));
+    QVERIFY(gutterSpin);
+    QVERIFY(gutterAuto);
+    gutterAuto->setChecked(false);
+    QTest::qWait(50);
     QAction *undo = undoAction(window);
     QVERIFY(undo);
 
-    borderSpin->setValue(3.0);
-    commitSpin(borderSpin);
+    gutterSpin->setValue(3.0);
+    commitSpin(gutterSpin);
     QTest::qWait(50);
     const DocumentSnapshot afterThree = window.document();
-    QCOMPARE(afterThree.pages.first().slotStyle.borderMm, 3.0);
+    QCOMPARE(afterThree.pages.first().slotStyle.gutterMm.value_or(-1.0), 3.0);
     QVERIFY2(undoLabelIs(window, QStringLiteral("Szegély beállítása")),
              qPrintable(undo->text()));
 
-    borderSpin->setValue(6.0);
-    commitSpin(borderSpin);
+    gutterSpin->setValue(6.0);
+    commitSpin(gutterSpin);
     QTest::qWait(50);
-    QCOMPARE(window.document().pages.first().slotStyle.borderMm, 6.0);
+    QCOMPARE(window.document().pages.first().slotStyle.gutterMm.value_or(-1.0), 6.0);
 
     // One step back is the 3 mm state, not the 0 mm one: one action, one entry.
     undo->trigger();
@@ -2931,12 +2936,12 @@ void TestSlotUi::oneUndoPerStyleChange()
 
     // A focus loss on an untouched spin is not an edit: no new entry.
     const QString text = undo->text();
-    commitSpin(borderSpin);
+    commitSpin(gutterSpin);
     QTest::qWait(30);
     QVERIFY(window.document() == afterThree);
     QCOMPARE(undo->text(), text);
 
-    // Radius and colour are their own single steps as well.
+    // The radius is its own single step as well.
     auto *radiusSpin = spinNamed(window, "radiusSpin");
     QVERIFY(radiusSpin);
     radiusSpin->setValue(4.0);
@@ -2944,13 +2949,8 @@ void TestSlotUi::oneUndoPerStyleChange()
     QTest::qWait(50);
     const DocumentSnapshot afterRadius = window.document();
     QCOMPARE(afterRadius.pages.first().slotStyle.cornerRadiusMm, 4.0);
-    undo->trigger();
-    QTest::qWait(50);
-    QVERIFY(window.document() == afterThree);
-
-    QVERIFY(QMetaObject::invokeMethod(&window, "applySlotBorderColour", Qt::DirectConnection,
-                                      Q_ARG(QColor, QColor(0, 0, 0))));
-    QTest::qWait(50);
+    QVERIFY2(undoLabelIs(window, QStringLiteral("Sarok lekerekítése")),
+             qPrintable(undo->text()));
     undo->trigger();
     QTest::qWait(50);
     QVERIFY(window.document() == afterThree);
@@ -3261,56 +3261,61 @@ void TestSlotUi::dissolveKeepsThePhotographs()
     QVERIFY(panel->isVisible());
 }
 
-void TestSlotUi::borderPrintsAndTheCanvasAgrees()
+void TestSlotUi::gapPrintsAndTheCanvasAgrees()
 {
     QTemporaryDir dir;
     QVERIFY(dir.isValid());
-    const QString photo = makePhoto(dir.path(), QStringLiteral("mat.png"), QColor(128, 128, 128));
+    const QString photo = makePhoto(dir.path(), QStringLiteral("gap.png"), QColor(128, 128, 128));
 
-    DocumentSnapshot document = documentWithLayout({photo}, 4);
+    DocumentSnapshot document = documentWithLayout({photo, photo}, 4);
     QVERIFY(!document.pages.isEmpty());
     const Frame *firstFrame =
         frameInSlot(document.pages.first(), document.pages.first().slotList.at(0).id);
+    const Frame *secondFrame =
+        frameInSlot(document.pages.first(), document.pages.first().slotList.at(1).id);
     QVERIFY(firstFrame);
+    QVERIFY(secondFrame);
     const QString frameId = firstFrame->id;
+    const QString secondFrameId = secondFrame->id;
 
-    // A 3 mm black mat, chosen through the engine by the same page the panel
-    // builds, so this test measures the style and not the panel.
+    // A 3 mm gap, chosen through the engine by the same page the panel builds,
+    // so this test measures the style and not the panel.
     SlotStyle style;
-    style.borderMm = 3.0;
-    style.borderColor = QColor(0, 0, 0);
+    style.marginMm = 10.0;
+    style.gutterMm = 3.0;
     auto styled = SlotLayoutEngine::setStyle(document.pages.first(), style);
     QVERIFY(styled);
     document.pages[0] = styled.value();
     const Page page = document.pages.first();
-    const Slot &filled = page.slotList.at(0);
-    const Slot &empty = page.slotList.at(1);
-    const QRectF filledCell = SlotGeometry::slotCellMm(page, filled);
-    const QRectF filledPhoto = SlotGeometry::slotPhotoRectMm(page, filled);
-    const QRectF emptyCell = SlotGeometry::slotCellMm(page, empty);
-    QVERIFY(filledPhoto.width() < filledCell.width());
+    const QList<QRectF> cells = SlotGeometry::cellsMm(page);
+    QCOMPARE(cells.size(), 4);
+    const QRectF filledCell = cells.at(0);
+    const QRectF emptyCell = cells.at(2);
+    QVERIFY(std::abs(cells.at(1).left() - cells.at(0).right() - 3.0) <= 1e-9);
+    QVERIFY(std::abs(cells.at(2).top() - cells.at(0).bottom() - 3.0) <= 1e-9);
+    // The photograph is the cell: there is no inset around it.
+    QCOMPARE(SlotGeometry::slotPhotoRectMm(page, page.slotList.at(0)), filledCell);
 
-    // The probes sit just inside an edge or a corner, and the block mean keeps
-    // antialiasing from two different resolutions out of the comparison.
+    // The probes sit just inside an edge or in the middle of the gap. The block
+    // mean keeps antialiasing from two different resolutions out of the
+    // comparison.
     struct Probe {
         QPointF centre;
         double sizeMm;
         const char *name;
     };
-    const auto nearEdge = [](const QRectF &rect) {
-        return QPointF(rect.left() + 1.2, rect.center().y());
-    };
-    const auto nearCorner = [](const QRectF &rect) {
-        return QPointF(rect.left() + 1.2, rect.top() + 1.2);
-    };
     const QList<Probe> probes = {
-        {nearEdge(filledCell), 0.8, "mat beside the cell edge"},
-        {nearCorner(filledCell), 0.8, "mat in the cell corner"},
-        {QPointF(filledPhoto.left() + 1.2, filledPhoto.center().y()), 0.8,
-         "photograph beside its edge"},
-        {filledPhoto.center(), 1.0, "photograph centre"},
-        {nearEdge(emptyCell), 0.8, "mat of the empty cell"},
+        {QPointF(filledCell.left() + 1.2, filledCell.center().y()), 0.8,
+         "photograph beside its left edge"},
+        {QPointF(filledCell.right() - 1.2, filledCell.center().y()), 0.8,
+         "photograph beside its right edge"},
+        {QPointF(filledCell.right() + 1.5, filledCell.center().y()), 0.8,
+         "paper in the horizontal gap"},
+        {QPointF(filledCell.center().x(), filledCell.bottom() + 1.5), 0.8,
+         "paper in the vertical gap"},
         {emptyCell.center(), 1.0, "paper inside the empty cell"},
+        {QPointF(emptyCell.left() + 1.2, emptyCell.center().y()), 0.8,
+         "paper at the empty cell edge"},
     };
 
     ImageStore store;
@@ -3322,34 +3327,54 @@ void TestSlotUi::borderPrintsAndTheCanvasAgrees()
     const QImage printed = rendered.value();
     QVERIFY(!printed.isNull());
     const QSizeF sheet = pageSizeMm(page);
+    const double pxPerMm = ppi / 25.4;
 
-    const auto isDark = [](const QColor &colour) {
-        return colour.red() <= 30 && colour.green() <= 30 && colour.blue() <= 30;
-    };
     const auto printedAt = [&](const QPointF &mm, double sizeMm) {
         return meanColourMm(printed, sheet, mm, sizeMm);
     };
-    QVERIFY2(isDark(printedAt(probes.at(0).centre, probes.at(0).sizeMm)),
-             "the 3 mm mat beside the cell edge did not print");
-    QVERIFY2(isDark(printedAt(probes.at(1).centre, probes.at(1).sizeMm)),
-             "the mat in the cell corner did not print");
-    const QColor photoNearEdge = printedAt(probes.at(2).centre, probes.at(2).sizeMm);
-    QVERIFY2(photoNearEdge.red() >= 95 && photoNearEdge.red() <= 165,
-             qPrintable(QStringLiteral("the photograph beside its edge printed %1/%2/%3")
-                            .arg(photoNearEdge.red())
-                            .arg(photoNearEdge.green())
-                            .arg(photoNearEdge.blue())));
-    // An empty cell prints its mat and nothing else: the ring is there, the
-    // middle is paper, and no placeholder tint reaches the raster.
-    QVERIFY2(isDark(printedAt(probes.at(4).centre, probes.at(4).sizeMm)),
-             "an empty cell must still print its mat");
-    const QColor emptyCentre = printedAt(probes.at(5).centre, probes.at(5).sizeMm);
-    QVERIFY2(emptyCentre.red() >= 245 && emptyCentre.green() >= 245
-                 && emptyCentre.blue() >= 245,
-             qPrintable(QStringLiteral("an empty cell printed %1/%2/%3 in its middle")
-                            .arg(emptyCentre.red())
-                            .arg(emptyCentre.green())
-                            .arg(emptyCentre.blue())));
+    const auto isPaper = [](const QColor &colour) {
+        return colour.red() >= 245 && colour.green() >= 245 && colour.blue() >= 245;
+    };
+    const auto isWhite = [](QRgb pixel) {
+        return qRed(pixel) > 248 && qGreen(pixel) > 248 && qBlue(pixel) > 248;
+    };
+    const auto isGreyPhoto = [](const QColor &colour) {
+        return colour.red() >= 95 && colour.red() <= 165;
+    };
+    QVERIFY2(isGreyPhoto(printedAt(probes.at(0).centre, 0.8)),
+             "the photograph did not reach its left edge");
+    QVERIFY2(isGreyPhoto(printedAt(probes.at(1).centre, 0.8)),
+             "the photograph did not reach its right edge");
+    QVERIFY2(isPaper(printedAt(probes.at(2).centre, 0.8)),
+             "the 3 mm horizontal gap did not print as paper");
+    QVERIFY2(isPaper(printedAt(probes.at(3).centre, 0.8)),
+             "the 3 mm vertical gap did not print as paper");
+    QVERIFY2(isPaper(printedAt(probes.at(4).centre, 1.0)),
+             "an empty cell printed something other than paper");
+    QVERIFY2(isPaper(printedAt(probes.at(5).centre, 0.8)),
+             "an empty cell printed a mat at its edge");
+
+    // Measure the white run between the two photographs on the top row: it is
+    // the gap, exactly, not a gap plus an inset on either side.
+    const int y = qRound(filledCell.center().y() * pxPerMm);
+    const int from = qRound(filledCell.left() * pxPerMm);
+    const int to = qRound(cells.at(1).right() * pxPerMm);
+    const int middle = qRound((filledCell.right() + cells.at(1).left()) / 2.0 * pxPerMm);
+    int lastPhoto = from;
+    int firstPhoto = to;
+    for (int x = from; x <= middle; ++x) {
+        if (!isWhite(printed.pixel(x, y)))
+            lastPhoto = x;
+    }
+    for (int x = middle; x <= to; ++x) {
+        if (!isWhite(printed.pixel(x, y))) {
+            firstPhoto = x;
+            break;
+        }
+    }
+    const double measuredGapMm = (firstPhoto - lastPhoto - 1) / pxPerMm;
+    QVERIFY2(std::abs(measuredGapMm - 3.0) <= 0.3,
+             qPrintable(QStringLiteral("a 3 mm gap measured %1 mm").arg(measuredGapMm)));
 
     // The canvas raster is made by the same painter at the same millimetres, so
     // what the screen shows and what the printer gets cannot drift apart. The
@@ -3359,7 +3384,7 @@ void TestSlotUi::borderPrintsAndTheCanvasAgrees()
     PageView view;
     view.resize(900, 700);
     view.setDocument(document);
-    view.setFrameImages({{frameId, pixels}});
+    view.setFrameImages({{frameId, pixels}, {secondFrameId, pixels}});
     view.show();
     QVERIFY(QTest::qWaitForWindowExposed(&view));
     const QImage canvas = view.composedImage();
@@ -3397,19 +3422,23 @@ void TestSlotUi::styleWritesOnlyTheEditedField()
                          QStringLiteral("stored.ppj")));
     QVERIFY(window.waitForPreview(15000));
 
-    auto *borderSpin = spinNamed(window, "borderSpin");
+    auto *gutterSpin = spinNamed(window, "gutterSpin");
+    auto *gutterAuto = window.findChild<QCheckBox *>(QStringLiteral("gutterAutoCheck"));
     auto *radiusSpin = spinNamed(window, "radiusSpin");
-    QVERIFY(borderSpin);
+    QVERIFY(gutterSpin);
+    QVERIFY(gutterAuto);
     QVERIFY(radiusSpin);
-
-    // The model's maximum border is 20 mm.
-    borderSpin->setValue(20.0);
-    commitSpin(borderSpin);
+    gutterAuto->setChecked(false);
     QTest::qWait(50);
-    QCOMPARE(window.document().pages.first().slotStyle.borderMm, 20.0);
 
-    // A 10 × 15 cm sheet cannot show 20 mm inside a cell: the panel clamps the
-    // display. What the page stores stays 20 mm.
+    // The model's maximum gap is 50 mm.
+    gutterSpin->setValue(50.0);
+    commitSpin(gutterSpin);
+    QTest::qWait(50);
+    QCOMPARE(window.document().pages.first().slotStyle.gutterMm.value_or(-1.0), 50.0);
+
+    // A 10 × 15 cm sheet cannot use 50 mm: the panel clamps the display. What
+    // the page stores stays 50 mm.
     QComboBox *paper = paperCombo(window);
     QVERIFY(paper);
     int tenByFifteen = -1;
@@ -3423,30 +3452,30 @@ void TestSlotUi::styleWritesOnlyTheEditedField()
 
     Page page = window.document().pages.first();
     QCOMPARE(page.paper.name, QStringLiteral("10 × 15 cm"));
-    QCOMPARE(page.slotStyle.borderMm, 20.0);
-    QVERIFY2(borderSpin->maximum() < 20.0, "the displayed border was not clamped");
-    QCOMPARE(borderSpin->value(), borderSpin->maximum());
+    QCOMPARE(page.slotStyle.gutterMm.value_or(-1.0), 50.0);
+    QVERIFY2(gutterSpin->maximum() < 50.0, "the displayed gap was not clamped");
+    QCOMPARE(gutterSpin->value(), gutterSpin->maximum());
 
-    // Touching another field writes that field and leaves the stored border
-    // alone, even though the panel shows the clamped value.
+    // Touching another field writes that field and leaves the stored gap alone,
+    // even though the panel shows the clamped value.
     radiusSpin->setValue(4.0);
     commitSpin(radiusSpin);
     QTest::qWait(50);
     page = window.document().pages.first();
-    QCOMPARE(page.slotStyle.borderMm, 20.0);
+    QCOMPARE(page.slotStyle.gutterMm.value_or(-1.0), 50.0);
     QCOMPARE(page.slotStyle.cornerRadiusMm, 4.0);
 
-    // Activating the border spin and leaving it is not an edit: no undo entry,
-    // no write of the clamped display.
+    // Activating the gap spin and leaving it is not an edit: no undo entry, no
+    // write of the clamped display.
     const DocumentSnapshot beforeLeave = window.document();
     QAction *undo = undoAction(window);
     QVERIFY(undo);
     const QString label = undo->text();
-    commitSpin(borderSpin);
+    commitSpin(gutterSpin);
     QTest::qWait(60);
     QVERIFY2(window.document() == beforeLeave, "an untouched spin republished its display");
     QCOMPARE(undo->text(), label);
-    QCOMPARE(window.document().pages.first().slotStyle.borderMm, 20.0);
+    QCOMPARE(window.document().pages.first().slotStyle.gutterMm.value_or(-1.0), 50.0);
 }
 
 void TestSlotUi::layoutStyleIsLiveAndOneUndo()
@@ -3463,19 +3492,23 @@ void TestSlotUi::layoutStyleIsLiveAndOneUndo()
                          QStringLiteral("live.ppj")));
     QVERIFY(window.waitForPreview(15000));
 
-    auto *borderSpin = spinNamed(window, "borderSpin");
-    QVERIFY(borderSpin);
+    auto *gutterSpin = spinNamed(window, "gutterSpin");
+    auto *gutterAuto = window.findChild<QCheckBox *>(QStringLiteral("gutterAutoCheck"));
+    QVERIFY(gutterSpin);
+    QVERIFY(gutterAuto);
+    gutterAuto->setChecked(false);
+    QTest::qWait(50);
     const DocumentSnapshot before = window.document();
     QAction *undo = undoAction(window);
     QVERIFY(undo);
 
     // A burst while the spin is still being used: the page has not changed yet,
     // the panel shows the new number, and the value lands once the burst stops.
-    borderSpin->setValue(1.0);
-    borderSpin->setValue(2.0);
-    borderSpin->setValue(3.0);
-    QCOMPARE(window.document().pages.first().slotStyle.borderMm, 0.0);
-    QTRY_COMPARE(window.document().pages.first().slotStyle.borderMm, 3.0);
+    gutterSpin->setValue(1.0);
+    gutterSpin->setValue(2.0);
+    gutterSpin->setValue(3.0);
+    QCOMPARE(window.document().pages.first().slotStyle.gutterMm.value_or(-1.0), 10.0);
+    QTRY_COMPARE(window.document().pages.first().slotStyle.gutterMm.value_or(-1.0), 3.0);
 
     // The whole burst is one undo step.
     QVERIFY(undo->isEnabled());
@@ -3487,7 +3520,7 @@ void TestSlotUi::layoutStyleIsLiveAndOneUndo()
 
     // Finishing the edit after the burst already landed pushes nothing.
     const DocumentSnapshot afterUndo = window.document();
-    commitSpin(borderSpin);
+    commitSpin(gutterSpin);
     QTest::qWait(60);
     QVERIFY(window.document() == afterUndo);
 
@@ -3497,8 +3530,8 @@ void TestSlotUi::layoutStyleIsLiveAndOneUndo()
     QAction *undoActionPtr = undoAction(window);
     QVERIFY(undoActionPtr);
     const QString labelBeforeDuplicate = undoActionPtr->text();
-    borderSpin->setValue(4.0);
-    borderSpin->setValue(0.0);
+    gutterSpin->setValue(4.0);
+    gutterSpin->setValue(10.0);
     QTest::qWait(kStyleBurstMs);
     QVERIFY2(window.document() == beforeDuplicate,
              "a burst that ended where it started made an edit");
@@ -3506,7 +3539,7 @@ void TestSlotUi::layoutStyleIsLiveAndOneUndo()
 
     // A burst that is still open when the paper changes lands first, so the value
     // the user just chose is not dropped by the new geometry.
-    borderSpin->setValue(5.0);
+    gutterSpin->setValue(5.0);
     QComboBox *paper = paperCombo(window);
     QVERIFY(paper);
     int tenByFifteen = -1;
@@ -3519,7 +3552,7 @@ void TestSlotUi::layoutStyleIsLiveAndOneUndo()
     QTest::qWait(80);
     const Page afterPaper = window.document().pages.first();
     QCOMPARE(afterPaper.paper.name, QStringLiteral("10 × 15 cm"));
-    QCOMPARE(afterPaper.slotStyle.borderMm, 5.0);
+    QCOMPARE(afterPaper.slotStyle.gutterMm.value_or(-1.0), 5.0);
 }
 
 void TestSlotUi::emptyCellSelectionShowsThePagePanel()
@@ -3592,17 +3625,21 @@ void TestSlotUi::layoutPanelFollowsThePage()
 
     // A burst that is still open when the page changes lands on the page it was
     // made on, never on the one that comes into view.
-    auto *borderSpin = spinNamed(window, "borderSpin");
-    QVERIFY(borderSpin);
+    auto *gutterSpin = spinNamed(window, "gutterSpin");
+    auto *gutterAuto = window.findChild<QCheckBox *>(QStringLiteral("gutterAutoCheck"));
+    QVERIFY(gutterSpin);
+    QVERIFY(gutterAuto);
     QVERIFY(QMetaObject::invokeMethod(&window, "pageSelected", Qt::DirectConnection,
                                       Q_ARG(int, 0)));
     QTest::qWait(50);
-    borderSpin->setValue(6.0);
+    gutterAuto->setChecked(false);
+    QTest::qWait(50);
+    gutterSpin->setValue(6.0);
     QVERIFY(QMetaObject::invokeMethod(&window, "pageSelected", Qt::DirectConnection,
                                       Q_ARG(int, 1)));
     QTest::qWait(80);
-    QCOMPARE(window.document().pages.at(0).slotStyle.borderMm, 6.0);
-    QCOMPARE(window.document().pages.at(1).slotStyle.borderMm, 0.0);
+    QCOMPARE(window.document().pages.at(0).slotStyle.gutterMm.value_or(-1.0), 6.0);
+    QVERIFY(!window.document().pages.at(1).slotStyle.gutterMm.has_value());
 
     QVERIFY(QMetaObject::invokeMethod(&window, "pageSelected", Qt::DirectConnection,
                                       Q_ARG(int, 0)));
@@ -3650,8 +3687,6 @@ void TestSlotUi::roundedCornersClipThePrint()
     DocumentSnapshot document = documentWithLayout({photo}, 4);
     QVERIFY(!document.pages.isEmpty());
     SlotStyle style;
-    style.borderMm = 3.0;
-    style.borderColor = QColor(0, 0, 0);
     style.cornerRadiusMm = 8.0;
     auto styled = SlotLayoutEngine::setStyle(document.pages.first(), style);
     QVERIFY(styled);
@@ -3660,6 +3695,7 @@ void TestSlotUi::roundedCornersClipThePrint()
     const Slot &slot = page.slotList.at(0);
     const QRectF cell = SlotGeometry::slotCellMm(page, slot);
     const QRectF photoRect = SlotGeometry::slotPhotoRectMm(page, slot);
+    QCOMPARE(photoRect, cell);
     QVERIFY(SlotGeometry::cornerRadiusMm(page.slotStyle, cell) > 0.0);
 
     ImageStore store;
@@ -3683,14 +3719,14 @@ void TestSlotUi::roundedCornersClipThePrint()
              qPrintable(QStringLiteral("the photograph centre printed %1").arg(qRed(centre))));
 
     // Just inside a corner of the photograph: the rounded clip cut the corner
-    // away, so the mat shows through. Without the clip this is grey.
+    // away, so the paper shows through. Without the clip this is grey.
     for (const QPointF &corner : {QPointF(photoRect.left() + 0.5, photoRect.top() + 0.5),
                                   QPointF(photoRect.right() - 0.5, photoRect.top() + 0.5),
                                   QPointF(photoRect.left() + 0.5, photoRect.bottom() - 0.5),
                                   QPointF(photoRect.right() - 0.5, photoRect.bottom() - 0.5)}) {
         const QRgb pixel = at(corner);
-        QVERIFY2(qRed(pixel) <= 30 && qGreen(pixel) <= 30 && qBlue(pixel) <= 30,
-                 qPrintable(QStringLiteral("a rounded corner printed %1/%2/%3 instead of the mat")
+        QVERIFY2(qRed(pixel) >= 235 && qGreen(pixel) >= 235 && qBlue(pixel) >= 235,
+                 qPrintable(QStringLiteral("a rounded corner printed %1/%2/%3 instead of paper")
                                 .arg(qRed(pixel))
                                 .arg(qGreen(pixel))
                                 .arg(qBlue(pixel))));
@@ -3703,19 +3739,12 @@ void TestSlotUi::roundedCornersClipThePrint()
     QVERIFY2(qRed(inner) >= 95 && qRed(inner) <= 165,
              qPrintable(QStringLiteral("inside the corner radius printed %1").arg(qRed(inner))));
 
-    // The ring follows the rounding. The cell's own corner is outside the rounded
-    // rectangle, so it stays paper; just inside the rounding it is mat; and the
-    // band between the cell and the photograph at mid-edge is mat as well.
-    const QRgb cornerOutside = at(QPointF(cell.left() + 0.6, cell.top() + 0.6));
-    QVERIFY2(qRed(cornerOutside) >= 235,
-             qPrintable(QStringLiteral("the rounded cell corner printed %1 instead of paper")
-                            .arg(qRed(cornerOutside))));
-    const QRgb ringCorner = at(QPointF(cell.left() + 4.0, cell.top() + 4.0));
-    QVERIFY2(qRed(ringCorner) <= 30,
-             qPrintable(QStringLiteral("the mat inside the rounding printed %1")
-                            .arg(qRed(ringCorner))));
-    const QRgb ringEdge = at(QPointF(cell.left() + 1.5, cell.center().y()));
-    QVERIFY(qRed(ringEdge) <= 30);
+    // There is no ring: at mid-edge the photograph reaches the cell edge, and
+    // the paper between two cells stays white.
+    const QRgb edge = at(QPointF(cell.left() + 0.5, cell.center().y()));
+    QVERIFY2(qRed(edge) >= 95 && qRed(edge) <= 165,
+             qPrintable(QStringLiteral("the cell edge printed %1 instead of the photograph")
+                            .arg(qRed(edge))));
     const QRgb paper = at(QPointF(cell.center().x(), cell.top() - 1.0));
     QVERIFY2(qRed(paper) >= 245, "the paper between two cells lost its white");
 }
@@ -3749,7 +3778,7 @@ void TestSlotUi::panelFitsALargerSystemFont()
 
     // No button in the panel clips its own label.
     for (const char *name : {"addSlotButton", "removeSlotButton", "dissolveLayoutButton",
-                             "layoutTemplatesButton", "borderColourButton"}) {
+                             "layoutTemplatesButton"}) {
         auto *button = window.findChild<QPushButton *>(QString::fromLatin1(name));
         QVERIFY2(button, name);
         QVERIFY2(button->width() >= button->minimumSizeHint().width(),

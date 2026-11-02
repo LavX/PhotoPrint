@@ -1076,8 +1076,8 @@
         <translation>Две фотографии не могут занимать одно место.</translation>
     </message>
     <message>
-        <source>A margó, a hézag vagy a szegély értéke érvénytelen.</source>
-        <translation>Значение поля, промежутка или рамки недопустимо.</translation>
+        <source>A margó, a szegély vagy a sarok lekerekítése érvénytelen.</source>
+        <translation>Значение поля, отступа или радиуса углов недопустимо.</translation>
     </message>
     <message>
         <source>Húzd ide a fotót</source>
@@ -1148,16 +1148,8 @@
         <translation>Внешнее поле</translation>
     </message>
     <message>
-        <source>Képek közti hézag</source>
-        <translation>Расстояние между фото</translation>
-    </message>
-    <message>
         <source>Szegély</source>
-        <translation>Окантовка</translation>
-    </message>
-    <message>
-        <source>Szegély színe</source>
-        <translation>Цвет окантовки</translation>
+        <translation>Отступ</translation>
     </message>
     <message>
         <source>Sarok lekerekítése</source>
@@ -1193,7 +1185,7 @@
     </message>
     <message>
         <source>Szegély beállítása</source>
-        <translation>Задать окантовку</translation>
+        <translation>Задать отступ</translation>
     </message>
     <message numerus="yes">
         <source>%n hely</source>
@@ -1208,8 +1200,12 @@
         <translation>Автоматическое поле</translation>
     </message>
     <message>
-        <source>Automatikus hézag</source>
+        <source>Automatikus szegély</source>
         <translation>Автоматический отступ</translation>
+    </message>
+    <message>
+        <source>A szegély a fotók között maradó fehér papír, nem színes keret.</source>
+        <translation>Отступ — это белая бумага между фотографиями, а не цветная рамка.</translation>
     </message>
     <message>
         <source>Hely törlése</source>

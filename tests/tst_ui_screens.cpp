@@ -334,14 +334,13 @@ void TestUiScreens::captureLayoutPanel()
                   QSize(900, 600));
     QVERIFY(!photo.isEmpty());
 
-    // A 2 x 2 layout with one photograph and a 3 mm black mat: the page panel
-    // shows the values, the filled cell shows its photograph inside the mat and
-    // the empty cells print the mat alone.
+    // A 2 x 2 layout with one photograph and a 3 mm gap: the page panel shows
+    // the values, the filled cell shows its photograph edge to edge and the
+    // empty cells print paper alone.
     DocumentSnapshot document = fourEmptySlots();
     Page page = document.pages.first();
     SlotStyle style;
-    style.borderMm = 3.0;
-    style.borderColor = QColor(0, 0, 0);
+    style.gutterMm = 3.0;
     const auto styled = SlotLayoutEngine::setStyle(page, style);
     QVERIFY(styled);
     page = styled.value();
@@ -368,13 +367,13 @@ void TestUiScreens::captureLayoutPanel()
     QVERIFY2(panel->isVisible(), "the layout panel must be visible with nothing selected");
     QVERIFY(window.grab().save(evidenceDir() + QStringLiteral("/ui-layout-panel.png")));
 
-    // The page alone, so the mat is readable at this size.
+    // The page alone, so the gap is readable at this size.
     auto *view = window.findChild<PageView *>();
     QVERIFY(view);
-    QVERIFY(view->grab().save(evidenceDir() + QStringLiteral("/ui-layout-mats.png")));
+    QVERIFY(view->grab().save(evidenceDir() + QStringLiteral("/ui-layout-gaps.png")));
 
-    // The same page as the print path rasterises it. An empty cell is paper with
-    // its mat: no dashed ring, no tint, nothing a printer would have to explain.
+    // The same page as the print path rasterises it. An empty cell is paper: no
+    // dashed ring, no tint, nothing a printer would have to explain.
     ImageStore store;
     PageRenderer renderer(store);
     const auto rendered = renderer.renderPage(window.document(), 0, 150.0);

@@ -90,10 +90,7 @@ SlotStyle sanitiseStyle(SlotStyle style)
     };
     style.marginMm = clampOptional(style.marginMm, kMaxMarginMm);
     style.gutterMm = clampOptional(style.gutterMm, kMaxGutterMm);
-    style.borderMm = clampValue(style.borderMm, kMaxBorderMm);
     style.cornerRadiusMm = clampValue(style.cornerRadiusMm, kMaxCornerRadiusMm);
-    if (!style.borderColor.isValid())
-        style.borderColor = QColor(255, 255, 255);
     return style;
 }
 
@@ -169,17 +166,6 @@ QRectF cellFromUnitRect(const QRectF &unitRect, const QSizeF &sheetMm, double ma
     return clampedCellToSheet(cell, sheetMm);
 }
 
-QRectF photoRectMm(const QRectF &cellMm, double borderMm)
-{
-    if (!finiteRect(cellMm) || cellMm.width() <= 0.0 || cellMm.height() <= 0.0)
-        return {};
-    const double limit = 0.45 * std::min(cellMm.width(), cellMm.height());
-    const double border = finite(borderMm)
-        ? std::clamp(borderMm, 0.0, std::min(kMaxBorderMm, limit))
-        : 0.0;
-    return cellMm.adjusted(border, border, -border, -border);
-}
-
 QRectF slotCellMm(const Page &page, const Slot &slot)
 {
     const QSizeF sheet = pageSizeMm(page);
@@ -190,7 +176,9 @@ QRectF slotCellMm(const Page &page, const Slot &slot)
 
 QRectF slotPhotoRectMm(const Page &page, const Slot &slot)
 {
-    return photoRectMm(slotCellMm(page, slot), sanitiseStyle(page.slotStyle).borderMm);
+    // The photograph fills its cell. The white paper between photographs is the
+    // gutter, not an inset around each picture.
+    return slotCellMm(page, slot);
 }
 
 QList<QRectF> cellsMm(const Page &page)

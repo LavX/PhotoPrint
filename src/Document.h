@@ -83,8 +83,8 @@ struct Slot {
     bool operator==(const Slot &) const = default;
 };
 
-/// How a laid-out page is dressed. Every value has a neutral default, so a page
-/// that never chose a border stores nothing and keeps today's geometry. A
+/// How a laid-out page is spaced. Every value has a neutral default, so a page
+/// that never chose a spacing stores nothing and keeps today's geometry. A
 /// missing margin means "automatic" (the catalogue's 5 %, 4..10 mm), not zero:
 /// an explicit zero is a real choice the panel can make with automatic off.
 struct SlotStyle {
@@ -92,12 +92,12 @@ struct SlotStyle {
     /// explicit zero is a real zero margin, so the panel can turn the automatic
     /// value off and still choose no margin at all.
     std::optional<double> marginMm;
-    /// Missing means "equal to the effective margin"; an explicit zero lets two
-    /// cells touch.
+    /// The white paper between two neighbouring photographs. Missing means
+    /// "equal to the effective margin"; an explicit zero lets two cells touch.
+    /// This is the border the panel exposes: the photograph fills its cell, so
+    /// the gap is the only frame around it.
     std::optional<double> gutterMm;
-    double borderMm = 0.0;             ///< mat around each photograph, 0 = none
-    QColor borderColor{255, 255, 255}; ///< the mat's colour; white is the paper colour
-    double cornerRadiusMm = 0.0;       ///< rounded print, 0 = square
+    double cornerRadiusMm = 0.0; ///< rounded photograph, 0 = square
     bool operator==(const SlotStyle &) const = default;
 };
 

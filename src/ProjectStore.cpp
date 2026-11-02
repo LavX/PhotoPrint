@@ -248,14 +248,26 @@ QHash<QString, QString> portableFileNames(const DocumentSnapshot &document)
     return names;
 }
 
-/// A border colour is written as #rrggbb when it is opaque and #aarrggbb
-/// otherwise, the shortest form that round-trips. The loader accepts any colour
-/// QColor understands, because the value is data, not a direction to trust.
-QJsonValue colourToJson(const QColor &colour)
+/// The mat width the old model allowed. A project saved with a mat could not
+/// hold a larger value, because the loader clamped it to this, so migration
+/// clamps a hand-edited file the same way before it becomes a gap.
+constexpr double kLegacyMaxBorderMm = 20.0;
+
+/// Turns a saved mat into the gap it visibly was. The photograph used to sit
+/// `border` inside its cell, so two neighbours were `gutter + 2 * border`
+/// apart. The new model has no inset, so that whole distance becomes the
+/// gutter. An automatic gutter is resolved first, because the saved value was
+/// an absence, not a number; the migrated value is always explicit so the
+/// spacing cannot change again when the paper does.
+SlotStyle migrateLegacyMat(SlotStyle style, double borderMm, const QSizeF &sheetMm)
 {
-    if (colour.alpha() == 255)
-        return colour.name(QColor::HexRgb);
-    return colour.name(QColor::HexArgb);
+    if (!(borderMm > 0.0) || !std::isfinite(borderMm))
+        return style;
+    const double border = std::clamp(borderMm, 0.0, kLegacyMaxBorderMm);
+    const double base = SlotGeometry::effectiveGutterMm(style, sheetMm);
+    style.gutterMm =
+        std::clamp(base + 2.0 * border, 0.0, SlotGeometry::kMaxGutterMm);
+    return style;
 }
 
 QJsonObject slotStyleToJson(const SlotStyle &stored)
@@ -269,8 +281,6 @@ QJsonObject slotStyleToJson(const SlotStyle &stored)
         object.insert(QStringLiteral("marginMm"), *style.marginMm);
     if (style.gutterMm)
         object.insert(QStringLiteral("gutterMm"), *style.gutterMm);
-    object.insert(QStringLiteral("borderMm"), style.borderMm);
-    object.insert(QStringLiteral("borderColor"), colourToJson(style.borderColor));
     object.insert(QStringLiteral("cornerRadiusMm"), style.cornerRadiusMm);
     return object;
 }
@@ -285,7 +295,7 @@ struct ParsedLayout {
     QString layoutId;
 };
 
-ParsedLayout layoutFromJson(const QJsonValue &value)
+ParsedLayout layoutFromJson(const QJsonValue &value, const QSizeF &sheetMm)
 {
     ParsedLayout parsed;
     if (!value.isObject())
@@ -341,16 +351,13 @@ ParsedLayout layoutFromJson(const QJsonValue &value)
         const QJsonValue gutterValue = styleObject.value(QStringLiteral("gutterMm"));
         if (gutterValue.isDouble())
             style.gutterMm = gutterValue.toDouble();
-        style.borderMm = styleObject.value(QStringLiteral("borderMm")).toDouble(0.0);
         style.cornerRadiusMm =
             styleObject.value(QStringLiteral("cornerRadiusMm")).toDouble(0.0);
-        const QString colour = styleObject.value(QStringLiteral("borderColor")).toString();
-        if (!colour.isEmpty()) {
-            const QColor parsedColour(colour);
-            if (parsedColour.isValid())
-                style.borderColor = parsedColour;
-        }
-        parsed.style = SlotGeometry::sanitiseStyle(style);
+        // The old mat is migrated before sanitising, so its width becomes part
+        // of the gutter instead of disappearing with the dropped colour.
+        const double borderMm = styleObject.value(QStringLiteral("borderMm")).toDouble(0.0);
+        parsed.style = SlotGeometry::sanitiseStyle(
+            migrateLegacyMat(style, borderMm, sheetMm));
     }
     return parsed;
 }
@@ -513,7 +520,8 @@ Result<ParsedProject> parseDocument(const QJsonObject &root, const QString &proj
             cutGuidesFromKey(pageObject.value(QStringLiteral("cutGuides")).toString());
         page.borderlessOverride = borderlessOverrideFromKey(
             pageObject.value(QStringLiteral("borderlessOverride")).toString());
-        const ParsedLayout layout = layoutFromJson(pageObject.value(QStringLiteral("layout")));
+        const ParsedLayout layout =
+            layoutFromJson(pageObject.value(QStringLiteral("layout")), pageSizeMm(page));
         page.slotList = layout.slotList;
         page.slotStyle = layout.style;
         page.layoutId = layout.layoutId;

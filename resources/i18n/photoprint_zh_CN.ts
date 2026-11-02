@@ -1068,8 +1068,8 @@
         <translation>两张照片不能占用同一个位置。</translation>
     </message>
     <message>
-        <source>A margó, a hézag vagy a szegély értéke érvénytelen.</source>
-        <translation>边距、间距或边框的值无效。</translation>
+        <source>A margó, a szegély vagy a sarok lekerekítése érvénytelen.</source>
+        <translation>边距、间距或圆角半径的值无效。</translation>
     </message>
     <message>
         <source>Húzd ide a fotót</source>
@@ -1136,16 +1136,8 @@
         <translation>外边距</translation>
     </message>
     <message>
-        <source>Képek közti hézag</source>
-        <translation>照片间距</translation>
-    </message>
-    <message>
         <source>Szegély</source>
-        <translation>照片边框</translation>
-    </message>
-    <message>
-        <source>Szegély színe</source>
-        <translation>边框颜色</translation>
+        <translation>间距</translation>
     </message>
     <message>
         <source>Sarok lekerekítése</source>
@@ -1181,7 +1173,7 @@
     </message>
     <message>
         <source>Szegély beállítása</source>
-        <translation>设置边框</translation>
+        <translation>设置间距</translation>
     </message>
     <message numerus="yes">
         <source>%n hely</source>
@@ -1194,8 +1186,12 @@
         <translation>自动边距</translation>
     </message>
     <message>
-        <source>Automatikus hézag</source>
+        <source>Automatikus szegély</source>
         <translation>自动间距</translation>
+    </message>
+    <message>
+        <source>A szegély a fotók között maradó fehér papír, nem színes keret.</source>
+        <translation>间距是照片之间的白纸，不是彩色边框。</translation>
     </message>
     <message>
         <source>Hely törlése</source>

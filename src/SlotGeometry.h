@@ -24,7 +24,6 @@ namespace SlotGeometry {
 constexpr double kAutoMarginFraction = 0.05;
 constexpr double kMinAutoMarginMm = 4.0;
 constexpr double kMaxAutoMarginMm = 10.0;
-constexpr double kMaxBorderMm = 20.0;
 constexpr double kMaxCornerRadiusMm = 30.0;
 constexpr double kMaxMarginMm = 50.0; ///< matches SheetLayout::kMaxMarginMm
 constexpr double kMaxGutterMm = 50.0;
@@ -39,9 +38,8 @@ double automaticMarginMm(const QSizeF &sheetMm);
 
 /// Clamps every field to its range. A non-finite margin or gutter becomes
 /// automatic again, because an infinity there is corruption rather than a
-/// direction a person chose; an explicit zero survives. Other non-finite
-/// numbers become the neutral default and an invalid border colour becomes
-/// white. Alpha is a colour choice and is preserved, not forced opaque.
+/// direction a person chose; an explicit zero survives. A non-finite corner
+/// radius becomes square.
 SlotStyle sanitiseStyle(SlotStyle style);
 
 /// Clamps a unit rectangle to 0..1 and to x + w <= 1, y + h <= 1. Returns false
@@ -65,22 +63,20 @@ double effectiveMarginMm(const SlotStyle &style, const QSizeF &sheetMm);
 /// otherwise. Same paper-aware clamp as the margin.
 double effectiveGutterMm(const SlotStyle &style, const QSizeF &sheetMm);
 
-/// One slot's cell (the mat's outer edge) in page millimetres, from the unit
-/// rectangle and the paper. An outer slot sits `marginMm` from the paper edge
-/// and two neighbours are `gutterMm` apart; for margin == gutter it reduces
-/// exactly to the catalogue's mapping. The result is always inside the sheet,
-/// finite, non-negative and at least 1 mm on both axes (or as large as the
-/// sheet allows), so no caller ever feeds a negative rectangle to a clamp.
+/// One slot's cell in page millimetres, from the unit rectangle and the paper.
+/// The cell is the photograph's rectangle: there is no inset, so the white
+/// paper between two cells is exactly `gutterMm`. An outer slot sits
+/// `marginMm` from the paper edge; for margin == gutter it reduces exactly to
+/// the catalogue's mapping. The result is always inside the sheet, finite,
+/// non-negative and at least 1 mm on both axes (or as large as the sheet
+/// allows), so no caller ever feeds a negative rectangle to a clamp.
 QRectF cellFromUnitRect(const QRectF &unitRect, const QSizeF &sheetMm, double marginMm,
                         double gutterMm);
 
-/// The cell deflated by the border, i.e. the photograph's rectangle. The border
-/// never takes more than 45 % of the shorter side, so a photograph always keeps
-/// at least 10 % of its cell. A degenerate cell yields an empty rectangle
-/// instead of a negative one, and a non-finite border counts as zero.
-QRectF photoRectMm(const QRectF &cellMm, double borderMm);
-
 QRectF slotCellMm(const Page &page, const Slot &slot);
+/// The photograph's rectangle. With no mat it is the slot's cell; the name is
+/// kept because every caller that places a photograph means the picture, not
+/// the cell as a concept.
 QRectF slotPhotoRectMm(const Page &page, const Slot &slot);
 QList<QRectF> cellsMm(const Page &page); ///< in slot order
 
@@ -96,7 +92,7 @@ bool keepCropAcrossAspect(double fromWidth, double fromHeight, double toWidth,
 
 /// The corner radius a frame's slot asks for, clamped to the cell's shorter
 /// side divided by two. Zero for a frame without a slot, so free frames stay
-/// rectangular.
+/// rectangular. The radius clips the photograph; there is no ring around it.
 double cornerRadiusMm(const SlotStyle &style, const QRectF &cellMm);
 
 const Slot *slotById(const Page &page, const QString &slotId);

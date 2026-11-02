@@ -1072,8 +1072,8 @@
         <translation>Two photos cannot occupy the same slot.</translation>
     </message>
     <message>
-        <source>A margó, a hézag vagy a szegély értéke érvénytelen.</source>
-        <translation>The margin, gutter or border value is invalid.</translation>
+        <source>A margó, a szegély vagy a sarok lekerekítése érvénytelen.</source>
+        <translation>The margin, gap or corner radius value is invalid.</translation>
     </message>
     <message>
         <source>Húzd ide a fotót</source>
@@ -1142,16 +1142,8 @@
         <translation>Outer margin</translation>
     </message>
     <message>
-        <source>Képek közti hézag</source>
-        <translation>Gap between photos</translation>
-    </message>
-    <message>
         <source>Szegély</source>
-        <translation>Border</translation>
-    </message>
-    <message>
-        <source>Szegély színe</source>
-        <translation>Border colour</translation>
+        <translation>Gap</translation>
     </message>
     <message>
         <source>Sarok lekerekítése</source>
@@ -1187,7 +1179,7 @@
     </message>
     <message>
         <source>Szegély beállítása</source>
-        <translation>Set border</translation>
+        <translation>Set gap</translation>
     </message>
     <message numerus="yes">
         <source>%n hely</source>
@@ -1201,8 +1193,12 @@
         <translation>Automatic margin</translation>
     </message>
     <message>
-        <source>Automatikus hézag</source>
+        <source>Automatikus szegély</source>
         <translation>Automatic gap</translation>
+    </message>
+    <message>
+        <source>A szegély a fotók között maradó fehér papír, nem színes keret.</source>
+        <translation>The gap is the white paper between photos, not a coloured frame.</translation>
     </message>
     <message>
         <source>Hely törlése</source>

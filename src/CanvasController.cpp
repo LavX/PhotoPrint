@@ -44,13 +44,13 @@ Result<void> validateSlotState(const QList<Slot> &slotValues, const QList<Frame>
                                const SlotStyle &style)
 {
     // The editor may only publish a style it could have produced: an
-    // out-of-range margin, a NaN border or an invalid colour is a bug in the
+    // out-of-range margin or gap, or a non-finite radius, is a bug in the
     // caller, not something to sanitise silently behind its back.
     if (!(SlotGeometry::sanitiseStyle(style) == style)) {
         return error(QStringLiteral("layout-slot-style"),
                      QCoreApplication::translate(
                          "PhotoPrint",
-                         "A margó, a hézag vagy a szegély értéke érvénytelen."));
+                         "A margó, a szegély vagy a sarok lekerekítése érvénytelen."));
     }
     if (slotValues.size() > SlotGeometry::kMaxSlotsPerPage) {
         return error(QStringLiteral("layout-slot-cap"),

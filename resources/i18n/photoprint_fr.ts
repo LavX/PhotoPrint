@@ -1072,8 +1072,8 @@
         <translation>Deux photos ne peuvent pas occuper le même emplacement.</translation>
     </message>
     <message>
-        <source>A margó, a hézag vagy a szegély értéke érvénytelen.</source>
-        <translation>La valeur de la marge, de l&apos;espacement ou du bord n&apos;est pas valide.</translation>
+        <source>A margó, a szegély vagy a sarok lekerekítése érvénytelen.</source>
+        <translation>La valeur de la marge, de l&apos;espacement ou du rayon des coins n&apos;est pas valide.</translation>
     </message>
     <message>
         <source>Húzd ide a fotót</source>
@@ -1142,16 +1142,8 @@
         <translation>Marge extérieure</translation>
     </message>
     <message>
-        <source>Képek közti hézag</source>
-        <translation>Espace entre les photos</translation>
-    </message>
-    <message>
         <source>Szegély</source>
-        <translation>Bordure</translation>
-    </message>
-    <message>
-        <source>Szegély színe</source>
-        <translation>Couleur de la bordure</translation>
+        <translation>Espacement</translation>
     </message>
     <message>
         <source>Sarok lekerekítése</source>
@@ -1187,7 +1179,7 @@
     </message>
     <message>
         <source>Szegély beállítása</source>
-        <translation>Régler la bordure</translation>
+        <translation>Définir l&apos;espacement</translation>
     </message>
     <message numerus="yes">
         <source>%n hely</source>
@@ -1201,8 +1193,12 @@
         <translation>Marge automatique</translation>
     </message>
     <message>
-        <source>Automatikus hézag</source>
+        <source>Automatikus szegély</source>
         <translation>Espacement automatique</translation>
+    </message>
+    <message>
+        <source>A szegély a fotók között maradó fehér papír, nem színes keret.</source>
+        <translation>L&apos;espacement est le papier blanc entre les photos, pas un cadre coloré.</translation>
     </message>
     <message>
         <source>Hely törlése</source>
