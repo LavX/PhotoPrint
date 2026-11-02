@@ -1,5 +1,6 @@
 #include "PageRenderer.h"
 
+#include "BackgroundGeometry.h"
 #include "ColorPipeline.h"
 #include "EffectEngine.h"
 #include "LayoutEngine.h"
@@ -12,6 +13,7 @@
 #include <QFileInfo>
 #include <QFont>
 #include <QImage>
+#include <QLinearGradient>
 #include <QPainter>
 #include <QPainterPath>
 #include <QSaveFile>
@@ -230,6 +232,108 @@ void drawSlottedFramePhoto(QPainter &painter, const Frame &frame, const QImage &
     painter.restore();
 }
 
+/// Draws one background picture. The layer is already linear and premultiplied;
+/// the painter only places it. Fill crops the source rectangle instead of
+/// scaling a page-sized copy, Fit centres the whole picture, and Tile repeats
+/// the source at the tile size. The tile grid is anchored at the sheet's
+/// top-left corner, so the pattern does not jump when the margin changes.
+void drawBackgroundImage(QPainter &painter, const PageBackground &background,
+                         const PageImages &images, const QSizeF &sheet)
+{
+    const QImage &image = images.background;
+    const QSize pixels = image.size();
+    if (pixels.isEmpty())
+        return;
+    switch (background.fit) {
+    case BackgroundFit::Fill: {
+        const QRectF source = BackgroundGeometry::fillSourcePixels(sheet, pixels);
+        if (source.isEmpty())
+            return;
+        painter.drawImage(QRectF(QPointF(0, 0), sheet), image, source);
+        break;
+    }
+    case BackgroundFit::Fit: {
+        const QRectF target = BackgroundGeometry::fitTargetMm(sheet, pixels);
+        if (target.isEmpty())
+            return;
+        painter.drawImage(target, image);
+        break;
+    }
+    case BackgroundFit::Tile: {
+        const QSize sourcePixels =
+            images.backgroundPixels.isEmpty() ? pixels : images.backgroundPixels;
+        const QSizeF tile =
+            BackgroundGeometry::tileSizeMm(background.tileMm, sourcePixels, sheet);
+        if (tile.isEmpty())
+            return;
+        const int columns =
+            std::min(kMaxTilesPerAxis, int(std::ceil(sheet.width() / tile.width())));
+        const int rows =
+            std::min(kMaxTilesPerAxis, int(std::ceil(sheet.height() / tile.height())));
+        for (int row = 0; row < rows; ++row) {
+            for (int column = 0; column < columns; ++column) {
+                const QRectF target(column * tile.width(), row * tile.height(),
+                                    tile.width(), tile.height());
+                painter.drawImage(target, image);
+            }
+        }
+        break;
+    }
+    }
+}
+
+/// Paints the page's background over the whole physical sheet. Every colour
+/// goes through ColorPipeline::linearColor: the canvas is linear Rec.2020, so a
+/// raw sRGB fill would print too bright. Opacity is applied with the painter's
+/// own opacity, which multiplies the source and composites in the linear space
+/// the rest of the page uses.
+void paintBackground(QPainter &painter, const Page &page, const PageImages &images)
+{
+    const PageBackground &background = page.background;
+    if (background.kind == BackgroundKind::None)
+        return;
+    const double opacity = std::clamp(background.opacity, 0.0, 100.0) / 100.0;
+    if (!(opacity > 0.0))
+        return;
+    const QSizeF sheet = pageSizeMm(page);
+    if (!(sheet.width() > 0.0) || !(sheet.height() > 0.0))
+        return;
+
+    painter.save();
+    painter.setOpacity(opacity);
+    const QRectF sheetRect(QPointF(0, 0), sheet);
+    switch (background.kind) {
+    case BackgroundKind::Solid:
+        painter.fillRect(sheetRect, ColorPipeline::linearColor(background.solid));
+        break;
+    case BackgroundKind::Gradient: {
+        const QLineF line = BackgroundGeometry::gradientLineMm(sheet, background.angleDeg);
+        QLinearGradient gradient(line.p1(), line.p2());
+        if (background.stops.size() >= 2) {
+            for (const BackgroundStop &stop : background.stops)
+                gradient.setColorAt(stop.first, ColorPipeline::linearColor(stop.second));
+        } else {
+            // A caller-built snapshot may carry fewer than two stops. Qt pads a
+            // one-stop gradient with that colour, and an empty one is white, so
+            // the page is still a defined colour rather than a hole.
+            const QRgb colour =
+                background.stops.isEmpty() ? 0xffffffffu : background.stops.first().second;
+            gradient.setColorAt(0.0, ColorPipeline::linearColor(colour));
+            gradient.setColorAt(1.0, ColorPipeline::linearColor(colour));
+        }
+        painter.fillRect(sheetRect, gradient);
+        break;
+    }
+    case BackgroundKind::Image:
+        if (!images.background.isNull())
+            drawBackgroundImage(painter, background, images, sheet);
+        break;
+    case BackgroundKind::None:
+        break;
+    }
+    painter.restore();
+}
+
 } // namespace
 
 PageRenderer::PageRenderer(ImageStore &store) : m_store(store) {}
@@ -256,47 +360,44 @@ QSize PageRenderer::effectLayerSize(const Frame &frame, const QSize &sourceSize,
 }
 
 void paintPageContent(QPainter &painter, const DocumentSnapshot &snapshot, int pageIndex,
-                      const QHash<QString, QImage> &images)
+                      const PageImages &images)
 {
     if (pageIndex < 0 || pageIndex >= snapshot.pages.size())
         return;
     const Page &page = snapshot.pages.at(pageIndex);
     const QTransform pageTransform = painter.transform();
 
-    // A page without slots keeps the exact code path it had before the feature
-    // existed, so a 1.0.1 project paints and prints byte-identically.
-    if (!page.hasLayout()) {
-        for (const Frame &frame : page.frames) {
-            const auto it = images.constFind(frame.id);
-            if (it == images.constEnd() || it->isNull())
-                continue;
-            if (!LayoutEngine::validFrame(frame))
-                continue;
-            drawFramePhoto(painter, frame, *it, pageTransform, 0.0);
-        }
-        return;
-    }
+    // The background is painted first and unconditionally. It is what shows in
+    // the gaps, the margins, the empty cells and the fit bands, and a page
+    // without a slot layout must get it too: the free-canvas page is the
+    // default page type, not an exception.
+    paintBackground(painter, page, images);
 
+    // One path for both page types. A page without slots simply has nothing to
+    // paint in the slot pass, and every frame lands in the free pass exactly as
+    // it did before the feature existed.
     QSet<QString> painted;
-    for (const Slot &slot : page.slotList) {
-        const QRectF cell = SlotGeometry::slotCellMm(page, slot);
-        const double radius = SlotGeometry::cornerRadiusMm(page.slotStyle, cell);
+    if (page.hasLayout()) {
+        for (const Slot &slot : page.slotList) {
+            const QRectF cell = SlotGeometry::slotCellMm(page, slot);
+            const double radius = SlotGeometry::cornerRadiusMm(page.slotStyle, cell);
 
-        if (const Frame *frame = SlotGeometry::frameInSlot(page, slot.id)) {
-            painted.insert(frame->id);
-            const auto it = images.constFind(frame->id);
-            if (it != images.constEnd() && !it->isNull()
-                && LayoutEngine::validFrame(*frame)) {
-                // The cell is the section's clipping window. The photograph is
-                // drawn at the frame's own geometry inside it: smaller leaves
-                // paper around it, larger is clipped. The optional radius rounds
-                // the window, with no coloured ring around it.
-                drawSlottedFramePhoto(painter, *frame, *it, pageTransform, cell, radius);
+            if (const Frame *frame = SlotGeometry::frameInSlot(page, slot.id)) {
+                painted.insert(frame->id);
+                const auto it = images.frames.constFind(frame->id);
+                if (it != images.frames.constEnd() && !it->isNull()
+                    && LayoutEngine::validFrame(*frame)) {
+                    // The cell is the section's clipping window. The photograph
+                    // is drawn at the frame's own geometry inside it: smaller
+                    // leaves paper around it, larger is clipped. The optional
+                    // radius rounds the window, with no coloured ring around it.
+                    drawSlottedFramePhoto(painter, *frame, *it, pageTransform, cell, radius);
+                }
             }
+            // An empty cell prints the background and nothing else.
+            // Placeholders are painted by the canvas widget, never here, so
+            // they cannot reach a raster, a PDF or a printer.
         }
-        // An empty cell prints paper and nothing else. Placeholders are painted
-        // by the canvas widget, never here, so they cannot reach a raster, a
-        // PDF or a printer.
     }
 
     // Free frames paint on top of the layout, exactly as they did before slots.
@@ -305,8 +406,8 @@ void paintPageContent(QPainter &painter, const DocumentSnapshot &snapshot, int p
     for (const Frame &frame : page.frames) {
         if (painted.contains(frame.id))
             continue;
-        const auto it = images.constFind(frame.id);
-        if (it == images.constEnd() || it->isNull())
+        const auto it = images.frames.constFind(frame.id);
+        if (it == images.frames.constEnd() || it->isNull())
             continue;
         if (!LayoutEngine::validFrame(frame))
             continue;
@@ -492,6 +593,34 @@ Result<QImage> PageRenderer::renderPageUsing(const DocumentSnapshot &snapshot, i
 
     const int pixelWidth = std::max(1, qRound(pageSize.width() / 25.4 * ppi));
     const int pixelHeight = std::max(1, qRound(pageSize.height() / 25.4 * ppi));
+
+    PageImages pageImages;
+    pageImages.frames = images;
+    // The background is decorative: a missing or unreadable file paints the
+    // white paper and never stops the page. The panel and the notice bar say
+    // what happened; a print job is not the place to abort a whole sheet for a
+    // picture the user can relink.
+    if (page.background.kind == BackgroundKind::Image
+        && !page.background.imagePath.isEmpty()) {
+        Result<SourceImage> source =
+            m_store.load(page.background.imagePath, ImportPolicy{}, token);
+        if (source) {
+            // The background is not a photograph: it has no per-frame tone and
+            // no filter. It does share the document's paper component, so it
+            // matches the photographs on the same sheet.
+            ColorRecipe recipe = baseRecipe;
+            recipe.tone = PhotoTone{};
+            const int bound = std::clamp(std::max(pixelWidth, pixelHeight), 1,
+                                         kBackgroundMaxDimension);
+            Result<QImage> converted =
+                m_store.linear(source.value(), recipe, bound, token);
+            if (converted) {
+                pageImages.background = converted.value();
+                pageImages.backgroundPixels = source.value().size();
+            }
+        }
+    }
+
     QImage canvas(pixelWidth, pixelHeight, QImage::Format_RGBA64_Premultiplied);
     if (canvas.isNull())
         return error(QStringLiteral("render-size"), QCoreApplication::translate("PhotoPrint", "A lap nem rajzolható meg."));
@@ -502,7 +631,7 @@ Result<QImage> PageRenderer::renderPageUsing(const DocumentSnapshot &snapshot, i
     QTransform pageScale;
     pageScale.scale(ppi / 25.4, ppi / 25.4);
     painter.setTransform(pageScale);
-    paintPageContent(painter, snapshot, pageIndex, images);
+    paintPageContent(painter, snapshot, pageIndex, pageImages);
     paintFrameLabels(painter, snapshot, pageIndex, pageScale, ppi);
     painter.end();
 

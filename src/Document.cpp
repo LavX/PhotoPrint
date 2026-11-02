@@ -169,6 +169,72 @@ QString borderlessOverrideKey(BorderlessOverride value)
     return QStringLiteral("auto");
 }
 
+PageBackground sanitiseBackground(PageBackground background)
+{
+    // An unknown enum value can only arrive from a caller that cast an integer;
+    // the loader maps strings through a whitelist. Normalising here keeps the
+    // renderer's switch exhaustive in practice.
+    switch (background.kind) {
+    case BackgroundKind::None:
+    case BackgroundKind::Solid:
+    case BackgroundKind::Gradient:
+    case BackgroundKind::Image:
+        break;
+    default:
+        background.kind = BackgroundKind::None;
+        break;
+    }
+    switch (background.fit) {
+    case BackgroundFit::Fill:
+    case BackgroundFit::Fit:
+    case BackgroundFit::Tile:
+        break;
+    default:
+        background.fit = BackgroundFit::Fill;
+        break;
+    }
+
+    // The model has no per-colour alpha: transparency is the layer's opacity.
+    // Forcing the alpha byte here is what keeps a colour picked with an alpha
+    // channel from compositing darker than the swatch shows.
+    background.solid = 0xff000000u | (background.solid & 0x00ffffffu);
+
+    QList<BackgroundStop> stops;
+    stops.reserve(std::min<int>(background.stops.size(), kMaxGradientStops));
+    for (const BackgroundStop &stored : background.stops) {
+        if (!std::isfinite(stored.first))
+            continue; // a broken position is corruption, not a direction
+        stops.append({std::clamp(stored.first, 0.0, 1.0),
+                      0xff000000u | (stored.second & 0x00ffffffu)});
+    }
+    std::stable_sort(stops.begin(), stops.end(),
+                     [](const BackgroundStop &a, const BackgroundStop &b) {
+                         return a.first < b.first;
+                     });
+    if (stops.size() > kMaxGradientStops)
+        stops = stops.mid(0, kMaxGradientStops);
+    background.stops = stops;
+
+    // A non-finite angle is corruption, so it becomes the neutral direction
+    // rather than saturating to a diagonal nobody asked for. A finite one is
+    // wrapped into [0, 360), which is the range the panel's combo can show.
+    if (std::isfinite(background.angleDeg)) {
+        background.angleDeg = std::fmod(background.angleDeg, 360.0);
+        if (background.angleDeg < 0.0)
+            background.angleDeg += 360.0;
+    } else {
+        background.angleDeg = 0.0;
+    }
+
+    background.tileMm = std::isfinite(background.tileMm)
+        ? std::clamp(background.tileMm, 0.0, kMaxTileMm)
+        : 0.0;
+    background.opacity = std::isfinite(background.opacity)
+        ? std::clamp(background.opacity, 0.0, 100.0)
+        : 100.0;
+    return background;
+}
+
 BorderlessOverride borderlessOverrideFromKey(const QString &key)
 {
     if (key == QLatin1String("off"))

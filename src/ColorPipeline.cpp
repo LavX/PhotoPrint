@@ -1,6 +1,9 @@
 #include "ColorPipeline.h"
 
 #include <QColorSpace>
+#include <QHash>
+#include <QMutex>
+#include <QMutexLocker>
 #include <QRgba64>
 #include <QThread>
 
@@ -376,9 +379,45 @@ QImage ColorPipeline::linearToSrgbWithAlpha(const QImage &linearPremultiplied,
     return output;
 }
 
-QImage ColorPipeline::srgbToLinear(const QImage &srgbArgb, std::stop_token token)
+QColor ColorPipeline::linearColor(QRgb srgb)
 {
-    if (srgbArgb.isNull())
+    // Alpha is not part of the model's colour: the layer's opacity decides how
+    // see-through it is. Forcing it here also keeps the premultiplied result
+    // equal to the straight value, which is what QColor::fromRgba64 expects.
+    const QRgb key = 0xff000000u | (srgb & 0x00ffffffu);
+
+    // A colour dialog drag can produce thousands of distinct values, so the
+    // cache is bounded rather than growing for the life of the process. A page
+    // has a handful of colours; clearing on overflow costs one lcms call each.
+    static QMutex mutex;
+    static QHash<QRgb, QRgba64> cache;
+    {
+        QMutexLocker locker(&mutex);
+        const auto hit = cache.constFind(key);
+        if (hit != cache.constEnd())
+            return QColor::fromRgba64(*hit);
+    }
+
+    QImage pixel(1, 1, QImage::Format_ARGB32);
+    pixel.fill(key);
+    const QImage linear = srgbToLinear(pixel);
+    QRgba64 value = qRgba64(0, 0, 0, 65535);
+    if (!linear.isNull()) {
+        const QRgba64 *line = reinterpret_cast<const QRgba64 *>(linear.constScanLine(0));
+        value = line[0];
+        value.setAlpha(65535);
+    }
+    {
+        QMutexLocker locker(&mutex);
+        if (cache.size() >= 512)
+            cache.clear();
+        cache.insert(key, value);
+    }
+    return QColor::fromRgba64(value);
+}
+
+QImage ColorPipeline::srgbToLinear(const QImage &srgbArgb, std::stop_token token)
+{    if (srgbArgb.isNull())
         return {};
     const QImage input = srgbArgb.convertToFormat(QImage::Format_ARGB32);
     if (input.isNull())

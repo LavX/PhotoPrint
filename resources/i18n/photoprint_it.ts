@@ -1649,5 +1649,93 @@
         <source>Elrendezés: %1</source>
         <translation>Disposizione: %1</translation>
     </message>
+    <message>
+        <source>Háttér</source>
+        <translation>Sfondo</translation>
+    </message>
+    <message>
+        <source>Színátmenet</source>
+        <translation>Sfumatura</translation>
+    </message>
+    <message>
+        <source>Kép</source>
+        <translation>Immagine</translation>
+    </message>
+    <message>
+        <source>Háttér színe</source>
+        <translation>Colore dello sfondo</translation>
+    </message>
+    <message>
+        <source>Válassz színt a háttérnek.</source>
+        <translation>Scegli un colore per lo sfondo.</translation>
+    </message>
+    <message>
+        <source>Kezdő szín</source>
+        <translation>Colore iniziale</translation>
+    </message>
+    <message>
+        <source>Záró szín</source>
+        <translation>Colore finale</translation>
+    </message>
+    <message>
+        <source>Balról jobbra</source>
+        <translation>Da sinistra a destra</translation>
+    </message>
+    <message>
+        <source>Felülről lefelé</source>
+        <translation>Dall'alto verso il basso</translation>
+    </message>
+    <message>
+        <source>Átlósan jobbra le</source>
+        <translation>In diagonale verso il basso a destra</translation>
+    </message>
+    <message>
+        <source>Átlósan balra le</source>
+        <translation>In diagonale verso il basso a sinistra</translation>
+    </message>
+    <message>
+        <source>Háttérkép kiválasztása…</source>
+        <translation>Scegli immagine di sfondo…</translation>
+    </message>
+    <message>
+        <source>Kép illesztése</source>
+        <translation>Adattamento immagine</translation>
+    </message>
+    <message>
+        <source>Kitöltés</source>
+        <translation>Riempi</translation>
+    </message>
+    <message>
+        <source>Csempézés</source>
+        <translation>Piastrellatura</translation>
+    </message>
+    <message>
+        <source>Csempe mérete</source>
+        <translation>Dimensione piastrella</translation>
+    </message>
+    <message>
+        <source>A háttérkép nem található.</source>
+        <translation>L'immagine di sfondo non si trova.</translation>
+    </message>
+    <message>
+        <source>Kép kiválasztása</source>
+        <translation>Scegli immagine</translation>
+    </message>
+    <message>
+        <source>Fedettség</source>
+        <translation>Opacità</translation>
+    </message>
+    <message>
+        <source>Vissza fehérre</source>
+        <translation>Torna al bianco</translation>
+    </message>
+    <message>
+        <source>A háttér a fotók mögött látszik, a résekben és az üres helyeken is.</source>
+        <translation>Lo sfondo si vede dietro le foto, negli spazi e nelle zone vuote.</translation>
+    </message>
+    <message>
+        <source>Képek (*.jpg *.jpeg *.png *.webp *.bmp)</source>
+        <translation>Immagini (*.jpg *.jpeg *.png *.webp *.bmp)</translation>
+    </message>
 </context>
 </TS>

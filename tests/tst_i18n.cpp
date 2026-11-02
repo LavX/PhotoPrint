@@ -127,6 +127,8 @@ private slots:
     void everyCatalogueTranslatesTheSheetToolMessages();
     void everyCataloguePluralisesTheSheetToolCounts_data();
     void everyCataloguePluralisesTheSheetToolCounts();
+    void everyCatalogueTranslatesTheBackgroundMessages_data();
+    void everyCatalogueTranslatesTheBackgroundMessages();
     void sourceLanguageInstallsTheQtCatalogue();
     void hungarianSourceSubstitutesTheCount();
     void repeatedLanguageSwitchingLeavesTranslatorsUnparented();
@@ -817,6 +819,55 @@ void TestI18n::everyCataloguePluralisesTheSheetToolCounts()
                      qPrintable(QStringLiteral("%1: %2 has no numerus difference")
                                     .arg(code, source)));
         }
+    }
+}
+
+void TestI18n::everyCatalogueTranslatesTheBackgroundMessages_data()
+{
+    QTest::addColumn<QString>("code");
+    for (const QString &code : i18n::targetCodes())
+        QTest::newRow(qPrintable(code)) << code;
+}
+
+void TestI18n::everyCatalogueTranslatesTheBackgroundMessages()
+{
+    QFETCH(QString, code);
+
+    InstalledCatalogue catalogue(code);
+    QVERIFY2(catalogue.loaded(), qPrintable(code));
+
+    // The Lap tab's background group: the kind entries, the two gradient
+    // swatches, the four directions, the picture controls, the opacity slider
+    // and the reset. Every one of them is a sentence a person reads.
+    for (const QString &source : {
+             QStringLiteral("Háttér"),
+             QStringLiteral("Színátmenet"),
+             QStringLiteral("Kép"),
+             QStringLiteral("Háttér színe"),
+             QStringLiteral("Válassz színt a háttérnek."),
+             QStringLiteral("Kezdő szín"),
+             QStringLiteral("Záró szín"),
+             QStringLiteral("Balról jobbra"),
+             QStringLiteral("Felülről lefelé"),
+             QStringLiteral("Átlósan jobbra le"),
+             QStringLiteral("Átlósan balra le"),
+             QStringLiteral("Háttérkép kiválasztása…"),
+             QStringLiteral("Kép illesztése"),
+             QStringLiteral("Kitöltés"),
+             QStringLiteral("Csempézés"),
+             QStringLiteral("Csempe mérete"),
+             QStringLiteral("A háttérkép nem található."),
+             QStringLiteral("Kép kiválasztása"),
+             QStringLiteral("Fedettség"),
+             QStringLiteral("Vissza fehérre"),
+             QStringLiteral("A háttér a fotók mögött látszik, a résekben és az üres "
+                            "helyeken is."),
+         }) {
+        const QString text = translated("PhotoPrint", source);
+        QVERIFY2(!text.isEmpty(),
+                 qPrintable(QStringLiteral("%1: empty translation of %2").arg(code, source)));
+        QVERIFY2(text != source,
+                 qPrintable(QStringLiteral("%1: %2 is still Hungarian").arg(code, source)));
     }
 }
 

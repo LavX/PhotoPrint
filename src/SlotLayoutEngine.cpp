@@ -594,6 +594,11 @@ Result<Page> removeSlot(Page page, const QString &slotId)
 
 Result<Page> repair(Page page)
 {
+    // The page background is a page invariant like the slot style: a caller
+    // that filled the struct directly, or a hand-edited file, must not be able
+    // to print a NaN angle, an out-of-range opacity or a colour with alpha.
+    page.background = sanitiseBackground(page.background);
+
     // Style first: ranges and finiteness are model rules, and a caller that
     // filled the struct directly must not be able to print a negative margin
     // or a NaN gap.

@@ -1649,5 +1649,93 @@
         <source>Elrendezés: %1</source>
         <translation>लेआउट: %1</translation>
     </message>
+    <message>
+        <source>Háttér</source>
+        <translation>पृष्ठभूमि</translation>
+    </message>
+    <message>
+        <source>Színátmenet</source>
+        <translation>ग्रेडिएंट</translation>
+    </message>
+    <message>
+        <source>Kép</source>
+        <translation>चित्र</translation>
+    </message>
+    <message>
+        <source>Háttér színe</source>
+        <translation>पृष्ठभूमि का रंग</translation>
+    </message>
+    <message>
+        <source>Válassz színt a háttérnek.</source>
+        <translation>पृष्ठभूमि के लिए रंग चुनें।</translation>
+    </message>
+    <message>
+        <source>Kezdő szín</source>
+        <translation>प्रारंभिक रंग</translation>
+    </message>
+    <message>
+        <source>Záró szín</source>
+        <translation>अंतिम रंग</translation>
+    </message>
+    <message>
+        <source>Balról jobbra</source>
+        <translation>बाएँ से दाएँ</translation>
+    </message>
+    <message>
+        <source>Felülről lefelé</source>
+        <translation>ऊपर से नीचे</translation>
+    </message>
+    <message>
+        <source>Átlósan jobbra le</source>
+        <translation>तिरछे नीचे दाएँ</translation>
+    </message>
+    <message>
+        <source>Átlósan balra le</source>
+        <translation>तिरछे नीचे बाएँ</translation>
+    </message>
+    <message>
+        <source>Háttérkép kiválasztása…</source>
+        <translation>पृष्ठभूमि चित्र चुनें…</translation>
+    </message>
+    <message>
+        <source>Kép illesztése</source>
+        <translation>चित्र फ़िट</translation>
+    </message>
+    <message>
+        <source>Kitöltés</source>
+        <translation>भरें</translation>
+    </message>
+    <message>
+        <source>Csempézés</source>
+        <translation>टाइल</translation>
+    </message>
+    <message>
+        <source>Csempe mérete</source>
+        <translation>टाइल का आकार</translation>
+    </message>
+    <message>
+        <source>A háttérkép nem található.</source>
+        <translation>पृष्ठभूमि चित्र नहीं मिला।</translation>
+    </message>
+    <message>
+        <source>Kép kiválasztása</source>
+        <translation>चित्र चुनें</translation>
+    </message>
+    <message>
+        <source>Fedettség</source>
+        <translation>अपारदर्शिता</translation>
+    </message>
+    <message>
+        <source>Vissza fehérre</source>
+        <translation>सफ़ेद पर वापस</translation>
+    </message>
+    <message>
+        <source>A háttér a fotók mögött látszik, a résekben és az üres helyeken is.</source>
+        <translation>पृष्ठभूमि फ़ोटो के पीछे, खाली जगहों और अंतरालों में दिखती है।</translation>
+    </message>
+    <message>
+        <source>Képek (*.jpg *.jpeg *.png *.webp *.bmp)</source>
+        <translation>चित्र (*.jpg *.jpeg *.png *.webp *.bmp)</translation>
+    </message>
 </context>
 </TS>

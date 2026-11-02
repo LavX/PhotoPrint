@@ -77,6 +77,7 @@ struct PageLayout {
     std::optional<QList<Slot>> slotList;
     std::optional<SlotStyle> slotStyle;
     std::optional<QString> layoutId;
+    std::optional<PageBackground> background;
 };
 
 /// A batch or align action, applied as one snapshot. The caller supplies the

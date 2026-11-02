@@ -239,6 +239,68 @@ enum class CutGuides {
 /// per page, so a later printer default cannot change a saved composition.
 enum class BorderlessOverride { Auto, Off, On };
 
+/// What is painted under the photographs. `None` is the white paper every
+/// existing project, batch sheet and trial sheet already has, so a default
+/// `PageBackground` leaves a page exactly as it was before the feature.
+enum class BackgroundKind { None, Solid, Gradient, Image };
+
+/// How a background picture is mapped onto the sheet. It is deliberately not
+/// `FitMode`: a photograph's fit is about its frame, and adding `Tile` there
+/// would let a frame ask for a mode the frame renderer cannot draw.
+enum class BackgroundFit {
+    Fill, ///< cover the sheet, the overflow is cropped away
+    Fit,  ///< the whole picture is visible, paper shows in the bands
+    Tile  ///< repeat at `tileMm`, anchored at the sheet's top-left corner
+};
+
+/// One colour stop of a gradient. The position is 0..1 along the gradient line
+/// and the colour is sRGB with alpha forced opaque: transparency is the
+/// background's own `opacity`, so there is exactly one place that decides how
+/// see-through the layer is. A plain pair rather than a struct because the
+/// effect catalogue already owns the name `GradientStop` for its own recipe.
+using BackgroundStop = QPair<double, QRgb>;
+
+/// The page's own background. Colours are stored as `QRgb` rather than `QColor`
+/// because `QColor::operator==` compares the colour spec as well as the value:
+/// a colour picked in the dialog's HSV tab and the same colour loaded from
+/// `#rrggbb` would compare unequal, and the whole document's value comparison
+/// (and its undo no-op guard) depends on an exact one.
+///
+/// Every field has a neutral default, so `PageBackground{}` is the white sheet
+/// and a page that never chose a background writes nothing. The fields are kept
+/// when the kind changes back to `None`, so a user who tries a picture and
+/// returns to white does not lose the picture path.
+struct PageBackground {
+    BackgroundKind kind = BackgroundKind::None;
+    QRgb solid = 0xffffffffu; ///< sRGB, alpha forced opaque
+    /// Gradient stops, sorted by position on load. Empty means "white to
+    /// white", which is what a freshly chosen gradient shows until a colour is
+    /// picked. A list rather than two colours so a future build can add stops
+    /// without a schema change.
+    QList<BackgroundStop> stops;
+    double angleDeg = 0.0; ///< clockwise, 0 = left to right
+    QString imagePath;     ///< resolved absolute path, like Frame::sourcePath
+    QByteArray imageSha256; ///< identity of the file content
+    BackgroundFit fit = BackgroundFit::Fill;
+    double tileMm = 0.0; ///< 0 = the source's natural size at kTileNaturalPpi
+    double opacity = 100.0; ///< 0..100 over the white paper base
+    bool operator==(const PageBackground &) const = default;
+};
+
+/// Bounds the renderer and the panel share, so neither can drift away from the
+/// other.
+constexpr int kMaxGradientStops = 8;
+constexpr int kTileNaturalPpi = 300; ///< tileMm == 0 means this resolution
+constexpr double kMaxTileMm = 1000.0;
+constexpr int kMaxTilesPerAxis = 64; ///< tileMm is raised until the count fits
+
+/// The background the renderer may see. Values loaded from a project file are
+/// untrusted: every finite field is clamped to its range, a non-finite one
+/// becomes the neutral value, an unknown enum becomes the default, and every
+/// colour is forced opaque. Called from SlotLayoutEngine::repair, the single
+/// invariant point every mutation and the loader pass through.
+PageBackground sanitiseBackground(PageBackground background);
+
 struct Page {
     QString id;
     PaperSpec paper;
@@ -257,6 +319,9 @@ struct Page {
     /// for rendering, so a renamed catalogue entry cannot break a project. Empty
     /// for a hand-made layout.
     QString layoutId;
+    /// The sheet's own background, painted under the photographs. The default
+    /// is the white paper, so a page that never chose one is unchanged.
+    PageBackground background;
 
     bool hasLayout() const { return !slotList.isEmpty(); }
     bool operator==(const Page &) const = default;

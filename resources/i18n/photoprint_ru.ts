@@ -1663,5 +1663,93 @@
         <source>Elrendezés: %1</source>
         <translation>Раскладка: %1</translation>
     </message>
+    <message>
+        <source>Háttér</source>
+        <translation>Фон</translation>
+    </message>
+    <message>
+        <source>Színátmenet</source>
+        <translation>Градиент</translation>
+    </message>
+    <message>
+        <source>Kép</source>
+        <translation>Изображение</translation>
+    </message>
+    <message>
+        <source>Háttér színe</source>
+        <translation>Цвет фона</translation>
+    </message>
+    <message>
+        <source>Válassz színt a háttérnek.</source>
+        <translation>Выберите цвет фона.</translation>
+    </message>
+    <message>
+        <source>Kezdő szín</source>
+        <translation>Начальный цвет</translation>
+    </message>
+    <message>
+        <source>Záró szín</source>
+        <translation>Конечный цвет</translation>
+    </message>
+    <message>
+        <source>Balról jobbra</source>
+        <translation>Слева направо</translation>
+    </message>
+    <message>
+        <source>Felülről lefelé</source>
+        <translation>Сверху вниз</translation>
+    </message>
+    <message>
+        <source>Átlósan jobbra le</source>
+        <translation>По диагонали вправо вниз</translation>
+    </message>
+    <message>
+        <source>Átlósan balra le</source>
+        <translation>По диагонали влево вниз</translation>
+    </message>
+    <message>
+        <source>Háttérkép kiválasztása…</source>
+        <translation>Выбрать фоновое изображение…</translation>
+    </message>
+    <message>
+        <source>Kép illesztése</source>
+        <translation>Размещение изображения</translation>
+    </message>
+    <message>
+        <source>Kitöltés</source>
+        <translation>Заполнить</translation>
+    </message>
+    <message>
+        <source>Csempézés</source>
+        <translation>Мозаика</translation>
+    </message>
+    <message>
+        <source>Csempe mérete</source>
+        <translation>Размер плитки</translation>
+    </message>
+    <message>
+        <source>A háttérkép nem található.</source>
+        <translation>Фоновое изображение не найдено.</translation>
+    </message>
+    <message>
+        <source>Kép kiválasztása</source>
+        <translation>Выбрать изображение</translation>
+    </message>
+    <message>
+        <source>Fedettség</source>
+        <translation>Непрозрачность</translation>
+    </message>
+    <message>
+        <source>Vissza fehérre</source>
+        <translation>Вернуть белый фон</translation>
+    </message>
+    <message>
+        <source>A háttér a fotók mögött látszik, a résekben és az üres helyeken is.</source>
+        <translation>Фон виден за фотографиями, в промежутках и на пустых местах.</translation>
+    </message>
+    <message>
+        <source>Képek (*.jpg *.jpeg *.png *.webp *.bmp)</source>
+        <translation>Изображения (*.jpg *.jpeg *.png *.webp *.bmp)</translation>
+    </message>
 </context>
 </TS>

@@ -47,6 +47,17 @@ public:
     /// sRGB with alpha -> linear premultiplied, used by filters that work in sRGB.
     static QImage srgbToLinear(const QImage &srgbArgb, std::stop_token token = {});
 
+    /// One sRGB colour (what the user picked) as the value QPainter must write
+    /// into a linear Rec.2020 premultiplied canvas. Alpha is forced opaque: the
+    /// model has no per-colour alpha, transparency is the layer's opacity.
+    ///
+    /// The conversion goes through the same lcms transform as a photograph, so
+    /// the working-space profile stays the single source of truth. Results are
+    /// cached by the 8-bit sRGB value; a page has a handful of distinct colours
+    /// and each miss is one lcms call. Painting the raw QColor instead would
+    /// print a solid #3366cc at about #8fb0e8.
+    static QColor linearColor(QRgb srgb);
+
     /// Convenience for single-image previews: toLinear followed by linearToSrgb.
     static QImage toSrgb(const SourceImage &source, const ColorRecipe &recipe, int maxDimension = 0,
                          std::stop_token token = {});

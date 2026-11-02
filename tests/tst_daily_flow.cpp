@@ -507,6 +507,10 @@ void TestDailyFlow::selectionReadsStayValidAcrossSelections()
 
     QList<QDoubleSpinBox *> sizeSpins;
     for (QDoubleSpinBox *spin : window.findChildren<QDoubleSpinBox *>()) {
+        // The page background's tile size is also in centimetres; it is not a
+        // photograph's size.
+        if (spin->objectName() == QStringLiteral("backgroundTileSpin"))
+            continue;
         if (spin->suffix() == QStringLiteral(" cm"))
             sizeSpins.append(spin);
     }

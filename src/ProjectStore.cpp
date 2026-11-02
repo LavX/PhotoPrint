@@ -160,6 +160,53 @@ QString resolveOriginalSource(const QString &projectDir, const QString &original
     return candidate;
 }
 
+/// One stored asset path resolved through the same trust rules as a frame
+/// source. `blocked` and `refused` are the relink hints: the path was not
+/// trusted, so it is never opened, but the cleaned form can start a file
+/// dialog next to it.
+struct ResolvedSource {
+    QString path;
+    bool blocked = false;
+    QString refused;
+};
+
+ResolvedSource resolveStoredSource(const QString &projectDir, const QString &stored,
+                                   const QString &original, const QByteArray &expectedSha256)
+{
+    ResolvedSource resolved;
+    QString contained;
+    if (!stored.isEmpty()) {
+        if (QDir::isAbsolutePath(stored)) {
+            // This application never writes an absolute `source`: a normal
+            // project stores the relative path plus an absolute `original`, a
+            // portable copy stores only a contained relative path. A recorded
+            // absolute value is in the same trust class as an escape.
+            resolved.refused = QDir::cleanPath(stored);
+            resolved.blocked = true;
+        } else if (projectDir.isEmpty()) {
+            resolved.blocked = true;
+        } else {
+            const QString joined =
+                QDir::cleanPath(QDir(projectDir).absoluteFilePath(stored));
+            contained = resolveProjectSource(projectDir, stored);
+            resolved.blocked = contained.isEmpty();
+            if (resolved.blocked)
+                resolved.refused = joined;
+        }
+    }
+
+    if (!contained.isEmpty() && QFileInfo::exists(contained)) {
+        resolved.path = contained;
+    } else {
+        // The absolute `original` is only worth the stat and the full content
+        // hash when the contained source cannot be used.
+        const QString fallback =
+            resolveOriginalSource(projectDir, original, expectedSha256);
+        resolved.path = fallback.isEmpty() ? contained : fallback;
+    }
+    return resolved;
+}
+
 /// Deterministic file names for a portable copy. Unrelated sources with the
 /// same base name get a short content hash, so two different photos can never
 /// overwrite each other. Identical content is copied once and keeps the plain
@@ -177,20 +224,28 @@ QHash<QString, QString> portableFileNames(const DocumentSnapshot &document)
     QMap<QString, QSet<QString>> hashesByBase;
     QMap<QString, QString> hashBySource;
 
+    const auto addSource = [&](const QString &path, const QByteArray &sha256) {
+        if (path.isEmpty())
+            return;
+        const QString source = lexicalPath(path);
+        if (baseBySource.contains(source))
+            return;
+        const QString base = QFileInfo(source).fileName();
+        const QString hash = QString::fromLatin1(sha256.toHex());
+        baseBySource.insert(source, base);
+        hashBySource.insert(source, hash);
+        sourcesByBase[base].insert(source);
+        hashesByBase[base].insert(hash);
+    };
+
     for (const Page &page : document.pages) {
-        for (const Frame &frame : page.frames) {
-            if (frame.sourcePath.isEmpty())
-                continue;
-            const QString source = lexicalPath(frame.sourcePath);
-            if (baseBySource.contains(source))
-                continue;
-            const QString base = QFileInfo(source).fileName();
-            const QString hash = QString::fromLatin1(frame.sourceSha256.toHex());
-            baseBySource.insert(source, base);
-            hashBySource.insert(source, hash);
-            sourcesByBase[base].insert(source);
-            hashesByBase[base].insert(hash);
-        }
+        for (const Frame &frame : page.frames)
+            addSource(frame.sourcePath, frame.sourceSha256);
+        // A background picture is carried by a portable copy exactly like a
+        // photograph. Only a picture background has a file; a solid or gradient
+        // page adds nothing.
+        if (page.background.kind == BackgroundKind::Image)
+            addSource(page.background.imagePath, page.background.imageSha256);
     }
 
     QSet<QString> used;
@@ -480,6 +535,141 @@ Frame frameFromJson(const QJsonObject &object)
     return frame;
 }
 
+QString backgroundKindKey(BackgroundKind kind)
+{
+    switch (kind) {
+    case BackgroundKind::Solid:
+        return QStringLiteral("solid");
+    case BackgroundKind::Gradient:
+        return QStringLiteral("gradient");
+    case BackgroundKind::Image:
+        return QStringLiteral("image");
+    case BackgroundKind::None:
+        break;
+    }
+    return QStringLiteral("none");
+}
+
+BackgroundKind backgroundKindFromKey(const QString &key)
+{
+    if (key == QLatin1String("solid"))
+        return BackgroundKind::Solid;
+    if (key == QLatin1String("gradient"))
+        return BackgroundKind::Gradient;
+    if (key == QLatin1String("image"))
+        return BackgroundKind::Image;
+    return BackgroundKind::None;
+}
+
+QString backgroundFitKey(BackgroundFit fit)
+{
+    switch (fit) {
+    case BackgroundFit::Fit:
+        return QStringLiteral("fit");
+    case BackgroundFit::Tile:
+        return QStringLiteral("tile");
+    case BackgroundFit::Fill:
+        break;
+    }
+    return QStringLiteral("fill");
+}
+
+BackgroundFit backgroundFitFromKey(const QString &key)
+{
+    if (key == QLatin1String("fit"))
+        return BackgroundFit::Fit;
+    if (key == QLatin1String("tile"))
+        return BackgroundFit::Tile;
+    return BackgroundFit::Fill;
+}
+
+QString colourKey(QRgb colour)
+{
+    return QStringLiteral("#%1").arg(
+        QString::number(colour & 0x00ffffffu, 16).rightJustified(6, QLatin1Char('0')));
+}
+
+QRgb colourFromKey(const QString &key)
+{
+    const QColor colour(key);
+    if (!colour.isValid())
+        return 0xffffffffu;
+    return 0xff000000u | (colour.rgb() & 0x00ffffffu);
+}
+
+QJsonObject backgroundToJson(const PageBackground &stored, const QString &projectDir,
+                             const QString &portableDir,
+                             const QHash<QString, QString> &portableNames)
+{
+    const PageBackground background = sanitiseBackground(stored);
+    QJsonObject object;
+    object.insert(QStringLiteral("kind"), backgroundKindKey(background.kind));
+    object.insert(QStringLiteral("color"), colourKey(background.solid));
+    QJsonArray stops;
+    for (const BackgroundStop &stop : background.stops) {
+        stops.append(QJsonObject{{QStringLiteral("pos"), stop.first},
+                                 {QStringLiteral("color"), colourKey(stop.second)}});
+    }
+    object.insert(QStringLiteral("stops"), stops);
+    object.insert(QStringLiteral("angleDeg"), background.angleDeg);
+    object.insert(QStringLiteral("fit"), backgroundFitKey(background.fit));
+    object.insert(QStringLiteral("tileMm"), background.tileMm);
+    object.insert(QStringLiteral("opacity"), background.opacity);
+
+    // The picture path follows the frame rule exactly: a normal project stores
+    // the project-relative path plus the absolute original, a portable copy
+    // stores only a contained relative path and no original.
+    if (!portableDir.isEmpty()) {
+        const QString source = lexicalPath(background.imagePath);
+        const QString name = portableNames.value(source);
+        if (name.isEmpty()) {
+            object.insert(QStringLiteral("image"), QString());
+        } else {
+            const QString target = QDir(portableDir).filePath(name);
+            object.insert(QStringLiteral("image"), QDir(projectDir).relativeFilePath(target));
+        }
+    } else if (!background.imagePath.isEmpty()) {
+        const QString relative = QDir(projectDir).relativeFilePath(background.imagePath);
+        object.insert(QStringLiteral("image"), relative.isEmpty() ? background.imagePath : relative);
+        object.insert(QStringLiteral("original"), background.imagePath);
+    }
+    object.insert(QStringLiteral("sha256"),
+                  QString::fromLatin1(background.imageSha256.toHex()));
+    return object;
+}
+
+PageBackground backgroundFromJson(const QJsonObject &object, const QString &projectDir)
+{
+    PageBackground background;
+    background.kind = backgroundKindFromKey(object.value(QStringLiteral("kind")).toString());
+    background.solid = colourFromKey(object.value(QStringLiteral("color")).toString());
+    const QJsonArray stops = object.value(QStringLiteral("stops")).toArray();
+    for (const QJsonValue &value : stops) {
+        if (!value.isObject())
+            continue;
+        const QJsonObject stopObject = value.toObject();
+        background.stops.append(
+            {stopObject.value(QStringLiteral("pos")).toDouble(),
+             colourFromKey(stopObject.value(QStringLiteral("color")).toString())});
+    }
+    background.angleDeg = object.value(QStringLiteral("angleDeg")).toDouble();
+    background.fit = backgroundFitFromKey(object.value(QStringLiteral("fit")).toString());
+    background.tileMm = object.value(QStringLiteral("tileMm")).toDouble();
+    background.opacity = object.value(QStringLiteral("opacity")).toDouble(100.0);
+    background.imageSha256 =
+        QByteArray::fromHex(object.value(QStringLiteral("sha256")).toString().toLatin1());
+
+    const QString stored = object.value(QStringLiteral("image")).toString();
+    const QString original = object.value(QStringLiteral("original")).toString();
+    const ResolvedSource resolved =
+        resolveStoredSource(projectDir, stored, original, background.imageSha256);
+    background.imagePath = resolved.path;
+    // A picture whose file cannot be resolved still loads as a picture with an
+    // empty path: the panel shows the hint and the picker, and saving keeps the
+    // rest of the page instead of silently turning it into a white sheet.
+    return sanitiseBackground(background);
+}
+
 QJsonObject recipeToJson(const ColorRecipe &recipe)
 {
     QJsonObject tone;
@@ -536,57 +726,22 @@ Result<ParsedProject> parseDocument(const QJsonObject &root, const QString &proj
         page.slotList = layout.slotList;
         page.slotStyle = layout.style;
         page.layoutId = layout.layoutId;
+        page.background = backgroundFromJson(
+            pageObject.value(QStringLiteral("background")).toObject(), projectDir);
         for (const QJsonValue &frameValue : pageObject.value(QStringLiteral("frames")).toArray()) {
             const QJsonObject frameObject = frameValue.toObject();
             Frame frame = frameFromJson(frameObject);
             const QString stored = frameObject.value(QStringLiteral("source")).toString();
             const QString original = frameObject.value(QStringLiteral("original")).toString();
 
-            bool blocked = false;
-            QString contained;
-            QString refused; // untrusted, kept only as a relink hint
-            if (!stored.isEmpty()) {
-                if (QDir::isAbsolutePath(stored)) {
-                    // This application never writes an absolute `source`: a
-                    // normal project stores the relative path plus an absolute
-                    // `original`, a portable copy stores only a contained
-                    // relative path. A recorded absolute value is therefore in
-                    // the same trust class as an escape. It is not even
-                    // stat()ed; only `original` can lead back to the photo.
-                    refused = QDir::cleanPath(stored);
-                    blocked = true;
-                } else if (projectDir.isEmpty()) {
-                    blocked = true;
-                } else {
-                    const QString joined =
-                        QDir::cleanPath(QDir(projectDir).absoluteFilePath(stored));
-                    contained = resolveProjectSource(projectDir, stored);
-                    blocked = contained.isEmpty();
-                    if (blocked)
-                        refused = joined;
-                }
-            }
-
-            if (!contained.isEmpty() && QFileInfo::exists(contained)) {
-                frame.sourcePath = contained;
-            } else {
-                // The absolute `original` is only worth the stat and the full
-                // content hash when the contained source cannot be used. A
-                // healthy project resolves every frame from inside its own
-                // folder, so hashing `original` eagerly read and hashed every
-                // photo a second time for nothing.
-                const QString fallback =
-                    resolveOriginalSource(projectDir, original, frame.sourceSha256);
-                // Absolute original: the normal way back to a photo that lives
-                // outside the project folder on this machine. Without one, the
-                // refused or missing contained path stays as the (empty) result.
-                frame.sourcePath = fallback.isEmpty() ? contained : fallback;
-            }
+            const ResolvedSource resolved =
+                resolveStoredSource(projectDir, stored, original, frame.sourceSha256);
+            frame.sourcePath = resolved.path;
 
             SourceIssue issue;
             issue.frameId = frame.id;
             issue.path = frame.sourcePath;
-            issue.refusedPath = refused;
+            issue.refusedPath = resolved.refused;
             issue.expectedSha256 = frame.sourceSha256;
             if (!frame.sourcePath.isEmpty() && QFileInfo::exists(frame.sourcePath)) {
                 const QByteArray current = fileSha256(frame.sourcePath);
@@ -596,7 +751,7 @@ Result<ParsedProject> parseDocument(const QJsonObject &root, const QString &proj
                 }
             } else {
                 issue.missing = true;
-                issue.blocked = blocked;
+                issue.blocked = resolved.blocked;
                 parsed.issues.append(issue);
             }
             page.frames.append(frame);
@@ -657,64 +812,89 @@ Result<void> copyPortableSources(const DocumentSnapshot &document, const QString
     const QString projectPath = lexicalPath(projectFile);
     QSet<QString> handled;
 
+    // One copy path for photographs and the background picture. A photograph is
+    // required: a missing one stops the save, exactly as it always did. A
+    // background is decoration: a missing file is skipped, so a page whose
+    // picture was moved still saves the rest of the project and reports the
+    // missing picture in the panel.
+    const auto copySource = [&](const QString &path, const QByteArray &sha256,
+                                bool required) -> Result<void> {
+        if (path.isEmpty()) {
+            if (!required)
+                return Result<void>();
+            return error(QStringLiteral("source-missing"),
+                         QCoreApplication::translate("PhotoPrint", "Ezt a fotót nem találjuk."));
+        }
+        const QString source = lexicalPath(path);
+        if (handled.contains(source))
+            return Result<void>();
+        handled.insert(source);
+
+        const QFileInfo info(source);
+        if (!info.exists() || !info.isFile()) {
+            if (!required)
+                return Result<void>();
+            return error(QStringLiteral("source-missing"),
+                         QCoreApplication::translate("PhotoPrint", "Ezt a fotót nem találjuk."));
+        }
+        if (source == projectPath) {
+            return error(QStringLiteral("portable-source"),
+                         QCoreApplication::translate("PhotoPrint", "A projektfájl nem másolható a fotók közé."));
+        }
+
+        const QString name = names.value(source);
+        const QString target = QDir::cleanPath(QDir(portableDir).filePath(name));
+        if (name.isEmpty() || !isInsideDirectory(portableDir, target) || target == projectPath) {
+            return error(QStringLiteral("portable-path"),
+                         QCoreApplication::translate("PhotoPrint", "A fotót nem sikerült a másolatba tenni."));
+        }
+
+        // A file loaded from a portable bundle already points at the carried
+        // file, so source and target are the same file. Nothing has to be
+        // copied, and moving the target aside would destroy the only copy this
+        // save could read.
+        if (source == target)
+            return Result<void>();
+
+        if (QFileInfo::exists(target)) {
+            if (fileSha256(target) == sha256)
+                return Result<void>(); // already carried by an earlier save
+            // The previous bundle already has a different file under this name.
+            // Move it aside rather than deleting it: a failure later in this
+            // save has to be able to put it back.
+            const QString backup = unusedBackupPath(portableDir);
+            if (backup.isEmpty() || !QFile::rename(target, backup)) {
+                return error(QStringLiteral("portable-write"),
+                             QCoreApplication::translate("PhotoPrint", "A fotót nem sikerült a másolatba tenni."));
+            }
+            changes->replaced.append(qMakePair(backup, target));
+        }
+        if (!QFile::copy(source, target)) {
+            return error(QStringLiteral("portable-copy"),
+                         QCoreApplication::translate("PhotoPrint", "A fotót nem sikerült a másolatba tenni."));
+        }
+        changes->added.append(target);
+        // A photograph's copy must still be the recorded photograph. A
+        // background is decorative and is not verified: a changed file is
+        // copied as it is, and the page still prints.
+        if (required && !sha256.isEmpty() && fileSha256(target) != sha256) {
+            return error(QStringLiteral("portable-hash"),
+                         QCoreApplication::translate("PhotoPrint", "A fotó másolata nem egyezik az eredetivel."));
+        }
+        return Result<void>();
+    };
+
     for (const Page &page : document.pages) {
         for (const Frame &frame : page.frames) {
-            if (frame.sourcePath.isEmpty()) {
-                return error(QStringLiteral("source-missing"),
-                             QCoreApplication::translate("PhotoPrint", "Ezt a fotót nem találjuk."));
-            }
-            const QString source = lexicalPath(frame.sourcePath);
-            if (handled.contains(source))
-                continue;
-            handled.insert(source);
-
-            const QFileInfo info(source);
-            if (!info.exists() || !info.isFile()) {
-                return error(QStringLiteral("source-missing"),
-                             QCoreApplication::translate("PhotoPrint", "Ezt a fotót nem találjuk."));
-            }
-            if (source == projectPath) {
-                return error(QStringLiteral("portable-source"),
-                             QCoreApplication::translate("PhotoPrint", "A projektfájl nem másolható a fotók közé."));
-            }
-
-            const QString name = names.value(source);
-            const QString target = QDir::cleanPath(QDir(portableDir).filePath(name));
-            if (name.isEmpty() || !isInsideDirectory(portableDir, target) || target == projectPath) {
-                return error(QStringLiteral("portable-path"),
-                             QCoreApplication::translate("PhotoPrint", "A fotót nem sikerült a másolatba tenni."));
-            }
-
-            // A frame loaded from a portable bundle already points at the
-            // carried file, so source and target are the same file. Nothing has
-            // to be copied, and moving the target aside would destroy the only
-            // copy this save could read. If its content no longer matches the
-            // recorded hash, the next load reports it as changed.
-            if (source == target)
-                continue;
-
-            if (QFileInfo::exists(target)) {
-                if (fileSha256(target) == frame.sourceSha256)
-                    continue; // already carried by an earlier save
-                // The previous bundle already has a different photo under this
-                // name. Move it aside rather than deleting it: a failure later
-                // in this save has to be able to put it back.
-                const QString backup = unusedBackupPath(portableDir);
-                if (backup.isEmpty() || !QFile::rename(target, backup)) {
-                    return error(QStringLiteral("portable-write"),
-                                 QCoreApplication::translate("PhotoPrint", "A fotót nem sikerült a másolatba tenni."));
-                }
-                changes->replaced.append(qMakePair(backup, target));
-            }
-            if (!QFile::copy(source, target)) {
-                return error(QStringLiteral("portable-copy"),
-                             QCoreApplication::translate("PhotoPrint", "A fotót nem sikerült a másolatba tenni."));
-            }
-            changes->added.append(target);
-            if (!frame.sourceSha256.isEmpty() && fileSha256(target) != frame.sourceSha256) {
-                return error(QStringLiteral("portable-hash"),
-                             QCoreApplication::translate("PhotoPrint", "A fotó másolata nem egyezik az eredetivel."));
-            }
+            const auto copied = copySource(frame.sourcePath, frame.sourceSha256, true);
+            if (!copied)
+                return copied;
+        }
+        if (page.background.kind == BackgroundKind::Image) {
+            const auto copied = copySource(page.background.imagePath,
+                                           page.background.imageSha256, false);
+            if (!copied)
+                return copied;
         }
     }
     return Result<void>();
@@ -768,6 +948,15 @@ QByteArray ProjectStore::serialize(const DocumentSnapshot &document, const QStri
             }
             layout.insert(QStringLiteral("slots"), slotArray);
             pageObject.insert(QStringLiteral("layout"), layout);
+        }
+        // The background is one optional object per page, omitted only when the
+        // whole struct is the default. A page that set a colour and returned to
+        // white still writes it, so the colour is not lost; an older build
+        // ignores the key and a 1.0.1 project stays byte-identical.
+        if (!(page.background == PageBackground{})) {
+            pageObject.insert(QStringLiteral("background"),
+                              backgroundToJson(page.background, projectDir, portableDir,
+                                               portableNames));
         }
         QJsonArray frames;
         for (const Frame &frame : page.frames)

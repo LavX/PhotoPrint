@@ -86,6 +86,8 @@ public:
     ~PageView() override;
 
     void setDocument(const DocumentSnapshot &document);
+    void setPageImages(const PageImages &images);
+    /// Test-only convenience: the frames of a page with no background picture.
     void setFrameImages(const QHash<QString, QImage> &images);
     void setViewZoom(double zoom);
     double viewZoom() const { return m_viewZoom; }
@@ -220,7 +222,7 @@ private:
         quint64 generation = 0;
         quint64 revision = 0;
         DocumentSnapshot document;
-        QHash<QString, QImage> images;
+        PageImages images;
         QSizeF pageMm;
         QSize pixels;
         int delayMs = 0;
@@ -284,7 +286,7 @@ private:
     void positionBusyOverlay();
 
     DocumentSnapshot m_document;
-    QHash<QString, QImage> m_images;
+    PageImages m_images;
     QSet<QString> m_unavailable;
     QString m_selectedId;
     QString m_selectedSlotId;
@@ -483,6 +485,25 @@ private slots:
     /// The per-page borderless override. Auto follows the printer; Off and On
     /// pin the decision so a batch sheet prints at its exact copy size.
     void borderlessChanged(int index);
+    /// The page background. Every control writes the whole `PageBackground` as
+    /// one page edit, so one action is one undo step. The opacity slider and the
+    /// tile spin are bursts: the page follows live and the burst lands once.
+    void backgroundKindChanged(int index);
+    void chooseBackgroundColor();
+    void chooseGradientStart();
+    void chooseGradientEnd();
+    /// Shared body of the two gradient swatches: `which` 0 is the first stop,
+    /// 1 the last. Extra stops from a future build are preserved.
+    void chooseGradientStop(int which);
+    void gradientAngleChanged(int index);
+    void chooseBackgroundImage();
+    void backgroundFitChanged(int index);
+    void backgroundTileChanged(double value);
+    void backgroundOpacityChanged(int value);
+    void resetBackground();
+    void queueBackground(const PageBackground &background);
+    void flushBackground();
+    void cancelPendingBackground();
     /// Applies one catalogue template to the current page as one page edit, so
     /// one undo restores the layout. The slot engine creates the cells (and the
     /// layout label) and assigns the photographs in display order; the page's
@@ -521,7 +542,11 @@ private:
     void cancelPreviewWork();
     void updateBusyOverlay();
     QString sourceKeyFor(const Frame &frame) const;
-    QHash<QString, QImage> displayedPreviewImages() const;
+    /// The layers the canvas should show: the preview frames plus the background
+    /// picture, but only when the loaded picture belongs to the current page.
+    /// A stale background from the previous page is never stretched over this
+    /// one while the new preview job runs.
+    PageImages displayedPageImages() const;
     void updateResolutionHint();
     void openEffectBrowser();
     void applyEffectChoice(const QString &key, int version, int strength);
@@ -551,6 +576,14 @@ private:
     /// The page-level sheet controls: the align button and the cut guide combo,
     /// plus the batch entry's enabled state.
     void syncPageTools();
+    /// Writes the current page's background into the Lap panel: the kind, the
+    /// colours, the angle, the picture, the fit, the tile size and the opacity.
+    /// Only the controls of the selected kind are visible, so the panel never
+    /// shows a fit combo for a solid page.
+    void syncBackgroundPanel();
+    /// True when the page asks for a picture that is not on disk. The panel and
+    /// the notice bar say so; the renderer paints white and never aborts.
+    bool backgroundImageMissing() const;
     /// The page's layout name for the panel: the English catalogue name when the
     /// layout came from the catalogue, a neutral label for a hand-made one.
     QString layoutDisplayName(const Page &page) const;
@@ -596,6 +629,9 @@ private:
         quint64 generation = 0;
         int pageIndex = -1;
         QHash<QString, QImage> images;
+        QImage background;
+        QSize backgroundPixels;
+        QString backgroundPath;
     };
 
     /// One untouched layer, rendered only when the user first asks for it and
@@ -705,6 +741,33 @@ private:
     QDoubleSpinBox *m_radiusSpin = nullptr;
     QPushButton *m_addSlotButton = nullptr;
     QPushButton *m_dissolveLayoutButton = nullptr;
+    /// The Lap tab's background group. The panel is always visible: a free page
+    /// has a background too, and it is the one page property that is not about
+    /// the layout.
+    QWidget *m_backgroundPanel = nullptr;
+    QComboBox *m_backgroundKindCombo = nullptr;
+    QWidget *m_backgroundSolidRow = nullptr;
+    QPushButton *m_backgroundColorButton = nullptr;
+    QWidget *m_backgroundGradientRow = nullptr;
+    QPushButton *m_gradientStartButton = nullptr;
+    QPushButton *m_gradientEndButton = nullptr;
+    QComboBox *m_gradientAngleCombo = nullptr;
+    QWidget *m_backgroundImageRow = nullptr;
+    QPushButton *m_backgroundImageButton = nullptr;
+    QComboBox *m_backgroundFitCombo = nullptr;
+    QLabel *m_backgroundTileLabel = nullptr;
+    QDoubleSpinBox *m_backgroundTileSpin = nullptr;
+    QSlider *m_backgroundOpacitySlider = nullptr;
+    QLabel *m_backgroundOpacityLabel = nullptr;
+    QLabel *m_backgroundOpacityValue = nullptr;
+    QPushButton *m_backgroundResetButton = nullptr;
+    QLabel *m_backgroundHint = nullptr;
+    QLabel *m_backgroundMissingHint = nullptr;
+    QPushButton *m_backgroundRelinkButton = nullptr;
+    /// The live background burst: every opacity or tile change restarts the
+    /// timer, and the whole burst lands as one undo step.
+    QTimer *m_backgroundTimer = nullptr;
+    std::optional<PageBackground> m_pendingBackground;
     /// The live style burst: every value change restarts the timer, and the page
     /// is updated once the user stops, so a spin that is held down is one undo.
     QTimer *m_styleTimer = nullptr;
@@ -728,6 +791,9 @@ private:
     QString m_selectedId;
     QString m_selectedSlotId;
     QHash<QString, QImage> m_previewImages;
+    QImage m_previewBackground;
+    QSize m_previewBackgroundPixels;
+    QString m_previewBackgroundPath;
     /// Frames whose source could not be decoded on the last preview pass, so a
     /// slot can say "not found" instead of pretending to load forever. A frame
     /// that is simply not decoded yet is not in here.

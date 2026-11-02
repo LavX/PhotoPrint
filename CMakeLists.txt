@@ -64,6 +64,7 @@ add_library(photoprint_core STATIC
   src/SheetToolsDialog.cpp
   src/SlotGeometry.cpp
   src/SlotLayoutEngine.cpp
+  src/BackgroundGeometry.cpp
   src/EffectStages.cpp
   src/WandStages.cpp
   src/EffectBrowserDialog.cpp
@@ -164,6 +165,7 @@ photoprint_test(tst_sheet_ui)
 photoprint_test(tst_pdf_streaming)
 photoprint_test(tst_slot_layout)
 photoprint_test(tst_slot_ui)
+photoprint_test(tst_page_background)
 photoprint_test(tst_template_browser)
 photoprint_test(tst_ui_screens)
 photoprint_test(tst_i18n)

@@ -1649,5 +1649,93 @@
         <source>Elrendezés: %1</source>
         <translation>Anordnung: %1</translation>
     </message>
+    <message>
+        <source>Háttér</source>
+        <translation>Hintergrund</translation>
+    </message>
+    <message>
+        <source>Színátmenet</source>
+        <translation>Verlauf</translation>
+    </message>
+    <message>
+        <source>Kép</source>
+        <translation>Bild</translation>
+    </message>
+    <message>
+        <source>Háttér színe</source>
+        <translation>Hintergrundfarbe</translation>
+    </message>
+    <message>
+        <source>Válassz színt a háttérnek.</source>
+        <translation>Wähle eine Farbe für den Hintergrund.</translation>
+    </message>
+    <message>
+        <source>Kezdő szín</source>
+        <translation>Startfarbe</translation>
+    </message>
+    <message>
+        <source>Záró szín</source>
+        <translation>Endfarbe</translation>
+    </message>
+    <message>
+        <source>Balról jobbra</source>
+        <translation>Von links nach rechts</translation>
+    </message>
+    <message>
+        <source>Felülről lefelé</source>
+        <translation>Von oben nach unten</translation>
+    </message>
+    <message>
+        <source>Átlósan jobbra le</source>
+        <translation>Diagonal nach rechts unten</translation>
+    </message>
+    <message>
+        <source>Átlósan balra le</source>
+        <translation>Diagonal nach links unten</translation>
+    </message>
+    <message>
+        <source>Háttérkép kiválasztása…</source>
+        <translation>Hintergrundbild wählen…</translation>
+    </message>
+    <message>
+        <source>Kép illesztése</source>
+        <translation>Bildanpassung</translation>
+    </message>
+    <message>
+        <source>Kitöltés</source>
+        <translation>Füllen</translation>
+    </message>
+    <message>
+        <source>Csempézés</source>
+        <translation>Kacheln</translation>
+    </message>
+    <message>
+        <source>Csempe mérete</source>
+        <translation>Kachelgröße</translation>
+    </message>
+    <message>
+        <source>A háttérkép nem található.</source>
+        <translation>Das Hintergrundbild wurde nicht gefunden.</translation>
+    </message>
+    <message>
+        <source>Kép kiválasztása</source>
+        <translation>Bild wählen</translation>
+    </message>
+    <message>
+        <source>Fedettség</source>
+        <translation>Deckkraft</translation>
+    </message>
+    <message>
+        <source>Vissza fehérre</source>
+        <translation>Zurück zu Weiß</translation>
+    </message>
+    <message>
+        <source>A háttér a fotók mögött látszik, a résekben és az üres helyeken is.</source>
+        <translation>Der Hintergrund erscheint hinter den Fotos, in den Zwischenräumen und an den leeren Stellen.</translation>
+    </message>
+    <message>
+        <source>Képek (*.jpg *.jpeg *.png *.webp *.bmp)</source>
+        <translation>Bilder (*.jpg *.jpeg *.png *.webp *.bmp)</translation>
+    </message>
 </context>
 </TS>

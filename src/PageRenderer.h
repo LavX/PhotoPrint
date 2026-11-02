@@ -47,10 +47,29 @@ struct ExportArtifact {
     QSizeF firstPageSizeMm;
 };
 
-/// Paints one page from prepared sRGB images. The painter is expected to map
-/// page millimetres to device pixels; nothing editor-only is drawn here.
+/// The prepared layers one page needs. The background is the converted source
+/// at a bounded size, not a page-sized raster: the painter places it, so memory
+/// stays bounded by the source and the geometry is testable without pixels.
+struct PageImages {
+    QHash<QString, QImage> frames; ///< frame id -> linear premultiplied layer
+    QImage background;             ///< linear premultiplied, null when none
+    /// The source's pixel size, kept for the natural tile size. The converted
+    /// layer may be smaller than the source, and a tile must not shrink with it.
+    QSize backgroundPixels;
+    bool operator==(const PageImages &) const = default;
+};
+
+/// The longest side a background layer is converted at. A decorative picture
+/// does not need 1200 ppi, and a page-sized layer at that resolution would be
+/// over a gigabyte; the painter upscales the bounded layer instead.
+constexpr int kBackgroundMaxDimension = 4096;
+
+/// Paints one page from prepared linear layers. The painter is expected to map
+/// page millimetres to device pixels; nothing editor-only is drawn here. The
+/// background is painted first, before the slot branch, so gaps, margins, empty
+/// cells and fit bands show it on a laid-out page and a free-canvas page alike.
 void paintPageContent(QPainter &painter, const DocumentSnapshot &snapshot, int pageIndex,
-                      const QHash<QString, QImage> &images);
+                      const PageImages &images);
 
 /// Numbered labels for trial sheets, drawn in device pixels after the page.
 void paintFrameLabels(QPainter &painter, const DocumentSnapshot &snapshot, int pageIndex,

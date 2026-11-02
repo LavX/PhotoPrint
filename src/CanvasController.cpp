@@ -606,6 +606,8 @@ Result<void> CanvasController::apply(const DocumentEdit &edit)
                         page.slotStyle = *change.slotStyle;
                     if (change.layoutId)
                         page.layoutId = *change.layoutId;
+                    if (change.background)
+                        page.background = *change.background;
                     if (firstChanged < 0 || change.pageIndex < firstChanged)
                         firstChanged = change.pageIndex;
                 }
@@ -683,6 +685,7 @@ Result<void> CanvasController::publishPage(const Page &page, const QString &acti
     change.slotList = page.slotList;
     change.slotStyle = page.slotStyle;
     change.layoutId = page.layoutId;
+    change.background = page.background;
     edit.pages.append(change);
     edit.actionText = actionText;
     edit.selectPage = index;

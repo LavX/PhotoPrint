@@ -1649,5 +1649,93 @@
         <source>Elrendezés: %1</source>
         <translation>Disposition : %1</translation>
     </message>
+    <message>
+        <source>Háttér</source>
+        <translation>Fond</translation>
+    </message>
+    <message>
+        <source>Színátmenet</source>
+        <translation>Dégradé</translation>
+    </message>
+    <message>
+        <source>Kép</source>
+        <translation>Image</translation>
+    </message>
+    <message>
+        <source>Háttér színe</source>
+        <translation>Couleur du fond</translation>
+    </message>
+    <message>
+        <source>Válassz színt a háttérnek.</source>
+        <translation>Choisis une couleur pour le fond.</translation>
+    </message>
+    <message>
+        <source>Kezdő szín</source>
+        <translation>Couleur de départ</translation>
+    </message>
+    <message>
+        <source>Záró szín</source>
+        <translation>Couleur de fin</translation>
+    </message>
+    <message>
+        <source>Balról jobbra</source>
+        <translation>De gauche à droite</translation>
+    </message>
+    <message>
+        <source>Felülről lefelé</source>
+        <translation>De haut en bas</translation>
+    </message>
+    <message>
+        <source>Átlósan jobbra le</source>
+        <translation>En diagonale vers le bas à droite</translation>
+    </message>
+    <message>
+        <source>Átlósan balra le</source>
+        <translation>En diagonale vers le bas à gauche</translation>
+    </message>
+    <message>
+        <source>Háttérkép kiválasztása…</source>
+        <translation>Choisir une image de fond…</translation>
+    </message>
+    <message>
+        <source>Kép illesztése</source>
+        <translation>Ajustement de l'image</translation>
+    </message>
+    <message>
+        <source>Kitöltés</source>
+        <translation>Remplir</translation>
+    </message>
+    <message>
+        <source>Csempézés</source>
+        <translation>Mosaïque</translation>
+    </message>
+    <message>
+        <source>Csempe mérete</source>
+        <translation>Taille de la mosaïque</translation>
+    </message>
+    <message>
+        <source>A háttérkép nem található.</source>
+        <translation>L'image de fond est introuvable.</translation>
+    </message>
+    <message>
+        <source>Kép kiválasztása</source>
+        <translation>Choisir une image</translation>
+    </message>
+    <message>
+        <source>Fedettség</source>
+        <translation>Opacité</translation>
+    </message>
+    <message>
+        <source>Vissza fehérre</source>
+        <translation>Revenir au blanc</translation>
+    </message>
+    <message>
+        <source>A háttér a fotók mögött látszik, a résekben és az üres helyeken is.</source>
+        <translation>Le fond apparaît derrière les photos, dans les espaces et les zones vides.</translation>
+    </message>
+    <message>
+        <source>Képek (*.jpg *.jpeg *.png *.webp *.bmp)</source>
+        <translation>Images (*.jpg *.jpeg *.png *.webp *.bmp)</translation>
+    </message>
 </context>
 </TS>

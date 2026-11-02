@@ -1635,5 +1635,93 @@
         <source>Elrendezés: %1</source>
         <translation>布局：%1</translation>
     </message>
+    <message>
+        <source>Háttér</source>
+        <translation>背景</translation>
+    </message>
+    <message>
+        <source>Színátmenet</source>
+        <translation>渐变</translation>
+    </message>
+    <message>
+        <source>Kép</source>
+        <translation>图片</translation>
+    </message>
+    <message>
+        <source>Háttér színe</source>
+        <translation>背景颜色</translation>
+    </message>
+    <message>
+        <source>Válassz színt a háttérnek.</source>
+        <translation>选择背景颜色。</translation>
+    </message>
+    <message>
+        <source>Kezdő szín</source>
+        <translation>起始颜色</translation>
+    </message>
+    <message>
+        <source>Záró szín</source>
+        <translation>结束颜色</translation>
+    </message>
+    <message>
+        <source>Balról jobbra</source>
+        <translation>从左到右</translation>
+    </message>
+    <message>
+        <source>Felülről lefelé</source>
+        <translation>从上到下</translation>
+    </message>
+    <message>
+        <source>Átlósan jobbra le</source>
+        <translation>向右下斜</translation>
+    </message>
+    <message>
+        <source>Átlósan balra le</source>
+        <translation>向左下斜</translation>
+    </message>
+    <message>
+        <source>Háttérkép kiválasztása…</source>
+        <translation>选择背景图片…</translation>
+    </message>
+    <message>
+        <source>Kép illesztése</source>
+        <translation>图片适配</translation>
+    </message>
+    <message>
+        <source>Kitöltés</source>
+        <translation>填充</translation>
+    </message>
+    <message>
+        <source>Csempézés</source>
+        <translation>平铺</translation>
+    </message>
+    <message>
+        <source>Csempe mérete</source>
+        <translation>平铺大小</translation>
+    </message>
+    <message>
+        <source>A háttérkép nem található.</source>
+        <translation>找不到背景图片。</translation>
+    </message>
+    <message>
+        <source>Kép kiválasztása</source>
+        <translation>选择图片</translation>
+    </message>
+    <message>
+        <source>Fedettség</source>
+        <translation>不透明度</translation>
+    </message>
+    <message>
+        <source>Vissza fehérre</source>
+        <translation>恢复白色</translation>
+    </message>
+    <message>
+        <source>A háttér a fotók mögött látszik, a résekben és az üres helyeken is.</source>
+        <translation>背景显示在照片后面、间隙和空白处。</translation>
+    </message>
+    <message>
+        <source>Képek (*.jpg *.jpeg *.png *.webp *.bmp)</source>
+        <translation>图片 (*.jpg *.jpeg *.png *.webp *.bmp)</translation>
+    </message>
 </context>
 </TS>

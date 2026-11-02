@@ -1649,5 +1649,93 @@
         <source>Elrendezés: %1</source>
         <translation>Layout: %1</translation>
     </message>
+    <message>
+        <source>Háttér</source>
+        <translation>Background</translation>
+    </message>
+    <message>
+        <source>Színátmenet</source>
+        <translation>Gradient</translation>
+    </message>
+    <message>
+        <source>Kép</source>
+        <translation>Picture</translation>
+    </message>
+    <message>
+        <source>Háttér színe</source>
+        <translation>Background colour</translation>
+    </message>
+    <message>
+        <source>Válassz színt a háttérnek.</source>
+        <translation>Choose a colour for the background.</translation>
+    </message>
+    <message>
+        <source>Kezdő szín</source>
+        <translation>Start colour</translation>
+    </message>
+    <message>
+        <source>Záró szín</source>
+        <translation>End colour</translation>
+    </message>
+    <message>
+        <source>Balról jobbra</source>
+        <translation>Left to right</translation>
+    </message>
+    <message>
+        <source>Felülről lefelé</source>
+        <translation>Top to bottom</translation>
+    </message>
+    <message>
+        <source>Átlósan jobbra le</source>
+        <translation>Diagonal, down to the right</translation>
+    </message>
+    <message>
+        <source>Átlósan balra le</source>
+        <translation>Diagonal, down to the left</translation>
+    </message>
+    <message>
+        <source>Háttérkép kiválasztása…</source>
+        <translation>Choose background picture…</translation>
+    </message>
+    <message>
+        <source>Kép illesztése</source>
+        <translation>Picture fit</translation>
+    </message>
+    <message>
+        <source>Kitöltés</source>
+        <translation>Fill</translation>
+    </message>
+    <message>
+        <source>Csempézés</source>
+        <translation>Tile</translation>
+    </message>
+    <message>
+        <source>Csempe mérete</source>
+        <translation>Tile size</translation>
+    </message>
+    <message>
+        <source>A háttérkép nem található.</source>
+        <translation>The background picture cannot be found.</translation>
+    </message>
+    <message>
+        <source>Kép kiválasztása</source>
+        <translation>Choose picture</translation>
+    </message>
+    <message>
+        <source>Fedettség</source>
+        <translation>Opacity</translation>
+    </message>
+    <message>
+        <source>Vissza fehérre</source>
+        <translation>Back to white</translation>
+    </message>
+    <message>
+        <source>A háttér a fotók mögött látszik, a résekben és az üres helyeken is.</source>
+        <translation>The background shows behind the photos, in the gaps and in the empty places.</translation>
+    </message>
+    <message>
+        <source>Képek (*.jpg *.jpeg *.png *.webp *.bmp)</source>
+        <translation>Pictures (*.jpg *.jpeg *.png *.webp *.bmp)</translation>
+    </message>
 </context>
 </TS>
