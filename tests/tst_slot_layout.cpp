@@ -258,6 +258,22 @@ QJsonObject slotJson(const QString &id, const QJsonArray &unit)
     return QJsonObject{{QStringLiteral("id"), id}, {QStringLiteral("unit"), unit}};
 }
 
+/// A two-cell layout carrying a saved style, loaded through the project parser
+/// so the mat migration runs exactly as it does when a file is opened.
+Result<DocumentSnapshot> layoutWithSavedStyle(const QJsonObject &styleObject)
+{
+    QJsonObject layout;
+    layout.insert(QStringLiteral("slots"),
+                  QJsonArray{slotJson(QStringLiteral("slot-a"),
+                                      QJsonArray{0.0, 0.0, 0.5, 1.0}),
+                             slotJson(QStringLiteral("slot-b"),
+                                      QJsonArray{0.5, 0.0, 0.5, 1.0})});
+    layout.insert(QStringLiteral("style"), styleObject);
+    QJsonObject page = minimalPageJson(QStringLiteral("page-a"), QJsonArray{});
+    page.insert(QStringLiteral("layout"), layout);
+    return ProjectStore::deserialize(encoded(minimalProjectJson(page)));
+}
+
 } // namespace
 
 class TestSlotLayout : public QObject
@@ -295,6 +311,7 @@ private slots:
     void layoutFreeProjectStaysByteIdentical();
     void oldProjectsLoadWithoutALayout();
     void legacyMatMigratesToGap();
+    void legacyMatPreservesTheOuterEdge();
     void loaderSanitisesBrokenLayouts();
 
     void oneEditPerAction();
@@ -1113,61 +1130,58 @@ void TestSlotLayout::oldProjectsLoadWithoutALayout()
 
 void TestSlotLayout::legacyMatMigratesToGap()
 {
-    // A saved 3 mm mat inset each photo by 3 mm, so two neighbours were
-    // gutter + 6 mm apart. Migration turns that whole distance into the gap.
-    const auto parseWithStyle = [](const QJsonObject &styleObject) {
-        QJsonObject layout;
-        layout.insert(QStringLiteral("slots"),
-                      QJsonArray{slotJson(QStringLiteral("slot-a"),
-                                          QJsonArray{0.0, 0.0, 0.5, 1.0}),
-                                 slotJson(QStringLiteral("slot-b"),
-                                          QJsonArray{0.5, 0.0, 0.5, 1.0})});
-        layout.insert(QStringLiteral("style"), styleObject);
-        QJsonObject page = minimalPageJson(QStringLiteral("page-a"), QJsonArray{});
-        page.insert(QStringLiteral("layout"), layout);
-        return ProjectStore::deserialize(encoded(minimalProjectJson(page)));
-    };
-
+    // A saved 3 mm mat inset each photo by 3 mm, so the paper edge was
+    // margin + 3 mm and two neighbours were gutter + 6 mm apart. Migration
+    // keeps both distances.
     QJsonObject style;
     style.insert(QStringLiteral("marginMm"), 8.0);
     style.insert(QStringLiteral("gutterMm"), 4.0);
     style.insert(QStringLiteral("borderMm"), 3.0);
     style.insert(QStringLiteral("borderColor"), QStringLiteral("#123456"));
     style.insert(QStringLiteral("cornerRadiusMm"), 2.0);
-    const auto parsed = parseWithStyle(style);
+    const auto parsed = layoutWithSavedStyle(style);
     QVERIFY(parsed.ok());
     const Page &page = parsed.value().pages.at(0);
-    QCOMPARE(page.slotStyle.marginMm.value_or(-1.0), 8.0);
+    QCOMPARE(page.slotStyle.marginMm.value_or(-1.0), 11.0);
     QCOMPARE(page.slotStyle.gutterMm.value_or(-1.0), 10.0);
     QCOMPARE(page.slotStyle.cornerRadiusMm, 2.0);
     const QList<QRectF> cells = SlotGeometry::cellsMm(page);
+    QVERIFY(near(cells.at(0).left(), 11.0));
     QVERIFY(near(cells.at(1).left() - cells.at(0).right(), 10.0));
     QVERIFY(SlotGeometry::layoutConsistent(page));
 
-    // An automatic gutter was an absence, not a number: resolve it first.
+    // An automatic margin and gutter were an absence, not numbers: resolve
+    // them first, then add the border once to the margin and twice to the gap.
     QJsonObject automatic;
     automatic.insert(QStringLiteral("borderMm"), 3.0);
-    const auto autoParsed = parseWithStyle(automatic);
+    const auto autoParsed = layoutWithSavedStyle(automatic);
     QVERIFY(autoParsed.ok());
+    const double autoMargin = SlotGeometry::automaticMarginMm(QSizeF(210.0, 297.0));
+    QCOMPARE(autoParsed.value().pages.at(0).slotStyle.marginMm.value_or(-1.0),
+             autoMargin + 3.0);
     QCOMPARE(autoParsed.value().pages.at(0).slotStyle.gutterMm.value_or(-1.0),
-             SlotGeometry::automaticMarginMm(QSizeF(210.0, 297.0)) + 6.0);
+             autoMargin + 6.0);
 
-    // A zero mat changes nothing: the gutter stays automatic.
+    // A zero mat changes nothing: both values stay automatic.
     QJsonObject none;
     none.insert(QStringLiteral("borderMm"), 0.0);
     none.insert(QStringLiteral("borderColor"), QStringLiteral("#ffffff"));
-    const auto noneParsed = parseWithStyle(none);
+    const auto noneParsed = layoutWithSavedStyle(none);
     QVERIFY(noneParsed.ok());
+    QVERIFY(!noneParsed.value().pages.at(0).slotStyle.marginMm.has_value());
     QVERIFY(!noneParsed.value().pages.at(0).slotStyle.gutterMm.has_value());
 
-    // The migrated value obeys the gutter range.
+    // The migrated values obey their ranges.
     QJsonObject wide;
     wide.insert(QStringLiteral("gutterMm"), 50.0);
     wide.insert(QStringLiteral("borderMm"), 20.0);
-    const auto wideParsed = parseWithStyle(wide);
+    const auto wideParsed = layoutWithSavedStyle(wide);
     QVERIFY(wideParsed.ok());
     QCOMPARE(wideParsed.value().pages.at(0).slotStyle.gutterMm.value_or(-1.0),
              SlotGeometry::kMaxGutterMm);
+    QCOMPARE(wideParsed.value().pages.at(0).slotStyle.marginMm.value_or(-1.0),
+             std::min(SlotGeometry::kMaxMarginMm,
+                      SlotGeometry::automaticMarginMm(QSizeF(210.0, 297.0)) + 20.0));
 
     // Saving the migrated page writes no mat keys.
     const QByteArray saved = ProjectStore::serialize(parsed.value(), QString());
@@ -1184,6 +1198,65 @@ void TestSlotLayout::legacyMatMigratesToGap()
     QVERIFY(!savedStyle.contains(QStringLiteral("borderMm")));
     QVERIFY(!savedStyle.contains(QStringLiteral("borderColor")));
     QCOMPARE(savedStyle.value(QStringLiteral("gutterMm")).toDouble(), 10.0);
+}
+
+void TestSlotLayout::legacyMatPreservesTheOuterEdge()
+{
+    // The old photograph sat 3 mm inside its cell: the white paper edge was
+    // margin + 3 and the distance between two photographs was gutter + 6.
+    // Migration must reproduce both, with no inset left.
+    QJsonObject explicitStyle;
+    explicitStyle.insert(QStringLiteral("marginMm"), 8.0);
+    explicitStyle.insert(QStringLiteral("gutterMm"), 4.0);
+    explicitStyle.insert(QStringLiteral("borderMm"), 3.0);
+    const auto explicitParsed = layoutWithSavedStyle(explicitStyle);
+    QVERIFY(explicitParsed.ok());
+    const Page &explicitPage = explicitParsed.value().pages.at(0);
+    QCOMPARE(explicitPage.slotStyle.marginMm.value_or(-1.0), 11.0);
+    QCOMPARE(explicitPage.slotStyle.gutterMm.value_or(-1.0), 10.0);
+    const QList<QRectF> explicitCells = SlotGeometry::cellsMm(explicitPage);
+    QVERIFY(near(explicitCells.at(0).left(), 8.0 + 3.0));
+    QVERIFY(near(explicitCells.at(1).left() - explicitCells.at(0).right(),
+                 4.0 + 2.0 * 3.0));
+
+    // An automatic margin is resolved first, then the border is added once to
+    // the margin and twice to the gutter.
+    QJsonObject automaticStyle;
+    automaticStyle.insert(QStringLiteral("borderMm"), 3.0);
+    const auto automaticParsed = layoutWithSavedStyle(automaticStyle);
+    QVERIFY(automaticParsed.ok());
+    const Page &automaticPage = automaticParsed.value().pages.at(0);
+    const double autoMargin =
+        SlotGeometry::automaticMarginMm(QSizeF(210.0, 297.0));
+    QCOMPARE(automaticPage.slotStyle.marginMm.value_or(-1.0), autoMargin + 3.0);
+    QCOMPARE(automaticPage.slotStyle.gutterMm.value_or(-1.0), autoMargin + 6.0);
+    const QList<QRectF> automaticCells = SlotGeometry::cellsMm(automaticPage);
+    QVERIFY(near(automaticCells.at(0).left(), autoMargin + 3.0));
+    QVERIFY(near(automaticCells.at(1).left() - automaticCells.at(0).right(),
+                 autoMargin + 6.0));
+
+    // Neither migrated page writes a mat key back, and both keep the explicit
+    // spacing the migration produced.
+    const auto savedStyle = [](const DocumentSnapshot &document) {
+        return QJsonDocument::fromJson(ProjectStore::serialize(document, QString()))
+            .object()
+            .value(QStringLiteral("pages"))
+            .toArray()
+            .at(0)
+            .toObject()
+            .value(QStringLiteral("layout"))
+            .toObject()
+            .value(QStringLiteral("style"))
+            .toObject();
+    };
+    for (const DocumentSnapshot *document :
+         {&explicitParsed.value(), &automaticParsed.value()}) {
+        const QJsonObject style = savedStyle(*document);
+        QVERIFY(!style.contains(QStringLiteral("borderMm")));
+        QVERIFY(!style.contains(QStringLiteral("borderColor")));
+        QVERIFY(style.contains(QStringLiteral("marginMm")));
+        QVERIFY(style.contains(QStringLiteral("gutterMm")));
+    }
 }
 
 void TestSlotLayout::loaderSanitisesBrokenLayouts()

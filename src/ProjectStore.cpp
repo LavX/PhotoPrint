@@ -253,20 +253,26 @@ QHash<QString, QString> portableFileNames(const DocumentSnapshot &document)
 /// clamps a hand-edited file the same way before it becomes a gap.
 constexpr double kLegacyMaxBorderMm = 20.0;
 
-/// Turns a saved mat into the gap it visibly was. The photograph used to sit
-/// `border` inside its cell, so two neighbours were `gutter + 2 * border`
-/// apart. The new model has no inset, so that whole distance becomes the
-/// gutter. An automatic gutter is resolved first, because the saved value was
-/// an absence, not a number; the migrated value is always explicit so the
+/// Turns a saved mat into the spacing it visibly was. The photograph used to
+/// sit `border` inside its cell, so the white edge of the paper was
+/// `margin + border` and two neighbours were `gutter + 2 * border` apart. The
+/// new model has no inset, so the margin takes the border once and the gutter
+/// takes it twice. Both automatic values are resolved first, because the saved
+/// absence is not a number; the migrated values are always explicit so the
 /// spacing cannot change again when the paper does.
 SlotStyle migrateLegacyMat(SlotStyle style, double borderMm, const QSizeF &sheetMm)
 {
     if (!(borderMm > 0.0) || !std::isfinite(borderMm))
         return style;
     const double border = std::clamp(borderMm, 0.0, kLegacyMaxBorderMm);
-    const double base = SlotGeometry::effectiveGutterMm(style, sheetMm);
+    // Resolve both bases before writing either field: an automatic gutter
+    // follows the old margin, not the migrated one.
+    const double marginBase = SlotGeometry::effectiveMarginMm(style, sheetMm);
+    const double gutterBase = SlotGeometry::effectiveGutterMm(style, sheetMm);
+    style.marginMm =
+        std::clamp(marginBase + border, 0.0, SlotGeometry::kMaxMarginMm);
     style.gutterMm =
-        std::clamp(base + 2.0 * border, 0.0, SlotGeometry::kMaxGutterMm);
+        std::clamp(gutterBase + 2.0 * border, 0.0, SlotGeometry::kMaxGutterMm);
     return style;
 }
 
