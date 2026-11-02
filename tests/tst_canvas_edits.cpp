@@ -5,6 +5,8 @@
 #include "MainWindow.h"
 #include "PageRenderer.h"
 #include "PhotoItem.h"
+#include "SlotGeometry.h"
+#include "SlotLayoutEngine.h"
 
 #include <QColor>
 #include <QDir>
@@ -69,6 +71,60 @@ DocumentSnapshot documentWith(const Frame &frame)
     return document;
 }
 
+/// A laid-out page with two vertical cells, the first one holding `photo`.
+/// Geometry comes from the slot engine, exactly as it would from a project.
+DocumentSnapshot documentWithOneSlotPhoto(const QString &photoPath, const QByteArray &sha256)
+{
+    DocumentSnapshot document;
+    Page page;
+    page.id = QStringLiteral("page-slots");
+    page.paper.name = QStringLiteral("A4");
+    page.paper.physicalWidthMm = 210.0;
+    page.paper.physicalHeightMm = 297.0;
+    page.slotList = {Slot{QStringLiteral("slot-a"), QRectF(0.0, 0.0, 0.5, 1.0)},
+                     Slot{QStringLiteral("slot-b"), QRectF(0.5, 0.0, 0.5, 1.0)}};
+    page.layoutId = QStringLiteral("hand-made");
+
+    Frame frame;
+    frame.id = QStringLiteral("frame-slot");
+    frame.sourcePath = photoPath;
+    frame.sourceSha256 = sha256;
+    frame.fit = FitMode::Fill;
+    const auto placed = SlotLayoutEngine::placePhoto(page, page.slotList.at(0).id, frame);
+    document.pages.append(placed.ok() ? placed.value() : page);
+    document.currentPage = 0;
+    return document;
+}
+
+/// A page that is exactly one borderless 90 x 133.5 mm portrait cell, filled by
+/// `photo`. The cell rectangle is the whole page, so a corner is a corner of the
+/// page and no margin can hide a cover failure.
+DocumentSnapshot documentWithPortraitSlot(const QString &photoPath, const QByteArray &sha256)
+{
+    DocumentSnapshot document;
+    Page page;
+    page.id = QStringLiteral("page-portrait");
+    page.paper.name = QStringLiteral("90 × 133,5 mm");
+    page.paper.physicalWidthMm = 90.0;
+    page.paper.physicalHeightMm = 133.5;
+    page.paper.type = PaperType::Glossy;
+    page.paper.custom = true;
+    page.slotList = {Slot{QStringLiteral("slot-portrait"), QRectF(0.0, 0.0, 1.0, 1.0)}};
+    page.slotStyle.marginMm = 0.0;
+    page.slotStyle.gutterMm = 0.0;
+    page.layoutId = QStringLiteral("hand-made");
+
+    Frame frame;
+    frame.id = QStringLiteral("frame-portrait");
+    frame.sourcePath = photoPath;
+    frame.sourceSha256 = sha256;
+    frame.fit = FitMode::Fill;
+    const auto placed = SlotLayoutEngine::placePhoto(page, page.slotList.at(0).id, frame);
+    document.pages.append(placed.ok() ? placed.value() : page);
+    document.currentPage = 0;
+    return document;
+}
+
 double distance(const QPointF &a, const QPointF &b)
 {
     return std::hypot(a.x() - b.x(), a.y() - b.y());
@@ -116,10 +172,13 @@ private slots:
     void paperAndOrientationApplyToEveryPage();
     void viewZoomOnlyChangesTheView();
     void pdfCarriesTheRotatedCrop();
+    void slottedRotationStaysInsideItsCell();
+    void fillRotationNeverShowsPaperAtACorner();
 
 private:
     QTemporaryDir m_dir;
     QString m_imagePath;
+    QString m_portraitImagePath;
 };
 
 void TestCanvasEdits::initTestCase()
@@ -128,6 +187,15 @@ void TestCanvasEdits::initTestCase()
     m_imagePath = m_dir.filePath(QStringLiteral("split.png"));
     QImageWriter writer(m_imagePath, "png");
     QVERIFY(writer.write(makeSplitImage()));
+
+    // A flat portrait photograph: every covered corner shows this colour, so a
+    // paper corner is unambiguous.
+    m_portraitImagePath = m_dir.filePath(QStringLiteral("portrait.png"));
+    QImage portrait(400, 600, QImage::Format_RGB32);
+    portrait.setColorSpace(QColorSpace(QColorSpace::SRgb));
+    portrait.fill(QColor(220, 30, 30));
+    QImageWriter portraitWriter(m_portraitImagePath, "png");
+    QVERIFY(portraitWriter.write(portrait));
 }
 
 void TestCanvasEdits::moveIsOneUndoableStep()
@@ -416,6 +484,183 @@ void TestCanvasEdits::pdfCarriesTheRotatedCrop()
             centre + QPointF(-std::sin(qDegreesToRadians(20.0)) * (45.0 + step),
                              std::cos(qDegreesToRadians(20.0)) * (45.0 + step));
         QVERIFY2(isWhite(samplePdf(outsidePoint)), "editor marks leaked into the PDF");
+    }
+}
+
+void TestCanvasEdits::slottedRotationStaysInsideItsCell()
+{
+    ImageStore store;
+    const auto source = store.load(m_imagePath, ImportPolicy{});
+    if (!source)
+        QFAIL(qPrintable(source.error().message));
+
+    DocumentSnapshot document =
+        documentWithOneSlotPhoto(source.value().path, source.value().sha256);
+    Frame *frame = findFrame(document, QStringLiteral("frame-slot"));
+    QVERIFY(frame);
+    // Tilt and magnify the photo hard: without the cell clip it would spill far
+    // past its own rectangle and cover the neighbour and the gutters.
+    frame->imageRotationDeg = 45.0;
+    frame->zoom = 3.5;
+    frame->cropCenter = QPointF(0.25, 0.5);
+
+    const Page &page = document.pages.first();
+    const Slot *slot = SlotGeometry::slotById(page, page.slotList.at(0).id);
+    const Slot *neighbour = SlotGeometry::slotById(page, page.slotList.at(1).id);
+    QVERIFY(slot);
+    QVERIFY(neighbour);
+    const QRectF photoRect = SlotGeometry::slotPhotoRectMm(page, *slot);
+    const QRectF otherRect = SlotGeometry::slotPhotoRectMm(page, *neighbour);
+    const QSizeF sheet = pageSizeMm(page);
+
+    PageRenderer renderer(store);
+    const double ppi = 200.0;
+    const auto rendered = renderer.renderPage(document, 0, ppi, {}, RenderOptions{});
+    if (!rendered)
+        QFAIL(qPrintable(rendered.error().message));
+    const QImage pageImage = rendered.value();
+    const double pxPerMm = ppi / 25.4;
+    auto sample = [&](const QPointF &mm) {
+        return pageImage.pixel(qRound(mm.x() * pxPerMm), qRound(mm.y() * pxPerMm));
+    };
+
+    // Only the slot shows the photograph; the cell covers the page, the gutter
+    // and the margin around it stay paper white.
+    QVERIFY2(isReddish(sample(photoRect.center())),
+             "the tilted photograph must still fill its own cell");
+    QVERIFY2(isWhite(sample(otherRect.center())),
+             "an empty neighbouring cell must stay paper white");
+    QVERIFY2(isWhite(sample(QPointF(sheet.width() / 2.0, photoRect.center().y()))),
+             "the gutter between the cells must not receive photo pixels");
+    const double margin = 3.0;
+    QVERIFY2(isWhite(sample(QPointF(photoRect.center().x(),
+                                    photoRect.top() - margin))),
+             "the top margin must not receive photo pixels");
+    QVERIFY2(isWhite(sample(QPointF(photoRect.center().x(),
+                                    photoRect.bottom() + margin))),
+             "the bottom margin must not receive photo pixels");
+
+    // The printable page follows the same recipe, so the PDF must match.
+    const QString pdfPath = evidenceDir() + QStringLiteral("/slice-slot-rotation.pdf");
+    RenderOptions options;
+    options.printPpi = ppi;
+    const auto artifact = renderer.writePdf(document, pdfPath, {}, options);
+    if (!artifact)
+        QFAIL(qPrintable(artifact.error().message));
+    QVERIFY(QFileInfo::exists(pdfPath));
+
+    QProcess process;
+    const QString base = evidenceDir() + QStringLiteral("/slice-slot-rotation");
+    process.start(QStringLiteral("pdftoppm"),
+                  {QStringLiteral("-r"), QString::number(ppi), QStringLiteral("-png"),
+                   QStringLiteral("-singlefile"), pdfPath, base});
+    QVERIFY(process.waitForFinished(60000));
+    QCOMPARE(process.exitCode(), 0);
+
+    const QImage pdfPage(base + QStringLiteral(".png"));
+    QVERIFY(!pdfPage.isNull());
+    auto samplePdf = [&](const QPointF &mm) {
+        return pdfPage.pixel(qRound(mm.x() * pxPerMm), qRound(mm.y() * pxPerMm));
+    };
+    QVERIFY2(isReddish(samplePdf(photoRect.center())), "PDF must show the photo in its cell");
+    QVERIFY2(isWhite(samplePdf(otherRect.center())), "PDF must keep the neighbour empty");
+    QVERIFY2(isWhite(samplePdf(QPointF(sheet.width() / 2.0, photoRect.center().y()))),
+             "PDF must not bleed into the gutter");
+    QVERIFY2(isWhite(samplePdf(QPointF(photoRect.center().x(), photoRect.top() - margin))),
+             "PDF must not bleed above the cell");
+    QVERIFY2(isWhite(samplePdf(QPointF(photoRect.center().x(), photoRect.bottom() + margin))),
+             "PDF must not bleed below the cell");
+}
+
+void TestCanvasEdits::fillRotationNeverShowsPaperAtACorner()
+{
+    ImageStore store;
+    const auto source = store.load(m_portraitImagePath, ImportPolicy{});
+    if (!source)
+        QFAIL(qPrintable(source.error().message));
+    QCOMPARE(source.value().size(), QSize(400, 600));
+
+    DocumentSnapshot document =
+        documentWithPortraitSlot(source.value().path, source.value().sha256);
+    Frame *frame = findFrame(document, QStringLiteral("frame-portrait"));
+    QVERIFY(frame);
+    const QSize pixels = source.value().size();
+    const Page &page = document.pages.first();
+    const Slot *slot = SlotGeometry::slotById(page, page.slotList.at(0).id);
+    QVERIFY(slot);
+    const QRectF photoRect = SlotGeometry::slotPhotoRectMm(page, *slot);
+    // The cell is the whole 90 x 133.5 mm page: its corners are the page's.
+    QCOMPARE(photoRect.width(), 90.0);
+    QCOMPARE(photoRect.height(), 133.5);
+
+    PageRenderer renderer(store);
+    const double ppi = 200.0;
+    const double pxPerMm = ppi / 25.4;
+    const double inset = 2.0;
+    const QList<QPointF> corners = {
+        QPointF(photoRect.left() + inset, photoRect.top() + inset),
+        QPointF(photoRect.right() - inset, photoRect.top() + inset),
+        QPointF(photoRect.left() + inset, photoRect.bottom() - inset),
+        QPointF(photoRect.right() - inset, photoRect.bottom() - inset)};
+
+    auto isPhoto = [](QRgb pixel) {
+        return qRed(pixel) > 150 && qGreen(pixel) < 110 && qBlue(pixel) < 110;
+    };
+
+    for (const double degrees : {45.0, 90.0}) {
+        *frame = PhotoItem::rotateImageTo(*frame, degrees, pixels);
+        QCOMPARE(frame->imageRotationDeg, degrees);
+        // 45 degrees needs about 1.76x, 90 degrees about 1.48x.
+        QVERIFY2(frame->zoom > (degrees < 60.0 ? 1.7 : 1.4),
+                 qPrintable(QStringLiteral("rotation %1 zoom %2")
+                                .arg(degrees)
+                                .arg(frame->zoom)));
+
+        const auto rendered = renderer.renderPage(document, 0, ppi, {}, RenderOptions{});
+        if (!rendered)
+            QFAIL(qPrintable(rendered.error().message));
+        const QImage pageImage = rendered.value();
+        for (const QPointF &corner : corners) {
+            const QRgb pixel = pageImage.pixel(qRound(corner.x() * pxPerMm),
+                                               qRound(corner.y() * pxPerMm));
+            QVERIFY2(isPhoto(pixel),
+                     qPrintable(QStringLiteral("rotation %1: paper at %2,%3 (%4,%5,%6)")
+                                    .arg(degrees)
+                                    .arg(corner.x())
+                                    .arg(corner.y())
+                                    .arg(qRed(pixel))
+                                    .arg(qGreen(pixel))
+                                    .arg(qBlue(pixel))));
+        }
+
+        const QString tag = QString::number(int(degrees));
+        const QString pdfPath =
+            evidenceDir() + QStringLiteral("/fill-cover-%1.pdf").arg(tag);
+        RenderOptions options;
+        options.printPpi = ppi;
+        const auto artifact = renderer.writePdf(document, pdfPath, {}, options);
+        if (!artifact)
+            QFAIL(qPrintable(artifact.error().message));
+        QVERIFY(QFileInfo::exists(pdfPath));
+
+        QProcess process;
+        const QString base = evidenceDir() + QStringLiteral("/fill-cover-%1").arg(tag);
+        process.start(QStringLiteral("pdftoppm"),
+                      {QStringLiteral("-r"), QString::number(ppi), QStringLiteral("-png"),
+                       QStringLiteral("-singlefile"), pdfPath, base});
+        QVERIFY(process.waitForFinished(60000));
+        QCOMPARE(process.exitCode(), 0);
+        const QImage pdfPage(base + QStringLiteral(".png"));
+        QVERIFY(!pdfPage.isNull());
+        for (const QPointF &corner : corners) {
+            const QRgb pixel = pdfPage.pixel(qRound(corner.x() * pxPerMm),
+                                             qRound(corner.y() * pxPerMm));
+            QVERIFY2(isPhoto(pixel),
+                     qPrintable(QStringLiteral("PDF rotation %1: paper at %2,%3")
+                                    .arg(degrees)
+                                    .arg(corner.x())
+                                    .arg(corner.y())));
+        }
     }
 }
 

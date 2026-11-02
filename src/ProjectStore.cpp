@@ -422,8 +422,19 @@ Frame frameFromJson(const QJsonObject &object)
     frame.width = object.value(QStringLiteral("width")).toDouble();
     frame.height = object.value(QStringLiteral("height")).toDouble();
     frame.angleDeg = object.value(QStringLiteral("angleDeg")).toDouble();
-    frame.imageRotationDeg = object.value(QStringLiteral("imageRotationDeg")).toDouble();
-    frame.zoom = object.value(QStringLiteral("zoom")).toDouble(1.0);
+    // The inspector's ranges are model rules, not a display preference: a
+    // hand-edited or older file never loads a zoom or an in-frame rotation the
+    // sliders and the gestures cannot represent. A non-finite value is
+    // corruption, so it becomes the neutral value instead of saturating.
+    const double storedRotation =
+        object.value(QStringLiteral("imageRotationDeg")).toDouble();
+    frame.imageRotationDeg = std::isfinite(storedRotation)
+        ? std::clamp(storedRotation, kMinImageRotationDeg, kMaxImageRotationDeg)
+        : 0.0;
+    const double storedZoom = object.value(QStringLiteral("zoom")).toDouble(1.0);
+    frame.zoom = std::isfinite(storedZoom)
+        ? std::clamp(storedZoom, kMinFrameZoom, kMaxFrameZoom)
+        : 1.0;
     const QJsonArray crop = object.value(QStringLiteral("cropCenter")).toArray();
     if (crop.size() == 2)
         frame.cropCenter = QPointF(crop.at(0).toDouble(), crop.at(1).toDouble());

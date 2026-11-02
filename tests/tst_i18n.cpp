@@ -611,6 +611,18 @@ void TestI18n::everyCatalogueTranslatesTheSlotUiMessages()
              QStringLiteral("Az elrendezés megszűnik, a fotók szabadon maradnak a helyükön."),
              QStringLiteral("Margó beállítása"),
              QStringLiteral("Szegély beállítása"),
+             // The in-slot photograph inspector: its section, the two sliders,
+             // the quarter turns, the reset and its tooltip and hint.
+             QStringLiteral("Kép a helyén"),
+             QStringLiteral("Nagyítás"),
+             QStringLiteral("Forgatás"),
+             QStringLiteral("Balra 90°"),
+             QStringLiteral("Jobbra 90°"),
+             QStringLiteral("Alaphelyzet"),
+             QStringLiteral("Visszaállítja a kép nagyítását, helyét és forgatását."),
+             QStringLiteral("Húzd a fotót a mozgatáshoz. A kerék nagyít, a Shift+kerék forgat, a Ctrl+kerék a lapot nagyítja."),
+             QStringLiteral("A kerék nagyít, a Ctrl+kerék a lapot nagyítja."),
+             QStringLiteral("A Shift+kerék forgatja a fotót."),
          }) {
         const QString text = translated("PhotoPrint", source);
         const QString where = QStringLiteral("%1: %2").arg(code, source);

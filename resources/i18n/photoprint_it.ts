@@ -1581,5 +1581,45 @@
         <source>Ehhez a laphoz még nincs elrendezés.</source>
         <translation>Questa pagina non ha ancora un layout.</translation>
     </message>
+    <message>
+        <source>Kép a helyén</source>
+        <translation>Foto al suo posto</translation>
+    </message>
+    <message>
+        <source>Nagyítás</source>
+        <translation>Ingrandimento</translation>
+    </message>
+    <message>
+        <source>Forgatás</source>
+        <translation>Rotazione</translation>
+    </message>
+    <message>
+        <source>Balra 90°</source>
+        <translation>90° a sinistra</translation>
+    </message>
+    <message>
+        <source>Jobbra 90°</source>
+        <translation>90° a destra</translation>
+    </message>
+    <message>
+        <source>Alaphelyzet</source>
+        <translation>Reimposta</translation>
+    </message>
+    <message>
+        <source>Visszaállítja a kép nagyítását, helyét és forgatását.</source>
+        <translation>Ripristina ingrandimento, posizione e rotazione della foto.</translation>
+    </message>
+    <message>
+        <source>Húzd a fotót a mozgatáshoz. A kerék nagyít, a Shift+kerék forgat, a Ctrl+kerék a lapot nagyítja.</source>
+        <translation>Trascina la foto per spostarla. La rotella ingrandisce, Maiusc+rotella ruota, Ctrl+rotella ingrandisce la pagina.</translation>
+    </message>
+    <message>
+        <source>A kerék nagyít, a Ctrl+kerék a lapot nagyítja.</source>
+        <translation>La rotella ingrandisce, Ctrl+rotella ingrandisce la pagina.</translation>
+    </message>
+    <message>
+        <source>A Shift+kerék forgatja a fotót.</source>
+        <translation>Maiusc+rotella ruota la foto.</translation>
+    </message>
 </context>
 </TS>
