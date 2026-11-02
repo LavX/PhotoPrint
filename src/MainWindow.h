@@ -101,6 +101,9 @@ public:
     /// Shows a frame without committing it. The inspector uses it while a
     /// slider is dragged; the window commits one edit when the drag ends.
     void previewFrame(const Frame &frame);
+    /// Lands a pending wheel burst now as one edit. An inspector action calls
+    /// this first, so a wheel gesture and the action stay separate undo steps.
+    void flushWheelBurst();
 
     /// How a laid-out cell looks on screen right now. The three placeholder
     /// states are screen-only; they are never part of the page raster.
@@ -242,6 +245,12 @@ private:
     int hitHandle(const QPointF &widgetPoint) const;
     SlotState slotStateFor(const Slot &slot) const;
     void paintSlotOverlays(QPainter &painter, const Page &page) const;
+    /// A dark outline that stays visible on the always-white page, even when
+    /// the theme's text colour is light.
+    QColor handleOutlineColor() const;
+    /// Recomputes the base accessible description: the clipped-photo warning
+    /// when the selected frame is partly outside its cell.
+    void updateAccessibleDescription();
     void clearSelection();
     /// Recomputes the drag cue for the cell under the pointer and updates the
     /// accessible description with it, restoring the base text afterwards.
@@ -280,7 +289,7 @@ private:
     QString m_selectedSlotId;
     QString m_dropSlotId;
     QString m_dropCue;
-    QString m_accessibleBeforeDrag;
+    QString m_accessibleBase;
     QString m_emptyHint;
     bool m_cropMode = false;
     double m_viewZoom = 1.0;
@@ -420,6 +429,14 @@ private slots:
     void applyFilterSettings();
     void toggleAutoTone(bool enabled);
     void brightnessChanged(int value);
+    /// The photograph's own rotation inside its frame. The slider, the quarter
+    /// turns and the reset each write one FrameChange, so one action is one
+    /// undo step. The frame angle stays a separate control.
+    void imageRotationChanged(int degrees);
+    void rotateImageBy(double degrees);
+    void resetImageInsideFrame();
+    /// Fits the selected slotted frame back onto its cell, one undo step.
+    void replaceFrameInSlot();
     void showOriginalPressed(bool pressed);
     void applySizeFromControls();
     /// The page-level layout panel. A style edit names the one field the user
@@ -502,6 +519,9 @@ private:
     void applyEffectChoice(const QString &key, int version, int strength);
     void syncFrameControls();
     void syncLayoutPanel();
+    /// Writes the photograph's own rotation into the slider and its readout,
+    /// skipping the slider while the user is dragging it.
+    void syncImageRotationControls(const Frame &frame);
     /// The page-level sheet controls: the align button and the cut guide combo,
     /// plus the batch entry's enabled state.
     void syncPageTools();
@@ -612,6 +632,18 @@ private:
     QDoubleSpinBox *m_widthSpin = nullptr;
     QDoubleSpinBox *m_heightSpin = nullptr;
     QDoubleSpinBox *m_angleSpin = nullptr;
+    /// The photograph's own rotation inside its frame, kept compact for the
+    /// contextual tabs that come next. The frame angle is the separate spin
+    /// above; this one turns the picture, not the window.
+    QSlider *m_imageRotationSlider = nullptr;
+    QLabel *m_imageRotationValue = nullptr;
+    QPushButton *m_imageRotateLeftButton = nullptr;
+    QPushButton *m_imageRotateRightButton = nullptr;
+    QPushButton *m_imageResetButton = nullptr;
+    /// Fits a slotted frame back onto its cell. Hidden for a free frame.
+    QPushButton *m_replaceInSlotButton = nullptr;
+    /// Says that part of the photograph is outside its cell and is clipped.
+    QLabel *m_clippedHint = nullptr;
     /// The page's own inspector: visible whenever the page has slots, even with
     /// no photograph selected. The selected-photo sections live in
     /// m_photoPanel, so the two can coexist without hiding each other.

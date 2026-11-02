@@ -1583,19 +1583,19 @@
     </message>
     <message>
         <source>Balra 90°</source>
-        <translation type="vanished">90° बाएँ</translation>
+        <translation>90° बाएँ</translation>
     </message>
     <message>
         <source>Jobbra 90°</source>
-        <translation type="vanished">90° दाएँ</translation>
+        <translation>90° दाएँ</translation>
     </message>
     <message>
         <source>Alaphelyzet</source>
-        <translation type="vanished">रीसेट</translation>
+        <translation>रीसेट</translation>
     </message>
     <message>
         <source>Visszaállítja a kép nagyítását, helyét és forgatását.</source>
-        <translation type="vanished">फ़ोटो का ज़ूम, स्थान और घुमाव वापस डिफ़ॉल्ट करता है।</translation>
+        <translation>फ़ोटो का ज़ूम, स्थान और घुमाव वापस डिफ़ॉल्ट करता है।</translation>
     </message>
     <message>
         <source>Húzd a fotót a mozgatáshoz. A kerék nagyít, a Shift+kerék forgat, a Ctrl+kerék a lapot nagyítja.</source>
@@ -1608,6 +1608,26 @@
     <message>
         <source>A Shift+kerék forgatja a fotót.</source>
         <translation type="vanished">Shift+पहिया फ़ोटो घुमाता है।</translation>
+    </message>
+    <message>
+        <source>Kép forgatása</source>
+        <translation>फ़ोटो घुमाव</translation>
+    </message>
+    <message>
+        <source>Kép visszahelyezése</source>
+        <translation>फ़ोटो को वापस रखें</translation>
+    </message>
+    <message>
+        <source>A fotót a helyére igazítja.</source>
+        <translation>फ़ोटो को उसकी जगह पर वापस फ़िट करता है।</translation>
+    </message>
+    <message>
+        <source>A kép egy része le van vágva.</source>
+        <translation>फ़ोटो का एक हिस्सा कटा हुआ है।</translation>
+    </message>
+    <message>
+        <source>Levágva</source>
+        <translation>कटा हुआ</translation>
     </message>
 </context>
 </TS>

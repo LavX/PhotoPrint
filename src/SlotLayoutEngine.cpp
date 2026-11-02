@@ -118,7 +118,7 @@ Result<void> assignFrame(Page &page, const QString &slotId, Frame payload, bool 
     const Slot *slot = SlotGeometry::slotById(page, slotId);
     if (!slot)
         return slotMissing();
-    const QRectF photo = SlotGeometry::slotPhotoRectMm(page, *slot);
+    const QRectF photo = SlotGeometry::slotCellMm(page, *slot);
 
     const bool existing = frameIndexById(page, payload.id) >= 0;
     if (!existing && payload.sourcePath.isEmpty()) {
@@ -637,8 +637,15 @@ Result<Page> repair(Page page)
         page.layoutId.clear();
     }
 
-    // Geometry is not repaired: a slotted frame's rectangle, size and angle are
-    // the user's composition inside the cell, and the cell only clips it.
+    // Geometry is the user's composition inside the cell, so it is not
+    // re-derived. It is only clamped: a frame that a hand-edited file or an old
+    // build left fully outside its cell is moved back until a visible part of
+    // the photograph is inside the window, instead of loading invisible.
+    for (Frame &frame : page.frames) {
+        if (frame.slotId.isEmpty())
+            continue;
+        frame = SlotGeometry::clampFrameToCell(page, frame);
+    }
     return page;
 }
 

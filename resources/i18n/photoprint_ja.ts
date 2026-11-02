@@ -1569,19 +1569,19 @@
     </message>
     <message>
         <source>Balra 90°</source>
-        <translation type="vanished">左へ90°</translation>
+        <translation>左へ90°</translation>
     </message>
     <message>
         <source>Jobbra 90°</source>
-        <translation type="vanished">右へ90°</translation>
+        <translation>右へ90°</translation>
     </message>
     <message>
         <source>Alaphelyzet</source>
-        <translation type="vanished">リセット</translation>
+        <translation>リセット</translation>
     </message>
     <message>
         <source>Visszaállítja a kép nagyítását, helyét és forgatását.</source>
-        <translation type="vanished">写真の拡大率、位置、回転を元に戻します。</translation>
+        <translation>写真の拡大率、位置、回転を元に戻します。</translation>
     </message>
     <message>
         <source>Húzd a fotót a mozgatáshoz. A kerék nagyít, a Shift+kerék forgat, a Ctrl+kerék a lapot nagyítja.</source>
@@ -1594,6 +1594,26 @@
     <message>
         <source>A Shift+kerék forgatja a fotót.</source>
         <translation type="vanished">Shift+ホイールで写真を回転します。</translation>
+    </message>
+    <message>
+        <source>Kép forgatása</source>
+        <translation>写真の回転</translation>
+    </message>
+    <message>
+        <source>Kép visszahelyezése</source>
+        <translation>写真を元の位置に戻す</translation>
+    </message>
+    <message>
+        <source>A fotót a helyére igazítja.</source>
+        <translation>写真を元の位置に合わせます。</translation>
+    </message>
+    <message>
+        <source>A kép egy része le van vágva.</source>
+        <translation>写真の一部が切り取られています。</translation>
+    </message>
+    <message>
+        <source>Levágva</source>
+        <translation>切り取り</translation>
     </message>
 </context>
 </TS>

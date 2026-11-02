@@ -610,6 +610,16 @@ void TestI18n::everyCatalogueTranslatesTheSlotUiMessages()
              QStringLiteral("Az elrendezés megszűnik, a fotók szabadon maradnak a helyükön."),
              QStringLiteral("Margó beállítása"),
              QStringLiteral("Szegély beállítása"),
+             // The compact photo-rotation control and the section reset.
+             QStringLiteral("Kép forgatása"),
+             QStringLiteral("Kép visszahelyezése"),
+             QStringLiteral("A fotót a helyére igazítja."),
+             QStringLiteral("A kép egy része le van vágva."),
+             QStringLiteral("Levágva"),
+             QStringLiteral("Balra 90°"),
+             QStringLiteral("Jobbra 90°"),
+             QStringLiteral("Alaphelyzet"),
+             QStringLiteral("Visszaállítja a kép nagyítását, helyét és forgatását."),
          }) {
         const QString text = translated("PhotoPrint", source);
         const QString where = QStringLiteral("%1: %2").arg(code, source);

@@ -152,14 +152,6 @@ Frame zoomAt(Frame frame, const QPointF &pagePoint, double factor, const QSize &
     return clampCrop(result, pixels);
 }
 
-Frame setZoom(Frame frame, double zoom, const QSize &pixels)
-{
-    if (!std::isfinite(zoom))
-        return frame;
-    frame.zoom = std::clamp(zoom, kMinFrameZoom, kMaxFrameZoom);
-    return clampCrop(frame, pixels);
-}
-
 Frame rotateImageTo(Frame frame, double degrees, const QSize &pixels)
 {
     if (!std::isfinite(degrees))

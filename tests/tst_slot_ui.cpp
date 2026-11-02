@@ -95,6 +95,40 @@ QString makePhoto(const QString &directory, const QString &name, const QColor &c
     return path;
 }
 
+/// Where the section evidence screenshots land, the same place the other UI
+/// captures use.
+QString evidenceDir()
+{
+#ifdef PHOTOPRINT_EVIDENCE_DIR
+    const QString dir = QStringLiteral(PHOTOPRINT_EVIDENCE_DIR);
+#else
+    const QString dir = QDir::currentPath() + QStringLiteral("/build/evidence");
+#endif
+    QDir().mkpath(dir);
+    return dir;
+}
+
+/// How many pixels near a cell's top edge are close to `colour`. The section
+/// outline is one device pixel, so a small band is sampled.
+int countNearCellEdge(const QImage &image, const QRectF &cell, const QColor &colour,
+                      int tolerance)
+{
+    int count = 0;
+    for (int y = int(cell.top()); y <= int(cell.top()) + 2; ++y) {
+        for (int x = int(cell.left()) + 4; x <= int(cell.right()) - 4; ++x) {
+            if (x < 0 || y < 0 || x >= image.width() || y >= image.height())
+                continue;
+            const QRgb pixel = image.pixel(x, y);
+            if (std::abs(qRed(pixel) - colour.red()) <= tolerance
+                && std::abs(qGreen(pixel) - colour.green()) <= tolerance
+                && std::abs(qBlue(pixel) - colour.blue()) <= tolerance) {
+                ++count;
+            }
+        }
+    }
+    return count;
+}
+
 /// A tiling grid of `count` slots, in fill order. The rectangles are split
 /// evenly, so a cell always exists on the default automatic margin.
 QList<Slot> gridSlots(int count)
@@ -445,6 +479,14 @@ private slots:
     void frameGeometryAndAngleSurviveSaveAndLoad();
     void paperChangeKeepsTheCompositionInsideTheSection();
     void frameControlsFollowSelectionAndUndo();
+    void dragFullyOutIsClamped();
+    void arrowNudgeFullyOutIsClamped();
+    void resetPutsTheFrameBackOnItsCell();
+    void clippedFrameIsAnnouncedAndHinted();
+    void sectionOutlineIsVisibleWhenFilledAndDeselected();
+    void imageRotationControlWritesAndPersists();
+    void clipAwareHitTest();
+    void danglingSlotFrameIsHitAsFree();
     void addPhotoFillsFirstEmptySlot();
     void applyLayoutToAnEmptyPageThenFill();
     void topUpFillsTheDetachedPhoto();
@@ -705,7 +747,7 @@ void TestSlotUi::fileDropOnSlotIsOneUndo()
     QVERIFY(placed);
     QCOMPARE(placed->sourcePath, photo);
     QCOMPARE(placed->slotId, target.id);
-    const QRectF expected = SlotGeometry::slotPhotoRectMm(after, target);
+    const QRectF expected = SlotGeometry::slotCellMm(after, target);
     QVERIFY(std::abs(placed->cx - expected.center().x()) < 0.01);
     QVERIFY(std::abs(placed->cy - expected.center().y()) < 0.01);
     QVERIFY(std::abs(placed->width - expected.width()) < 0.01);
@@ -1487,8 +1529,6 @@ void TestSlotUi::paperChangeKeepsTheCompositionInsideTheSection()
     const Frame beforeFrame = *frameInSlot(before, slotId);
     const double relX = (beforeFrame.cx - oldCell.center().x()) / oldCell.width();
     const double relY = (beforeFrame.cy - oldCell.center().y()) / oldCell.height();
-    const double relW = beforeFrame.width / oldCell.width();
-    const double relH = beforeFrame.height / oldCell.height();
     const QRectF unit = before.slotList.at(0).unitRect;
 
     QComboBox *paper = paperCombo(window);
@@ -1513,10 +1553,17 @@ void TestSlotUi::paperChangeKeepsTheCompositionInsideTheSection()
              "the horizontal composition did not survive the paper change");
     QVERIFY2(std::abs((afterFrame->cy - newCell.center().y()) / newCell.height() - relY) < 1e-6,
              "the vertical composition did not survive the paper change");
-    QVERIFY2(std::abs(afterFrame->width / newCell.width() - relW) < 1e-6,
-             "the width did not scale with the cell");
-    QVERIFY2(std::abs(afterFrame->height / newCell.height() - relH) < 1e-6,
-             "the height did not scale with the cell");
+    // The frame is turned, so it takes one uniform scale: the aspect ratio is
+    // preserved and the new cell shape cannot shear the composition.
+    const double uniform = std::sqrt((newCell.width() / oldCell.width())
+                                     * (newCell.height() / oldCell.height()));
+    QVERIFY2(std::abs(afterFrame->width - beforeFrame.width * uniform) < 1e-6,
+             "the width did not take the uniform scale");
+    QVERIFY2(std::abs(afterFrame->height - beforeFrame.height * uniform) < 1e-6,
+             "the height did not take the uniform scale");
+    QVERIFY2(std::abs(afterFrame->width / afterFrame->height
+                      - beforeFrame.width / beforeFrame.height) < 1e-6,
+             "the turned frame was sheared by the paper change");
     QCOMPARE(afterFrame->angleDeg, 14.0);
     QCOMPARE(after.slotList.at(0).unitRect, unit);
 
@@ -1595,6 +1642,469 @@ void TestSlotUi::frameControlsFollowSelectionAndUndo()
     QTest::qWait(50);
     QCOMPARE(angle->value(), 0.0);
     QCOMPARE(stack->count(), edits);
+}
+
+void TestSlotUi::dragFullyOutIsClamped()
+{
+    QTemporaryDir dir;
+    QVERIFY(dir.isValid());
+    const QString photo = makePhoto(dir.path(), QStringLiteral("out.png"), QColor(200, 40, 40));
+    MainWindow window;
+    window.resize(1280, 800);
+    window.show();
+    QTest::qWait(100);
+    QVERIFY(loadDocument(window, dir, documentWithLayout({photo}, 4),
+                         QStringLiteral("out.ppj")));
+    auto *view = window.findChild<PageView *>();
+    QVERIFY(view);
+    QVERIFY(window.waitForPreview(15000));
+
+    const Page page = window.document().pages.first();
+    const QString slotId = page.slotList.at(0).id;
+    QTest::mouseClick(view, Qt::LeftButton, Qt::NoModifier,
+                      view->slotRect(slotId).center().toPoint());
+    const QPointF start = view->slotRect(slotId).center();
+    // Drag far to the right: without the clamp the frame would leave the cell
+    // completely and the photograph would vanish from screen and print.
+    QTest::mousePress(view, Qt::LeftButton, Qt::NoModifier, start.toPoint());
+    QTest::mouseMove(view, (start + QPointF(420.0, 0.0)).toPoint());
+    QTest::mouseRelease(view, Qt::LeftButton, Qt::NoModifier,
+                        (start + QPointF(420.0, 0.0)).toPoint());
+    QTest::qWait(150);
+
+    const Page after = window.document().pages.first();
+    const Frame *frame = frameInSlot(after, slotId);
+    QVERIFY(frame);
+    QVERIFY2(!SlotGeometry::visibleRectMm(after, *frame).isEmpty(),
+             "a drag left the photograph outside its cell");
+    QVERIFY(SlotGeometry::frameIsClipped(after, *frame));
+
+    // The print still shows the photograph inside the cell.
+    ImageStore store;
+    PageRenderer renderer(store);
+    const auto rendered = renderer.renderPage(window.document(), 0, 200.0);
+    if (!rendered)
+        QFAIL(qPrintable(rendered.error().message));
+    const QImage printed = rendered.value();
+    const QSizeF sheet = pageSizeMm(after);
+    const Slot *slot = SlotGeometry::slotById(after, slotId);
+    QVERIFY(slot);
+    const QRectF cell = SlotGeometry::slotCellMm(after, *slot);
+    // The clamp leaves a visible sliver at the cell edge, not the cell centre.
+    const QRectF visible = SlotGeometry::visibleRectMm(after, *frame);
+    QVERIFY(!visible.isEmpty());
+    const QColor centre = meanColourMm(printed, sheet, visible.center(), 1.0);
+    QVERIFY2(centre.red() > 150 && centre.green() < 120 && centre.blue() < 120,
+             qPrintable(QStringLiteral("the clamped photograph did not print: %1/%2/%3")
+                            .arg(centre.red()).arg(centre.green()).arg(centre.blue())));
+
+    QVERIFY(window.grab().save(evidenceDir() +
+                               QStringLiteral("/ui-section-out-of-window.png")));
+    QVERIFY(view->grab().save(evidenceDir() +
+                              QStringLiteral("/ui-section-out-of-window-canvas.png")));
+}
+
+void TestSlotUi::arrowNudgeFullyOutIsClamped()
+{
+    QTemporaryDir dir;
+    QVERIFY(dir.isValid());
+    const QString photo = makePhoto(dir.path(), QStringLiteral("nudge.png"), QColor(40, 160, 60));
+    MainWindow window;
+    window.resize(1280, 800);
+    window.show();
+    QTest::qWait(100);
+    QVERIFY(loadDocument(window, dir, documentWithLayout({photo}, 4),
+                         QStringLiteral("nudge.ppj")));
+    auto *view = window.findChild<PageView *>();
+    QVERIFY(view);
+    QVERIFY(window.waitForPreview(15000));
+
+    const Page page = window.document().pages.first();
+    const QString slotId = page.slotList.at(0).id;
+    QTest::mouseClick(view, Qt::LeftButton, Qt::NoModifier,
+                      view->slotRect(slotId).center().toPoint());
+    // A small frame needs fewer nudges to leave the cell.
+    auto *width = spinNamed(window, "widthSpin");
+    auto *height = spinNamed(window, "heightSpin");
+    QVERIFY(width);
+    QVERIFY(height);
+    width->setValue(1.0);
+    commitSpin(width);
+    QTest::qWait(30);
+    height->setValue(1.0);
+    commitSpin(height);
+    QTest::qWait(30);
+
+    for (int step = 0; step < 80; ++step)
+        QTest::keyClick(view, Qt::Key_Right);
+    QTest::qWait(150);
+
+    const Page after = window.document().pages.first();
+    const Frame *frame = frameInSlot(after, slotId);
+    QVERIFY(frame);
+    QVERIFY2(!SlotGeometry::visibleRectMm(after, *frame).isEmpty(),
+             "an arrow nudge left the photograph outside its cell");
+    // A small frame is pulled fully back inside the cell, so it is not clipped.
+    QVERIFY(!SlotGeometry::frameIsClipped(after, *frame));
+}
+
+void TestSlotUi::resetPutsTheFrameBackOnItsCell()
+{
+    QTemporaryDir dir;
+    QVERIFY(dir.isValid());
+    const QString photo = makePhoto(dir.path(), QStringLiteral("reset-slot.png"),
+                                    QColor(60, 60, 200));
+    MainWindow window;
+    window.resize(1280, 800);
+    window.show();
+    QTest::qWait(100);
+    QVERIFY(loadDocument(window, dir, documentWithLayout({photo}, 4),
+                         QStringLiteral("reset-slot.ppj")));
+    auto *view = window.findChild<PageView *>();
+    QVERIFY(view);
+    QVERIFY(window.waitForPreview(15000));
+
+    const Page page = window.document().pages.first();
+    const QString slotId = page.slotList.at(0).id;
+    QTest::mouseClick(view, Qt::LeftButton, Qt::NoModifier,
+                      view->slotRect(slotId).center().toPoint());
+    const QPointF start = view->slotRect(slotId).center();
+    QTest::mousePress(view, Qt::LeftButton, Qt::NoModifier, start.toPoint());
+    QTest::mouseMove(view, (start + QPointF(90.0, 40.0)).toPoint());
+    QTest::mouseRelease(view, Qt::LeftButton, Qt::NoModifier,
+                        (start + QPointF(90.0, 40.0)).toPoint());
+    QTest::qWait(80);
+    QVERIFY(SlotGeometry::frameIsClipped(window.document().pages.first(),
+                                         *frameInSlot(window.document().pages.first(), slotId)));
+
+    auto *reset = window.findChild<QPushButton *>(QStringLiteral("replaceInSlotButton"));
+    QVERIFY(reset);
+    QVERIFY(reset->isVisible());
+    reset->click();
+    QTest::qWait(80);
+
+    const Page after = window.document().pages.first();
+    const Frame *frame = frameInSlot(after, slotId);
+    QVERIFY(frame);
+    QVERIFY(SlotGeometry::slotGeometryMatches(after, *frame));
+    QVERIFY(!SlotGeometry::frameIsClipped(after, *frame));
+
+    // One reset, one undo: the moved frame comes back.
+    undoAction(window)->trigger();
+    QTest::qWait(80);
+    QVERIFY(SlotGeometry::frameIsClipped(window.document().pages.first(),
+                                         *frameInSlot(window.document().pages.first(), slotId)));
+}
+
+void TestSlotUi::clippedFrameIsAnnouncedAndHinted()
+{
+    QTemporaryDir dir;
+    QVERIFY(dir.isValid());
+    const QString photo = makePhoto(dir.path(), QStringLiteral("clipped.png"),
+                                    QColor(200, 120, 30));
+    MainWindow window;
+    window.resize(1280, 800);
+    window.show();
+    QTest::qWait(100);
+    QVERIFY(loadDocument(window, dir, documentWithLayout({photo}, 4),
+                         QStringLiteral("clipped.ppj")));
+    auto *view = window.findChild<PageView *>();
+    QVERIFY(view);
+    QVERIFY(window.waitForPreview(15000));
+
+    const Page page = window.document().pages.first();
+    const QString slotId = page.slotList.at(0).id;
+    QTest::mouseClick(view, Qt::LeftButton, Qt::NoModifier,
+                      view->slotRect(slotId).center().toPoint());
+    const QPointF start = view->slotRect(slotId).center();
+    QTest::mousePress(view, Qt::LeftButton, Qt::NoModifier, start.toPoint());
+    QTest::mouseMove(view, (start + QPointF(70.0, 0.0)).toPoint());
+    QTest::mouseRelease(view, Qt::LeftButton, Qt::NoModifier,
+                        (start + QPointF(70.0, 0.0)).toPoint());
+    QTest::qWait(120);
+
+    const Page after = window.document().pages.first();
+    QVERIFY(SlotGeometry::frameIsClipped(after, *frameInSlot(after, slotId)));
+    auto *hint = window.findChild<QLabel *>(QStringLiteral("clippedHint"));
+    QVERIFY(hint);
+    QVERIFY2(hint->isVisible(), "the clipped hint is not shown");
+    QCOMPARE(view->accessibleDescription(),
+             QStringLiteral("A kép egy része le van vágva."));
+
+    // The canvas carries the orange clipped badge as well.
+    const QImage canvas = view->grab().toImage();
+    const QRectF cell = view->slotRect(slotId);
+    int orange = 0;
+    for (int y = int(cell.top()); y <= int(cell.top()) + 30; ++y) {
+        for (int x = int(cell.left()); x <= int(cell.left()) + 90; ++x) {
+            if (x < 0 || y < 0 || x >= canvas.width() || y >= canvas.height())
+                continue;
+            const QRgb pixel = canvas.pixel(x, y);
+            if (qRed(pixel) > 150 && qGreen(pixel) < 130 && qBlue(pixel) < 100)
+                ++orange;
+        }
+    }
+    QVERIFY2(orange > 10, qPrintable(QStringLiteral("clipped badge pixels %1").arg(orange)));
+}
+
+void TestSlotUi::sectionOutlineIsVisibleWhenFilledAndDeselected()
+{
+    QTemporaryDir dir;
+    QVERIFY(dir.isValid());
+    const QString photo = makePhoto(dir.path(), QStringLiteral("outline.png"),
+                                    QColor(200, 40, 40));
+    MainWindow window;
+    window.resize(1280, 800);
+    window.show();
+    QTest::qWait(100);
+    QVERIFY(loadDocument(window, dir, documentWithLayout({photo}, 4),
+                         QStringLiteral("outline.ppj")));
+    auto *view = window.findChild<PageView *>();
+    QVERIFY(view);
+    QVERIFY(window.waitForPreview(15000));
+
+    const Page page = window.document().pages.first();
+    const QString slotId = page.slotList.at(0).id;
+    // Deselect by clicking the paper margin.
+    QTest::mouseClick(view, Qt::LeftButton, Qt::NoModifier,
+                      pageToWidget(*view, QPointF(2.0, 2.0)).toPoint());
+    QVERIFY(view->selectedFrame().isEmpty());
+    QTest::qWait(80);
+
+    const QRectF cell = view->slotRect(slotId);
+    const QImage deselected = view->grab().toImage();
+    const QColor muted(0x8a, 0x8a, 0x92);
+    const int mutedPixels = countNearCellEdge(deselected, cell, muted, 55);
+    QVERIFY2(mutedPixels > 20,
+             qPrintable(QStringLiteral("a filled deselected cell has no muted outline: %1")
+                            .arg(mutedPixels)));
+
+    // Selecting the cell brings the accent ring, and the muted outline is still
+    // the same window underneath.
+    QTest::mouseClick(view, Qt::LeftButton, Qt::NoModifier, cell.center().toPoint());
+    QCOMPARE(view->selectedFrame(), frameInSlot(page, slotId)->id);
+    QTest::qWait(80);
+    const QImage selected = view->grab().toImage();
+    const QColor accent = view->palette().color(QPalette::Highlight);
+    const int accentPixels = countNearCellEdge(selected, cell, accent, 70);
+    QVERIFY2(accentPixels > 20,
+             qPrintable(QStringLiteral("the selected cell has no accent ring: %1")
+                            .arg(accentPixels)));
+}
+
+void TestSlotUi::imageRotationControlWritesAndPersists()
+{
+    QTemporaryDir dir;
+    QVERIFY(dir.isValid());
+    const QString photo = makePhoto(dir.path(), QStringLiteral("image-rot.png"),
+                                    QColor(30, 120, 200));
+    MainWindow window;
+    window.resize(1280, 800);
+    window.show();
+    QTest::qWait(100);
+    QVERIFY(loadDocument(window, dir, documentWithLayout({photo}, 4),
+                         QStringLiteral("image-rot.ppj")));
+    auto *view = window.findChild<PageView *>();
+    QVERIFY(view);
+    QVERIFY(window.waitForPreview(15000));
+
+    const Page page = window.document().pages.first();
+    const QString slotId = page.slotList.at(0).id;
+    const QString frameId = frameInSlot(page, slotId)->id;
+    QTest::mouseClick(view, Qt::LeftButton, Qt::NoModifier,
+                      view->slotRect(slotId).center().toPoint());
+
+    auto *slider = window.findChild<QSlider *>(QStringLiteral("imageRotationSlider"));
+    auto *value = window.findChild<QLabel *>(QStringLiteral("imageRotationValue"));
+    auto *right = window.findChild<QPushButton *>(QStringLiteral("imageRotateRight"));
+    auto *left = window.findChild<QPushButton *>(QStringLiteral("imageRotateLeft"));
+    auto *reset = window.findChild<QPushButton *>(QStringLiteral("imageRotationReset"));
+    QVERIFY(slider);
+    QVERIFY(value);
+    QVERIFY(right);
+    QVERIFY(left);
+    QVERIFY(reset);
+    QVERIFY(slider->isVisible());
+    QCOMPARE(slider->minimum(), -180);
+    QCOMPARE(slider->maximum(), 180);
+    QCOMPARE(slider->value(), 0);
+
+    const DocumentSnapshot before = window.document();
+    slider->setValue(45);
+    QTest::qWait(60);
+    Frame after = *frameInSlot(window.document().pages.first(), slotId);
+    QCOMPARE(after.imageRotationDeg, 45.0);
+    QCOMPARE(value->text(), QStringLiteral("45°"));
+    // The frame angle is a separate control and did not move.
+    QCOMPARE(after.angleDeg, 0.0);
+
+    right->click();
+    QTest::qWait(60);
+    after = *frameInSlot(window.document().pages.first(), slotId);
+    QCOMPARE(after.imageRotationDeg, 135.0);
+    left->click();
+    QTest::qWait(60);
+    after = *frameInSlot(window.document().pages.first(), slotId);
+    QCOMPARE(after.imageRotationDeg, 45.0);
+
+    // The reset puts the picture back inside the frame.
+    reset->click();
+    QTest::qWait(60);
+    after = *frameInSlot(window.document().pages.first(), slotId);
+    QCOMPARE(after.imageRotationDeg, 0.0);
+    QCOMPARE(after.zoom, 1.0);
+    QCOMPARE(after.cropCenter, QPointF(0.5, 0.5));
+
+    // Each action is one undo step.
+    QAction *undo = undoAction(window);
+    QVERIFY(undo);
+    undo->trigger();
+    QTest::qWait(50);
+    QCOMPARE(frameInSlot(window.document().pages.first(), slotId)->imageRotationDeg, 45.0);
+    undo->trigger();
+    QTest::qWait(50);
+    QCOMPARE(frameInSlot(window.document().pages.first(), slotId)->imageRotationDeg, 135.0);
+    undo->trigger();
+    QTest::qWait(50);
+    QCOMPARE(frameInSlot(window.document().pages.first(), slotId)->imageRotationDeg, 45.0);
+    undo->trigger();
+    QTest::qWait(50);
+    QVERIFY(window.document() == before);
+
+    // Persistence: the photograph's own rotation is a stored field.
+    slider->setValue(-30);
+    QTest::qWait(60);
+    const Frame stored = *frameInSlot(window.document().pages.first(), slotId);
+    QCOMPARE(stored.imageRotationDeg, -30.0);
+    const QString path = dir.filePath(QStringLiteral("image-rot-saved.ppj"));
+    ProjectStore store;
+    QVERIFY(store.save(path, window.document(), SaveMode::Normal).ok());
+    const auto loaded = store.load(path);
+    if (!loaded)
+        QFAIL(qPrintable(loaded.error().message));
+    const Frame *restored = findFrame(loaded.value().document, frameId);
+    QVERIFY(restored);
+    QCOMPARE(restored->imageRotationDeg, -30.0);
+
+    // Clipping: a turned picture stays inside the cell, and the gap stays paper.
+    auto *width = spinNamed(window, "widthSpin");
+    auto *height = spinNamed(window, "heightSpin");
+    QVERIFY(width);
+    QVERIFY(height);
+    const Slot *slot = SlotGeometry::slotById(window.document().pages.first(), slotId);
+    QVERIFY(slot);
+    const QRectF cell = SlotGeometry::slotCellMm(window.document().pages.first(), *slot);
+    width->setValue(cell.width() / 10.0 * 1.4);
+    commitSpin(width);
+    QTest::qWait(40);
+    height->setValue(cell.height() / 10.0 * 1.4);
+    commitSpin(height);
+    QTest::qWait(40);
+    slider->setValue(45);
+    QTest::qWait(120);
+    ImageStore store2;
+    PageRenderer renderer(store2);
+    const auto rendered = renderer.renderPage(window.document(), 0, 200.0);
+    if (!rendered)
+        QFAIL(qPrintable(rendered.error().message));
+    const QImage printed = rendered.value();
+    const QSizeF sheet = pageSizeMm(window.document().pages.first());
+    const QColor gap = meanColourMm(printed, sheet,
+                                    QPointF(cell.right() + 1.5, cell.center().y()), 1.0);
+    QVERIFY2(gap.red() >= 245 && gap.green() >= 245 && gap.blue() >= 245,
+             "the turned picture bled into the gap");
+}
+
+void TestSlotUi::clipAwareHitTest()
+{
+    QTemporaryDir dir;
+    QVERIFY(dir.isValid());
+    const QString photo = makePhoto(dir.path(), QStringLiteral("hit.png"), QColor(120, 60, 180));
+    MainWindow window;
+    window.resize(1280, 800);
+    window.show();
+    QTest::qWait(100);
+    QVERIFY(loadDocument(window, dir, documentWithLayout({photo}, 4),
+                         QStringLiteral("hit.ppj")));
+    auto *view = window.findChild<PageView *>();
+    QVERIFY(view);
+    QVERIFY(window.waitForPreview(15000));
+
+    const Page page = window.document().pages.first();
+    const QString slotId = page.slotList.at(0).id;
+    const QString frameId = frameInSlot(page, slotId)->id;
+    QTest::mouseClick(view, Qt::LeftButton, Qt::NoModifier,
+                      view->slotRect(slotId).center().toPoint());
+    QCOMPARE(view->selectedFrame(), frameId);
+
+    // Make the frame larger than its cell, so part of it is clipped away.
+    auto *width = spinNamed(window, "widthSpin");
+    auto *height = spinNamed(window, "heightSpin");
+    QVERIFY(width);
+    QVERIFY(height);
+    const Slot *slot = SlotGeometry::slotById(page, slotId);
+    QVERIFY(slot);
+    const QRectF cell = SlotGeometry::slotCellMm(page, *slot);
+    width->setValue(cell.width() / 10.0 * 1.5);
+    commitSpin(width);
+    QTest::qWait(40);
+    height->setValue(cell.height() / 10.0 * 1.5);
+    commitSpin(height);
+    QTest::qWait(80);
+
+    // A click on the clipped-away part (outside the cell, inside the frame)
+    // must not select the photograph the user cannot see.
+    const QPointF outside = pageToWidget(*view, QPointF(cell.right() + 3.0, cell.center().y()));
+    QTest::mouseClick(view, Qt::LeftButton, Qt::NoModifier, outside.toPoint());
+    QVERIFY2(view->selectedFrame().isEmpty(),
+             "a click on the clipped-away part selected the photograph");
+
+    // A click inside the cell selects it again.
+    QTest::mouseClick(view, Qt::LeftButton, Qt::NoModifier,
+                      pageToWidget(*view, cell.center()).toPoint());
+    QCOMPARE(view->selectedFrame(), frameId);
+}
+
+void TestSlotUi::danglingSlotFrameIsHitAsFree()
+{
+    QTemporaryDir dir;
+    QVERIFY(dir.isValid());
+    const QString photo = makePhoto(dir.path(), QStringLiteral("dangling.png"),
+                                    QColor(90, 160, 90));
+
+    DocumentSnapshot document;
+    Page page;
+    page.id = QStringLiteral("page-dangling");
+    page.paper = a4Paper();
+    Slot slot;
+    slot.id = QStringLiteral("slot-a");
+    slot.unitRect = QRectF(0.0, 0.0, 0.5, 1.0);
+    page.slotList.append(slot);
+    Frame frame;
+    frame.id = QStringLiteral("frame-dangling");
+    frame.sourcePath = photo;
+    frame.sourceSha256 = fileSha256(photo);
+    frame.slotId = QStringLiteral("slot-missing");
+    frame.cx = 150.0;
+    frame.cy = 100.0;
+    frame.width = 40.0;
+    frame.height = 30.0;
+    frame.fit = FitMode::Fill;
+    frame.autoPlaced = false;
+    page.frames.append(frame);
+    document.pages.append(page);
+
+    PageView view;
+    view.resize(900, 700);
+    view.setDocument(document);
+    view.show();
+    QVERIFY(QTest::qWaitForWindowExposed(&view));
+
+    // The renderer draws a dangling-slot frame as a free frame, so the hit test
+    // must treat it the same way instead of skipping it.
+    QTest::mouseClick(&view, Qt::LeftButton, Qt::NoModifier,
+                      pageToWidget(view, QPointF(150.0, 100.0)).toPoint());
+    QCOMPARE(view.selectedFrame(), QStringLiteral("frame-dangling"));
 }
 
 void TestSlotUi::addPhotoFillsFirstEmptySlot()
@@ -1862,7 +2372,6 @@ void TestSlotUi::hoverOnFilledCellSaysReplace()
     PageView view;
     view.resize(900, 700);
     view.setDocument(document);
-    view.setAccessibleDescription(QStringLiteral("alap"));
     view.show();
     QVERIFY(QTest::qWaitForWindowExposed(&view));
 
@@ -1898,7 +2407,7 @@ void TestSlotUi::hoverOnFilledCellSaysReplace()
     QDragMoveEvent overEmpty(emptyCentre, Qt::CopyAction, &mime, Qt::LeftButton, Qt::NoModifier);
     view.dragMoveForTest(&overEmpty);
     QVERIFY(view.dropCue().isEmpty());
-    QCOMPARE(view.accessibleDescription(), QStringLiteral("alap"));
+    QVERIFY(view.accessibleDescription().isEmpty());
 
     // Leaving the drag restores the base description as well.
     QDragEnterEvent enterAgain(filledCentre, Qt::CopyAction, &mime, Qt::LeftButton,
@@ -1911,7 +2420,7 @@ void TestSlotUi::hoverOnFilledCellSaysReplace()
     QDragLeaveEvent leave;
     view.dragLeaveForTest(&leave);
     QVERIFY(view.dropCue().isEmpty());
-    QCOMPARE(view.accessibleDescription(), QStringLiteral("alap"));
+    QVERIFY(view.accessibleDescription().isEmpty());
 }
 
 void TestSlotUi::multiFileDropOnFreeCanvasIsOneUndo()
@@ -2636,7 +3145,7 @@ void TestSlotUi::styleValuesClampOnSmallPaper()
     // survives.
     for (const Slot &slot : page.slotList) {
         const QRectF slotCell = SlotGeometry::slotCellMm(page, slot);
-        const QRectF photoRect = SlotGeometry::slotPhotoRectMm(page, slot);
+        const QRectF photoRect = SlotGeometry::slotCellMm(page, slot);
         QVERIFY(slotCell.width() >= 1.0);
         QVERIFY(slotCell.height() >= 1.0);
         QCOMPARE(photoRect, slotCell);
@@ -3129,7 +3638,7 @@ void TestSlotUi::gapPrintsAndTheCanvasAgrees()
     QVERIFY(std::abs(cells.at(1).left() - cells.at(0).right() - 3.0) <= 1e-9);
     QVERIFY(std::abs(cells.at(2).top() - cells.at(0).bottom() - 3.0) <= 1e-9);
     // The photograph is the cell: there is no inset around it.
-    QCOMPARE(SlotGeometry::slotPhotoRectMm(page, page.slotList.at(0)), filledCell);
+    QCOMPARE(SlotGeometry::slotCellMm(page, page.slotList.at(0)), filledCell);
 
     // The probes sit just inside an edge or in the middle of the gap. The block
     // mean keeps antialiasing from two different resolutions out of the
@@ -3529,7 +4038,7 @@ void TestSlotUi::roundedCornersClipThePrint()
     const Page page = document.pages.first();
     const Slot &slot = page.slotList.at(0);
     const QRectF cell = SlotGeometry::slotCellMm(page, slot);
-    const QRectF photoRect = SlotGeometry::slotPhotoRectMm(page, slot);
+    const QRectF photoRect = SlotGeometry::slotCellMm(page, slot);
     QCOMPARE(photoRect, cell);
     QVERIFY(SlotGeometry::cornerRadiusMm(page.slotStyle, cell) > 0.0);
 

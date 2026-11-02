@@ -1597,19 +1597,19 @@
     </message>
     <message>
         <source>Balra 90°</source>
-        <translation type="vanished">90° влево</translation>
+        <translation>90° влево</translation>
     </message>
     <message>
         <source>Jobbra 90°</source>
-        <translation type="vanished">90° вправо</translation>
+        <translation>90° вправо</translation>
     </message>
     <message>
         <source>Alaphelyzet</source>
-        <translation type="vanished">Сбросить</translation>
+        <translation>Сбросить</translation>
     </message>
     <message>
         <source>Visszaállítja a kép nagyítását, helyét és forgatását.</source>
-        <translation type="vanished">Возвращает масштаб, положение и поворот фото.</translation>
+        <translation>Возвращает масштаб, положение и поворот фото.</translation>
     </message>
     <message>
         <source>Húzd a fotót a mozgatáshoz. A kerék nagyít, a Shift+kerék forgat, a Ctrl+kerék a lapot nagyítja.</source>
@@ -1622,6 +1622,26 @@
     <message>
         <source>A Shift+kerék forgatja a fotót.</source>
         <translation type="vanished">Shift+колесо поворачивает фото.</translation>
+    </message>
+    <message>
+        <source>Kép forgatása</source>
+        <translation>Поворот фотографии</translation>
+    </message>
+    <message>
+        <source>Kép visszahelyezése</source>
+        <translation>Вернуть фото на место</translation>
+    </message>
+    <message>
+        <source>A fotót a helyére igazítja.</source>
+        <translation>Возвращает фото на своё место.</translation>
+    </message>
+    <message>
+        <source>A kép egy része le van vágva.</source>
+        <translation>Часть фотографии обрезана.</translation>
+    </message>
+    <message>
+        <source>Levágva</source>
+        <translation>Обрезано</translation>
     </message>
 </context>
 </TS>

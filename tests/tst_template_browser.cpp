@@ -971,7 +971,7 @@ void TestTemplateBrowser::applyingOneTemplateIsOneUndo()
         QCOMPARE(frame.angleDeg, 0.0);
         QVERIFY(!frame.autoPlaced);
         QCOMPARE(frame.slotId, after.slotList.at(i).id);
-        const QRectF photo = SlotGeometry::slotPhotoRectMm(after, after.slotList.at(i));
+        const QRectF photo = SlotGeometry::slotCellMm(after, after.slotList.at(i));
         QVERIFY(std::abs(frame.cx - photo.center().x()) < 0.01);
         QVERIFY(std::abs(frame.cy - photo.center().y()) < 0.01);
         QVERIFY(std::abs(frame.width - photo.width()) < 0.01);

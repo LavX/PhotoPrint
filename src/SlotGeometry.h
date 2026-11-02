@@ -30,6 +30,12 @@ constexpr double kMaxGutterMm = 50.0;
 constexpr double kMinSlotSideMm = 1.0; ///< model floor; 15 mm is a picker floor
 constexpr double kGeometryEpsilonMm = 0.01;
 constexpr int kMaxSlotsPerPage = 12;
+/// A slotted frame must keep at least this much of itself inside its cell, so a
+/// drag or a nudge can never make the photograph disappear. The floor is 10 mm,
+/// but never more than 15 % of the cell's smaller side: a small cell is not
+/// forced to show most of itself.
+constexpr double kMinVisibleMm = 10.0;
+constexpr double kMinVisibleFraction = 0.15;
 
 /// 5 % of the short side, clamped 4..10 mm. Bit-identical to the shipped
 /// collageMarginMm(): the catalogue's pinned geometry is this function's
@@ -74,11 +80,6 @@ QRectF cellFromUnitRect(const QRectF &unitRect, const QSizeF &sheetMm, double ma
                         double gutterMm);
 
 QRectF slotCellMm(const Page &page, const Slot &slot);
-/// The slot's cell in millimetres: the clipping window of the photograph
-/// assigned to it. The name is kept because every caller that places a
-/// photograph means the picture's window, not the cell as a concept. The
-/// photograph's own rectangle is the frame's, and may be smaller or larger.
-QRectF slotPhotoRectMm(const Page &page, const Slot &slot);
 QList<QRectF> cellsMm(const Page &page); ///< in slot order
 
 /// True when a photograph keeps its crop and zoom across an assignment. The two
@@ -110,7 +111,7 @@ const Slot *slotAt(const Page &page, const QPointF &pagePointMm);
 /// size within kGeometryEpsilonMm and a zero angle. This is a query, not an
 /// invariant: a slotted frame owns its geometry and may be smaller, larger,
 /// moved or turned inside the cell. It answers "has this frame been touched
-/// since it was placed", which the tests and the picker use.
+/// since it was placed", which the tests use.
 bool slotGeometryMatches(const Page &page, const Frame &frame);
 
 /// Structural invariant, for the loader, the controller and the tests: unique
@@ -120,6 +121,26 @@ bool slotGeometryMatches(const Page &page, const Frame &frame);
 /// photograph's rectangle. A page without slots is consistent when no frame
 /// carries a slot id.
 bool layoutConsistent(const Page &page);
+
+/// The smallest visible intersection a slotted frame must keep with its cell:
+/// 10 mm, but never more than 15 % of the cell's smaller side. Zero for an
+/// unusable cell.
+double minimumVisibleMm(const QRectF &cellMm);
+
+/// The visible part of a slotted frame: the intersection of the frame's rotated
+/// rectangle with its cell, as a bounding rectangle. Empty when the frame is
+/// outside the cell, has no slot, or the slot is dangling.
+QRectF visibleRectMm(const Page &page, const Frame &frame);
+
+/// True when the frame's rotated rectangle is not fully inside its cell, so the
+/// renderer clips part of the photograph away. A free frame is never clipped.
+bool frameIsClipped(const Page &page, const Frame &frame);
+
+/// Moves a slotted frame back until it overlaps its cell by the visible
+/// minimum. Size and angle are kept; a frame that still cannot be seen is
+/// centred on the cell, so a photograph can never become invisible. A free
+/// frame, or one whose slot is dangling, is returned unchanged.
+Frame clampFrameToCell(const Page &page, const Frame &frame);
 
 /// Initial placement of a photograph on a cell: the slot's photo rectangle
 /// becomes the frame rectangle and the frame angle becomes zero. Crop, zoom,
@@ -131,11 +152,12 @@ void initialiseFrameInSlot(const Page &page, const Slot &slot, Frame &frame);
 
 /// Re-maps every slotted frame proportionally with its slot's cell, from the
 /// cell the slot had on `before` to the cell it has on `after`. The frame's
-/// centre offset from the cell centre and its size are scaled by the cell's
-/// scale factors; the angle is unchanged, so a composition inside a section
-/// survives a paper, orientation or margin change instead of being re-fitted.
-/// A slotted frame whose slot is new on `after` is initialised on its cell.
-/// Free frames are untouched.
+/// centre offset from the cell centre follows the cell's own scale factors; its
+/// size follows them too, except for a frame turned off the page axes, which
+/// takes one uniform scale (the geometric mean) so a paper or orientation
+/// change cannot shear the composition. The angle is unchanged. A slotted frame
+/// whose slot is new on `after` is initialised on its cell. Free frames are
+/// untouched.
 Page remapToPaper(const Page &before, Page after);
 
 } // namespace SlotGeometry

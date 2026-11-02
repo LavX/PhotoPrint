@@ -174,6 +174,7 @@ private slots:
     void pdfCarriesTheRotatedCrop();
     void slottedRotationStaysInsideItsCell();
     void rotationKeepsTheUserZoomAndTheCellClips();
+    void oversizedFrameIsClippedInThePrint();
 
 private:
     QTemporaryDir m_dir;
@@ -509,8 +510,8 @@ void TestCanvasEdits::slottedRotationStaysInsideItsCell()
     const Slot *neighbour = SlotGeometry::slotById(page, page.slotList.at(1).id);
     QVERIFY(slot);
     QVERIFY(neighbour);
-    const QRectF photoRect = SlotGeometry::slotPhotoRectMm(page, *slot);
-    const QRectF otherRect = SlotGeometry::slotPhotoRectMm(page, *neighbour);
+    const QRectF photoRect = SlotGeometry::slotCellMm(page, *slot);
+    const QRectF otherRect = SlotGeometry::slotCellMm(page, *neighbour);
     const QSizeF sheet = pageSizeMm(page);
 
     PageRenderer renderer(store);
@@ -588,7 +589,7 @@ void TestCanvasEdits::rotationKeepsTheUserZoomAndTheCellClips()
     const Page &page = document.pages.first();
     const Slot *slot = SlotGeometry::slotById(page, page.slotList.at(0).id);
     QVERIFY(slot);
-    const QRectF photoRect = SlotGeometry::slotPhotoRectMm(page, *slot);
+    const QRectF photoRect = SlotGeometry::slotCellMm(page, *slot);
     // The cell is the whole 90 x 133.5 mm page: its corners are the page's.
     QCOMPARE(photoRect.width(), 90.0);
     QCOMPARE(photoRect.height(), 133.5);
@@ -673,6 +674,106 @@ void TestCanvasEdits::rotationKeepsTheUserZoomAndTheCellClips()
             }
         }
     }
+}
+
+void TestCanvasEdits::oversizedFrameIsClippedInThePrint()
+{
+    ImageStore store;
+    const auto source = store.load(m_portraitImagePath, ImportPolicy{});
+    if (!source)
+        QFAIL(qPrintable(source.error().message));
+
+    DocumentSnapshot document;
+    Page page;
+    page.id = QStringLiteral("page-2x2");
+    page.paper.name = QStringLiteral("A4");
+    page.paper.physicalWidthMm = 210.0;
+    page.paper.physicalHeightMm = 297.0;
+    page.slotList = {Slot{QStringLiteral("slot-0"), QRectF(0.0, 0.0, 0.5, 0.5)},
+                     Slot{QStringLiteral("slot-1"), QRectF(0.5, 0.0, 0.5, 0.5)},
+                     Slot{QStringLiteral("slot-2"), QRectF(0.0, 0.5, 0.5, 0.5)},
+                     Slot{QStringLiteral("slot-3"), QRectF(0.5, 0.5, 0.5, 0.5)}};
+    page.layoutId = QStringLiteral("hand-made");
+
+    // One photograph in the top-left cell; the other three stay empty paper, so
+    // a bleed from the oversized frame is unambiguous.
+    Frame frame;
+    frame.id = QStringLiteral("frame-0");
+    frame.sourcePath = source.value().path;
+    frame.sourceSha256 = source.value().sha256;
+    frame.fit = FitMode::Fill;
+    const auto placed = SlotLayoutEngine::placePhoto(page, page.slotList.at(0).id, frame);
+    if (!placed)
+        QFAIL(qPrintable(placed.error().message));
+    page = placed.value();
+
+    // The first photograph is larger than its cell and moved off centre: the
+    // cell must clip it, and the neighbour and the gap must stay paper.
+    Frame *first = nullptr;
+    for (Frame &frame : page.frames) {
+        if (frame.id == QStringLiteral("frame-0"))
+            first = &frame;
+    }
+    QVERIFY(first);
+    first->width *= 1.6;
+    first->height *= 1.6;
+    first->cx += 8.0;
+    first->cy -= 6.0;
+    document.pages.append(page);
+
+    const QRectF cell0 = SlotGeometry::slotCellMm(page, page.slotList.at(0));
+    const QRectF cell1 = SlotGeometry::slotCellMm(page, page.slotList.at(1));
+    const QSizeF sheet = pageSizeMm(page);
+    const double ppi = 200.0;
+    const double pxPerMm = ppi / 25.4;
+    auto isRed = [](QRgb pixel) {
+        return qRed(pixel) > 150 && qGreen(pixel) < 110 && qBlue(pixel) < 110;
+    };
+    auto isPaper = [](QRgb pixel) {
+        return qRed(pixel) > 240 && qGreen(pixel) > 240 && qBlue(pixel) > 240;
+    };
+
+    PageRenderer renderer(store);
+    const auto rendered = renderer.renderPage(document, 0, ppi, {}, RenderOptions{});
+    if (!rendered)
+        QFAIL(qPrintable(rendered.error().message));
+    const QImage printed = rendered.value();
+    auto sample = [&](const QPointF &mm) {
+        return printed.pixel(qRound(mm.x() * pxPerMm), qRound(mm.y() * pxPerMm));
+    };
+    QVERIFY2(isRed(sample(cell0.center())), "the oversized photograph is missing from its cell");
+    QVERIFY2(isPaper(sample(cell1.center())), "the oversized photograph covered its neighbour");
+    QVERIFY2(isPaper(sample(QPointF(cell0.right() + 1.5, cell0.center().y()))),
+             "the oversized photograph bled into the gap");
+    QVERIFY2(isPaper(sample(QPointF(cell0.center().x(), cell0.bottom() + 1.5))),
+             "the oversized photograph bled into the lower gap");
+    QVERIFY(printed.save(evidenceDir() + QStringLiteral("/section-2x2-clipping.png")));
+
+    // The PDF follows the same painter, so it clips the same way.
+    const QString pdfPath = evidenceDir() + QStringLiteral("/section-2x2-clipping.pdf");
+    RenderOptions options;
+    options.printPpi = ppi;
+    const auto artifact = renderer.writePdf(document, pdfPath, {}, options);
+    if (!artifact)
+        QFAIL(qPrintable(artifact.error().message));
+    QVERIFY(QFileInfo::exists(pdfPath));
+
+    QProcess process;
+    const QString base = evidenceDir() + QStringLiteral("/section-2x2-clipping");
+    process.start(QStringLiteral("pdftoppm"),
+                  {QStringLiteral("-r"), QString::number(ppi), QStringLiteral("-png"),
+                   QStringLiteral("-singlefile"), pdfPath, base});
+    QVERIFY(process.waitForFinished(60000));
+    QCOMPARE(process.exitCode(), 0);
+    const QImage pdfPage(base + QStringLiteral(".png"));
+    QVERIFY(!pdfPage.isNull());
+    auto samplePdf = [&](const QPointF &mm) {
+        return pdfPage.pixel(qRound(mm.x() * pxPerMm), qRound(mm.y() * pxPerMm));
+    };
+    QVERIFY2(isRed(samplePdf(cell0.center())), "PDF lost the oversized photograph");
+    QVERIFY2(isPaper(samplePdf(cell1.center())), "PDF let the photograph cover its neighbour");
+    QVERIFY2(isPaper(samplePdf(QPointF(cell0.right() + 1.5, cell0.center().y()))),
+             "PDF let the photograph bleed into the gap");
 }
 
 QTEST_MAIN(TestCanvasEdits)

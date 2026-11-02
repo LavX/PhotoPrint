@@ -104,19 +104,20 @@ struct SlotStyle {
 };
 
 /// Bounds of the extra magnification of the photograph inside its frame. The
-/// wheel gesture and the in-slot inspector share these, so neither can drift
-/// away from the model the renderer clamps to.
+/// wheel gesture and the model share these, so neither can drift away from the
+/// range the renderer clamps to.
 constexpr double kMinFrameZoom = 0.2;
 constexpr double kMaxFrameZoom = 8.0;
 
-/// Bounds of the photograph's own rotation inside its frame. The inspector
-/// shows exactly this range, so a slider position is always a stored value.
+/// Bounds of the photograph's own rotation inside its frame. The inspector's
+/// slider shows exactly this range, so a slider position is always a stored
+/// value.
 constexpr double kMinImageRotationDeg = -180.0;
 constexpr double kMaxImageRotationDeg = 180.0;
 
 /// Wraps any angle into (-180, 180]. Used by the gestures that rotate freely
-/// (the wheel and the quarter-turn buttons); the slider itself clamps instead,
-/// so a deliberate -180 stays -180.
+/// (the quarter-turn buttons); the slider itself clamps instead, so a
+/// deliberate -180 stays -180.
 inline double normalizedImageRotationDeg(double degrees)
 {
     if (!std::isfinite(degrees))

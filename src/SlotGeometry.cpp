@@ -1,6 +1,11 @@
 #include "SlotGeometry.h"
 
+#include "PhotoItem.h"
+
+#include <QPainterPath>
+#include <QPolygonF>
 #include <QSet>
+#include <QtMath>
 
 #include <algorithm>
 #include <cmath>
@@ -174,13 +179,6 @@ QRectF slotCellMm(const Page &page, const Slot &slot)
                             effectiveGutterMm(style, sheet));
 }
 
-QRectF slotPhotoRectMm(const Page &page, const Slot &slot)
-{
-    // The photograph fills its cell. The white paper between photographs is the
-    // gutter, not an inset around each picture.
-    return slotCellMm(page, slot);
-}
-
 QList<QRectF> cellsMm(const Page &page)
 {
     QList<QRectF> cells;
@@ -265,6 +263,99 @@ const Slot *slotAt(const Page &page, const QPointF &pagePointMm)
     return nullptr;
 }
 
+double minimumVisibleMm(const QRectF &cellMm)
+{
+    if (!finiteRect(cellMm) || cellMm.width() <= 0.0 || cellMm.height() <= 0.0)
+        return 0.0;
+    const double smaller = std::min(cellMm.width(), cellMm.height());
+    return std::min(kMinVisibleMm, kMinVisibleFraction * smaller);
+}
+
+QRectF visibleRectMm(const Page &page, const Frame &frame)
+{
+    if (frame.slotId.isEmpty())
+        return {};
+    const Slot *slot = slotById(page, frame.slotId);
+    if (!slot)
+        return {};
+    const QRectF cell = slotCellMm(page, *slot);
+    if (cell.width() <= 0.0 || cell.height() <= 0.0)
+        return {};
+    QPainterPath framePath;
+    framePath.addPolygon(PhotoItem::frameQuadMm(frame));
+    framePath.closeSubpath();
+    QPainterPath cellPath;
+    cellPath.addRect(cell);
+    return framePath.intersected(cellPath).boundingRect();
+}
+
+bool frameIsClipped(const Page &page, const Frame &frame)
+{
+    if (frame.slotId.isEmpty())
+        return false;
+    const Slot *slot = slotById(page, frame.slotId);
+    if (!slot)
+        return false;
+    const QRectF cell = slotCellMm(page, *slot);
+    if (cell.width() <= 0.0 || cell.height() <= 0.0)
+        return false;
+    // A convex frame is inside a convex cell exactly when all four corners are.
+    const QPolygonF quad = PhotoItem::frameQuadMm(frame);
+    for (const QPointF &corner : quad) {
+        if (!cell.contains(corner))
+            return true;
+    }
+    return false;
+}
+
+Frame clampFrameToCell(const Page &page, const Frame &frame)
+{
+    if (frame.slotId.isEmpty())
+        return frame;
+    const Slot *slot = slotById(page, frame.slotId);
+    if (!slot)
+        return frame;
+    const QRectF cell = slotCellMm(page, *slot);
+    if (cell.width() <= 0.0 || cell.height() <= 0.0)
+        return frame;
+    if (!finite(frame.cx) || !finite(frame.cy) || !finite(frame.width)
+        || !finite(frame.height) || !finite(frame.angleDeg) || frame.width <= 0.0
+        || frame.height <= 0.0) {
+        return frame;
+    }
+
+    const double required = minimumVisibleMm(cell);
+    // A frame thinner than the minimum only has to show its own thickness.
+    const double requiredX = std::min(required, frame.width);
+    const double requiredY = std::min(required, frame.height);
+
+    // The cell can only see the frame's axis-aligned bounding box. Keeping that
+    // box overlapping by the minimum is what stops a drag from hiding the
+    // photograph; the exact intersection below is the safety net.
+    const double rad = qDegreesToRadians(frame.angleDeg);
+    const double c = std::abs(std::cos(rad));
+    const double s = std::abs(std::sin(rad));
+    const double halfW = (frame.width * c + frame.height * s) / 2.0;
+    const double halfH = (frame.width * s + frame.height * c) / 2.0;
+
+    Frame result = frame;
+    const double minCx = cell.left() + requiredX - halfW;
+    const double maxCx = cell.right() - requiredX + halfW;
+    const double minCy = cell.top() + requiredY - halfH;
+    const double maxCy = cell.bottom() - requiredY + halfH;
+    result.cx = minCx <= maxCx ? std::clamp(result.cx, minCx, maxCx) : cell.center().x();
+    result.cy = minCy <= maxCy ? std::clamp(result.cy, minCy, maxCy) : cell.center().y();
+
+    // The bounding box is a superset of the rotated rectangle. If the exact
+    // intersection is still empty, centre the frame on the cell so the
+    // photograph can never disappear.
+    if (visibleRectMm(page, result).isEmpty()) {
+        result.cx = cell.center().x();
+        result.cy = cell.center().y();
+    }
+    return result;
+}
+
 bool slotGeometryMatches(const Page &page, const Frame &frame)
 {
     if (frame.slotId.isEmpty())
@@ -272,7 +363,7 @@ bool slotGeometryMatches(const Page &page, const Frame &frame)
     const Slot *slot = slotById(page, frame.slotId);
     if (!slot)
         return false;
-    const QRectF photo = slotPhotoRectMm(page, *slot);
+    const QRectF photo = slotCellMm(page, *slot);
     if (photo.width() <= 0.0 || photo.height() <= 0.0)
         return false;
     return std::abs(frame.cx - photo.center().x()) <= kGeometryEpsilonMm
@@ -294,7 +385,7 @@ bool layoutConsistent(const Page &page)
         slotIds.insert(slot.id);
         if (!unitRectIsValid(slot.unitRect))
             return false;
-        const QRectF photo = slotPhotoRectMm(page, slot);
+        const QRectF photo = slotCellMm(page, slot);
         if (photo.width() <= 0.0 || photo.height() <= 0.0)
             return false;
     }
@@ -314,7 +405,7 @@ bool layoutConsistent(const Page &page)
 
 void initialiseFrameInSlot(const Page &page, const Slot &slot, Frame &frame)
 {
-    const QRectF photo = slotPhotoRectMm(page, slot);
+    const QRectF photo = slotCellMm(page, slot);
     frame.cx = photo.center().x();
     frame.cy = photo.center().y();
     frame.width = photo.width();
@@ -330,12 +421,12 @@ Page remapToPaper(const Page &before, Page after)
         const Slot *nowSlot = slotById(after, frame.slotId);
         if (!nowSlot)
             continue;
-        const QRectF now = slotPhotoRectMm(after, *nowSlot);
+        const QRectF now = slotCellMm(after, *nowSlot);
         if (!(now.width() > 0.0) || !(now.height() > 0.0))
             continue;
 
         const Slot *wasSlot = slotById(before, frame.slotId);
-        const QRectF was = wasSlot ? slotPhotoRectMm(before, *wasSlot) : QRectF();
+        const QRectF was = wasSlot ? slotCellMm(before, *wasSlot) : QRectF();
         if (!(was.width() > 0.0) || !(was.height() > 0.0)) {
             // A slot the previous page did not have: nothing to scale from, so
             // the frame starts on its cell as a fresh placement would.
@@ -353,8 +444,20 @@ Page remapToPaper(const Page &before, Page after)
         const QPointF nowCentre = now.center();
         frame.cx = nowCentre.x() + (frame.cx - wasCentre.x()) * sx;
         frame.cy = nowCentre.y() + (frame.cy - wasCentre.y()) * sy;
-        frame.width *= sx;
-        frame.height *= sy;
+        // A frame turned off the page axes takes one uniform scale, so a cell
+        // whose aspect changed cannot shear the composition. A frame on the
+        // axes (0, 90, 180, 270) is still a rectangle under a non-uniform
+        // scale, so it follows the cell exactly.
+        const double quarter = std::fmod(std::abs(frame.angleDeg), 90.0);
+        const bool turned = std::min(quarter, 90.0 - quarter) > 1e-9;
+        if (turned) {
+            const double uniform = std::sqrt(sx * sy);
+            frame.width *= uniform;
+            frame.height *= uniform;
+        } else {
+            frame.width *= sx;
+            frame.height *= sy;
+        }
         // The frame angle is the user's own rotation on the paper, not a
         // property of the cell, so a paper change never turns the photograph.
     }

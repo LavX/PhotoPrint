@@ -306,6 +306,11 @@ private slots:
     void repairClearsDanglingAndDuplicateIds();
     void controllerKeepsGeometryAndRemapsProportionally();
     void invariantRejectsBrokenPages();
+    void minimumVisibleScalesWithTheCell();
+    void clampKeepsAVisiblePartInsideTheCell();
+    void repairClampsAnInvisibleFrame();
+    void remapKeepsATurnedFrameUndistorted();
+    void projectPaperChangeRemapsEveryPage();
 
     void persistenceRoundTrip();
     void layoutFreeProjectStaysByteIdentical();
@@ -544,7 +549,7 @@ void TestSlotLayout::hugeMarginOnTenByFifteen()
     const QRectF cell = SlotGeometry::slotCellMm(page, slot);
     QVERIFY(nearRect(cell, QRectF(48.0, 48.0, 4.0, 54.0)));
     // The photograph is the cell: no mat eats into it.
-    QVERIFY(nearRect(SlotGeometry::slotPhotoRectMm(page, slot), cell));
+    QVERIFY(nearRect(SlotGeometry::slotCellMm(page, slot), cell));
     QVERIFY(SlotGeometry::layoutConsistent(page));
     QCOMPARE(SlotGeometry::cornerRadiusMm(page.slotStyle, cell), 2.0);
 }
@@ -563,7 +568,7 @@ void TestSlotLayout::applyToEmptyPage()
     for (const Slot &slot : page.slotList) {
         QVERIFY(!slot.id.isEmpty());
         QVERIFY(!SlotGeometry::frameInSlot(page, slot.id));
-        QVERIFY(SlotGeometry::slotPhotoRectMm(page, slot).width() > 0.0);
+        QVERIFY(SlotGeometry::slotCellMm(page, slot).width() > 0.0);
     }
 }
 
@@ -840,10 +845,11 @@ void TestSlotLayout::repairClearsDanglingAndDuplicateIds()
     QVERIFY(result.frames.at(0).slotId.isEmpty());
     QVERIFY(near(result.frames.at(0).cx, danglingCentre.x())); // geometry kept
     QCOMPARE(result.frames.at(1).slotId, slot.id);
-    // Repair validates the assignment, it does not re-derive the rectangle: the
-    // frame keeps the geometry it was given.
-    QVERIFY(near(result.frames.at(1).cx, 1.0));
+    // Repair validates the assignment and clamps a frame that a hand-edited
+    // file left outside its cell; it does not re-derive the rectangle.
     QVERIFY(near(result.frames.at(1).width, 5.0));
+    QVERIFY(!SlotGeometry::visibleRectMm(result, result.frames.at(1)).isEmpty());
+    QVERIFY(result.frames.at(1).cx > 1.0);
     QVERIFY(result.frames.at(2).slotId.isEmpty());
 
     // The controller's loader path clears a dangling id as well.
@@ -911,8 +917,6 @@ void TestSlotLayout::controllerKeepsGeometryAndRemapsProportionally()
     const Frame beforeFrame = *SlotGeometry::frameInSlot(beforePaper, slotId);
     const double relX = (beforeFrame.cx - oldCell.center().x()) / oldCell.width();
     const double relY = (beforeFrame.cy - oldCell.center().y()) / oldCell.height();
-    const double relW = beforeFrame.width / oldCell.width();
-    const double relH = beforeFrame.height / oldCell.height();
 
     controller.apply(SetPaperEdit{0, a5Paper()});
     QCOMPARE(pageNow().paper, a5Paper());
@@ -923,8 +927,14 @@ void TestSlotLayout::controllerKeepsGeometryAndRemapsProportionally()
     const Frame afterFrame = *SlotGeometry::frameInSlot(pageNow(), slotId);
     QVERIFY(near((afterFrame.cx - newCell.center().x()) / newCell.width(), relX, 1e-9));
     QVERIFY(near((afterFrame.cy - newCell.center().y()) / newCell.height(), relY, 1e-9));
-    QVERIFY(near(afterFrame.width / newCell.width(), relW, 1e-9));
-    QVERIFY(near(afterFrame.height / newCell.height(), relH, 1e-9));
+    // The frame is turned, so it takes one uniform scale: the aspect ratio is
+    // preserved and the cell's aspect change cannot shear the composition.
+    const double uniform = std::sqrt((newCell.width() / oldCell.width())
+                                     * (newCell.height() / oldCell.height()));
+    QVERIFY(near(afterFrame.width, beforeFrame.width * uniform, 1e-9));
+    QVERIFY(near(afterFrame.height, beforeFrame.height * uniform, 1e-9));
+    QVERIFY(near(afterFrame.width / afterFrame.height,
+                 beforeFrame.width / beforeFrame.height, 1e-9));
     QCOMPARE(afterFrame.angleDeg, beforeFrame.angleDeg);
     // The unit rectangles are the mapping source of truth and never move.
     QVERIFY(nearRect(pageNow().slotList.at(0).unitRect, beforePaper.slotList.at(0).unitRect));
@@ -946,6 +956,163 @@ void TestSlotLayout::controllerKeepsGeometryAndRemapsProportionally()
     }
     QVERIFY(controller.document() == initial);
     QCOMPARE(controller.undoStack()->index(), 0);
+}
+
+void TestSlotLayout::minimumVisibleScalesWithTheCell()
+{
+    // A large cell asks for the 10 mm floor; a small one asks for 15 % of its
+    // smaller side, so it is not forced to show most of itself.
+    QCOMPARE(SlotGeometry::minimumVisibleMm(QRectF(0.0, 0.0, 200.0, 200.0)), 10.0);
+    QVERIFY(near(SlotGeometry::minimumVisibleMm(QRectF(0.0, 0.0, 40.0, 60.0)), 6.0));
+    QVERIFY(near(SlotGeometry::minimumVisibleMm(QRectF(0.0, 0.0, 20.0, 20.0)), 3.0));
+    QCOMPARE(SlotGeometry::minimumVisibleMm(QRectF()), 0.0);
+}
+
+void TestSlotLayout::clampKeepsAVisiblePartInsideTheCell()
+{
+    Page page = layoutPage(templateNamed(QStringLiteral("n04-grid-2x2")), a4Paper(), false, 1);
+    const QString slotId = page.slotList.at(0).id;
+    const Slot *slot = SlotGeometry::slotById(page, slotId);
+    QVERIFY(slot);
+    const QRectF cell = SlotGeometry::slotCellMm(page, *slot);
+    const Frame original = *SlotGeometry::frameInSlot(page, slotId);
+
+    // Drag the frame fully to the right of its cell: nothing is visible.
+    Frame outside = original;
+    outside.cx = cell.right() + outside.width;
+    outside.cy = cell.center().y();
+    QVERIFY(SlotGeometry::visibleRectMm(page, outside).isEmpty());
+    QVERIFY(SlotGeometry::frameIsClipped(page, outside));
+
+    const Frame clamped = SlotGeometry::clampFrameToCell(page, outside);
+    const QRectF visible = SlotGeometry::visibleRectMm(page, clamped);
+    QVERIFY(!visible.isEmpty());
+    const double required = SlotGeometry::minimumVisibleMm(cell);
+    QVERIFY(visible.width() >= std::min(required, clamped.width) - 1e-6);
+    QVERIFY(visible.height() >= std::min(required, clamped.height) - 1e-6);
+    // The clamp moves the frame, it does not resize or turn it.
+    QCOMPARE(clamped.width, outside.width);
+    QCOMPARE(clamped.height, outside.height);
+    QCOMPARE(clamped.angleDeg, outside.angleDeg);
+
+    // The same for a turned frame, whose bounding box is larger than its body.
+    Frame turned = original;
+    turned.angleDeg = 45.0;
+    turned.cx = cell.right() + 300.0;
+    turned.cy = cell.bottom() + 300.0;
+    const Frame clampedTurned = SlotGeometry::clampFrameToCell(page, turned);
+    QVERIFY(!SlotGeometry::visibleRectMm(page, clampedTurned).isEmpty());
+    QCOMPARE(clampedTurned.angleDeg, 45.0);
+
+    // A frame that is already visible is left exactly where it is.
+    Frame inside = original;
+    inside.cx += 3.0;
+    inside.cy -= 2.0;
+    const Frame kept = SlotGeometry::clampFrameToCell(page, inside);
+    QCOMPARE(kept.cx, inside.cx);
+    QCOMPARE(kept.cy, inside.cy);
+
+    // A free frame is never clamped.
+    Frame free = original;
+    free.slotId.clear();
+    free.cx = -500.0;
+    QCOMPARE(SlotGeometry::clampFrameToCell(page, free).cx, -500.0);
+}
+
+void TestSlotLayout::repairClampsAnInvisibleFrame()
+{
+    Page page = layoutPage(templateNamed(QStringLiteral("n04-grid-2x2")), a4Paper(), false, 1);
+    const QString slotId = page.slotList.at(0).id;
+    page.frames[0].cx = 5000.0;
+    page.frames[0].cy = -5000.0;
+    QVERIFY(SlotGeometry::visibleRectMm(page, page.frames.at(0)).isEmpty());
+
+    const auto repaired = SlotLayoutEngine::repair(page);
+    QVERIFY(repaired.ok());
+    const Page &result = repaired.value();
+    QVERIFY(!SlotGeometry::visibleRectMm(result, result.frames.at(0)).isEmpty());
+    QCOMPARE(result.frames.at(0).slotId, slotId);
+    QVERIFY(SlotGeometry::layoutConsistent(result));
+
+    // The loader path clamps too: a hand-edited project cannot open invisible.
+    DocumentSnapshot document;
+    document.pages.append(page);
+    const QByteArray json = ProjectStore::serialize(document, QString());
+    const auto loaded = ProjectStore::deserialize(json);
+    QVERIFY(loaded.ok());
+    const Page &loadedPage = loaded.value().pages.at(0);
+    QVERIFY(!SlotGeometry::visibleRectMm(loadedPage, loadedPage.frames.at(0)).isEmpty());
+}
+
+void TestSlotLayout::remapKeepsATurnedFrameUndistorted()
+{
+    Page page = layoutPage(templateNamed(QStringLiteral("n04-grid-2x2")), a4Paper(), false, 1);
+    Frame &frame = page.frames[0];
+    frame.angleDeg = 30.0;
+    frame.width = 50.0;
+    frame.height = 30.0;
+    const double aspect = frame.width / frame.height;
+
+    Page after = page;
+    after.paper = photoPaper();
+    after = SlotGeometry::remapToPaper(page, after);
+    const Frame &moved = after.frames.at(0);
+    // One uniform scale: the aspect ratio survives a cell whose shape changed.
+    QVERIFY(near(moved.width / moved.height, aspect, 1e-9));
+    QVERIFY(near(moved.width / frame.width, moved.height / frame.height, 1e-9));
+    QCOMPARE(moved.angleDeg, 30.0);
+
+    // An axis-aligned frame still follows the cell exactly.
+    Page straight = layoutPage(templateNamed(QStringLiteral("n04-grid-2x2")), a4Paper(), false, 1);
+    straight.frames[0].angleDeg = 0.0;
+    Page straightAfter = straight;
+    straightAfter.paper = photoPaper();
+    straightAfter = SlotGeometry::remapToPaper(straight, straightAfter);
+    const Slot *oldSlot = SlotGeometry::slotById(straight, straight.frames.at(0).slotId);
+    const Slot *newSlot = SlotGeometry::slotById(straightAfter, straightAfter.frames.at(0).slotId);
+    QVERIFY(oldSlot);
+    QVERIFY(newSlot);
+    const QRectF oldCell = SlotGeometry::slotCellMm(straight, *oldSlot);
+    const QRectF newCell = SlotGeometry::slotCellMm(straightAfter, *newSlot);
+    QVERIFY(near(straightAfter.frames.at(0).width,
+                 straight.frames.at(0).width * newCell.width() / oldCell.width(), 1e-9));
+    QVERIFY(near(straightAfter.frames.at(0).height,
+                 straight.frames.at(0).height * newCell.height() / oldCell.height(), 1e-9));
+}
+
+void TestSlotLayout::projectPaperChangeRemapsEveryPage()
+{
+    DocumentSnapshot document;
+    Page first = layoutPage(templateNamed(QStringLiteral("n04-grid-2x2")), a4Paper(), false, 2);
+    Page second = layoutPage(templateNamed(QStringLiteral("n02-equal-side")), a4Paper(), false, 2);
+    first.frames[0].cx += 5.0;
+    second.frames[0].cy -= 4.0;
+    document.pages = {first, second};
+    CanvasController controller;
+    controller.setDocument(document);
+
+    const auto beforeFirst = controller.document().pages.at(0);
+    const auto beforeSecond = controller.document().pages.at(1);
+    QVERIFY(controller.apply(SetProjectPaperEdit{photoPaper()}).ok());
+    QCOMPARE(controller.document().pages.size(), 2);
+    for (const Page &page : controller.document().pages) {
+        QCOMPARE(page.paper, photoPaper());
+        for (const Frame &frame : page.frames) {
+            if (frame.slotId.isEmpty())
+                continue;
+            QVERIFY(!SlotGeometry::visibleRectMm(page, frame).isEmpty());
+        }
+    }
+    // The composition on both pages moved with its cell, not back onto it.
+    const Frame &movedFirst = controller.document().pages.at(0).frames.at(0);
+    const Frame &movedSecond = controller.document().pages.at(1).frames.at(0);
+    QVERIFY(!SlotGeometry::slotGeometryMatches(controller.document().pages.at(0), movedFirst));
+    QVERIFY(!SlotGeometry::slotGeometryMatches(controller.document().pages.at(1), movedSecond));
+
+    // One undo restores both pages exactly.
+    controller.undoStack()->undo();
+    QVERIFY(controller.document().pages.at(0) == beforeFirst);
+    QVERIFY(controller.document().pages.at(1) == beforeSecond);
 }
 
 void TestSlotLayout::invariantRejectsBrokenPages()
@@ -1523,7 +1690,7 @@ void TestSlotLayout::photoFillsItsCellWithoutAMat()
     QVERIFY(SlotGeometry::layoutConsistent(page));
 
     const QRectF cell = SlotGeometry::slotCellMm(page, slot);
-    QVERIFY(nearRect(SlotGeometry::slotPhotoRectMm(page, slot), cell));
+    QVERIFY(nearRect(SlotGeometry::slotCellMm(page, slot), cell));
 
     DocumentSnapshot document;
     document.pages.append(page);
@@ -1624,13 +1791,13 @@ void TestSlotLayout::gapChangesSpacingNotThePhotoInset()
     page.slotStyle.marginMm = 10.0;
     page.slotStyle.gutterMm = 3.0;
     const QRectF narrowCell = SlotGeometry::slotCellMm(page, slot);
-    const QRectF narrowPhoto = SlotGeometry::slotPhotoRectMm(page, slot);
+    const QRectF narrowPhoto = SlotGeometry::slotCellMm(page, slot);
     QVERIFY(near(narrowCell.left(), 10.0));
     QVERIFY(nearRect(narrowPhoto, narrowCell));
 
     page.slotStyle.gutterMm = 6.0;
     const QRectF wideCell = SlotGeometry::slotCellMm(page, slot);
-    const QRectF widePhoto = SlotGeometry::slotPhotoRectMm(page, slot);
+    const QRectF widePhoto = SlotGeometry::slotCellMm(page, slot);
     // The cell gives up 1.5 mm on the shared edge, and the photograph follows
     // the cell exactly. Nothing else is taken from the picture.
     QVERIFY(near(wideCell.left(), 10.0));
@@ -1739,7 +1906,7 @@ void TestSlotLayout::placementKeepsOrResetsTheCrop()
 {
     Page page = layoutPage(templateNamed(QStringLiteral("n04-grid-2x2")), a4Paper(), false, 0);
     const Slot &slot0 = page.slotList.at(0);
-    const QRectF cell = SlotGeometry::slotPhotoRectMm(page, slot0);
+    const QRectF cell = SlotGeometry::slotCellMm(page, slot0);
 
     Frame keep = sourceFrame(QStringLiteral("frame-keep"), QStringLiteral("/photos/keep.png"));
     keep.width = cell.width();
@@ -2058,8 +2225,6 @@ void TestSlotLayout::publishPageStyleOnly()
     const Frame beforeFrame = before.frames.at(0);
     const double relX = (beforeFrame.cx - beforeCell.center().x()) / beforeCell.width();
     const double relY = (beforeFrame.cy - beforeCell.center().y()) / beforeCell.height();
-    const double relW = beforeFrame.width / beforeCell.width();
-    const double relH = beforeFrame.height / beforeCell.height();
 
     SlotStyle style = before.slotStyle;
     style.gutterMm = 4.0;
@@ -2083,8 +2248,14 @@ void TestSlotLayout::publishPageStyleOnly()
     const Frame afterFrame = *SlotGeometry::frameInSlot(after, slotId);
     QVERIFY(near((afterFrame.cx - afterCell.center().x()) / afterCell.width(), relX));
     QVERIFY(near((afterFrame.cy - afterCell.center().y()) / afterCell.height(), relY));
-    QVERIFY(near(afterFrame.width / afterCell.width(), relW));
-    QVERIFY(near(afterFrame.height / afterCell.height(), relH));
+    // The frame is turned, so the size follows one uniform scale and keeps its
+    // aspect ratio instead of being sheared by the cell's new shape.
+    const double uniform = std::sqrt((afterCell.width() / beforeCell.width())
+                                     * (afterCell.height() / beforeCell.height()));
+    QVERIFY(near(afterFrame.width, beforeFrame.width * uniform));
+    QVERIFY(near(afterFrame.height, beforeFrame.height * uniform));
+    QVERIFY(near(afterFrame.width / afterFrame.height,
+                 beforeFrame.width / beforeFrame.height));
     QCOMPARE(afterFrame.angleDeg, 12.0);
     // The composition was not re-fitted onto the cell.
     QVERIFY(!SlotGeometry::slotGeometryMatches(after, afterFrame));

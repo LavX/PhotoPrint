@@ -49,7 +49,7 @@ private slots:
     void resizeKeepsAspectAndFixedCorner();
     void cropBoundsKeepTheFrameCovered();
     void zoomAtKeepsThePointUnderTheCursor();
-    void imageZoomAndRotationHelpersClampAndReset();
+    void imageRotationHelpersClampAndReset();
     void rotationNeverForcesACoverZoom();
     void wheelZoomOutReachesTheModelFloor();
     void resolutionHintUsesDocumentedThresholds();
@@ -307,29 +307,10 @@ void TestLayout::zoomAtKeepsThePointUnderTheCursor()
              qPrintable(QStringLiteral("cursor drift %1").arg(distance(before, after))));
 }
 
-void TestLayout::imageZoomAndRotationHelpersClampAndReset()
+void TestLayout::imageRotationHelpersClampAndReset()
 {
     const QSize pixels(800, 400);
     const Frame original = makeFrame(100.0, 60.0, FitMode::Fill);
-
-    const Frame zoomed = PhotoItem::setZoom(original, 2.5, pixels);
-    QCOMPARE(zoomed.zoom, 2.5);
-    // The frame rectangle belongs to the page, never to the image controls.
-    QCOMPARE(zoomed.cx, original.cx);
-    QCOMPARE(zoomed.cy, original.cy);
-    QCOMPARE(zoomed.width, original.width);
-    QCOMPARE(zoomed.height, original.height);
-    QCOMPARE(zoomed.angleDeg, original.angleDeg);
-
-    QCOMPARE(PhotoItem::setZoom(original, 99.0, pixels).zoom, kMaxFrameZoom);
-    // The model range is the only limit: a Fill frame may be zoomed out until
-    // paper shows, exactly like a Full one. Nothing forces a cover zoom.
-    QCOMPARE(PhotoItem::setZoom(original, 0.01, pixels).zoom, kMinFrameZoom);
-    Frame full = original;
-    full.fit = FitMode::Full;
-    QCOMPARE(PhotoItem::setZoom(full, 0.01, pixels).zoom, kMinFrameZoom);
-    QCOMPARE(PhotoItem::setZoom(original, std::numeric_limits<double>::quiet_NaN(), pixels),
-             original);
 
     const Frame turned = PhotoItem::rotateImageTo(original, 45.0, pixels);
     QCOMPARE(turned.imageRotationDeg, 45.0);
@@ -384,15 +365,6 @@ void TestLayout::rotationNeverForcesACoverZoom()
         QCOMPARE(turned.height, frame.height);
         QCOMPARE(turned.angleDeg, frame.angleDeg);
     }
-
-    // The zoom setter is just as literal: it neither raises a Fill frame to a
-    // cover minimum nor invents a different value.
-    const Frame smaller = PhotoItem::setZoom(frame, 0.35, pixels);
-    QCOMPARE(smaller.zoom, 0.35);
-    const Frame larger = PhotoItem::setZoom(frame, 4.0, pixels);
-    QCOMPARE(larger.zoom, 4.0);
-    const Frame clamped = PhotoItem::setZoom(frame, 100.0, pixels);
-    QCOMPARE(clamped.zoom, kMaxFrameZoom);
 
     // A quarter turn of a square lands on 1x because the user asked for 1x, not
     // because the model computed a cover.

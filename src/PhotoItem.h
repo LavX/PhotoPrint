@@ -29,13 +29,6 @@ Frame clampCrop(Frame frame, const QSize &pixels);
 /// fixed. The page view zoom is untouched.
 Frame zoomAt(Frame frame, const QPointF &pagePoint, double factor, const QSize &pixels);
 
-/// Sets the inner zoom directly, the way the inspector's slider does. The
-/// zoom is clamped to the shared range and the visible crop is kept inside
-/// the photograph. Nothing raises the zoom to cover the frame: a Fill frame may
-/// be zoomed out until paper shows, exactly like a Full one. The frame
-/// rectangle is never touched.
-Frame setZoom(Frame frame, double zoom, const QSize &pixels);
-
 /// Sets the photograph's rotation inside the frame. The angle is clamped to
 /// [-180, 180], so a slider position and the stored value always agree. The
 /// zoom is left exactly as the user set it; a turn never forces a cover zoom.

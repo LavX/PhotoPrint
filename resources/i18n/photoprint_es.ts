@@ -1583,19 +1583,19 @@
     </message>
     <message>
         <source>Balra 90°</source>
-        <translation type="vanished">90° a la izquierda</translation>
+        <translation>90° a la izquierda</translation>
     </message>
     <message>
         <source>Jobbra 90°</source>
-        <translation type="vanished">90° a la derecha</translation>
+        <translation>90° a la derecha</translation>
     </message>
     <message>
         <source>Alaphelyzet</source>
-        <translation type="vanished">Restablecer</translation>
+        <translation>Restablecer</translation>
     </message>
     <message>
         <source>Visszaállítja a kép nagyítását, helyét és forgatását.</source>
-        <translation type="vanished">Restaura la ampliación, la posición y la rotación de la foto.</translation>
+        <translation>Restaura la ampliación, la posición y la rotación de la foto.</translation>
     </message>
     <message>
         <source>Húzd a fotót a mozgatáshoz. A kerék nagyít, a Shift+kerék forgat, a Ctrl+kerék a lapot nagyítja.</source>
@@ -1608,6 +1608,26 @@
     <message>
         <source>A Shift+kerék forgatja a fotót.</source>
         <translation type="vanished">Mayús+rueda gira la foto.</translation>
+    </message>
+    <message>
+        <source>Kép forgatása</source>
+        <translation>Rotación de la foto</translation>
+    </message>
+    <message>
+        <source>Kép visszahelyezése</source>
+        <translation>Recolocar la foto</translation>
+    </message>
+    <message>
+        <source>A fotót a helyére igazítja.</source>
+        <translation>Ajusta la foto de nuevo en su sitio.</translation>
+    </message>
+    <message>
+        <source>A kép egy része le van vágva.</source>
+        <translation>Parte de la foto está recortada.</translation>
+    </message>
+    <message>
+        <source>Levágva</source>
+        <translation>Recortada</translation>
     </message>
 </context>
 </TS>

@@ -557,6 +557,19 @@ void TestUiScreens::captureSectionComposition()
     QVERIFY(window.grab().save(evidenceDir() + QStringLiteral("/ui-section-composition.png")));
     QVERIFY(view->grab().save(evidenceDir() +
                               QStringLiteral("/ui-section-composition-canvas.png")));
+
+    // The compact photo inspector: the image rotation control and the section
+    // reset sit together, so the capture shows the restored controls.
+    auto *photoPanel = window.findChild<QWidget *>(QStringLiteral("photoPanel"));
+    QVERIFY(photoPanel);
+    for (QScrollArea *area : window.findChildren<QScrollArea *>()) {
+        if (area->widget() && area->widget()->isAncestorOf(photoPanel)) {
+            area->ensureWidgetVisible(photoPanel);
+            QTest::qWait(150);
+        }
+    }
+    QVERIFY(window.grab().save(evidenceDir() +
+                               QStringLiteral("/ui-section-photo-controls.png")));
 }
 
 QTEST_MAIN(TestUiScreens)

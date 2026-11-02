@@ -443,6 +443,7 @@ void PageView::setDocument(const DocumentSnapshot &document)
         const QString frameBefore = m_selectedId;
         const QString slotBefore = m_selectedSlotId;
         pruneSelection();
+        updateAccessibleDescription();
         if (frameBefore != m_selectedId || slotBefore != m_selectedSlotId)
             update();
         return;
@@ -460,6 +461,7 @@ void PageView::setDocument(const DocumentSnapshot &document)
     }
 
     pruneSelection();
+    updateAccessibleDescription();
     contentChanged(true);
 }
 
@@ -811,6 +813,7 @@ void PageView::setSelectedFrame(const QString &frameId)
     m_selectedId = frameId;
     if (const Frame *frame = selectedFramePtr())
         m_selectedSlotId = frame->slotId;
+    updateAccessibleDescription();
     update();
 }
 
@@ -819,6 +822,7 @@ void PageView::setSelectedSlot(const QString &slotId)
     if (m_selectedSlotId == slotId)
         return;
     m_selectedSlotId = slotId;
+    updateAccessibleDescription();
     update();
 }
 
@@ -1023,10 +1027,11 @@ int PageView::hitFrame(const QPointF &widgetPoint) const
             continue;
         // A slotted photograph is only visible inside its cell, so a click on
         // the clipped-away part of a larger frame belongs to whatever is under
-        // it, not to a photograph the user cannot see.
+        // it, not to a photograph the user cannot see. A dangling slot id is
+        // drawn as a free frame by the renderer, so it is hit as one too.
         if (!frame.slotId.isEmpty()) {
             const Slot *slot = SlotGeometry::slotById(page, frame.slotId);
-            if (!slot || !SlotGeometry::slotCellMm(page, *slot).contains(pagePoint))
+            if (slot && !SlotGeometry::slotCellMm(page, *slot).contains(pagePoint))
                 continue;
         }
         return i;
@@ -1094,6 +1099,7 @@ void PageView::updateLiveFrame(const Frame &frame, bool markDragChanged)
     target->autoPlaced = false;
     if (markDragChanged)
         m_drag.changed = true;
+    updateAccessibleDescription();
     // A move inside a drag keeps the running build: the frame preview advances
     // one composition behind the pointer instead of starving every build.
     contentChanged(false);
@@ -1113,6 +1119,11 @@ void PageView::previewFrame(const Frame &frame)
     if (!findFrame(m_document, frame.id))
         return;
     updateLiveFrame(frame, false);
+}
+
+void PageView::flushWheelBurst()
+{
+    flushWheelZoom();
 }
 
 void PageView::flushWheelZoom()
@@ -1141,11 +1152,40 @@ void PageView::clearSelection()
     m_selectedSlotId.clear();
     if (!hadSelection)
         return;
+    updateAccessibleDescription();
     update();
     if (onSelectionChanged)
         onSelectionChanged(QString());
     if (onSlotSelectionChanged)
         onSlotSelectionChanged(QString());
+}
+
+void PageView::updateAccessibleDescription()
+{
+    QString description;
+    const Page *page = currentPage();
+    if (page) {
+        if (const Frame *frame = selectedFramePtr()) {
+            if (SlotGeometry::frameIsClipped(*page, *frame)) {
+                description = QCoreApplication::translate(
+                    "PhotoPrint", "A kép egy része le van vágva.");
+            }
+        }
+    }
+    if (m_accessibleBase == description)
+        return;
+    m_accessibleBase = description;
+    if (m_dropCue.isEmpty())
+        setAccessibleDescription(description);
+}
+
+QColor PageView::handleOutlineColor() const
+{
+    // The page is always white, so a light theme colour would vanish on it.
+    QColor colour = palette().color(QPalette::Text);
+    if (colour.lightness() > 140)
+        colour = QColor(0x2c, 0x2c, 0x30);
+    return colour;
 }
 
 void PageView::updateDropCue()
@@ -1166,7 +1206,7 @@ void PageView::updateDropCue()
     if (!cue.isEmpty())
         setAccessibleDescription(cue);
     else
-        setAccessibleDescription(m_accessibleBeforeDrag);
+        setAccessibleDescription(m_accessibleBase);
     update();
 }
 
@@ -1196,7 +1236,6 @@ Frame PageView::draggedFrame(const QPointF &pagePoint, bool fine) const
         break;
     }
     case DragKind::CropPan: {
-        const QPointF delta = pagePoint - m_drag.startPage;
         const QSizeF image = LayoutEngine::imageSizeMm(frame, m_drag.pixels);
         if (image.width() > 0.0 && image.height() > 0.0) {
             const QPointF local = PhotoItem::toFrameLocalMm(frame, pagePoint)
@@ -1209,11 +1248,16 @@ Frame PageView::draggedFrame(const QPointF &pagePoint, bool fine) const
             frame.cropCenter.setY(frame.cropCenter.y() - inImage.y() / image.height());
             frame = PhotoItem::clampCrop(frame, m_drag.pixels);
         }
-        Q_UNUSED(delta)
         break;
     }
     case DragKind::None:
         break;
+    }
+    // A move, resize or turn can never take a slotted photograph out of its
+    // window: the frame is pulled back until a visible part stays inside.
+    if (m_drag.kind != DragKind::CropPan && m_drag.kind != DragKind::None) {
+        if (const Page *page = currentPage())
+            frame = SlotGeometry::clampFrameToCell(*page, frame);
     }
     return frame;
 }
@@ -1307,8 +1351,12 @@ void PageView::paintEvent(QPaintEvent *)
 
     // Every frame keeps the original handles, slotted or free: the section's
     // cell clips the photograph but does not take the frame's rectangle away
-    // from the user.
-    painter.setBrush(Qt::white);
+    // from the user. The fill and the outline are theme-aware, and the outline
+    // is forced dark enough to stay visible on the always-white page.
+    const QColor handleFill = palette().color(QPalette::Base);
+    const QColor handleOutline = handleOutlineColor();
+    painter.setPen(QPen(handleOutline, 1.2));
+    painter.setBrush(handleFill);
     for (int i = 0; i < 4; ++i) {
         const QPointF point = quad.at(i);
         painter.drawRect(QRectF(point.x() - kHandleHalfPx, point.y() - kHandleHalfPx,
@@ -1322,21 +1370,42 @@ void PageView::paintEvent(QPaintEvent *)
     if (length > 0.0)
         direction /= length;
     const QPointF rotate = topMid + direction * kRotateOffsetPx;
-    painter.setPen(QPen(palette().color(QPalette::Highlight), 1.2));
+    painter.setPen(QPen(handleOutline, 1.2));
     painter.drawLine(topMid, rotate);
-    painter.setBrush(Qt::white);
+    painter.setBrush(handleFill);
     painter.drawEllipse(rotate, 5.0, 5.0);
 
     if (m_cropMode) {
+        // The crop overlay marks the visible window, not the frame: a slotted
+        // photograph is clipped to its cell, so the dim and the dashed outline
+        // follow the intersection of the frame and the cell.
+        QPainterPath visible;
+        if (!frame->slotId.isEmpty()) {
+            if (const Page *page = currentPage()) {
+                if (const Slot *slot = SlotGeometry::slotById(*page, frame->slotId)) {
+                    QPainterPath framePath;
+                    framePath.addPolygon(quad);
+                    framePath.closeSubpath();
+                    QPainterPath cellPath;
+                    cellPath.addRect(pageToWidget().mapRect(
+                        SlotGeometry::slotCellMm(*page, *slot)));
+                    visible = framePath.intersected(cellPath);
+                }
+            }
+        }
+        if (visible.isEmpty()) {
+            visible.addPolygon(quad);
+            visible.closeSubpath();
+        }
         QPainterPath dim;
         dim.setFillRule(Qt::OddEvenFill);
         dim.addRect(page);
-        dim.addPolygon(quad);
+        dim.addPath(visible);
         painter.fillPath(dim, QColor(255, 255, 255, 170));
         QPen cropPen(QColor(0x00, 0x7a, 0x5e), 1.4, Qt::DashLine);
         painter.setPen(cropPen);
         painter.setBrush(Qt::NoBrush);
-        painter.drawPolygon(quad);
+        painter.drawPath(visible);
     }
 
     if (hasFocus()) {
@@ -1354,6 +1423,10 @@ void PageView::paintSlotOverlays(QPainter &painter, const Page &page) const
     if (page.slotList.isEmpty())
         return;
     const QColor accent = palette().color(QPalette::Highlight);
+    // The section outline is furniture, not selection: a muted grey that stays
+    // visible on the white page whether the cell is empty or filled. The accent
+    // is reserved for the selected cell.
+    const QColor muted(0x8a, 0x8a, 0x92);
     const Slot *firstEmpty = SlotGeometry::firstEmptySlot(page);
     const QTransform transform = pageToWidget();
     const QFont baseFont = painter.font();
@@ -1366,6 +1439,8 @@ void PageView::paintSlotOverlays(QPainter &painter, const Page &page) const
         const bool hovered = m_dropSlotId == slot.id;
         const bool selected = m_selectedSlotId == slot.id;
         const QRectF ring = cell.adjusted(1.0, 1.0, -1.0, -1.0);
+        const Frame *occupant = SlotGeometry::frameInSlot(page, slot.id);
+        const bool clipped = occupant && SlotGeometry::frameIsClipped(page, *occupant);
 
         QColor border;
         QColor fill;
@@ -1374,8 +1449,8 @@ void PageView::paintSlotOverlays(QPainter &painter, const Page &page) const
         case SlotState::Filled:
             break;
         case SlotState::Empty:
-            border = accent;
-            fill = QColor(accent.red(), accent.green(), accent.blue(), 18);
+            border = muted;
+            fill = QColor(muted.red(), muted.green(), muted.blue(), 18);
             if (firstEmpty && firstEmpty->id == slot.id)
                 text = QCoreApplication::translate("PhotoPrint", "Húzd ide a fotót");
             break;
@@ -1390,10 +1465,17 @@ void PageView::paintSlotOverlays(QPainter &painter, const Page &page) const
             break;
         }
 
+        // The clip window is always visible, filled or not: without it a
+        // photograph that fills its cell would look like a free frame.
+        QPen sectionPen(muted, 1.0, state == SlotState::Filled ? Qt::SolidLine : Qt::DashLine);
+        if (state != SlotState::Filled)
+            sectionPen.setDashPattern({5.0, 4.0});
+        painter.setPen(sectionPen);
+        painter.setBrush(Qt::NoBrush);
+        painter.drawRoundedRect(ring, 3.0, 3.0);
+
         if (state != SlotState::Filled) {
-            QPen pen(border, hovered ? 2.0 : 1.2, Qt::DashLine);
-            pen.setDashPattern({5.0, 4.0});
-            painter.setPen(pen);
+            painter.setPen(Qt::NoPen);
             painter.setBrush(fill);
             painter.drawRoundedRect(ring, 3.0, 3.0);
             if (!text.isEmpty() && ring.width() > 54.0 && ring.height() > 22.0) {
@@ -1405,6 +1487,33 @@ void PageView::paintSlotOverlays(QPainter &painter, const Page &page) const
                     painter.fontMetrics().elidedText(text, Qt::ElideRight,
                                                      qRound(ring.width() - 10.0));
                 painter.drawText(ring.adjusted(4, 2, -4, -2), Qt::AlignCenter, elided);
+            }
+        }
+
+        if (clipped) {
+            // Part of the photograph is outside the window. A dashed orange
+            // ring and a short badge say so before the user wonders where the
+            // rest of the picture went; the inspector carries the full hint.
+            QPen clipPen(QColor(0xc4, 0x55, 0x00), 1.6, Qt::DashLine);
+            clipPen.setDashPattern({3.0, 3.0});
+            painter.setPen(clipPen);
+            painter.setBrush(Qt::NoBrush);
+            painter.drawRoundedRect(ring.adjusted(2.0, 2.0, -2.0, -2.0), 3.0, 3.0);
+            const QString label = QCoreApplication::translate("PhotoPrint", "Levágva");
+            QFont font = baseFont;
+            font.setBold(true);
+            font.setPointSizeF(std::max(7.0, baseFont.pointSizeF() * 0.85));
+            const QFontMetrics metrics(font);
+            const int textWidth = metrics.horizontalAdvance(label) + 12;
+            const int textHeight = metrics.height() + 4;
+            if (cell.width() >= textWidth + 8 && cell.height() >= textHeight + 8) {
+                const QRectF badge(cell.left() + 5.0, cell.top() + 5.0, textWidth, textHeight);
+                painter.setPen(Qt::NoPen);
+                painter.setBrush(QColor(0xc4, 0x55, 0x00));
+                painter.drawRoundedRect(badge, 3.0, 3.0);
+                painter.setFont(font);
+                painter.setPen(Qt::white);
+                painter.drawText(badge, Qt::AlignCenter, label);
             }
         }
 
@@ -1670,23 +1779,16 @@ void PageView::wheelEvent(QWheelEvent *event)
     const QPointF position = event->position();
     const double factor = std::pow(1.0015, event->angleDelta().y());
 
-    // Which photograph, if any, is under the wheel? Crop mode keeps acting on
-    // the selected frame; otherwise the page zooms, even over a laid-out page.
-    // The frame is copied out of the document first: flushWheelZoom() commits
-    // synchronously and the window may publish a new document in response, so
-    // no pointer into m_document may outlive it.
+    // Which photograph, if any, is under the wheel? Only crop mode acts on a
+    // frame; outside it the page zooms, even over a laid-out page. The frame is
+    // copied out of the document first: flushWheelZoom() commits synchronously
+    // and the window may publish a new document in response, so no pointer into
+    // m_document may outlive it.
     Frame target;
     bool hasTarget = false;
-    const Page *page = currentPage();
     if (m_cropMode) {
         if (const Frame *selected = selectedFramePtr()) {
             target = *selected;
-            hasTarget = true;
-        }
-    } else if (page) {
-        const int index = hitFrame(position);
-        if (index >= 0) {
-            target = page->frames.at(index);
             hasTarget = true;
         }
     }
@@ -1799,6 +1901,9 @@ void PageView::keyPressEvent(QKeyEvent *event)
         break;
     }
     if (nudged) {
+        // A nudge can never take a slotted photograph out of its window.
+        if (const Page *page = currentPage())
+            moved = SlotGeometry::clampFrameToCell(*page, moved);
         // Repeated arrow keys are a burst: the outline moves live and the
         // photo is composed once when the keys stop.
         m_nudgePulse.start();
@@ -1859,7 +1964,6 @@ void PageView::dragEnterEvent(QDragEnterEvent *event)
     flushWheelZoom();
     const bool frames = event->mimeData()->hasFormat(QString::fromLatin1(kFrameMimeType));
     if (event->mimeData()->hasUrls() || frames) {
-        m_accessibleBeforeDrag = accessibleDescription();
         m_dropSlotId = slotAtWidget(event->position());
         updateDropCue();
         update();
@@ -2539,6 +2643,75 @@ void MainWindow::buildUi()
     photoLayout->addWidget(advancedContent);
     for (QDoubleSpinBox *spin : {m_widthSpin, m_heightSpin, m_angleSpin})
         connect(spin, &QDoubleSpinBox::editingFinished, this, &MainWindow::applySizeFromControls);
+
+    // --- Kép forgatása: the photograph's own rotation inside its frame --------
+    // The frame angle above turns the window; this turns the picture inside it.
+    // Kept compact for the contextual tabs that come next: one slider, the two
+    // quarter turns and a reset, each one undo step.
+    addSectionTo(photoLayout, QCoreApplication::translate("PhotoPrint", "Kép forgatása"));
+    auto *imageRotationRow = new QHBoxLayout;
+    m_imageRotationSlider = new QSlider(Qt::Horizontal, side);
+    m_imageRotationSlider->setObjectName(QStringLiteral("imageRotationSlider"));
+    m_imageRotationSlider->setAccessibleName(
+        QCoreApplication::translate("PhotoPrint", "Kép forgatása"));
+    m_imageRotationSlider->setRange(int(kMinImageRotationDeg), int(kMaxImageRotationDeg));
+    m_imageRotationSlider->setSingleStep(1);
+    m_imageRotationSlider->setPageStep(15);
+    // Tracking off: the release is the action, so one drag is one undo step.
+    m_imageRotationSlider->setTracking(false);
+    m_imageRotationValue = new QLabel(QStringLiteral("0°"), side);
+    m_imageRotationValue->setObjectName(QStringLiteral("imageRotationValue"));
+    m_imageRotationValue->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
+    markSecondaryText(m_imageRotationValue);
+    imageRotationRow->addWidget(m_imageRotationSlider, 1);
+    imageRotationRow->addWidget(m_imageRotationValue);
+    photoLayout->addLayout(imageRotationRow);
+    connect(m_imageRotationSlider, &QSlider::valueChanged, this,
+            &MainWindow::imageRotationChanged);
+
+    auto *imageTurnRow = new QHBoxLayout;
+    m_imageRotateLeftButton =
+        new QPushButton(QCoreApplication::translate("PhotoPrint", "Balra 90°"), side);
+    m_imageRotateLeftButton->setObjectName(QStringLiteral("imageRotateLeft"));
+    m_imageRotateRightButton =
+        new QPushButton(QCoreApplication::translate("PhotoPrint", "Jobbra 90°"), side);
+    m_imageRotateRightButton->setObjectName(QStringLiteral("imageRotateRight"));
+    m_imageResetButton =
+        new QPushButton(QCoreApplication::translate("PhotoPrint", "Alaphelyzet"), side);
+    m_imageResetButton->setObjectName(QStringLiteral("imageRotationReset"));
+    m_imageResetButton->setToolTip(QCoreApplication::translate(
+        "PhotoPrint", "Visszaállítja a kép nagyítását, helyét és forgatását."));
+    imageTurnRow->addWidget(m_imageRotateLeftButton);
+    imageTurnRow->addWidget(m_imageRotateRightButton);
+    imageTurnRow->addWidget(m_imageResetButton);
+    photoLayout->addLayout(imageTurnRow);
+    connect(m_imageRotateLeftButton, &QPushButton::clicked, this,
+            [this] { rotateImageBy(-90.0); });
+    connect(m_imageRotateRightButton, &QPushButton::clicked, this,
+            [this] { rotateImageBy(90.0); });
+    connect(m_imageResetButton, &QPushButton::clicked, this,
+            &MainWindow::resetImageInsideFrame);
+
+    // A slotted frame can be moved, resized or turned out of its window. The
+    // reset puts it back on the cell; the hint says when part of the picture is
+    // clipped away.
+    m_replaceInSlotButton =
+        new QPushButton(QCoreApplication::translate("PhotoPrint", "Kép visszahelyezése"), side);
+    m_replaceInSlotButton->setObjectName(QStringLiteral("replaceInSlotButton"));
+    m_replaceInSlotButton->setToolTip(
+        QCoreApplication::translate("PhotoPrint", "A fotót a helyére igazítja."));
+    m_replaceInSlotButton->setVisible(false);
+    photoLayout->addWidget(m_replaceInSlotButton);
+    connect(m_replaceInSlotButton, &QPushButton::clicked, this,
+            &MainWindow::replaceFrameInSlot);
+
+    m_clippedHint = new QLabel(
+        QCoreApplication::translate("PhotoPrint", "A kép egy része le van vágva."), side);
+    m_clippedHint->setObjectName(QStringLiteral("clippedHint"));
+    m_clippedHint->setWordWrap(true);
+    markSecondaryText(m_clippedHint);
+    m_clippedHint->setVisible(false);
+    photoLayout->addWidget(m_clippedHint);
 
     m_resolutionHint = new QLabel(side);
     m_resolutionHint->setWordWrap(true);
@@ -4084,6 +4257,14 @@ void MainWindow::syncFrameControls()
     m_widthSpin->setEnabled(hasSelection);
     m_heightSpin->setEnabled(hasSelection);
     m_angleSpin->setEnabled(hasSelection);
+    if (m_imageRotationSlider)
+        m_imageRotationSlider->setEnabled(hasSelection);
+    if (m_imageRotateLeftButton)
+        m_imageRotateLeftButton->setEnabled(hasSelection);
+    if (m_imageRotateRightButton)
+        m_imageRotateRightButton->setEnabled(hasSelection);
+    if (m_imageResetButton)
+        m_imageResetButton->setEnabled(hasSelection);
 
     m_syncing = true;
     m_resolutionHint->clear();
@@ -4091,6 +4272,15 @@ void MainWindow::syncFrameControls()
         m_widthSpin->setValue(frame->width / 10.0);
         m_heightSpin->setValue(frame->height / 10.0);
         m_angleSpin->setValue(frame->angleDeg);
+        syncImageRotationControls(*frame);
+        const bool slotted = !frame->slotId.isEmpty();
+        if (m_replaceInSlotButton)
+            m_replaceInSlotButton->setVisible(slotted);
+        if (m_clippedHint) {
+            const bool clipped = slotted && currentPage
+                && SlotGeometry::frameIsClipped(*currentPage, *frame);
+            m_clippedHint->setVisible(clipped);
+        }
         m_autoCheck->setChecked(frame->autoTone);
         if (m_autoHint) {
             if (!frame->autoTone)
@@ -4122,6 +4312,10 @@ void MainWindow::syncFrameControls()
         m_effectButton->setText(QCoreApplication::translate("PhotoPrint", "Eredeti"));
         m_legacyHint->setVisible(false);
         m_strengthHint->setVisible(false);
+        if (m_replaceInSlotButton)
+            m_replaceInSlotButton->setVisible(false);
+        if (m_clippedHint)
+            m_clippedHint->setVisible(false);
     }
     m_syncing = false;
     syncLayoutPanel();
@@ -5217,6 +5411,100 @@ void MainWindow::brightnessChanged(int value)
     Frame updated = *frame;
     updated.brightness = sliderToBrightnessEv(value);
     m_controller.apply(FrameChange{updated.id, updated});
+}
+
+void MainWindow::syncImageRotationControls(const Frame &frame)
+{
+    const bool wasSyncing = m_syncing;
+    m_syncing = true;
+    const int degrees = int(std::lround(std::clamp(frame.imageRotationDeg,
+                                                   kMinImageRotationDeg,
+                                                   kMaxImageRotationDeg)));
+    if (m_imageRotationSlider && !m_imageRotationSlider->isSliderDown())
+        m_imageRotationSlider->setValue(degrees);
+    if (m_imageRotationValue)
+        m_imageRotationValue->setText(QStringLiteral("%1°").arg(degrees));
+    m_syncing = wasSyncing;
+}
+
+void MainWindow::imageRotationChanged(int degrees)
+{
+    if (m_syncing)
+        return;
+    // A wheel burst that has not settled yet becomes its own edit first, so
+    // the undo stack keeps one step per gesture.
+    if (m_pageView)
+        m_pageView->flushWheelBurst();
+    const std::optional<Frame> frame = selectedFrame();
+    if (!frame)
+        return;
+    const QSize pixels =
+        m_previewImages.contains(frame->id) ? m_previewImages.value(frame->id).size() : QSize();
+    const Frame updated = PhotoItem::rotateImageTo(*frame, degrees, pixels);
+    if (updated != *frame)
+        m_controller.apply(FrameChange{updated.id, updated});
+    syncImageRotationControls(updated);
+}
+
+void MainWindow::rotateImageBy(double degrees)
+{
+    if (m_syncing)
+        return;
+    // A wheel burst that has not settled yet becomes its own edit first, so
+    // the undo stack keeps one step per gesture.
+    if (m_pageView)
+        m_pageView->flushWheelBurst();
+    const std::optional<Frame> frame = selectedFrame();
+    if (!frame)
+        return;
+    const QSize pixels =
+        m_previewImages.contains(frame->id) ? m_previewImages.value(frame->id).size() : QSize();
+    const Frame updated = PhotoItem::rotateImageBy(*frame, degrees, pixels);
+    if (updated != *frame)
+        m_controller.apply(FrameChange{updated.id, updated});
+    syncImageRotationControls(updated);
+}
+
+void MainWindow::resetImageInsideFrame()
+{
+    if (m_syncing)
+        return;
+    // A wheel burst that has not settled yet becomes its own edit first, so
+    // the undo stack keeps one step per gesture.
+    if (m_pageView)
+        m_pageView->flushWheelBurst();
+    const std::optional<Frame> frame = selectedFrame();
+    if (!frame)
+        return;
+    const Frame updated = PhotoItem::resetInsideFrame(*frame);
+    if (updated != *frame)
+        m_controller.apply(FrameChange{updated.id, updated});
+    syncImageRotationControls(updated);
+}
+
+void MainWindow::replaceFrameInSlot()
+{
+    if (m_syncing)
+        return;
+    // A wheel burst that has not settled yet becomes its own edit first, so
+    // the undo stack keeps one step per gesture.
+    if (m_pageView)
+        m_pageView->flushWheelBurst();
+    const std::optional<Frame> frame = selectedFrame();
+    if (!frame || frame->slotId.isEmpty())
+        return;
+    const DocumentSnapshot document = m_controller.document();
+    if (document.pages.isEmpty())
+        return;
+    const Page &page = document.pages.at(document.currentPage);
+    const Slot *slot = SlotGeometry::slotById(page, frame->slotId);
+    if (!slot)
+        return;
+    Frame updated = *frame;
+    SlotGeometry::initialiseFrameInSlot(page, *slot, updated);
+    updated.autoPlaced = false;
+    if (updated != *frame)
+        m_controller.apply(FrameChange{updated.id, updated});
 }
 
 void MainWindow::showOriginalPressed(bool pressed)
