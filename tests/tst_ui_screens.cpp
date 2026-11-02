@@ -14,10 +14,12 @@
 #include <QAbstractItemView>
 #include <QListWidget>
 #include <QMessageBox>
+#include <QPainter>
 #include <QPointer>
 #include <QPushButton>
 #include <QScrollArea>
 #include <QScrollBar>
+#include <QSlider>
 #include <QSettings>
 #include <QTimer>
 #include <QtTest>
@@ -123,6 +125,7 @@ private slots:
     void captureStates();
     void captureSlotInteraction();
     void captureLayoutPanel();
+    void captureInSlotImageControls();
 
 private:
     QTemporaryDir m_settingsDir;
@@ -407,6 +410,68 @@ void TestUiScreens::captureLayoutPanel()
     QVERIFY(!window.document().pages.first().hasLayout());
     QVERIFY(!panel->isVisible());
     QVERIFY(window.grab().save(evidenceDir() + QStringLiteral("/ui-layout-dissolved.png")));
+}
+
+void TestUiScreens::captureInSlotImageControls()
+{
+    QTemporaryDir dir;
+    QVERIFY(dir.isValid());
+    // A patterned photo: a flat colour would hide the rotation in the capture.
+    QImage sample(QSize(900, 600), QImage::Format_RGB32);
+    sample.setColorSpace(QColorSpace(QColorSpace::SRgb));
+    QPainter painter(&sample);
+    painter.fillRect(QRect(0, 0, 450, 600), QColor(190, 95, 60));
+    painter.fillRect(QRect(450, 0, 450, 600), QColor(245, 225, 195));
+    painter.setPen(QPen(QColor(45, 45, 45), 10));
+    painter.drawRect(QRect(40, 40, 820, 520));
+    painter.drawEllipse(QPointF(450, 300), 180, 180);
+    painter.end();
+    const QString photo = dir.filePath(QStringLiteral("in-slot-photo.png"));
+    {
+        QImageWriter writer(photo, "png");
+        QVERIFY(writer.write(sample));
+    }
+
+    MainWindow window;
+    window.resize(1280, 800);
+    window.show();
+    QTest::qWait(120);
+    QVERIFY(loadDocument(window, dir, fourEmptySlots()));
+    QVERIFY(QMetaObject::invokeMethod(&window, "addDroppedFiles", Qt::DirectConnection,
+                                      Q_ARG(QStringList, QStringList{photo})));
+    QVERIFY(window.waitForPreview(15000));
+    QTest::qWait(300);
+
+    auto *view = window.findChild<PageView *>();
+    QVERIFY(view);
+    const Page page = window.document().pages.first();
+    const QString slotId = page.slotList.at(0).id;
+    QTest::mouseClick(view, Qt::LeftButton, Qt::NoModifier,
+                      view->slotRect(slotId).center().toPoint());
+    QTest::qWait(150);
+
+    auto *zoom = window.findChild<QSlider *>(QStringLiteral("slotZoomSlider"));
+    auto *rotation = window.findChild<QSlider *>(QStringLiteral("slotRotationSlider"));
+    QVERIFY(zoom);
+    QVERIFY(rotation);
+    zoom->setValue(180);
+    QTest::qWait(100);
+    rotation->setValue(20);
+    QTest::qWait(500);
+
+    // The side column scrolls: bring the in-slot section into view before the
+    // capture, or the screenshot would only show the layout panel above it.
+    auto *panel = window.findChild<QWidget *>(QStringLiteral("slotImagePanel"));
+    QVERIFY(panel);
+    for (QScrollArea *area : window.findChildren<QScrollArea *>()) {
+        if (area->widget() && area->widget()->isAncestorOf(panel)) {
+            area->ensureWidgetVisible(panel);
+            QTest::qWait(150);
+        }
+    }
+
+    QVERIFY(window.grab().save(evidenceDir() + QStringLiteral("/ui-slot-image.png")));
+    QVERIFY(view->grab().save(evidenceDir() + QStringLiteral("/ui-slot-image-canvas.png")));
 }
 
 QTEST_MAIN(TestUiScreens)

@@ -1577,5 +1577,37 @@
         <source>Ehhez a laphoz még nincs elrendezés.</source>
         <translation>Esta página aún no tiene una composición.</translation>
     </message>
+    <message>
+        <source>Kép a helyen belül</source>
+        <translation>Foto dentro del hueco</translation>
+    </message>
+    <message>
+        <source>Nagyítás</source>
+        <translation>Ampliación</translation>
+    </message>
+    <message>
+        <source>Forgatás</source>
+        <translation>Rotación</translation>
+    </message>
+    <message>
+        <source>Balra 90°</source>
+        <translation>90° a la izquierda</translation>
+    </message>
+    <message>
+        <source>Jobbra 90°</source>
+        <translation>90° a la derecha</translation>
+    </message>
+    <message>
+        <source>Alaphelyzet</source>
+        <translation>Restablecer</translation>
+    </message>
+    <message>
+        <source>Visszaállítja a kép nagyítását, helyét és forgatását.</source>
+        <translation>Restaura la ampliación, la posición y la rotación de la foto.</translation>
+    </message>
+    <message>
+        <source>A fotó a helyén belül mozgatható, nagyítható és forgatható.</source>
+        <translation>La foto se puede mover, ampliar y girar dentro de su hueco.</translation>
+    </message>
 </context>
 </TS>

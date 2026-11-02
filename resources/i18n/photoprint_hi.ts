@@ -1577,5 +1577,37 @@
         <source>Ehhez a laphoz még nincs elrendezés.</source>
         <translation>इस पृष्ठ पर अभी कोई लेआउट नहीं है।</translation>
     </message>
+    <message>
+        <source>Kép a helyen belül</source>
+        <translation>जगह के अंदर फ़ोटो</translation>
+    </message>
+    <message>
+        <source>Nagyítás</source>
+        <translation>ज़ूम</translation>
+    </message>
+    <message>
+        <source>Forgatás</source>
+        <translation>घुमाव</translation>
+    </message>
+    <message>
+        <source>Balra 90°</source>
+        <translation>90° बाएँ</translation>
+    </message>
+    <message>
+        <source>Jobbra 90°</source>
+        <translation>90° दाएँ</translation>
+    </message>
+    <message>
+        <source>Alaphelyzet</source>
+        <translation>रीसेट</translation>
+    </message>
+    <message>
+        <source>Visszaállítja a kép nagyítását, helyét és forgatását.</source>
+        <translation>फ़ोटो का ज़ूम, स्थान और घुमाव वापस डिफ़ॉल्ट करता है।</translation>
+    </message>
+    <message>
+        <source>A fotó a helyén belül mozgatható, nagyítható és forgatható.</source>
+        <translation>फ़ोटो को उसकी जगह के अंदर खिसकाया, ज़ूम किया और घुमाया जा सकता है।</translation>
+    </message>
 </context>
 </TS>

@@ -1563,5 +1563,37 @@
         <source>Ehhez a laphoz még nincs elrendezés.</source>
         <translation>このページにはまだレイアウトがありません。</translation>
     </message>
+    <message>
+        <source>Kép a helyen belül</source>
+        <translation>枠内の写真</translation>
+    </message>
+    <message>
+        <source>Nagyítás</source>
+        <translation>拡大</translation>
+    </message>
+    <message>
+        <source>Forgatás</source>
+        <translation>回転</translation>
+    </message>
+    <message>
+        <source>Balra 90°</source>
+        <translation>左へ90°</translation>
+    </message>
+    <message>
+        <source>Jobbra 90°</source>
+        <translation>右へ90°</translation>
+    </message>
+    <message>
+        <source>Alaphelyzet</source>
+        <translation>リセット</translation>
+    </message>
+    <message>
+        <source>Visszaállítja a kép nagyítását, helyét és forgatását.</source>
+        <translation>写真の拡大率、位置、回転を元に戻します。</translation>
+    </message>
+    <message>
+        <source>A fotó a helyén belül mozgatható, nagyítható és forgatható.</source>
+        <translation>写真は枠内で移動、拡大、回転できます。</translation>
+    </message>
 </context>
 </TS>

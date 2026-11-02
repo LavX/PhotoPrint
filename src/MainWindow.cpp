@@ -89,6 +89,9 @@ constexpr double kRotateOffsetPx = 30.0;
 constexpr int kSettleDelayMs = 120;
 constexpr qint64 kMaxRasterPixels = 8000000; // retained raster ceiling (8 MP)
 constexpr int kEditPulseMs = 200;            // crop zoom or arrow nudge burst
+// How far one 120-unit wheel notch turns the photograph inside its slot when
+// Shift is held. Small enough to feel continuous, big enough to see per notch.
+constexpr double kImageRotationWheelStepDeg = 3.0;
 // A layout style edit follows the spin live and lands as one edit once the user
 // stops: short enough to feel immediate, long enough that a held arrow is one
 // undo step.
@@ -1092,7 +1095,8 @@ void PageView::flushWheelZoom()
     if (m_zoomTimer)
         m_zoomTimer->stop();
     const bool changed = finalFrame.cropCenter != startFrame.cropCenter
-        || finalFrame.zoom != startFrame.zoom || finalFrame.fit != startFrame.fit;
+        || finalFrame.zoom != startFrame.zoom || finalFrame.fit != startFrame.fit
+        || finalFrame.imageRotationDeg != startFrame.imageRotationDeg;
     if (changed && !frameId.isEmpty() && onFrameCommitted)
         onFrameCommitted(finalFrame);
     // The burst is over: sharpen the raster it left behind.
@@ -1668,13 +1672,28 @@ void PageView::wheelEvent(QWheelEvent *event)
 
     if (!pageZoomRequested && hasTarget && !target.slotId.isEmpty()) {
         // The page view does not move: the photograph zooms inside its cell and
-        // the existing clip keeps everything outside the cell invisible.
+        // the existing clip keeps everything outside the cell invisible. Shift
+        // turns the photograph instead, in small steps, without touching the
+        // cell rectangle.
         const QSize pixels =
             m_images.contains(targetId) ? m_images.value(targetId).size() : QSize();
-        if (!pixels.isEmpty()) {
-            Frame updated = PhotoItem::zoomAt(target, widgetToPage(position), factor, pixels);
-            if (PhotoItem::clampCrop(updated, pixels).cropCenter != target.cropCenter
-                || updated.zoom != target.zoom) {
+        const bool rotate =
+            event->modifiers().testFlag(Qt::ShiftModifier) && event->angleDelta().y() != 0;
+        Frame updated = target;
+        bool handled = true;
+        if (rotate) {
+            const double notches = event->angleDelta().y() / 120.0;
+            updated = PhotoItem::rotateImageBy(target,
+                                               kImageRotationWheelStepDeg * notches, pixels);
+        } else if (!pixels.isEmpty()) {
+            updated = PhotoItem::zoomAt(target, widgetToPage(position), factor, pixels);
+        } else {
+            // No pixels to bound the crop yet: leave the event to the page view.
+            handled = false;
+        }
+        if (handled) {
+            updated = PhotoItem::clampCrop(updated, pixels);
+            if (updated != target) {
                 if (m_zoomFrameId != targetId) {
                     const Frame start = target;
                     flushWheelZoom();
@@ -2497,6 +2516,116 @@ void MainWindow::buildUi()
     photoLayout->addWidget(new QLabel(QCoreApplication::translate("PhotoPrint", "Világosítás"), side));
     photoLayout->addWidget(m_brightnessSlider);
     connect(m_brightnessSlider, &QSlider::valueChanged, this, &MainWindow::brightnessChanged);
+
+    // --- Kép a helyen belül: the photograph inside its cell ------------------
+    // A slot owns the rectangle, so the only edits left are the image's own:
+    // its magnification and its rotation. The whole block hides for a free
+    // frame, whose size and angle the advanced controls already carry.
+    m_slotImagePanel = new QWidget(side);
+    m_slotImagePanel->setObjectName(QStringLiteral("slotImagePanel"));
+    auto *slotImageLayout = new QVBoxLayout(m_slotImagePanel);
+    slotImageLayout->setContentsMargins(0, 0, 0, 0);
+    photoLayout->addWidget(m_slotImagePanel);
+    {
+        auto *label = new QLabel(QCoreApplication::translate("PhotoPrint", "Kép a helyen belül"),
+                                 m_slotImagePanel);
+        label->setObjectName(QStringLiteral("sectionHeader"));
+        QFont font = label->font();
+        font.setBold(true);
+        label->setFont(font);
+        label->setStyleSheet(QStringLiteral("margin-top: 8px;"));
+        slotImageLayout->addWidget(label);
+    }
+
+    auto *slotZoomRow = new QHBoxLayout;
+    slotZoomRow->addWidget(
+        new QLabel(QCoreApplication::translate("PhotoPrint", "Nagyítás"), m_slotImagePanel));
+    m_slotZoomValue = new QLabel(QStringLiteral("100%"), m_slotImagePanel);
+    m_slotZoomValue->setObjectName(QStringLiteral("slotZoomValue"));
+    m_slotZoomValue->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
+    m_slotZoomValue->setStyleSheet(QStringLiteral("color: #6e6e73; font-size: 11px;"));
+    slotZoomRow->addWidget(m_slotZoomValue, 1);
+    slotImageLayout->addLayout(slotZoomRow);
+    m_slotZoomSlider = new QSlider(Qt::Horizontal, m_slotImagePanel);
+    m_slotZoomSlider->setObjectName(QStringLiteral("slotZoomSlider"));
+    m_slotZoomSlider->setAccessibleName(
+        QCoreApplication::translate("PhotoPrint", "Nagyítás"));
+    m_slotZoomSlider->setRange(100, 800);
+    m_slotZoomSlider->setSingleStep(5);
+    m_slotZoomSlider->setPageStep(25);
+    m_slotZoomSlider->setValue(100);
+    // A drag is one action: the frame follows on release, not on every pixel.
+    m_slotZoomSlider->setTracking(false);
+    slotImageLayout->addWidget(m_slotZoomSlider);
+    connect(m_slotZoomSlider, &QSlider::valueChanged, this, &MainWindow::slotZoomChanged);
+    // The frame lands on release, but the number follows the thumb so the drag
+    // has feedback before it commits.
+    connect(m_slotZoomSlider, &QSlider::sliderMoved, this, [this](int value) {
+        m_slotZoomValue->setText(QStringLiteral("%1%").arg(value));
+    });
+
+    auto *slotRotationRow = new QHBoxLayout;
+    slotRotationRow->addWidget(
+        new QLabel(QCoreApplication::translate("PhotoPrint", "Forgatás"), m_slotImagePanel));
+    m_slotRotationValue = new QLabel(QStringLiteral("0°"), m_slotImagePanel);
+    m_slotRotationValue->setObjectName(QStringLiteral("slotRotationValue"));
+    m_slotRotationValue->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
+    m_slotRotationValue->setStyleSheet(QStringLiteral("color: #6e6e73; font-size: 11px;"));
+    slotRotationRow->addWidget(m_slotRotationValue, 1);
+    slotImageLayout->addLayout(slotRotationRow);
+    m_slotRotationSlider = new QSlider(Qt::Horizontal, m_slotImagePanel);
+    m_slotRotationSlider->setObjectName(QStringLiteral("slotRotationSlider"));
+    m_slotRotationSlider->setAccessibleName(
+        QCoreApplication::translate("PhotoPrint", "Forgatás"));
+    m_slotRotationSlider->setRange(int(kMinImageRotationDeg), int(kMaxImageRotationDeg));
+    m_slotRotationSlider->setSingleStep(1);
+    m_slotRotationSlider->setPageStep(15);
+    m_slotRotationSlider->setTracking(false);
+    slotImageLayout->addWidget(m_slotRotationSlider);
+    connect(m_slotRotationSlider, &QSlider::valueChanged, this,
+            &MainWindow::slotRotationChanged);
+    connect(m_slotRotationSlider, &QSlider::sliderMoved, this, [this](int value) {
+        m_slotRotationValue->setText(QStringLiteral("%1°").arg(value));
+    });
+
+    auto *slotTurnRow = new QHBoxLayout;
+    m_slotRotateLeftButton =
+        new QPushButton(QCoreApplication::translate("PhotoPrint", "Balra 90°"),
+                        m_slotImagePanel);
+    m_slotRotateLeftButton->setObjectName(QStringLiteral("slotRotateLeft"));
+    m_slotRotateRightButton =
+        new QPushButton(QCoreApplication::translate("PhotoPrint", "Jobbra 90°"),
+                        m_slotImagePanel);
+    m_slotRotateRightButton->setObjectName(QStringLiteral("slotRotateRight"));
+    slotTurnRow->addWidget(m_slotRotateLeftButton);
+    slotTurnRow->addWidget(m_slotRotateRightButton);
+    slotImageLayout->addLayout(slotTurnRow);
+    connect(m_slotRotateLeftButton, &QPushButton::clicked, this,
+            [this] { rotateSlotImageBy(-90.0); });
+    connect(m_slotRotateRightButton, &QPushButton::clicked, this,
+            [this] { rotateSlotImageBy(90.0); });
+
+    auto *slotResetRow = new QHBoxLayout;
+    m_slotResetButton =
+        new QPushButton(QCoreApplication::translate("PhotoPrint", "Alaphelyzet"),
+                        m_slotImagePanel);
+    m_slotResetButton->setObjectName(QStringLiteral("slotImageReset"));
+    m_slotResetButton->setToolTip(QCoreApplication::translate(
+        "PhotoPrint", "Visszaállítja a kép nagyítását, helyét és forgatását."));
+    slotResetRow->addWidget(m_slotResetButton);
+    slotImageLayout->addLayout(slotResetRow);
+    connect(m_slotResetButton, &QPushButton::clicked, this, &MainWindow::resetSlotImage);
+
+    auto *slotImageHint =
+        new QLabel(QCoreApplication::translate(
+                       "PhotoPrint",
+                       "A fotó a helyén belül mozgatható, nagyítható és forgatható."),
+                   m_slotImagePanel);
+    slotImageHint->setObjectName(QStringLiteral("slotImageHint"));
+    slotImageHint->setWordWrap(true);
+    slotImageHint->setStyleSheet(QStringLiteral("color: #6e6e73; font-size: 11px;"));
+    slotImageLayout->addWidget(slotImageHint);
+    m_slotImagePanel->setVisible(false);
 
     addSectionTo(photoLayout, QCoreApplication::translate("PhotoPrint", "Effekt"));
     m_effectButton = new QPushButton(QCoreApplication::translate("PhotoPrint", "Eredeti"), side);
@@ -4132,6 +4261,10 @@ void MainWindow::syncFrameControls()
     m_widthSpin->setEnabled(hasSelection && !slotted);
     m_heightSpin->setEnabled(hasSelection && !slotted);
     m_angleSpin->setEnabled(hasSelection && !slotted);
+    // The in-slot controls describe a photograph the slot has fixed in place;
+    // a free frame keeps the size and angle controls instead.
+    if (m_slotImagePanel)
+        m_slotImagePanel->setVisible(slotted);
 
     m_syncing = true;
     m_resolutionHint->clear();
@@ -4139,6 +4272,26 @@ void MainWindow::syncFrameControls()
         m_widthSpin->setValue(frame->width / 10.0);
         m_heightSpin->setValue(frame->height / 10.0);
         m_angleSpin->setValue(frame->angleDeg);
+        if (m_slotZoomSlider) {
+            // The wheel and the slider both write the same frame fields, so the
+            // slider always shows the value the model holds. The slider's own
+            // range is the inspector's 100..800 %, while the wheel can still
+            // zoom below 100 %; the readout stays truthful in that corner and
+            // the thumb sits at its floor. m_syncing keeps this write from
+            // being taken as a user action.
+            const int percent =
+                int(std::lround(std::clamp(frame->zoom, kMinFrameZoom, kMaxFrameZoom) * 100.0));
+            m_slotZoomSlider->setValue(std::clamp(percent, m_slotZoomSlider->minimum(),
+                                                  m_slotZoomSlider->maximum()));
+            m_slotZoomValue->setText(QStringLiteral("%1%").arg(percent));
+        }
+        if (m_slotRotationSlider) {
+            const int degrees = int(std::lround(
+                std::clamp(frame->imageRotationDeg, kMinImageRotationDeg,
+                           kMaxImageRotationDeg)));
+            m_slotRotationSlider->setValue(degrees);
+            m_slotRotationValue->setText(QStringLiteral("%1°").arg(degrees));
+        }
         m_autoCheck->setChecked(frame->autoTone);
         if (m_autoHint) {
             if (!frame->autoTone)
@@ -5316,6 +5469,64 @@ void MainWindow::toggleAutoTone(bool enabled)
             updated.tone = ToneEngine::suggest(sample);
         }
     }
+    m_controller.apply(FrameChange{updated.id, updated});
+}
+
+void MainWindow::slotZoomChanged(int percent)
+{
+    if (m_syncing)
+        return;
+    const std::optional<Frame> frame = selectedFrame();
+    if (!frame || frame->slotId.isEmpty())
+        return;
+    const QSize pixels =
+        m_previewImages.contains(frame->id) ? m_previewImages.value(frame->id).size() : QSize();
+    const Frame updated = PhotoItem::setZoom(*frame, percent / 100.0, pixels);
+    if (updated == *frame)
+        return;
+    m_controller.apply(FrameChange{updated.id, updated});
+}
+
+void MainWindow::slotRotationChanged(int degrees)
+{
+    if (m_syncing)
+        return;
+    const std::optional<Frame> frame = selectedFrame();
+    if (!frame || frame->slotId.isEmpty())
+        return;
+    const QSize pixels =
+        m_previewImages.contains(frame->id) ? m_previewImages.value(frame->id).size() : QSize();
+    const Frame updated = PhotoItem::rotateImageTo(*frame, degrees, pixels);
+    if (updated == *frame)
+        return;
+    m_controller.apply(FrameChange{updated.id, updated});
+}
+
+void MainWindow::rotateSlotImageBy(double degrees)
+{
+    if (m_syncing)
+        return;
+    const std::optional<Frame> frame = selectedFrame();
+    if (!frame || frame->slotId.isEmpty())
+        return;
+    const QSize pixels =
+        m_previewImages.contains(frame->id) ? m_previewImages.value(frame->id).size() : QSize();
+    const Frame updated = PhotoItem::rotateImageBy(*frame, degrees, pixels);
+    if (updated == *frame)
+        return;
+    m_controller.apply(FrameChange{updated.id, updated});
+}
+
+void MainWindow::resetSlotImage()
+{
+    if (m_syncing)
+        return;
+    const std::optional<Frame> frame = selectedFrame();
+    if (!frame || frame->slotId.isEmpty())
+        return;
+    const Frame updated = PhotoItem::resetInsideFrame(*frame);
+    if (updated == *frame)
+        return;
     m_controller.apply(FrameChange{updated.id, updated});
 }
 

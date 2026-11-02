@@ -1563,5 +1563,37 @@
         <source>Ehhez a laphoz még nincs elrendezés.</source>
         <translation>此页面还没有布局。</translation>
     </message>
+    <message>
+        <source>Kép a helyen belül</source>
+        <translation>格子内的照片</translation>
+    </message>
+    <message>
+        <source>Nagyítás</source>
+        <translation>缩放</translation>
+    </message>
+    <message>
+        <source>Forgatás</source>
+        <translation>旋转</translation>
+    </message>
+    <message>
+        <source>Balra 90°</source>
+        <translation>向左 90°</translation>
+    </message>
+    <message>
+        <source>Jobbra 90°</source>
+        <translation>向右 90°</translation>
+    </message>
+    <message>
+        <source>Alaphelyzet</source>
+        <translation>重置</translation>
+    </message>
+    <message>
+        <source>Visszaállítja a kép nagyítását, helyét és forgatását.</source>
+        <translation>恢复照片的缩放、位置和旋转。</translation>
+    </message>
+    <message>
+        <source>A fotó a helyén belül mozgatható, nagyítható és forgatható.</source>
+        <translation>照片可以在格子内移动、缩放和旋转。</translation>
+    </message>
 </context>
 </TS>

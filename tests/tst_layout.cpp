@@ -48,6 +48,7 @@ private slots:
     void resizeKeepsAspectAndFixedCorner();
     void cropBoundsKeepTheFrameCovered();
     void zoomAtKeepsThePointUnderTheCursor();
+    void imageZoomAndRotationHelpersClampAndReset();
     void resolutionHintUsesDocumentedThresholds();
     void gridKeepsFourAspectsInsideThePage();
     void appendPhotoDoesNotDisturbManualWork();
@@ -301,6 +302,59 @@ void TestLayout::zoomAtKeepsThePointUnderTheCursor()
     QVERIFY(zoomed.zoom > frame.zoom);
     QVERIFY2(distance(before, after) < 1e-6,
              qPrintable(QStringLiteral("cursor drift %1").arg(distance(before, after))));
+}
+
+void TestLayout::imageZoomAndRotationHelpersClampAndReset()
+{
+    const QSize pixels(800, 400);
+    const Frame original = makeFrame(100.0, 60.0, FitMode::Fill);
+
+    const Frame zoomed = PhotoItem::setZoom(original, 2.5, pixels);
+    QCOMPARE(zoomed.zoom, 2.5);
+    // The frame rectangle belongs to the page, never to the image controls.
+    QCOMPARE(zoomed.cx, original.cx);
+    QCOMPARE(zoomed.cy, original.cy);
+    QCOMPARE(zoomed.width, original.width);
+    QCOMPARE(zoomed.height, original.height);
+    QCOMPARE(zoomed.angleDeg, original.angleDeg);
+
+    QCOMPARE(PhotoItem::setZoom(original, 99.0, pixels).zoom, kMaxFrameZoom);
+    QCOMPARE(PhotoItem::setZoom(original, 0.01, pixels).zoom, kMinFrameZoom);
+    QCOMPARE(PhotoItem::setZoom(original, std::numeric_limits<double>::quiet_NaN(), pixels),
+             original);
+
+    const Frame turned = PhotoItem::rotateImageTo(original, 45.0, pixels);
+    QCOMPARE(turned.imageRotationDeg, 45.0);
+    QCOMPARE(turned.width, original.width);
+    QCOMPARE(turned.angleDeg, original.angleDeg);
+    // The slider clamps instead of wrapping, so its ends are exact values.
+    QCOMPARE(PhotoItem::rotateImageTo(original, 999.0, pixels).imageRotationDeg, 180.0);
+    QCOMPARE(PhotoItem::rotateImageTo(original, -999.0, pixels).imageRotationDeg, -180.0);
+    QCOMPARE(PhotoItem::rotateImageTo(original, std::numeric_limits<double>::quiet_NaN(),
+                                      pixels),
+             original);
+
+    // Gestures wrap inside the same range: a quarter turn from 135 is -135.
+    QCOMPARE(PhotoItem::rotateImageBy(original, 90.0, pixels).imageRotationDeg, 90.0);
+    Frame nearEdge = original;
+    nearEdge.imageRotationDeg = 135.0;
+    QCOMPARE(PhotoItem::rotateImageBy(nearEdge, 90.0, pixels).imageRotationDeg, -135.0);
+    Frame atEdge = original;
+    atEdge.imageRotationDeg = -135.0;
+    QCOMPARE(PhotoItem::rotateImageBy(atEdge, -90.0, pixels).imageRotationDeg, 135.0);
+
+    Frame worked = original;
+    worked.zoom = 4.0;
+    worked.imageRotationDeg = -30.0;
+    worked.cropCenter = QPointF(0.31, 0.62);
+    const Frame reset = PhotoItem::resetInsideFrame(worked);
+    QCOMPARE(reset.zoom, 1.0);
+    QCOMPARE(reset.imageRotationDeg, 0.0);
+    QCOMPARE(reset.cropCenter, QPointF(0.5, 0.5));
+    // Fit is the user's choice and survives a reset.
+    QCOMPARE(reset.fit, worked.fit);
+    QCOMPARE(reset.width, worked.width);
+    QCOMPARE(reset.height, worked.height);
 }
 
 void TestLayout::resolutionHintUsesDocumentedThresholds()

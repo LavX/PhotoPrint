@@ -1577,5 +1577,37 @@
         <source>Ehhez a laphoz még nincs elrendezés.</source>
         <translation>Questa pagina non ha ancora un layout.</translation>
     </message>
+    <message>
+        <source>Kép a helyen belül</source>
+        <translation>Foto all'interno dello spazio</translation>
+    </message>
+    <message>
+        <source>Nagyítás</source>
+        <translation>Ingrandimento</translation>
+    </message>
+    <message>
+        <source>Forgatás</source>
+        <translation>Rotazione</translation>
+    </message>
+    <message>
+        <source>Balra 90°</source>
+        <translation>90° a sinistra</translation>
+    </message>
+    <message>
+        <source>Jobbra 90°</source>
+        <translation>90° a destra</translation>
+    </message>
+    <message>
+        <source>Alaphelyzet</source>
+        <translation>Reimposta</translation>
+    </message>
+    <message>
+        <source>Visszaállítja a kép nagyítását, helyét és forgatását.</source>
+        <translation>Ripristina ingrandimento, posizione e rotazione della foto.</translation>
+    </message>
+    <message>
+        <source>A fotó a helyén belül mozgatható, nagyítható és forgatható.</source>
+        <translation>La foto si può spostare, ingrandire e ruotare dentro lo spazio.</translation>
+    </message>
 </context>
 </TS>

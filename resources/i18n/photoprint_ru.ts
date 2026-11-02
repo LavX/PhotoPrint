@@ -1591,5 +1591,37 @@
         <source>Ehhez a laphoz még nincs elrendezés.</source>
         <translation>У этой страницы ещё нет макета.</translation>
     </message>
+    <message>
+        <source>Kép a helyen belül</source>
+        <translation>Фото внутри ячейки</translation>
+    </message>
+    <message>
+        <source>Nagyítás</source>
+        <translation>Увеличение</translation>
+    </message>
+    <message>
+        <source>Forgatás</source>
+        <translation>Поворот</translation>
+    </message>
+    <message>
+        <source>Balra 90°</source>
+        <translation>90° влево</translation>
+    </message>
+    <message>
+        <source>Jobbra 90°</source>
+        <translation>90° вправо</translation>
+    </message>
+    <message>
+        <source>Alaphelyzet</source>
+        <translation>Сбросить</translation>
+    </message>
+    <message>
+        <source>Visszaállítja a kép nagyítását, helyét és forgatását.</source>
+        <translation>Возвращает масштаб, положение и поворот фото.</translation>
+    </message>
+    <message>
+        <source>A fotó a helyén belül mozgatható, nagyítható és forgatható.</source>
+        <translation>Фото можно перемещать, увеличивать и поворачивать внутри ячейки.</translation>
+    </message>
 </context>
 </TS>

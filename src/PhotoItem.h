@@ -29,4 +29,22 @@ Frame clampCrop(Frame frame, const QSize &pixels);
 /// fixed. The page view zoom is untouched.
 Frame zoomAt(Frame frame, const QPointF &pagePoint, double factor, const QSize &pixels);
 
+/// Sets the inner zoom directly, the way the inspector's slider does. The
+/// zoom is clamped to the shared range and the visible crop is kept inside
+/// the photograph. The frame rectangle is never touched.
+Frame setZoom(Frame frame, double zoom, const QSize &pixels);
+
+/// Sets the photograph's rotation inside the frame. The angle is clamped to
+/// [-180, 180], so a slider position and the stored value always agree.
+Frame rotateImageTo(Frame frame, double degrees, const QSize &pixels);
+
+/// Adds `delta` degrees to the photograph's rotation and wraps the result into
+/// (-180, 180]. This is what the wheel and the quarter-turn buttons use; a
+/// frame rectangle is never touched either.
+Frame rotateImageBy(Frame frame, double delta, const QSize &pixels);
+
+/// Puts the photograph back to its neutral state inside the frame without
+/// touching the frame's own fit: zoom 1, centred crop and no rotation.
+Frame resetInsideFrame(Frame frame);
+
 } // namespace pp::PhotoItem

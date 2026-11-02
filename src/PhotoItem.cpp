@@ -127,7 +127,7 @@ Frame zoomAt(Frame frame, const QPointF &pagePoint, double factor, const QSize &
     const QSizeF before = LayoutEngine::imageSizeMm(frame, pixels);
     if (before.width() <= 0.0 || before.height() <= 0.0)
         return frame;
-    const double targetZoom = std::clamp(frame.zoom * factor, 0.2, 8.0);
+    const double targetZoom = std::clamp(frame.zoom * factor, kMinFrameZoom, kMaxFrameZoom);
     if (qFuzzyCompare(targetZoom, frame.zoom))
         return frame;
 
@@ -146,6 +146,44 @@ Frame zoomAt(Frame frame, const QPointF &pagePoint, double factor, const QSize &
         QPointF(normalized.x() - inImageManifold.x() / after.width(),
                 normalized.y() - inImageManifold.y() / after.height());
     return clampCrop(result, pixels);
+}
+
+Frame setZoom(Frame frame, double zoom, const QSize &pixels)
+{
+    if (!std::isfinite(zoom))
+        return frame;
+    const double target = std::clamp(zoom, kMinFrameZoom, kMaxFrameZoom);
+    if (qFuzzyCompare(target, frame.zoom))
+        return frame;
+    frame.zoom = target;
+    return clampCrop(frame, pixels);
+}
+
+Frame rotateImageTo(Frame frame, double degrees, const QSize &pixels)
+{
+    if (!std::isfinite(degrees))
+        return frame;
+    const double target = std::clamp(degrees, kMinImageRotationDeg, kMaxImageRotationDeg);
+    if (qFuzzyCompare(target + 360.0, frame.imageRotationDeg + 360.0))
+        return frame;
+    frame.imageRotationDeg = target;
+    return clampCrop(frame, pixels);
+}
+
+Frame rotateImageBy(Frame frame, double delta, const QSize &pixels)
+{
+    if (!std::isfinite(delta))
+        return frame;
+    return rotateImageTo(frame, normalizedImageRotationDeg(frame.imageRotationDeg + delta),
+                         pixels);
+}
+
+Frame resetInsideFrame(Frame frame)
+{
+    frame.zoom = 1.0;
+    frame.cropCenter = QPointF(0.5, 0.5);
+    frame.imageRotationDeg = 0.0;
+    return frame;
 }
 
 } // namespace pp::PhotoItem

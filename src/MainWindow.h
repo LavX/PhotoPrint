@@ -414,6 +414,12 @@ private slots:
     void applyFilterSettings();
     void toggleAutoTone(bool enabled);
     void brightnessChanged(int value);
+    /// The photograph inside a slot: its magnification and its own rotation.
+    /// Each control writes one FrameChange and leaves the slot rectangle alone.
+    void slotZoomChanged(int percent);
+    void slotRotationChanged(int degrees);
+    void rotateSlotImageBy(double degrees);
+    void resetSlotImage();
     void showOriginalPressed(bool pressed);
     void applySizeFromControls();
     /// The page-level layout panel. A style edit names the one field the user
@@ -611,6 +617,17 @@ private:
     QDoubleSpinBox *m_widthSpin = nullptr;
     QDoubleSpinBox *m_heightSpin = nullptr;
     QDoubleSpinBox *m_angleSpin = nullptr;
+    /// The in-slot inspector. The whole block hides for a free frame, whose
+    /// rectangle the advanced controls already edit; a slotted photograph only
+    /// exposes its own zoom and rotation here.
+    QWidget *m_slotImagePanel = nullptr;
+    QSlider *m_slotZoomSlider = nullptr;
+    QLabel *m_slotZoomValue = nullptr;
+    QSlider *m_slotRotationSlider = nullptr;
+    QLabel *m_slotRotationValue = nullptr;
+    QPushButton *m_slotRotateLeftButton = nullptr;
+    QPushButton *m_slotRotateRightButton = nullptr;
+    QPushButton *m_slotResetButton = nullptr;
     /// The page's own inspector: visible whenever the page has slots, even with
     /// no photograph selected. The selected-photo sections live in
     /// m_photoPanel, so the two can coexist without hiding each other.
