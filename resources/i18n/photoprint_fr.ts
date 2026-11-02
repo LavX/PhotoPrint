@@ -1189,18 +1189,6 @@
         </translation>
     </message>
     <message>
-        <source>Automatikus margó</source>
-        <translation>Marge automatique</translation>
-    </message>
-    <message>
-        <source>Automatikus szegély</source>
-        <translation>Espacement automatique</translation>
-    </message>
-    <message>
-        <source>A szegély a fotók között maradó fehér papír, nem színes keret.</source>
-        <translation>L&apos;espacement est le papier blanc entre les photos, pas un cadre coloré.</translation>
-    </message>
-    <message>
         <source>Hely törlése</source>
         <translation>Supprimer la case</translation>
     </message>
@@ -1243,6 +1231,10 @@
     <message>
         <source>Automatikus</source>
         <translation>Automatique</translation>
+    </message>
+    <message>
+        <source>Automatikus esetén a szegély a margót követi. A 0 mm-es szegélynél a fotók összeérnek.</source>
+        <translation>En automatique, l&apos;espacement suit la marge. À 0 mm, les photos se touchent.</translation>
     </message>
     <message>
         <source>Ehhez a laphoz elrendezés tartozik. Szüntesd meg az elrendezést az igazításhoz.</source>

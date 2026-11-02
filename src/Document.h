@@ -1,7 +1,6 @@
 #pragma once
 
 #include <QByteArray>
-#include <QColor>
 #include <QColorSpace>
 #include <QList>
 #include <QPointF>

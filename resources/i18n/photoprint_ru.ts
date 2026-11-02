@@ -1196,18 +1196,6 @@
         </translation>
     </message>
     <message>
-        <source>Automatikus margó</source>
-        <translation>Автоматическое поле</translation>
-    </message>
-    <message>
-        <source>Automatikus szegély</source>
-        <translation>Автоматический отступ</translation>
-    </message>
-    <message>
-        <source>A szegély a fotók között maradó fehér papír, nem színes keret.</source>
-        <translation>Отступ — это белая бумага между фотографиями, а не цветная рамка.</translation>
-    </message>
-    <message>
         <source>Hely törlése</source>
         <translation>Удалить ячейку</translation>
     </message>
@@ -1250,6 +1238,10 @@
     <message>
         <source>Automatikus</source>
         <translation>Автоматически</translation>
+    </message>
+    <message>
+        <source>Automatikus esetén a szegély a margót követi. A 0 mm-es szegélynél a fotók összeérnek.</source>
+        <translation>В автоматическом режиме отступ следует за полем. При 0 мм фотографии соприкасаются.</translation>
     </message>
     <message>
         <source>Ehhez a laphoz elrendezés tartozik. Szüntesd meg az elrendezést az igazításhoz.</source>

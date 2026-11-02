@@ -101,6 +101,15 @@ constexpr int kStyleDebounceMs = 180;
 constexpr double kRasterMinFactor = 0.98;
 constexpr double kRasterMaxFactor = 2.0;
 
+/// Marks a label as secondary text. The theme stylesheet owns the colour, so
+/// the label follows light and dark mode and keeps the normal label size
+/// instead of a hardcoded grey at the smallest size.
+void markSecondaryText(QLabel *label)
+{
+    if (label)
+        label->setProperty("secondary", true);
+}
+
 Page emptyPage(const PaperSpec &paper)
 {
     Page page;
@@ -245,6 +254,7 @@ QMessageBox QLabel { color: @text; }
 QMessageBox QPushButton { min-width: 80px; }
 QToolTip { background: @panel; color: @text; border: 1px solid @border; padding: 4px 6px; border-radius: 5px; }
 QLabel { color: @text; }
+QLabel[secondary="true"] { color: @secondary; }
 )");
 
     auto replace = [&qss](const char *token, const QColor &color) {
@@ -2261,15 +2271,17 @@ void MainWindow::buildUi()
     layoutLayout->addWidget(m_layoutNameLabel);
     m_layoutCountLabel = new QLabel(layoutPanel);
     m_layoutCountLabel->setObjectName(QStringLiteral("layoutCountLabel"));
-    m_layoutCountLabel->setStyleSheet(QStringLiteral("color: #6e6e73; font-size: 11px;"));
+    markSecondaryText(m_layoutCountLabel);
     layoutLayout->addWidget(m_layoutCountLabel);
 
     // A length in millimetres. The spin gets the full width of the column, which
-    // is what a "10.0 mm" value needs next to its own arrows. For the two fields
-    // that can be automatic, the switch above it names the field ("Automatikus
-    // margó"), so the pair stays readable when the system font is larger.
-    const auto addTitle = [side, layoutLayout](const QString &text) {
+    // is what a "10.0 mm" value needs next to its own arrows. The two automatic
+    // fields share the same shape: a named group title, an "Automatikus" switch
+    // and the value below it. The title names the field, so the switch never has
+    // to repeat it.
+    const auto addTitle = [side, layoutLayout](const QString &text, const QString &name) {
         auto *title = new QLabel(text, side);
+        title->setObjectName(name);
         title->setWordWrap(true);
         layoutLayout->addWidget(title);
     };
@@ -2294,18 +2306,21 @@ void MainWindow::buildUi()
         return check;
     };
 
+    addTitle(QCoreApplication::translate("PhotoPrint", "Külső margó"),
+             QStringLiteral("marginTitle"));
     m_marginAutoCheck = addAutomatic(
-        QCoreApplication::translate("PhotoPrint", "Automatikus margó"),
+        QCoreApplication::translate("PhotoPrint", "Automatikus"),
         QStringLiteral("marginAutoCheck"));
     m_marginSpin = addLength(QStringLiteral("marginSpin"),
                              QCoreApplication::translate("PhotoPrint", "Külső margó"),
                              SlotGeometry::kMaxMarginMm, 0.5);
-    // The gap is the border: the white paper between two photographs. It is
-    // not a coloured frame around each picture, so there is no width and no
-    // colour to choose, only the distance.
-    addTitle(QCoreApplication::translate("PhotoPrint", "Szegély"));
+
+    // The gap is the border: the white paper between two photographs. It has
+    // no width and no colour of its own, only the distance.
+    addTitle(QCoreApplication::translate("PhotoPrint", "Szegély"),
+             QStringLiteral("gutterTitle"));
     m_gutterAutoCheck = addAutomatic(
-        QCoreApplication::translate("PhotoPrint", "Automatikus szegély"),
+        QCoreApplication::translate("PhotoPrint", "Automatikus"),
         QStringLiteral("gutterAutoCheck"));
     m_gutterSpin = addLength(QStringLiteral("gutterSpin"),
                              QCoreApplication::translate("PhotoPrint", "Szegély"),
@@ -2313,14 +2328,16 @@ void MainWindow::buildUi()
     m_gutterHint = new QLabel(
         QCoreApplication::translate(
             "PhotoPrint",
-            "A szegély a fotók között maradó fehér papír, nem színes keret."),
+            "Automatikus esetén a szegély a margót követi. A 0 mm-es szegélynél "
+            "a fotók összeérnek."),
         side);
     m_gutterHint->setObjectName(QStringLiteral("gutterHint"));
     m_gutterHint->setWordWrap(true);
-    m_gutterHint->setStyleSheet(QStringLiteral("color: #6e6e73; font-size: 11px;"));
+    markSecondaryText(m_gutterHint);
     layoutLayout->addWidget(m_gutterHint);
 
-    addTitle(QCoreApplication::translate("PhotoPrint", "Sarok lekerekítése"));
+    addTitle(QCoreApplication::translate("PhotoPrint", "Sarok lekerekítése"),
+             QStringLiteral("radiusTitle"));
     m_radiusSpin = addLength(QStringLiteral("radiusSpin"),
                              QCoreApplication::translate("PhotoPrint", "Sarok lekerekítése"),
                              SlotGeometry::kMaxCornerRadiusMm, 1.0);
@@ -2436,7 +2453,7 @@ void MainWindow::buildUi()
     m_guidesHint = new QLabel(side);
     m_guidesHint->setObjectName(QStringLiteral("cutGuidesHint"));
     m_guidesHint->setWordWrap(true);
-    m_guidesHint->setStyleSheet(QStringLiteral("color: #6e6e73; font-size: 11px;"));
+    markSecondaryText(m_guidesHint);
     pageToolsLayout->addWidget(m_guidesHint);
 
     auto *borderlessTitle =
@@ -2462,7 +2479,7 @@ void MainWindow::buildUi()
                        "nélkül."),
                    side);
     m_borderlessHint->setWordWrap(true);
-    m_borderlessHint->setStyleSheet(QStringLiteral("color: #6e6e73; font-size: 11px;"));
+    markSecondaryText(m_borderlessHint);
     pageToolsLayout->addWidget(m_borderlessHint);
     sideLayout->addWidget(pageTools);
 
@@ -2515,7 +2532,7 @@ void MainWindow::buildUi()
     toneFont.setWeight(QFont::DemiBold);
     toneTitle->setFont(toneFont);
     m_autoHint = new QLabel(QCoreApplication::translate("PhotoPrint", "Finom fény- és színjavítás"), side);
-    m_autoHint->setStyleSheet(QStringLiteral("color: #6e6e73; font-size: 11px;"));
+    markSecondaryText(m_autoHint);
     m_autoHint->setWordWrap(true);
     toneText->addWidget(toneTitle);
     toneText->addWidget(m_autoHint);
@@ -2549,7 +2566,7 @@ void MainWindow::buildUi()
     m_legacyHint = new QLabel(QCoreApplication::translate("PhotoPrint", "Új effekt választása"), side);
     m_legacyHint->setObjectName(QStringLiteral("legacyEffectHint"));
     m_legacyHint->setWordWrap(true);
-    m_legacyHint->setStyleSheet(QStringLiteral("color: #6e6e73; font-size: 11px;"));
+    markSecondaryText(m_legacyHint);
     m_legacyHint->setVisible(false);
     photoLayout->addWidget(m_legacyHint);
     connect(m_effectButton, &QPushButton::clicked, this, &MainWindow::openEffectBrowser);
@@ -2568,7 +2585,7 @@ void MainWindow::buildUi()
     m_strengthHint = new QLabel(side);
     m_strengthHint->setObjectName(QStringLiteral("effectStrengthHint"));
     m_strengthHint->setWordWrap(true);
-    m_strengthHint->setStyleSheet(QStringLiteral("color: #6e6e73; font-size: 11px;"));
+    markSecondaryText(m_strengthHint);
     m_strengthHint->setVisible(false);
     photoLayout->addWidget(m_strengthHint);
 
@@ -2577,7 +2594,7 @@ void MainWindow::buildUi()
         QCoreApplication::translate("PhotoPrint", "A nyomtatási felbontást növeli; az előnézet nem változik."));
     photoLayout->addWidget(m_upscaleCheck);
     auto *upscaleHint = new QLabel(QCoreApplication::translate("PhotoPrint", "A nyomtatási felbontást növeli."), side);
-    upscaleHint->setStyleSheet(QStringLiteral("color: #6e6e73; font-size: 11px;"));
+    markSecondaryText(upscaleHint);
     upscaleHint->setWordWrap(true);
     photoLayout->addWidget(upscaleHint);
     connect(m_upscaleCheck, &QCheckBox::toggled, this, &MainWindow::applyFilterSettings);
@@ -2681,7 +2698,7 @@ void MainWindow::buildUi()
     m_slotZoomValue = new QLabel(QStringLiteral("100%"), m_slotImagePanel);
     m_slotZoomValue->setObjectName(QStringLiteral("slotZoomValue"));
     m_slotZoomValue->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
-    m_slotZoomValue->setStyleSheet(QStringLiteral("color: #6e6e73; font-size: 11px;"));
+    markSecondaryText(m_slotZoomValue);
     slotGrid->addWidget(slotZoomLabel, 0, 0);
     slotGrid->addWidget(m_slotZoomSlider, 0, 1);
     slotGrid->addWidget(m_slotZoomValue, 0, 2);
@@ -2707,7 +2724,7 @@ void MainWindow::buildUi()
     m_slotRotationValue = new QLabel(QStringLiteral("0°"), m_slotImagePanel);
     m_slotRotationValue->setObjectName(QStringLiteral("slotRotationValue"));
     m_slotRotationValue->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
-    m_slotRotationValue->setStyleSheet(QStringLiteral("color: #6e6e73; font-size: 11px;"));
+    markSecondaryText(m_slotRotationValue);
     slotGrid->addWidget(slotRotationLabel, 1, 0);
     slotGrid->addWidget(m_slotRotationSlider, 1, 1);
     slotGrid->addWidget(m_slotRotationValue, 1, 2);
@@ -2753,7 +2770,7 @@ void MainWindow::buildUi()
         m_slotImagePanel);
     slotImageHint->setObjectName(QStringLiteral("slotImageHint"));
     slotImageHint->setWordWrap(true);
-    slotImageHint->setStyleSheet(QStringLiteral("color: #6e6e73; font-size: 11px;"));
+    markSecondaryText(slotImageHint);
     slotImageLayout->addWidget(slotImageHint);
     m_slotImagePanel->setVisible(false);
 

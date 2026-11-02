@@ -1189,18 +1189,6 @@
         </translation>
     </message>
     <message>
-        <source>Automatikus margó</source>
-        <translation>Automatischer Außenrand</translation>
-    </message>
-    <message>
-        <source>Automatikus szegély</source>
-        <translation>Automatischer Abstand</translation>
-    </message>
-    <message>
-        <source>A szegély a fotók között maradó fehér papír, nem színes keret.</source>
-        <translation>Der Abstand ist das weiße Papier zwischen den Fotos, kein farbiger Rahmen.</translation>
-    </message>
-    <message>
         <source>Hely törlése</source>
         <translation>Zelle löschen</translation>
     </message>
@@ -1243,6 +1231,10 @@
     <message>
         <source>Automatikus</source>
         <translation>Automatisch</translation>
+    </message>
+    <message>
+        <source>Automatikus esetén a szegély a margót követi. A 0 mm-es szegélynél a fotók összeérnek.</source>
+        <translation>Automatisch folgt der Abstand dem Rand. Bei 0 mm berühren sich die Fotos.</translation>
     </message>
     <message>
         <source>Ehhez a laphoz elrendezés tartozik. Szüntesd meg az elrendezést az igazításhoz.</source>

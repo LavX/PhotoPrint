@@ -1189,18 +1189,6 @@
         </translation>
     </message>
     <message>
-        <source>Automatikus margó</source>
-        <translation>स्वचालित मार्जिन</translation>
-    </message>
-    <message>
-        <source>Automatikus szegély</source>
-        <translation>स्वचालित दूरी</translation>
-    </message>
-    <message>
-        <source>A szegély a fotók között maradó fehér papír, nem színes keret.</source>
-        <translation>अंतर फ़ोटो के बीच का सफ़ेद कागज़ है, रंगीन फ़्रेम नहीं।</translation>
-    </message>
-    <message>
         <source>Hely törlése</source>
         <translation>सेल हटाएँ</translation>
     </message>
@@ -1243,6 +1231,10 @@
     <message>
         <source>Automatikus</source>
         <translation>स्वचालित</translation>
+    </message>
+    <message>
+        <source>Automatikus esetén a szegély a margót követi. A 0 mm-es szegélynél a fotók összeérnek.</source>
+        <translation>स्वचालित होने पर अंतर मार्जिन का अनुसरण करता है। 0 mm पर फ़ोटो एक-दूसरे को छूती हैं।</translation>
     </message>
     <message>
         <source>Ehhez a laphoz elrendezés tartozik. Szüntesd meg az elrendezést az igazításhoz.</source>

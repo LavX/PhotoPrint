@@ -1189,18 +1189,6 @@
         </translation>
     </message>
     <message>
-        <source>Automatikus margó</source>
-        <translation>Automatic margin</translation>
-    </message>
-    <message>
-        <source>Automatikus szegély</source>
-        <translation>Automatic gap</translation>
-    </message>
-    <message>
-        <source>A szegély a fotók között maradó fehér papír, nem színes keret.</source>
-        <translation>The gap is the white paper between photos, not a coloured frame.</translation>
-    </message>
-    <message>
         <source>Hely törlése</source>
         <translation>Delete cell</translation>
     </message>
@@ -1243,6 +1231,10 @@
     <message>
         <source>Automatikus</source>
         <translation>Automatic</translation>
+    </message>
+    <message>
+        <source>Automatikus esetén a szegély a margót követi. A 0 mm-es szegélynél a fotók összeérnek.</source>
+        <translation>When automatic, the gap follows the margin. At 0 mm the photos touch.</translation>
     </message>
     <message>
         <source>Ehhez a laphoz elrendezés tartozik. Szüntesd meg az elrendezést az igazításhoz.</source>

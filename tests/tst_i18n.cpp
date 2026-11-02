@@ -592,10 +592,10 @@ void TestI18n::everyCatalogueTranslatesTheSlotUiMessages()
              QStringLiteral("Elrendezés"),
              QStringLiteral("Saját elrendezés"),
              QStringLiteral("Külső margó"),
-             QStringLiteral("Automatikus margó"),
+             QStringLiteral("Automatikus"),
              QStringLiteral("Szegély"),
-             QStringLiteral("Automatikus szegély"),
-             QStringLiteral("A szegély a fotók között maradó fehér papír, nem színes keret."),
+             QStringLiteral("Automatikus esetén a szegély a margót követi. A 0 mm-es "
+                            "szegélynél a fotók összeérnek."),
              QStringLiteral("Sarok lekerekítése"),
              QStringLiteral("Hely hozzáadása"),
              QStringLiteral("Hely törlése"),

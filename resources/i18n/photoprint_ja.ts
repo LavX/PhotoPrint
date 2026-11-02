@@ -1182,18 +1182,6 @@
         </translation>
     </message>
     <message>
-        <source>Automatikus margó</source>
-        <translation>余白を自動</translation>
-    </message>
-    <message>
-        <source>Automatikus szegély</source>
-        <translation>間隔を自動</translation>
-    </message>
-    <message>
-        <source>A szegély a fotók között maradó fehér papír, nem színes keret.</source>
-        <translation>間隔は写真のあいだの白い紙で、色付きの枠ではありません。</translation>
-    </message>
-    <message>
         <source>Hely törlése</source>
         <translation>セルを削除</translation>
     </message>
@@ -1236,6 +1224,10 @@
     <message>
         <source>Automatikus</source>
         <translation>自動</translation>
+    </message>
+    <message>
+        <source>Automatikus esetén a szegély a margót követi. A 0 mm-es szegélynél a fotók összeérnek.</source>
+        <translation>自動の場合、間隔は余白に従います。0 mm では写真どうしが接します。</translation>
     </message>
     <message>
         <source>Ehhez a laphoz elrendezés tartozik. Szüntesd meg az elrendezést az igazításhoz.</source>

@@ -2848,24 +2848,48 @@ void TestSlotUi::gapControlReplacesTheMatControls()
     // The gap is the border: one distance, no width and no colour.
     auto *gutterSpin = spinNamed(window, "gutterSpin");
     auto *gutterAuto = window.findChild<QCheckBox *>(QStringLiteral("gutterAutoCheck"));
+    auto *marginSpin = spinNamed(window, "marginSpin");
+    auto *marginAuto = window.findChild<QCheckBox *>(QStringLiteral("marginAutoCheck"));
     auto *hint = window.findChild<QLabel *>(QStringLiteral("gutterHint"));
+    auto *marginTitle = window.findChild<QLabel *>(QStringLiteral("marginTitle"));
+    auto *gutterTitle = window.findChild<QLabel *>(QStringLiteral("gutterTitle"));
+    auto *radiusTitle = window.findChild<QLabel *>(QStringLiteral("radiusTitle"));
     QVERIFY(gutterSpin);
     QVERIFY(gutterAuto);
+    QVERIFY(marginSpin);
+    QVERIFY(marginAuto);
     QVERIFY(hint);
+    QVERIFY(marginTitle);
+    QVERIFY(gutterTitle);
+    QVERIFY(radiusTitle);
+
+    // Both automatic groups have the same shape: a named title, an
+    // "Automatikus" switch and a value with a clear unit.
+    QCOMPARE(marginTitle->text(), QStringLiteral("Külső margó"));
+    QCOMPARE(gutterTitle->text(), QStringLiteral("Szegély"));
+    QCOMPARE(radiusTitle->text(), QStringLiteral("Sarok lekerekítése"));
+    QCOMPARE(marginAuto->text(), QStringLiteral("Automatikus"));
+    QCOMPARE(gutterAuto->text(), QStringLiteral("Automatikus"));
+    QCOMPARE(marginSpin->accessibleName(), QStringLiteral("Külső margó"));
     QCOMPARE(gutterSpin->accessibleName(), QStringLiteral("Szegély"));
+    QCOMPARE(marginSpin->suffix(), QStringLiteral(" mm"));
     QCOMPARE(gutterSpin->suffix(), QStringLiteral(" mm"));
     QCOMPARE(gutterSpin->minimum(), 0.0);
     QCOMPARE(gutterSpin->maximum(), SlotGeometry::kMaxGutterMm);
-    QCOMPARE(gutterAuto->text(), QStringLiteral("Automatikus szegély"));
-    QVERIFY2(hint->text().contains(QStringLiteral("fehér papír")),
+
+    // The hint explains the automatic rule and the zero case, and it uses the
+    // shared secondary-text style rather than a hardcoded small grey.
+    QVERIFY2(hint->text().contains(QStringLiteral("margót követi")),
              qPrintable(hint->text()));
+    QVERIFY2(hint->text().contains(QStringLiteral("0 mm")), qPrintable(hint->text()));
+    QVERIFY(hint->property("secondary").toBool());
+    QVERIFY2(hint->styleSheet().isEmpty(), "the hint kept a hardcoded colour");
     QVERIFY2(!window.findChild<QDoubleSpinBox *>(QStringLiteral("borderSpin")),
              "the mat width control survived");
     QVERIFY2(!window.findChild<QPushButton *>(QStringLiteral("borderColourButton")),
              "the mat colour control survived");
 
     // The rest of the page panel is still there.
-    QVERIFY(spinNamed(window, "marginSpin"));
     QVERIFY(spinNamed(window, "radiusSpin"));
     QVERIFY(window.findChild<QPushButton *>(QStringLiteral("addSlotButton")));
     QVERIFY(window.findChild<QPushButton *>(QStringLiteral("removeSlotButton")));

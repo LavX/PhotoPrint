@@ -1189,18 +1189,6 @@
         </translation>
     </message>
     <message>
-        <source>Automatikus margó</source>
-        <translation>Margen automático</translation>
-    </message>
-    <message>
-        <source>Automatikus szegély</source>
-        <translation>Separación automática</translation>
-    </message>
-    <message>
-        <source>A szegély a fotók között maradó fehér papír, nem színes keret.</source>
-        <translation>La separación es el papel blanco entre las fotos, no un marco de color.</translation>
-    </message>
-    <message>
         <source>Hely törlése</source>
         <translation>Borrar celda</translation>
     </message>
@@ -1243,6 +1231,10 @@
     <message>
         <source>Automatikus</source>
         <translation>Automático</translation>
+    </message>
+    <message>
+        <source>Automatikus esetén a szegély a margót követi. A 0 mm-es szegélynél a fotók összeérnek.</source>
+        <translation>En automático, la separación sigue al margen. Con 0 mm, las fotos se tocan.</translation>
     </message>
     <message>
         <source>Ehhez a laphoz elrendezés tartozik. Szüntesd meg az elrendezést az igazításhoz.</source>

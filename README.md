@@ -25,9 +25,11 @@ MagickWand.
   previews on the selected photo (or a bundled sample) and the print matches the
   preview. Legacy projects keep their original looks.
 - 55 collage layouts for 2 to 10 photos. A layout creates numbered sections you
-  can drop photos into, pan and zoom inside, and clip to the section; empty
-  sections are visible on screen and print as mat only. Margin, gutter, border
-  width, border colour and corner radius are adjustable per page.
+  can drop photos into, pan and zoom inside, and clip to the section. A section
+  is the photograph itself: the white paper between sections is the adjustable
+  gap, not a coloured frame. The outer margin, the gap and an optional corner
+  radius are adjustable per page. Empty sections show a drop target on screen
+  and print as plain paper.
 - Batch portrait sheets: 35 × 45 mm passport copies and custom sizes, fill the
   sheet or choose a count, overflow on new pages, optional cut guides, exact
   print size without borderless enlargement. Auto align into equal cells or

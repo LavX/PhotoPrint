@@ -3,6 +3,7 @@
 #include "EffectBrowserDialog.h"
 #include "MainWindow.h"
 #include "ProjectStore.h"
+#include "SlotGeometry.h"
 #include "SlotLayoutEngine.h"
 #include "TemplateBrowserDialog.h"
 
@@ -329,31 +330,37 @@ void TestUiScreens::captureLayoutPanel()
 {
     QTemporaryDir dir;
     QVERIFY(dir.isValid());
-    const QString photo =
-        makePhoto(dir.path(), QStringLiteral("layout-photo.png"), QColor(75, 130, 175),
-                  QSize(900, 600));
-    QVERIFY(!photo.isEmpty());
-
-    // A 2 x 2 layout with one photograph and a 3 mm gap: the page panel shows
-    // the values, the filled cell shows its photograph edge to edge and the
-    // empty cells print paper alone.
+    // A 2 x 2 layout with four photographs and a 3 mm gap. Every photograph
+    // touches a neighbour, so every visible gap edge is a real seam and not
+    // empty paper.
     DocumentSnapshot document = fourEmptySlots();
     Page page = document.pages.first();
     SlotStyle style;
+    style.marginMm = 10.0;
     style.gutterMm = 3.0;
     const auto styled = SlotLayoutEngine::setStyle(page, style);
     QVERIFY(styled);
     page = styled.value();
 
-    Frame frame;
-    frame.id = QStringLiteral("frame-layout-panel");
-    frame.sourcePath = photo;
-    frame.sourceSha256 = fileSha256(photo);
-    frame.fit = FitMode::Fill;
-    frame.autoPlaced = false;
-    const auto placed = SlotLayoutEngine::placePhoto(page, page.slotList.at(1).id, frame);
-    QVERIFY(placed);
-    document.pages[0] = placed.value();
+    const QList<QColor> colours = {QColor(190, 70, 60), QColor(65, 135, 185),
+                                   QColor(80, 150, 95), QColor(195, 150, 55)};
+    for (int i = 0; i < page.slotList.size(); ++i) {
+        const QString photo =
+            makePhoto(dir.path(), QStringLiteral("layout-photo-%1.png").arg(i),
+                      colours.at(i), QSize(900, 600));
+        QVERIFY(!photo.isEmpty());
+        Frame frame;
+        frame.id = QStringLiteral("frame-layout-%1").arg(i);
+        frame.sourcePath = photo;
+        frame.sourceSha256 = fileSha256(photo);
+        frame.fit = FitMode::Fill;
+        frame.autoPlaced = false;
+        const auto placed =
+            SlotLayoutEngine::placePhoto(page, page.slotList.at(i).id, frame);
+        QVERIFY(placed);
+        page = placed.value();
+    }
+    document.pages[0] = page;
 
     MainWindow window;
     window.resize(1280, 800);
@@ -367,19 +374,94 @@ void TestUiScreens::captureLayoutPanel()
     QVERIFY2(panel->isVisible(), "the layout panel must be visible with nothing selected");
     QVERIFY(window.grab().save(evidenceDir() + QStringLiteral("/ui-layout-panel.png")));
 
-    // The page alone, so the gap is readable at this size.
+    // The page alone, so the seam between two photographs is readable.
     auto *view = window.findChild<PageView *>();
     QVERIFY(view);
     QVERIFY(view->grab().save(evidenceDir() + QStringLiteral("/ui-layout-gaps.png")));
 
-    // The same page as the print path rasterises it. An empty cell is paper: no
-    // dashed ring, no tint, nothing a printer would have to explain.
+    // The same page as the print path rasterises it. Every cell is a
+    // photograph, so the paper-only gaps are unambiguous.
     ImageStore store;
     PageRenderer renderer(store);
-    const auto rendered = renderer.renderPage(window.document(), 0, 150.0);
+    const auto rendered = renderer.renderPage(window.document(), 0, 200.0);
     if (!rendered)
         QFAIL(qPrintable(rendered.error().message));
-    QVERIFY(rendered.value().save(evidenceDir() + QStringLiteral("/ui-layout-print.png")));
+    const QImage printed = rendered.value();
+    QVERIFY(printed.save(evidenceDir() + QStringLiteral("/ui-layout-print.png")));
+
+    const QList<QRectF> cells = SlotGeometry::cellsMm(page);
+    QVERIFY(cells.size() == 4);
+    const QSizeF sheet = pageSizeMm(page);
+    const auto cropMm = [&](const QImage &image, const QRectF &regionMm, int scale) {
+        const double pxPerMmX = image.width() / sheet.width();
+        const double pxPerMmY = image.height() / sheet.height();
+        QRect pixels(qRound(regionMm.left() * pxPerMmX),
+                     qRound(regionMm.top() * pxPerMmY),
+                     qRound(regionMm.width() * pxPerMmX),
+                     qRound(regionMm.height() * pxPerMmY));
+        pixels = pixels.intersected(image.rect());
+        if (pixels.isEmpty())
+            return QImage();
+        const QImage crop = image.copy(pixels);
+        return crop.scaled(crop.size() * scale, Qt::IgnoreAspectRatio,
+                           Qt::SmoothTransformation);
+    };
+
+    // A 200 % crop of the horizontal seam between the top two photographs: the
+    // ink reaches both cell edges and the gap is only paper.
+    const QRectF seam(cells.at(0).right() - 5.0, cells.at(0).center().y() - 10.0,
+                      (cells.at(1).left() - cells.at(0).right()) + 10.0, 20.0);
+    const QImage seamCrop = cropMm(printed, seam, 2);
+    QVERIFY(!seamCrop.isNull());
+    QVERIFY(seamCrop.save(evidenceDir() +
+                          QStringLiteral("/ui-layout-gap-seam-200.png")));
+    bool seamPaper = false;
+    bool seamRed = false;
+    bool seamBlue = false;
+    for (int y = 0; y < seamCrop.height(); ++y) {
+        for (int x = 0; x < seamCrop.width(); ++x) {
+            const QRgb pixel = seamCrop.pixel(x, y);
+            seamPaper = seamPaper
+                || (qRed(pixel) > 245 && qGreen(pixel) > 245 && qBlue(pixel) > 245);
+            seamRed = seamRed || (qRed(pixel) > 120 && qGreen(pixel) < 120);
+            seamBlue = seamBlue || (qBlue(pixel) > 120 && qRed(pixel) < 120);
+        }
+    }
+    QVERIFY2(seamPaper && seamRed && seamBlue,
+             "the seam crop must show both photographs and the paper between them");
+
+    // The same four photographs with an 8 mm corner radius: the clip cuts each
+    // photograph and the paper shows in the corner, with no ring around it.
+    DocumentSnapshot rounded = document;
+    SlotStyle roundedStyle = rounded.pages.first().slotStyle;
+    roundedStyle.cornerRadiusMm = 8.0;
+    const auto roundedPage = SlotLayoutEngine::setStyle(rounded.pages.first(), roundedStyle);
+    QVERIFY(roundedPage);
+    rounded.pages[0] = roundedPage.value();
+    const auto roundedRender = renderer.renderPage(rounded, 0, 200.0);
+    if (!roundedRender)
+        QFAIL(qPrintable(roundedRender.error().message));
+    const QImage roundedPrinted = roundedRender.value();
+    QVERIFY(roundedPrinted.save(evidenceDir() +
+                                QStringLiteral("/ui-layout-rounded-print.png")));
+    const QRectF corner(cells.at(0).left() - 2.0, cells.at(0).top() - 2.0, 16.0, 16.0);
+    const QImage cornerCrop = cropMm(roundedPrinted, corner, 2);
+    QVERIFY(!cornerCrop.isNull());
+    QVERIFY(cornerCrop.save(evidenceDir() +
+                            QStringLiteral("/ui-layout-rounded-corner-200.png")));
+    bool cornerPaper = false;
+    bool cornerInk = false;
+    for (int y = 0; y < cornerCrop.height(); ++y) {
+        for (int x = 0; x < cornerCrop.width(); ++x) {
+            const QRgb pixel = cornerCrop.pixel(x, y);
+            cornerPaper = cornerPaper
+                || (qRed(pixel) > 245 && qGreen(pixel) > 245 && qBlue(pixel) > 245);
+            cornerInk = cornerInk || !(qRed(pixel) > 245 && qGreen(pixel) > 245
+                                       && qBlue(pixel) > 245);
+        }
+    }
+    QVERIFY2(cornerPaper && cornerInk,
+             "the rounded corner crop must show paper and photograph");
 
     // The same panel at a 1.35x system font. The contract asks for a window that
     // works with larger system text; the longest button used to clip here.

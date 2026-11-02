@@ -257,9 +257,12 @@ constexpr double kLegacyMaxBorderMm = 20.0;
 /// sit `border` inside its cell, so the white edge of the paper was
 /// `margin + border` and two neighbours were `gutter + 2 * border` apart. The
 /// new model has no inset, so the margin takes the border once and the gutter
-/// takes it twice. Both automatic values are resolved first, because the saved
-/// absence is not a number; the migrated values are always explicit so the
-/// spacing cannot change again when the paper does.
+/// takes it twice. A rounded corner started at the cell edge and the photo was
+/// inset by the border, so the visible radius was `radius - border`; it keeps
+/// that visible radius instead of growing back with the cell. Both automatic
+/// values are resolved first, because the saved absence is not a number; the
+/// migrated values are always explicit so the spacing cannot change again when
+/// the paper does.
 SlotStyle migrateLegacyMat(SlotStyle style, double borderMm, const QSizeF &sheetMm)
 {
     if (!(borderMm > 0.0) || !std::isfinite(borderMm))
@@ -273,6 +276,8 @@ SlotStyle migrateLegacyMat(SlotStyle style, double borderMm, const QSizeF &sheet
         std::clamp(marginBase + border, 0.0, SlotGeometry::kMaxMarginMm);
     style.gutterMm =
         std::clamp(gutterBase + 2.0 * border, 0.0, SlotGeometry::kMaxGutterMm);
+    style.cornerRadiusMm =
+        std::max(0.0, SlotGeometry::sanitiseStyle(style).cornerRadiusMm - border);
     return style;
 }
 
