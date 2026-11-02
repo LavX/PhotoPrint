@@ -1376,6 +1376,10 @@
         <translation>Numero</translation>
     </message>
     <message>
+        <source>db</source>
+        <translation>pz.</translation>
+    </message>
+    <message>
         <source>Amennyi befér</source>
         <translation>Quante ne stanno</translation>
     </message>

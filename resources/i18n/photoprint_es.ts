@@ -1376,6 +1376,10 @@
         <translation>Número</translation>
     </message>
     <message>
+        <source>db</source>
+        <translation>uds.</translation>
+    </message>
+    <message>
         <source>Amennyi befér</source>
         <translation>Tantas como quepan</translation>
     </message>

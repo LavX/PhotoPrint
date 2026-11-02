@@ -1376,6 +1376,10 @@
         <translation>Count</translation>
     </message>
     <message>
+        <source>db</source>
+        <translation>pcs</translation>
+    </message>
+    <message>
         <source>Amennyi befér</source>
         <translation>As many as fit</translation>
     </message>

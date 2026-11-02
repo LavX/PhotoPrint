@@ -1376,6 +1376,10 @@
         <translation>Nombre</translation>
     </message>
     <message>
+        <source>db</source>
+        <translation>ex.</translation>
+    </message>
+    <message>
         <source>Amennyi befér</source>
         <translation>Autant que possible</translation>
     </message>

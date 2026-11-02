@@ -1376,6 +1376,10 @@
         <translation>Stückzahl</translation>
     </message>
     <message>
+        <source>db</source>
+        <translation>Stk.</translation>
+    </message>
+    <message>
         <source>Amennyi befér</source>
         <translation>So viele wie passen</translation>
     </message>

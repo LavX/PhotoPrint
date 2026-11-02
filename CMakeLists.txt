@@ -168,6 +168,9 @@ photoprint_test(tst_template_browser)
 photoprint_test(tst_ui_screens)
 photoprint_test(tst_i18n)
 photoprint_test(tst_about_dialog)
+# Every user-visible label is walked in English and must not contain Hungarian
+# text. It is the runtime half of the translation guard.
+photoprint_test(tst_english_ui)
 
 # Measured targets only run with PHOTOPRINT_RUNTIME_TARGETS=1; otherwise SKIP.
 add_executable(tst_runtime_targets tests/tst_runtime_targets.cpp)

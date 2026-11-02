@@ -5177,7 +5177,8 @@ void MainWindow::exportPdf(bool allPages)
     if (!m_queue.isEmpty()) {
         const PrinterCapabilities *capabilities = printerByQueue(m_queue);
         if (!capabilities) {
-            showProblem(QStringLiteral(
+            showProblem(QCoreApplication::translate(
+                "PhotoPrint",
                 "A nyomtató most nem érhető el. Ellenőrizd, hogy be van-e kapcsolva."));
             return;
         }
@@ -5391,7 +5392,8 @@ void MainWindow::printNow()
         return;
     const PrinterCapabilities *capabilities = printerByQueue(m_queue);
     if (!capabilities) {
-        showProblem(QStringLiteral(
+        showProblem(QCoreApplication::translate(
+            "PhotoPrint",
             "A nyomtató most nem érhető el. Ellenőrizd, hogy be van-e kapcsolva."));
         return;
     }
@@ -5473,7 +5475,8 @@ void MainWindow::showTrialSheet()
     }
     const PrinterCapabilities *capabilities = printerByQueue(m_queue);
     if (!capabilities) {
-        showProblem(QStringLiteral(
+        showProblem(QCoreApplication::translate(
+            "PhotoPrint",
             "A nyomtató most nem érhető el. Ellenőrizd, hogy be van-e kapcsolva."));
         return;
     }

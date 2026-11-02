@@ -1368,6 +1368,10 @@
         <translation>份数</translation>
     </message>
     <message>
+        <source>db</source>
+        <translation>个</translation>
+    </message>
+    <message>
         <source>Amennyi befér</source>
         <translation>尽量多放</translation>
     </message>

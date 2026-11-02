@@ -1384,6 +1384,10 @@
         <translation>Штук</translation>
     </message>
     <message>
+        <source>db</source>
+        <translation>шт.</translation>
+    </message>
+    <message>
         <source>Amennyi befér</source>
         <translation>Сколько поместится</translation>
     </message>

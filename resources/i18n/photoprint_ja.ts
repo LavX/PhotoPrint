@@ -1368,6 +1368,10 @@
         <translation>枚数</translation>
     </message>
     <message>
+        <source>db</source>
+        <translation>個</translation>
+    </message>
+    <message>
         <source>Amennyi befér</source>
         <translation>入るだけ</translation>
     </message>

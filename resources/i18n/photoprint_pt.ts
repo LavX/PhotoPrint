@@ -1376,6 +1376,10 @@
         <translation>Número</translation>
     </message>
     <message>
+        <source>db</source>
+        <translation>un.</translation>
+    </message>
+    <message>
         <source>Amennyi befér</source>
         <translation>Tantas quantas couberem</translation>
     </message>

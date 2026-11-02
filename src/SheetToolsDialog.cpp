@@ -409,7 +409,7 @@ void SheetToolsDialog::buildBatchTab()
     m_batchCount->setObjectName(QStringLiteral("batchCount"));
     m_batchCount->setAccessibleName(uiText(QT_TRANSLATE_NOOP("PhotoPrint", "Darabszám")));
     m_batchCount->setRange(1, SheetLayout::maxCount());
-    m_batchCount->setSuffix(QStringLiteral(" db"));
+    m_batchCount->setSuffix(QStringLiteral(" ") + uiText(QT_TRANSLATE_NOOP("PhotoPrint", "db")));
     m_batchFill = new QCheckBox(uiText(QT_TRANSLATE_NOOP("PhotoPrint", "Amennyi befér")), countRow);
     m_batchFill->setObjectName(QStringLiteral("batchFill"));
     countLayout->addWidget(m_batchCount);

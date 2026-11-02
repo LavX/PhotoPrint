@@ -1376,6 +1376,10 @@
         <translation>गिनती</translation>
     </message>
     <message>
+        <source>db</source>
+        <translation>नग</translation>
+    </message>
+    <message>
         <source>Amennyi befér</source>
         <translation>जितनी फ़िट हों</translation>
     </message>
