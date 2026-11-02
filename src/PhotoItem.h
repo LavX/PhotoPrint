@@ -29,13 +29,21 @@ Frame clampCrop(Frame frame, const QSize &pixels);
 /// fixed. The page view zoom is untouched.
 Frame zoomAt(Frame frame, const QPointF &pagePoint, double factor, const QSize &pixels);
 
+/// The smallest inner zoom at which a Fill frame is fully covered by the
+/// rotated photograph, so no paper shows inside the cell. For a frame that is
+/// not Fill, or without usable pixels, the neutral 1.0 is returned.
+double minCoverZoom(const Frame &frame, const QSize &pixels);
+
 /// Sets the inner zoom directly, the way the inspector's slider does. The
 /// zoom is clamped to the shared range and the visible crop is kept inside
-/// the photograph. The frame rectangle is never touched.
+/// the photograph. A Fill frame is raised to the cover minimum, so shrinking
+/// below it never exposes paper inside the cell. The frame rectangle is never
+/// touched.
 Frame setZoom(Frame frame, double zoom, const QSize &pixels);
 
 /// Sets the photograph's rotation inside the frame. The angle is clamped to
-/// [-180, 180], so a slider position and the stored value always agree.
+/// [-180, 180], so a slider position and the stored value always agree. A Fill
+/// frame is raised to the zoom its new rotation needs to keep covering.
 Frame rotateImageTo(Frame frame, double degrees, const QSize &pixels);
 
 /// Adds `delta` degrees to the photograph's rotation and wraps the result into

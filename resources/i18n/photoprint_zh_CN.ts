@@ -1564,8 +1564,8 @@
         <translation>此页面还没有布局。</translation>
     </message>
     <message>
-        <source>Kép a helyen belül</source>
-        <translation>格子内的照片</translation>
+        <source>Kép a helyén</source>
+        <translation>照片在原位</translation>
     </message>
     <message>
         <source>Nagyítás</source>
@@ -1592,8 +1592,16 @@
         <translation>恢复照片的缩放、位置和旋转。</translation>
     </message>
     <message>
-        <source>A fotó a helyén belül mozgatható, nagyítható és forgatható.</source>
-        <translation>照片可以在格子内移动、缩放和旋转。</translation>
+        <source>Húzd a fotót a mozgatáshoz. A kerék nagyít, a Shift+kerék forgat, a Ctrl+kerék a lapot nagyítja.</source>
+        <translation>拖动照片可移动。滚轮缩放，Shift+滚轮旋转，Ctrl+滚轮缩放页面。</translation>
+    </message>
+    <message>
+        <source>A kerék nagyít, a Ctrl+kerék a lapot nagyítja.</source>
+        <translation>滚轮缩放，Ctrl+滚轮缩放页面。</translation>
+    </message>
+    <message>
+        <source>A Shift+kerék forgatja a fotót.</source>
+        <translation>Shift+滚轮旋转照片。</translation>
     </message>
 </context>
 </TS>

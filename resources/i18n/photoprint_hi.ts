@@ -1578,8 +1578,8 @@
         <translation>इस पृष्ठ पर अभी कोई लेआउट नहीं है।</translation>
     </message>
     <message>
-        <source>Kép a helyen belül</source>
-        <translation>जगह के अंदर फ़ोटो</translation>
+        <source>Kép a helyén</source>
+        <translation>फ़ोटो अपनी जगह पर</translation>
     </message>
     <message>
         <source>Nagyítás</source>
@@ -1606,8 +1606,16 @@
         <translation>फ़ोटो का ज़ूम, स्थान और घुमाव वापस डिफ़ॉल्ट करता है।</translation>
     </message>
     <message>
-        <source>A fotó a helyén belül mozgatható, nagyítható és forgatható.</source>
-        <translation>फ़ोटो को उसकी जगह के अंदर खिसकाया, ज़ूम किया और घुमाया जा सकता है।</translation>
+        <source>Húzd a fotót a mozgatáshoz. A kerék nagyít, a Shift+kerék forgat, a Ctrl+kerék a lapot nagyítja.</source>
+        <translation>फ़ोटो को खिसकाने के लिए खींचें। पहिया ज़ूम करता है, Shift+पहिया घुमाता है, Ctrl+पहिया पेज ज़ूम करता है।</translation>
+    </message>
+    <message>
+        <source>A kerék nagyít, a Ctrl+kerék a lapot nagyítja.</source>
+        <translation>पहिया ज़ूम करता है, Ctrl+पहिया पेज ज़ूम करता है।</translation>
+    </message>
+    <message>
+        <source>A Shift+kerék forgatja a fotót.</source>
+        <translation>Shift+पहिया फ़ोटो घुमाता है।</translation>
     </message>
 </context>
 </TS>

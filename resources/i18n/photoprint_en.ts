@@ -1578,8 +1578,8 @@
         <translation>This page does not have a layout yet.</translation>
     </message>
     <message>
-        <source>Kép a helyen belül</source>
-        <translation>Photo inside the slot</translation>
+        <source>Kép a helyén</source>
+        <translation>Photo in its place</translation>
     </message>
     <message>
         <source>Nagyítás</source>
@@ -1606,8 +1606,16 @@
         <translation>Restores the photo's zoom, position and rotation.</translation>
     </message>
     <message>
-        <source>A fotó a helyén belül mozgatható, nagyítható és forgatható.</source>
-        <translation>The photo can be moved, zoomed and rotated inside its slot.</translation>
+        <source>Húzd a fotót a mozgatáshoz. A kerék nagyít, a Shift+kerék forgat, a Ctrl+kerék a lapot nagyítja.</source>
+        <translation>Drag the photo to move it. The wheel zooms, Shift+wheel rotates, Ctrl+wheel zooms the page.</translation>
+    </message>
+    <message>
+        <source>A kerék nagyít, a Ctrl+kerék a lapot nagyítja.</source>
+        <translation>The wheel zooms, Ctrl+wheel zooms the page.</translation>
+    </message>
+    <message>
+        <source>A Shift+kerék forgatja a fotót.</source>
+        <translation>Shift+wheel rotates the photo.</translation>
     </message>
 </context>
 </TS>

@@ -1578,8 +1578,8 @@
         <translation>Diese Seite hat noch kein Layout.</translation>
     </message>
     <message>
-        <source>Kép a helyen belül</source>
-        <translation>Foto im Feld</translation>
+        <source>Kép a helyén</source>
+        <translation>Foto an seinem Platz</translation>
     </message>
     <message>
         <source>Nagyítás</source>
@@ -1606,8 +1606,16 @@
         <translation>Setzt Vergrößerung, Position und Drehung des Fotos zurück.</translation>
     </message>
     <message>
-        <source>A fotó a helyén belül mozgatható, nagyítható és forgatható.</source>
-        <translation>Das Foto lässt sich im Feld verschieben, vergrößern und drehen.</translation>
+        <source>Húzd a fotót a mozgatáshoz. A kerék nagyít, a Shift+kerék forgat, a Ctrl+kerék a lapot nagyítja.</source>
+        <translation>Ziehe das Foto zum Verschieben. Das Rad vergrößert, Shift+Rad dreht, Strg+Rad vergrößert die Seite.</translation>
+    </message>
+    <message>
+        <source>A kerék nagyít, a Ctrl+kerék a lapot nagyítja.</source>
+        <translation>Das Rad vergrößert, Strg+Rad vergrößert die Seite.</translation>
+    </message>
+    <message>
+        <source>A Shift+kerék forgatja a fotót.</source>
+        <translation>Shift+Rad dreht das Foto.</translation>
     </message>
 </context>
 </TS>

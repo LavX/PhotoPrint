@@ -231,6 +231,7 @@ private slots:
     void portableBundleCanBeResaved();
     void craftedBrightnessCannotReachTheRenderer();
     void craftedPaperToneIsClamped();
+    void craftedZoomAndRotationAreClamped();
     void craftedRecipeCannotReachThePrintPath();
     void versionOneProjectWithoutNewKeysStillLoads();
     void missingAndChangedSourcesKeepTheLayout();
@@ -1069,6 +1070,45 @@ void TestProjectStore::craftedBrightnessCannotReachTheRenderer()
     QCOMPARE(effectiveTone(inMemory).exposureEv, kMaxBrightnessEv);
     inMemory.brightness = -20.0;
     QCOMPARE(effectiveTone(inMemory).exposureEv, kMinBrightnessEv);
+}
+
+void TestProjectStore::craftedZoomAndRotationAreClamped()
+{
+    const QString projectDir = m_dir.filePath(QStringLiteral("zoom-rotation"));
+    QVERIFY(QDir().mkpath(projectDir));
+    const QString path = QDir(projectDir).filePath(QStringLiteral("z.ppj"));
+    ProjectStore store;
+    QVERIFY(store.save(path, sampleDocument(m_red, m_blue), SaveMode::Normal).ok());
+
+    // A hand-edited project can carry a zoom or an in-frame rotation the
+    // inspector and the gestures cannot represent. The load is the model
+    // boundary, so both are clamped there, on both sides of the range.
+    QJsonObject root = readJson(path);
+    QJsonArray pages = root.value(QStringLiteral("pages")).toArray();
+    QCOMPARE(pages.size(), 2);
+    for (int p = 0; p < pages.size(); ++p) {
+        QJsonObject page = pages.at(p).toObject();
+        QJsonArray frames = page.value(QStringLiteral("frames")).toArray();
+        QVERIFY(!frames.isEmpty());
+        QJsonObject frame = frames.at(0).toObject();
+        frame.insert(QStringLiteral("zoom"), p == 0 ? 99.0 : 0.0001);
+        frame.insert(QStringLiteral("imageRotationDeg"), p == 0 ? 999.0 : -999.0);
+        frames.replace(0, frame);
+        page.insert(QStringLiteral("frames"), frames);
+        pages.replace(p, page);
+    }
+    root.insert(QStringLiteral("pages"), pages);
+    QVERIFY(writeJson(path, root));
+
+    const auto loaded = store.load(path);
+    if (!loaded)
+        QFAIL(qPrintable(loaded.error().message));
+    const Frame high = loaded.value().document.pages.at(0).frames.at(0);
+    const Frame low = loaded.value().document.pages.at(1).frames.at(0);
+    QCOMPARE(high.zoom, kMaxFrameZoom);
+    QCOMPARE(high.imageRotationDeg, kMaxImageRotationDeg);
+    QCOMPARE(low.zoom, kMinFrameZoom);
+    QCOMPARE(low.imageRotationDeg, kMinImageRotationDeg);
 }
 
 void TestProjectStore::craftedPaperToneIsClamped()

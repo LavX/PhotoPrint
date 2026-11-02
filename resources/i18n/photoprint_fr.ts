@@ -1578,8 +1578,8 @@
         <translation>Cette page n'a pas encore de disposition.</translation>
     </message>
     <message>
-        <source>Kép a helyen belül</source>
-        <translation>Photo dans l'emplacement</translation>
+        <source>Kép a helyén</source>
+        <translation>Photo à sa place</translation>
     </message>
     <message>
         <source>Nagyítás</source>
@@ -1606,8 +1606,16 @@
         <translation>Rétablit l'agrandissement, la position et la rotation de la photo.</translation>
     </message>
     <message>
-        <source>A fotó a helyén belül mozgatható, nagyítható és forgatható.</source>
-        <translation>La photo peut être déplacée, agrandie et pivotée dans son emplacement.</translation>
+        <source>Húzd a fotót a mozgatáshoz. A kerék nagyít, a Shift+kerék forgat, a Ctrl+kerék a lapot nagyítja.</source>
+        <translation>Fais glisser la photo pour la déplacer. La molette agrandit, Maj+molette pivote, Ctrl+molette agrandit la page.</translation>
+    </message>
+    <message>
+        <source>A kerék nagyít, a Ctrl+kerék a lapot nagyítja.</source>
+        <translation>La molette agrandit, Ctrl+molette agrandit la page.</translation>
+    </message>
+    <message>
+        <source>A Shift+kerék forgatja a fotót.</source>
+        <translation>Maj+molette pivote la photo.</translation>
     </message>
 </context>
 </TS>

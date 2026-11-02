@@ -454,9 +454,9 @@ void TestUiScreens::captureInSlotImageControls()
     auto *rotation = window.findChild<QSlider *>(QStringLiteral("slotRotationSlider"));
     QVERIFY(zoom);
     QVERIFY(rotation);
-    zoom->setValue(180);
-    QTest::qWait(100);
-    rotation->setValue(20);
+    zoom->setValue(100);
+    QTest::qWait(80);
+    rotation->setValue(45);
     QTest::qWait(500);
 
     // The side column scrolls: bring the in-slot section into view before the

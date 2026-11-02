@@ -95,6 +95,18 @@ public:
     /// the layout panel exists. An empty id means no cell is selected.
     void setSelectedSlot(const QString &slotId);
     QString selectedSlot() const { return m_selectedSlotId; }
+    /// The frame as the canvas currently shows it, including an uncommitted
+    /// wheel burst. The inspector builds its next action on this.
+    std::optional<Frame> liveFrame(const QString &frameId) const;
+    /// Shows a frame without committing it. The inspector uses it while a
+    /// slider is dragged; the window commits one edit when the drag ends.
+    void previewFrame(const Frame &frame);
+    /// Stops a pending wheel burst for one frame without committing it, so the
+    /// caller that just read liveFrame() takes over its state.
+    void takeOverWheelBurst(const QString &frameId);
+    /// Lands a pending wheel burst now as one edit. A slider press calls this,
+    /// so the wheel gesture and the drag stay separate undo steps.
+    void flushWheelBurst();
 
     /// How a laid-out cell looks on screen right now. The three placeholder
     /// states are screen-only; they are never part of the page raster.
@@ -416,8 +428,11 @@ private slots:
     void brightnessChanged(int value);
     /// The photograph inside a slot: its magnification and its own rotation.
     /// Each control writes one FrameChange and leaves the slot rectangle alone.
+    /// A slider drag previews on the canvas and commits once, on release.
     void slotZoomChanged(int percent);
     void slotRotationChanged(int degrees);
+    void slotImageEditStarted();
+    void slotImageEditFinished();
     void rotateSlotImageBy(double degrees);
     void resetSlotImage();
     void showOriginalPressed(bool pressed);
@@ -539,6 +554,21 @@ private:
     /// about borderless cannot be printed honestly.
     bool projectBorderlessConsistent(const DocumentSnapshot &document) const;
     std::optional<Frame> selectedFrame() const;
+    /// The selected frame as the canvas shows it, including an uncommitted
+    /// wheel burst. An inspector action builds on this, so a pending gesture is
+    /// folded into the action instead of being discarded or overwritten.
+    std::optional<Frame> liveSelectedFrame() const;
+    /// Edits the selected slotted photograph inside its slot. `edit` receives
+    /// the live frame and the image's pixel size. `live` previews on the canvas
+    /// without committing; otherwise the result lands as one FrameChange.
+    void editSlotImage(const std::function<Frame(Frame, const QSize &)> &edit, bool live);
+    /// Writes a frame's effective values into the two sliders and readouts,
+    /// skipping any slider the user is currently dragging. Used after an edit
+    /// and by syncFrameControls, so a clamped request can never leave a thumb
+    /// pointing at a value the frame does not hold.
+    void syncSlotImageControls(const Frame &frame);
+    /// Writes a frame's effective values into the two readouts alone.
+    void showInSlotReadouts(const Frame &frame);
     PaperSpec currentPaper() const;
     const PrinterCapabilities *printerByQueue(const QString &queue) const;
 
@@ -628,6 +658,9 @@ private:
     QPushButton *m_slotRotateLeftButton = nullptr;
     QPushButton *m_slotRotateRightButton = nullptr;
     QPushButton *m_slotResetButton = nullptr;
+    /// The frame whose slider drag is previewing on the canvas. Empty outside a
+    /// drag; the release commits one FrameChange for whatever the drag built.
+    QString m_slotEditFrameId;
     /// The page's own inspector: visible whenever the page has slots, even with
     /// no photograph selected. The selected-photo sections live in
     /// m_photoPanel, so the two can coexist without hiding each other.

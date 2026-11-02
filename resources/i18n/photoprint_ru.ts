@@ -1592,8 +1592,8 @@
         <translation>У этой страницы ещё нет макета.</translation>
     </message>
     <message>
-        <source>Kép a helyen belül</source>
-        <translation>Фото внутри ячейки</translation>
+        <source>Kép a helyén</source>
+        <translation>Фото на своём месте</translation>
     </message>
     <message>
         <source>Nagyítás</source>
@@ -1620,8 +1620,16 @@
         <translation>Возвращает масштаб, положение и поворот фото.</translation>
     </message>
     <message>
-        <source>A fotó a helyén belül mozgatható, nagyítható és forgatható.</source>
-        <translation>Фото можно перемещать, увеличивать и поворачивать внутри ячейки.</translation>
+        <source>Húzd a fotót a mozgatáshoz. A kerék nagyít, a Shift+kerék forgat, a Ctrl+kerék a lapot nagyítja.</source>
+        <translation>Перетащи фото, чтобы сдвинуть. Колесо увеличивает, Shift+колесо поворачивает, Ctrl+колесо увеличивает страницу.</translation>
+    </message>
+    <message>
+        <source>A kerék nagyít, a Ctrl+kerék a lapot nagyítja.</source>
+        <translation>Колесо увеличивает, Ctrl+колесо увеличивает страницу.</translation>
+    </message>
+    <message>
+        <source>A Shift+kerék forgatja a fotót.</source>
+        <translation>Shift+колесо поворачивает фото.</translation>
     </message>
 </context>
 </TS>

@@ -1564,8 +1564,8 @@
         <translation>このページにはまだレイアウトがありません。</translation>
     </message>
     <message>
-        <source>Kép a helyen belül</source>
-        <translation>枠内の写真</translation>
+        <source>Kép a helyén</source>
+        <translation>写真の位置</translation>
     </message>
     <message>
         <source>Nagyítás</source>
@@ -1592,8 +1592,16 @@
         <translation>写真の拡大率、位置、回転を元に戻します。</translation>
     </message>
     <message>
-        <source>A fotó a helyén belül mozgatható, nagyítható és forgatható.</source>
-        <translation>写真は枠内で移動、拡大、回転できます。</translation>
+        <source>Húzd a fotót a mozgatáshoz. A kerék nagyít, a Shift+kerék forgat, a Ctrl+kerék a lapot nagyítja.</source>
+        <translation>写真をドラッグすると移動します。ホイールで拡大、Shift+ホイールで回転、Ctrl+ホイールでページを拡大します。</translation>
+    </message>
+    <message>
+        <source>A kerék nagyít, a Ctrl+kerék a lapot nagyítja.</source>
+        <translation>ホイールで拡大、Ctrl+ホイールでページを拡大します。</translation>
+    </message>
+    <message>
+        <source>A Shift+kerék forgatja a fotót.</source>
+        <translation>Shift+ホイールで写真を回転します。</translation>
     </message>
 </context>
 </TS>

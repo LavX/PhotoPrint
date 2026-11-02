@@ -1578,8 +1578,8 @@
         <translation>Questa pagina non ha ancora un layout.</translation>
     </message>
     <message>
-        <source>Kép a helyen belül</source>
-        <translation>Foto all'interno dello spazio</translation>
+        <source>Kép a helyén</source>
+        <translation>Foto al suo posto</translation>
     </message>
     <message>
         <source>Nagyítás</source>
@@ -1606,8 +1606,16 @@
         <translation>Ripristina ingrandimento, posizione e rotazione della foto.</translation>
     </message>
     <message>
-        <source>A fotó a helyén belül mozgatható, nagyítható és forgatható.</source>
-        <translation>La foto si può spostare, ingrandire e ruotare dentro lo spazio.</translation>
+        <source>Húzd a fotót a mozgatáshoz. A kerék nagyít, a Shift+kerék forgat, a Ctrl+kerék a lapot nagyítja.</source>
+        <translation>Trascina la foto per spostarla. La rotella ingrandisce, Maiusc+rotella ruota, Ctrl+rotella ingrandisce la pagina.</translation>
+    </message>
+    <message>
+        <source>A kerék nagyít, a Ctrl+kerék a lapot nagyítja.</source>
+        <translation>La rotella ingrandisce, Ctrl+rotella ingrandisce la pagina.</translation>
+    </message>
+    <message>
+        <source>A Shift+kerék forgatja a fotót.</source>
+        <translation>Maiusc+rotella ruota la foto.</translation>
     </message>
 </context>
 </TS>

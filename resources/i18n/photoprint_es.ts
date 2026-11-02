@@ -1578,8 +1578,8 @@
         <translation>Esta página aún no tiene una composición.</translation>
     </message>
     <message>
-        <source>Kép a helyen belül</source>
-        <translation>Foto dentro del hueco</translation>
+        <source>Kép a helyén</source>
+        <translation>Foto en su sitio</translation>
     </message>
     <message>
         <source>Nagyítás</source>
@@ -1606,8 +1606,16 @@
         <translation>Restaura la ampliación, la posición y la rotación de la foto.</translation>
     </message>
     <message>
-        <source>A fotó a helyén belül mozgatható, nagyítható és forgatható.</source>
-        <translation>La foto se puede mover, ampliar y girar dentro de su hueco.</translation>
+        <source>Húzd a fotót a mozgatáshoz. A kerék nagyít, a Shift+kerék forgat, a Ctrl+kerék a lapot nagyítja.</source>
+        <translation>Arrastra la foto para moverla. La rueda amplía, Mayús+rueda gira y Ctrl+rueda amplía la página.</translation>
+    </message>
+    <message>
+        <source>A kerék nagyít, a Ctrl+kerék a lapot nagyítja.</source>
+        <translation>La rueda amplía, Ctrl+rueda amplía la página.</translation>
+    </message>
+    <message>
+        <source>A Shift+kerék forgatja a fotót.</source>
+        <translation>Mayús+rueda gira la foto.</translation>
     </message>
 </context>
 </TS>
