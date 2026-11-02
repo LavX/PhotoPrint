@@ -1571,43 +1571,43 @@
     </message>
     <message>
         <source>Kép a helyén</source>
-        <translation>फ़ोटो अपनी जगह पर</translation>
+        <translation type="vanished">फ़ोटो अपनी जगह पर</translation>
     </message>
     <message>
         <source>Nagyítás</source>
-        <translation>ज़ूम</translation>
+        <translation type="vanished">ज़ूम</translation>
     </message>
     <message>
         <source>Forgatás</source>
-        <translation>घुमाव</translation>
+        <translation type="vanished">घुमाव</translation>
     </message>
     <message>
         <source>Balra 90°</source>
-        <translation>90° बाएँ</translation>
+        <translation type="vanished">90° बाएँ</translation>
     </message>
     <message>
         <source>Jobbra 90°</source>
-        <translation>90° दाएँ</translation>
+        <translation type="vanished">90° दाएँ</translation>
     </message>
     <message>
         <source>Alaphelyzet</source>
-        <translation>रीसेट</translation>
+        <translation type="vanished">रीसेट</translation>
     </message>
     <message>
         <source>Visszaállítja a kép nagyítását, helyét és forgatását.</source>
-        <translation>फ़ोटो का ज़ूम, स्थान और घुमाव वापस डिफ़ॉल्ट करता है।</translation>
+        <translation type="vanished">फ़ोटो का ज़ूम, स्थान और घुमाव वापस डिफ़ॉल्ट करता है।</translation>
     </message>
     <message>
         <source>Húzd a fotót a mozgatáshoz. A kerék nagyít, a Shift+kerék forgat, a Ctrl+kerék a lapot nagyítja.</source>
-        <translation>फ़ोटो को खिसकाने के लिए खींचें। पहिया ज़ूम करता है, Shift+पहिया घुमाता है, Ctrl+पहिया पेज ज़ूम करता है।</translation>
+        <translation type="vanished">फ़ोटो को खिसकाने के लिए खींचें। पहिया ज़ूम करता है, Shift+पहिया घुमाता है, Ctrl+पहिया पेज ज़ूम करता है।</translation>
     </message>
     <message>
         <source>A kerék nagyít, a Ctrl+kerék a lapot nagyítja.</source>
-        <translation>पहिया ज़ूम करता है, Ctrl+पहिया पेज ज़ूम करता है।</translation>
+        <translation type="vanished">पहिया ज़ूम करता है, Ctrl+पहिया पेज ज़ूम करता है।</translation>
     </message>
     <message>
         <source>A Shift+kerék forgatja a fotót.</source>
-        <translation>Shift+पहिया फ़ोटो घुमाता है।</translation>
+        <translation type="vanished">Shift+पहिया फ़ोटो घुमाता है।</translation>
     </message>
 </context>
 </TS>

@@ -61,10 +61,12 @@ struct Frame {
     /// when an effect is applied, so it is still 0 for every existing frame.
     int effectVersion = 0;
     bool upscale = false;                        ///< 2x Lanczos before print
-    /// Empty for a free frame. Otherwise the slot on the page that owns this
-    /// frame's rectangle: the slot's photo rectangle is the frame's geometry and
-    /// the frame angle stays zero. A dangling id (a slot that no longer exists)
-    /// is cleared by SlotLayoutEngine::repair, which turns the frame back into a
+    /// Empty for a free frame. Otherwise the slot on the page whose cell clips
+    /// this frame. The slot is a clipping window, not a box that owns the
+    /// photograph: the frame keeps its own centre, size and angle, so the photo
+    /// may be smaller than the cell (paper shows around it) or larger (the
+    /// overflow is cut away). A dangling id (a slot that no longer exists) is
+    /// cleared by SlotLayoutEngine::repair, which turns the frame back into a
     /// free one instead of leaving an unusable reference behind.
     QString slotId;
 
@@ -75,7 +77,8 @@ struct Frame {
 /// 0..1 of the page's content box, origin top-left, x right, y down, the same
 /// convention CollageSlot uses. The millimetre rectangle is a pure function of
 /// this and the page's paper, so a paper or orientation change re-maps without
-/// touching the stored layout.
+/// touching the stored layout. The cell is the clipping window of the
+/// photograph assigned to it; the photograph's own rectangle lives on the frame.
 struct Slot {
     QString id;                    ///< stable while the layout lives, unique per page
     QRectF unitRect{0.0, 0.0, 1.0, 1.0};
@@ -93,8 +96,8 @@ struct SlotStyle {
     std::optional<double> marginMm;
     /// The white paper between two neighbouring photographs. Missing means
     /// "equal to the effective margin"; an explicit zero lets two cells touch.
-    /// This is the border the panel exposes: the photograph fills its cell, so
-    /// the gap is the only frame around it.
+    /// This is the border the panel exposes: the cells are the clipping windows
+    /// and the gap is the paper between them.
     std::optional<double> gutterMm;
     double cornerRadiusMm = 0.0; ///< rounded photograph, 0 = square
     bool operator==(const SlotStyle &) const = default;

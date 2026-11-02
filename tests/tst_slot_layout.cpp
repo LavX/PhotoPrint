@@ -304,7 +304,7 @@ private slots:
     void dissolveKeepsFrames();
 
     void repairClearsDanglingAndDuplicateIds();
-    void repairAfterEveryControllerMutation();
+    void controllerKeepsGeometryAndRemapsProportionally();
     void invariantRejectsBrokenPages();
 
     void persistenceRoundTrip();
@@ -336,7 +336,7 @@ private slots:
 
     void publishPageStyleOnly();
     void publishPageFramesAndSlots();
-    void staleGeometryDoesNotPushAnUndoStep();
+    void geometryEditsAreRealUndoSteps();
     void validatorErrorCodes();
 
     void zeroMarginIsNotAutomatic();
@@ -840,7 +840,10 @@ void TestSlotLayout::repairClearsDanglingAndDuplicateIds()
     QVERIFY(result.frames.at(0).slotId.isEmpty());
     QVERIFY(near(result.frames.at(0).cx, danglingCentre.x())); // geometry kept
     QCOMPARE(result.frames.at(1).slotId, slot.id);
-    QVERIFY(SlotGeometry::slotGeometryMatches(result, result.frames.at(1)));
+    // Repair validates the assignment, it does not re-derive the rectangle: the
+    // frame keeps the geometry it was given.
+    QVERIFY(near(result.frames.at(1).cx, 1.0));
+    QVERIFY(near(result.frames.at(1).width, 5.0));
     QVERIFY(result.frames.at(2).slotId.isEmpty());
 
     // The controller's loader path clears a dangling id as well.
@@ -852,7 +855,7 @@ void TestSlotLayout::repairClearsDanglingAndDuplicateIds()
     QVERIFY(SlotGeometry::layoutConsistent(controller.document().pages.at(0)));
 }
 
-void TestSlotLayout::repairAfterEveryControllerMutation()
+void TestSlotLayout::controllerKeepsGeometryAndRemapsProportionally()
 {
     Page page = layoutPage(templateNamed(QStringLiteral("n04-grid-2x2")), a4Paper(), false, 3);
     Frame free = photoFrame(9);
@@ -873,73 +876,67 @@ void TestSlotLayout::repairAfterEveryControllerMutation()
         return controller.document().pages.at(0);
     };
     auto slotFrame = [&pageNow]() -> const Frame & { return pageNow().frames.at(0); };
-    auto matches = [&pageNow]() {
-        for (const Frame &frame : pageNow().frames) {
-            if (frame.slotId.isEmpty())
-                continue;
-            if (!SlotGeometry::slotGeometryMatches(pageNow(), frame))
-                return false;
-        }
-        return true;
-    };
 
-    // A frame change that tries to move a slotted frame is corrected.
+    // A FrameChange that moves, resizes and turns a slotted frame is a real
+    // edit now: the slot clips the photograph, it does not own its rectangle.
     Frame moved = slotFrame();
     moved.cx += 10.0;
+    moved.cy -= 4.0;
+    moved.width -= 5.0;
     moved.angleDeg = 33.0;
     controller.apply(FrameChange{moved.id, moved});
     QVERIFY(SlotGeometry::layoutConsistent(pageNow()));
-    QVERIFY(matches());
-    QCOMPARE(slotFrame().angleDeg, 0.0);
+    QCOMPARE(slotFrame().cx, moved.cx);
+    QCOMPARE(slotFrame().cy, moved.cy);
+    QCOMPARE(slotFrame().width, moved.width);
+    QCOMPARE(slotFrame().angleDeg, 33.0);
+    QCOMPARE(controller.undoStack()->index(), 1);
 
-    // SetFramesEdit with drifted geometry.
-    QList<Frame> drift = pageNow().frames;
-    drift[0].width += 5.0;
-    drift[1].height += 7.0;
-    controller.apply(SetFramesEdit{0, drift});
+    // SetFramesEdit keeps the geometry it is given, slot ids included.
+    QList<Frame> edited = pageNow().frames;
+    edited[0].height += 7.0;
+    controller.apply(SetFramesEdit{0, edited});
     QVERIFY(SlotGeometry::layoutConsistent(pageNow()));
-    QVERIFY(matches());
+    QCOMPARE(slotFrame().height, edited.at(0).height);
+    QCOMPARE(controller.undoStack()->index(), 2);
 
-    // Align writes new geometry into every frame and keeps the slot ids; repair
-    // has to win over it, or a slot could be moved by the align tool.
-    SheetLayout::AlignSpec align;
-    align.marginMm = 10.0;
-    align.gutterMm = 10.0;
-    const auto aligned = SheetLayout::alignFrames(pageNow(), align);
-    QVERIFY(aligned.ok());
-    controller.apply(SetFramesEdit{0, aligned.value()});
-    QVERIFY(SlotGeometry::layoutConsistent(pageNow()));
-    QVERIFY(matches());
+    // A paper change re-maps the composition proportionally with the cell: the
+    // frame's offset from the cell centre and its size keep their ratios, and
+    // the angle is untouched.
+    const Page beforePaper = pageNow();
+    const QString slotId = beforePaper.slotList.at(0).id;
+    const Slot *oldSlot = SlotGeometry::slotById(beforePaper, slotId);
+    QVERIFY(oldSlot);
+    const QRectF oldCell = SlotGeometry::slotCellMm(beforePaper, *oldSlot);
+    const Frame beforeFrame = *SlotGeometry::frameInSlot(beforePaper, slotId);
+    const double relX = (beforeFrame.cx - oldCell.center().x()) / oldCell.width();
+    const double relY = (beforeFrame.cy - oldCell.center().y()) / oldCell.height();
+    const double relW = beforeFrame.width / oldCell.width();
+    const double relH = beforeFrame.height / oldCell.height();
 
-    // The first-use grid is a no-op on a laid-out page in practice, but a
-    // hand-built autoPlaced frame list must still end up consistent.
-    QList<Frame> autoFrames = pageNow().frames;
-    for (Frame &frame : autoFrames)
-        frame.autoPlaced = true;
-    const QList<Frame> regridded = LayoutEngine::arrangeGrid(pageNow(), autoFrames, {});
-    controller.apply(SetFramesEdit{0, regridded});
-    QVERIFY(SlotGeometry::layoutConsistent(pageNow()));
-    QVERIFY(matches());
-
-    // A paper change remaps from the unit rectangles, it does not scale frames.
-    const QList<QRectF> units = {pageNow().slotList.at(0).unitRect,
-                                 pageNow().slotList.at(3).unitRect};
     controller.apply(SetPaperEdit{0, a5Paper()});
     QCOMPARE(pageNow().paper, a5Paper());
     QVERIFY(SlotGeometry::layoutConsistent(pageNow()));
-    QVERIFY(matches());
-    QVERIFY(nearRect(pageNow().slotList.at(0).unitRect, units.at(0)));
-    QVERIFY(nearRect(pageNow().slotList.at(3).unitRect, units.at(1)));
+    const Slot *newSlot = SlotGeometry::slotById(pageNow(), slotId);
+    QVERIFY(newSlot);
+    const QRectF newCell = SlotGeometry::slotCellMm(pageNow(), *newSlot);
+    const Frame afterFrame = *SlotGeometry::frameInSlot(pageNow(), slotId);
+    QVERIFY(near((afterFrame.cx - newCell.center().x()) / newCell.width(), relX, 1e-9));
+    QVERIFY(near((afterFrame.cy - newCell.center().y()) / newCell.height(), relY, 1e-9));
+    QVERIFY(near(afterFrame.width / newCell.width(), relW, 1e-9));
+    QVERIFY(near(afterFrame.height / newCell.height(), relH, 1e-9));
+    QCOMPARE(afterFrame.angleDeg, beforeFrame.angleDeg);
+    // The unit rectangles are the mapping source of truth and never move.
+    QVERIFY(nearRect(pageNow().slotList.at(0).unitRect, beforePaper.slotList.at(0).unitRect));
 
-    // Orientation: free frames turn, slotted frames stay axis-aligned.
+    // Orientation: free frames turn, slotted frames keep their own angle and
+    // are re-mapped with their cell.
+    const Frame beforeTurn = *SlotGeometry::frameInSlot(pageNow(), slotId);
     controller.apply(RotatePageEdit{0});
     QVERIFY(pageNow().landscape);
     QVERIFY(SlotGeometry::layoutConsistent(pageNow()));
-    QVERIFY(matches());
-    for (const Frame &frame : pageNow().frames) {
-        if (!frame.slotId.isEmpty())
-            QCOMPARE(frame.angleDeg, 0.0);
-    }
+    const Frame afterTurn = *SlotGeometry::frameInSlot(pageNow(), slotId);
+    QCOMPARE(afterTurn.angleDeg, beforeTurn.angleDeg);
 
     // Undo everything: each intermediate state must satisfy the invariant, and
     // the fully undone document must be the one before the first edit.
@@ -970,11 +967,13 @@ void TestSlotLayout::invariantRejectsBrokenPages()
 
     Page drifted = page;
     drifted.frames[0].cx += 5.0;
-    QVERIFY(!SlotGeometry::layoutConsistent(drifted));
+    // Geometry is the user's composition inside the cell, so a moved or turned
+    // slotted frame is a valid page, not a broken one.
+    QVERIFY(SlotGeometry::layoutConsistent(drifted));
 
     Page rotated = page;
     rotated.frames[0].angleDeg = 5.0;
-    QVERIFY(!SlotGeometry::layoutConsistent(rotated));
+    QVERIFY(SlotGeometry::layoutConsistent(rotated));
 
     Page outside = page;
     outside.slotList[0].unitRect = QRectF(-0.2, 0.0, 0.6, 1.0);
@@ -1401,7 +1400,7 @@ void TestSlotLayout::validatorRefusesBrokenSlotEdits()
     page.slotList.append(slot);
     page.frames.append(photoFrame(0));
     page.frames[0].slotId = slot.id;
-    SlotGeometry::applySlotGeometry(page, slot, page.frames[0]);
+    SlotGeometry::initialiseFrameInSlot(page, slot, page.frames[0]);
     document.pages.append(page);
 
     auto editWithSlots = [](const QList<Slot> &slotValues, const QList<Frame> &frames) {
@@ -1519,7 +1518,7 @@ void TestSlotLayout::photoFillsItsCellWithoutAMat()
     page.slotStyle = style;
     Frame frame = frameFor(blue, QStringLiteral("photo-0"));
     frame.slotId = slot.id;
-    SlotGeometry::applySlotGeometry(page, slot, frame);
+    SlotGeometry::initialiseFrameInSlot(page, slot, frame);
     page.frames.append(frame);
     QVERIFY(SlotGeometry::layoutConsistent(page));
 
@@ -1658,7 +1657,7 @@ void TestSlotLayout::roundedCornersClipThePhoto()
     page.slotStyle = style;
     Frame frame = frameFor(blue, QStringLiteral("photo-0"));
     frame.slotId = slot.id;
-    SlotGeometry::applySlotGeometry(page, slot, frame);
+    SlotGeometry::initialiseFrameInSlot(page, slot, frame);
     page.frames.append(frame);
     QVERIFY(SlotGeometry::layoutConsistent(page));
 
@@ -2041,28 +2040,61 @@ void TestSlotLayout::publishPageStyleOnly()
     controller.setDocument(document);
     QCOMPARE(controller.undoStack()->count(), 0);
 
-    Page styled = controller.document().pages.at(0);
-    styled.slotStyle.gutterMm = 4.0;
-    const auto published = controller.publishPage(styled, QStringLiteral("Szegély beállítása"));
+    // Compose the first photograph off its cell first, so a re-fit would be
+    // visible: the style change must scale the composition, not reset it.
+    Page composed = controller.document().pages.at(0);
+    composed.frames[0].cx += 6.0;
+    composed.frames[0].cy -= 4.0;
+    composed.frames[0].width -= 12.0;
+    composed.frames[0].angleDeg = 12.0;
+    QVERIFY(controller.publishPage(composed, QStringLiteral("Elrendezés")).ok());
+    QCOMPARE(controller.undoStack()->count(), 1);
+
+    const Page before = controller.document().pages.at(0);
+    const QString slotId = before.frames.at(0).slotId;
+    const Slot *beforeSlot = SlotGeometry::slotById(before, slotId);
+    QVERIFY(beforeSlot);
+    const QRectF beforeCell = SlotGeometry::slotCellMm(before, *beforeSlot);
+    const Frame beforeFrame = before.frames.at(0);
+    const double relX = (beforeFrame.cx - beforeCell.center().x()) / beforeCell.width();
+    const double relY = (beforeFrame.cy - beforeCell.center().y()) / beforeCell.height();
+    const double relW = beforeFrame.width / beforeCell.width();
+    const double relH = beforeFrame.height / beforeCell.height();
+
+    SlotStyle style = before.slotStyle;
+    style.gutterMm = 4.0;
+    const auto restyled = SlotLayoutEngine::setStyle(before, style);
+    if (!restyled.ok())
+        QFAIL(qPrintable(restyled.error().message));
+    const auto published =
+        controller.publishPage(restyled.value(), QStringLiteral("Szegély beállítása"));
     if (!published.ok())
         QFAIL(qPrintable(published.error().message));
-    QCOMPARE(controller.undoStack()->count(), 1);
+    QCOMPARE(controller.undoStack()->count(), 2);
+
     const Page &after = controller.document().pages.at(0);
     QCOMPARE(after.slotList.size(), 4);
     QCOMPARE(after.frames.size(), 2);
     QCOMPARE(after.slotStyle.gutterMm.value_or(-1.0), 4.0);
     QVERIFY(SlotGeometry::layoutConsistent(after));
-    // The gap changed the cell size, so repair re-derived the photograph
-    // rectangle from the slot.
-    for (const Frame &frame : after.frames) {
-        QVERIFY(SlotGeometry::slotGeometryMatches(after, frame));
-        QVERIFY(frame.width < 97.5);
-    }
+    const Slot *afterSlot = SlotGeometry::slotById(after, slotId);
+    QVERIFY(afterSlot);
+    const QRectF afterCell = SlotGeometry::slotCellMm(after, *afterSlot);
+    const Frame afterFrame = *SlotGeometry::frameInSlot(after, slotId);
+    QVERIFY(near((afterFrame.cx - afterCell.center().x()) / afterCell.width(), relX));
+    QVERIFY(near((afterFrame.cy - afterCell.center().y()) / afterCell.height(), relY));
+    QVERIFY(near(afterFrame.width / afterCell.width(), relW));
+    QVERIFY(near(afterFrame.height / afterCell.height(), relH));
+    QCOMPARE(afterFrame.angleDeg, 12.0);
+    // The composition was not re-fitted onto the cell.
+    QVERIFY(!SlotGeometry::slotGeometryMatches(after, afterFrame));
 
     // Publishing the same finished page again is not an edit.
     QVERIFY(controller.publishPage(after).ok());
-    QCOMPARE(controller.undoStack()->count(), 1);
+    QCOMPARE(controller.undoStack()->count(), 2);
 
+    controller.undoStack()->undo();
+    QVERIFY(controller.document().pages.at(0) == before);
     controller.undoStack()->undo();
     QVERIFY(controller.document() == document);
 }
@@ -2093,7 +2125,7 @@ void TestSlotLayout::publishPageFramesAndSlots()
     QVERIFY(controller.document() == document);
 }
 
-void TestSlotLayout::staleGeometryDoesNotPushAnUndoStep()
+void TestSlotLayout::geometryEditsAreRealUndoSteps()
 {
     DocumentSnapshot document;
     Page page = layoutPage(templateNamed(QStringLiteral("n04-grid-2x2")), a4Paper(), false, 2);
@@ -2101,36 +2133,35 @@ void TestSlotLayout::staleGeometryDoesNotPushAnUndoStep()
     CanvasController controller;
     controller.setDocument(document);
 
-    // A frames edit that only drifts slotted geometry repairs back to the same
-    // page; it must not leave an undo step behind.
-    QList<Frame> drifted = controller.document().pages.at(0).frames;
-    drifted[0].cx += 25.0;
-    drifted[1].angleDeg = 30.0;
-    const auto framesEdit = controller.apply(SetFramesEdit{0, drifted});
-    QVERIFY(framesEdit.ok());
-    QCOMPARE(controller.undoStack()->count(), 0);
+    // A frames edit that moves and turns slotted photographs is a real edit:
+    // the slot clips the picture, it does not own the rectangle.
+    QList<Frame> moved = controller.document().pages.at(0).frames;
+    moved[0].cx += 25.0;
+    moved[1].angleDeg = 30.0;
+    QVERIFY(controller.apply(SetFramesEdit{0, moved}).ok());
+    QCOMPARE(controller.undoStack()->count(), 1);
+    QCOMPARE(controller.document().pages.at(0).frames.at(0).cx, moved.at(0).cx);
+    QCOMPARE(controller.document().pages.at(0).frames.at(1).angleDeg, 30.0);
     QVERIFY(SlotGeometry::layoutConsistent(controller.document().pages.at(0)));
 
-    Frame moved = drifted.at(0);
-    moved.cx += 10.0;
-    const auto frameEdit = controller.apply(FrameChange{moved.id, moved});
-    QVERIFY(frameEdit.ok());
-    QCOMPARE(controller.undoStack()->count(), 0);
+    Frame nudged = controller.document().pages.at(0).frames.at(0);
+    nudged.cx += 10.0;
+    QVERIFY(controller.apply(FrameChange{nudged.id, nudged}).ok());
+    QCOMPARE(controller.undoStack()->count(), 2);
 
-    // The same through the publish API: a page whose only difference is stale
-    // slotted geometry is not an edit after repair.
-    Page driftedPage = controller.document().pages.at(0);
-    driftedPage.frames[1].cx += 40.0;
-    const auto publishEdit = controller.publishPage(driftedPage);
-    QVERIFY(publishEdit.ok());
-    QCOMPARE(controller.undoStack()->count(), 0);
+    // The same through the publish API.
+    Page published = controller.document().pages.at(0);
+    published.frames[1].cx += 40.0;
+    QVERIFY(controller.publishPage(published).ok());
+    QCOMPARE(controller.undoStack()->count(), 3);
 
-    // A real crop edit still pushes exactly one step.
-    Frame cropped = controller.document().pages.at(0).frames.at(0);
-    cropped.cropCenter = QPointF(0.2, 0.3);
-    QVERIFY(controller.apply(FrameChange{cropped.id, cropped}).ok());
-    QCOMPARE(controller.undoStack()->count(), 1);
-    controller.undoStack()->undo();
+    // A no-op edit still pushes nothing.
+    const Frame current = controller.document().pages.at(0).frames.at(0);
+    QVERIFY(controller.apply(FrameChange{current.id, current}).ok());
+    QCOMPARE(controller.undoStack()->count(), 3);
+
+    while (controller.canUndo())
+        controller.undoStack()->undo();
     QVERIFY(controller.document() == document);
 }
 
@@ -2144,7 +2175,7 @@ void TestSlotLayout::validatorErrorCodes()
     page.slotList.append(slot);
     page.frames.append(photoFrame(0));
     page.frames[0].slotId = slot.id;
-    SlotGeometry::applySlotGeometry(page, slot, page.frames[0]);
+    SlotGeometry::initialiseFrameInSlot(page, slot, page.frames[0]);
     document.pages.append(page);
 
     auto codeOf = [&document](const QList<Slot> &slotValues, const QList<Frame> &frames,
@@ -2552,7 +2583,12 @@ void TestSlotLayout::twelveSlotsRoundTrip()
         QCOMPARE(loaded.slotList.at(i).id, page.slotList.at(i).id);
         QVERIFY(nearRect(loaded.slotList.at(i).unitRect, page.slotList.at(i).unitRect, 1e-9));
         QCOMPARE(loaded.frames.at(i).slotId, page.frames.at(i).slotId);
-        QVERIFY(SlotGeometry::slotGeometryMatches(loaded, loaded.frames.at(i)));
+        // Geometry and angle round-trip exactly: repair never re-derives them.
+        QCOMPARE(loaded.frames.at(i).cx, page.frames.at(i).cx);
+        QCOMPARE(loaded.frames.at(i).cy, page.frames.at(i).cy);
+        QCOMPARE(loaded.frames.at(i).width, page.frames.at(i).width);
+        QCOMPARE(loaded.frames.at(i).height, page.frames.at(i).height);
+        QCOMPARE(loaded.frames.at(i).angleDeg, page.frames.at(i).angleDeg);
     }
     QVERIFY(SlotGeometry::layoutConsistent(loaded));
 

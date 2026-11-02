@@ -1571,43 +1571,43 @@
     </message>
     <message>
         <source>Kép a helyén</source>
-        <translation>Foto an seinem Platz</translation>
+        <translation type="vanished">Foto an seinem Platz</translation>
     </message>
     <message>
         <source>Nagyítás</source>
-        <translation>Vergrößerung</translation>
+        <translation type="vanished">Vergrößerung</translation>
     </message>
     <message>
         <source>Forgatás</source>
-        <translation>Drehen</translation>
+        <translation type="vanished">Drehen</translation>
     </message>
     <message>
         <source>Balra 90°</source>
-        <translation>90° nach links</translation>
+        <translation type="vanished">90° nach links</translation>
     </message>
     <message>
         <source>Jobbra 90°</source>
-        <translation>90° nach rechts</translation>
+        <translation type="vanished">90° nach rechts</translation>
     </message>
     <message>
         <source>Alaphelyzet</source>
-        <translation>Zurücksetzen</translation>
+        <translation type="vanished">Zurücksetzen</translation>
     </message>
     <message>
         <source>Visszaállítja a kép nagyítását, helyét és forgatását.</source>
-        <translation>Setzt Vergrößerung, Position und Drehung des Fotos zurück.</translation>
+        <translation type="vanished">Setzt Vergrößerung, Position und Drehung des Fotos zurück.</translation>
     </message>
     <message>
         <source>Húzd a fotót a mozgatáshoz. A kerék nagyít, a Shift+kerék forgat, a Ctrl+kerék a lapot nagyítja.</source>
-        <translation>Ziehe das Foto zum Verschieben. Das Rad vergrößert, Shift+Rad dreht, Strg+Rad vergrößert die Seite.</translation>
+        <translation type="vanished">Ziehe das Foto zum Verschieben. Das Rad vergrößert, Shift+Rad dreht, Strg+Rad vergrößert die Seite.</translation>
     </message>
     <message>
         <source>A kerék nagyít, a Ctrl+kerék a lapot nagyítja.</source>
-        <translation>Das Rad vergrößert, Strg+Rad vergrößert die Seite.</translation>
+        <translation type="vanished">Das Rad vergrößert, Strg+Rad vergrößert die Seite.</translation>
     </message>
     <message>
         <source>A Shift+kerék forgatja a fotót.</source>
-        <translation>Shift+Rad dreht das Foto.</translation>
+        <translation type="vanished">Shift+Rad dreht das Foto.</translation>
     </message>
 </context>
 </TS>

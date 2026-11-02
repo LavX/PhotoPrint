@@ -298,12 +298,6 @@ QDoubleSpinBox *spinNamed(MainWindow &window, const char *name)
     return window.findChild<QDoubleSpinBox *>(QString::fromLatin1(name));
 }
 
-/// One of the in-slot inspector's sliders, by object name.
-QSlider *sliderNamed(MainWindow &window, const char *name)
-{
-    return window.findChild<QSlider *>(QString::fromLatin1(name));
-}
-
 /// Finishes a spin edit the way the panel commits one: the editing finished,
 /// not every keystroke. A test cannot type, so it delivers the same signal.
 void commitSpin(QDoubleSpinBox *spin)
@@ -440,22 +434,17 @@ private slots:
     void backgroundDropFillsFirstEmptySlot();
     void multiFileDropIsOneUndo();
     void libraryDragMovesSwapsAndDetaches();
-    void dragInsideSlotPansThePhoto();
-    void wheelZoomsPhotoCtrlZoomsPage();
-    void slotZoomControlScalesThePhoto();
-    void slotRotationControlTurnsThePhoto();
-    void slotImageResetRestoresThePhoto();
-    void shiftWheelRotatesInsideTheSlot();
-    void fillRotationKeepsEveryCellCornerCovered();
-    void wheelToTheFloorKeepsTheSliderHonest();
-    void sliderDragPreviewsLiveAndCommitsOnce();
-    void quarterTurnKeepsAPendingWheelBurst();
-    void mixedWheelBurstIsOneUndo();
-    void inSlotLabelsAreBuddyLinked();
-    void inSlotControlsFollowSelectionAndUndo();
-    void freeFrameHasNoInSlotControls();
+    void dragMovesTheFrameInsideItsSlot();
+    void cropModePansTheImageInsideTheFrame();
+    void wheelOverASlotFrameZoomsThePage();
+    void widthHeightAndAngleSpinsEditASlottedFrame();
+    void canvasHandlesResizeAndTurnASlottedFrame();
+    void smallerPhotoShowsPaperInsideTheCell();
+    void largerPhotoIsClippedToTheCell();
     void rotatedPhotoStaysInsideTheSlotOnCanvas();
-    void slottedImageStateSurvivesSaveAndLoad();
+    void frameGeometryAndAngleSurviveSaveAndLoad();
+    void paperChangeKeepsTheCompositionInsideTheSection();
+    void frameControlsFollowSelectionAndUndo();
     void addPhotoFillsFirstEmptySlot();
     void applyLayoutToAnEmptyPageThenFill();
     void topUpFillsTheDetachedPhoto();
@@ -469,7 +458,7 @@ private slots:
     void fitPageStaysHiddenOnALaidOutPageThatOverflows();
     void cropWheelAfterSelectionChangeIsSafe();
     void externalReplacementCancelsWheelBurst();
-    void slottedFrameControlsAreDisabled();
+    void slottedFrameControlsAreEnabled();
     void templateApplyKeepsSlotsOnALaidOutPage();
     void deleteClearsSelectedSlot();
     void invalidDropChangesNothing();
@@ -892,7 +881,7 @@ void TestSlotUi::libraryDragMovesSwapsAndDetaches()
     QVERIFY(window.document() == beforeDetach);
 }
 
-void TestSlotUi::dragInsideSlotPansThePhoto()
+void TestSlotUi::dragMovesTheFrameInsideItsSlot()
 {
     QTemporaryDir dir;
     QVERIFY(dir.isValid());
@@ -917,19 +906,23 @@ void TestSlotUi::dragInsideSlotPansThePhoto()
     // gesture starts from the cell's current position.
     const QPointF start = view->slotRect(slotId).center();
     QTest::mousePress(view, Qt::LeftButton, Qt::NoModifier, start.toPoint());
-    QTest::mouseMove(view, (start + QPointF(60.0, 30.0)).toPoint());
+    QTest::mouseMove(view, (start + QPointF(40.0, 25.0)).toPoint());
     QTest::mouseRelease(view, Qt::LeftButton, Qt::NoModifier,
-                        (start + QPointF(60.0, 30.0)).toPoint());
+                        (start + QPointF(40.0, 25.0)).toPoint());
     QTest::qWait(50);
 
     const Frame after = *frameInSlot(window.document().pages.first(), slotId);
-    // The cell did not move: the photograph inside it did.
-    QCOMPARE(after.cx, before.cx);
-    QCOMPARE(after.cy, before.cy);
+    // The frame moved; the cell (the clipping window) did not.
+    QVERIFY2(after.cx > before.cx, qPrintable(QStringLiteral("cx %1 -> %2").arg(before.cx).arg(after.cx)));
+    QVERIFY2(after.cy > before.cy, qPrintable(QStringLiteral("cy %1 -> %2").arg(before.cy).arg(after.cy)));
     QCOMPARE(after.width, before.width);
     QCOMPARE(after.height, before.height);
-    QVERIFY(after.cropCenter != before.cropCenter);
+    QCOMPARE(after.angleDeg, before.angleDeg);
+    QCOMPARE(after.cropCenter, before.cropCenter);
+    const QRectF cellBefore = view->slotRect(slotId);
+    QCOMPARE(view->slotAtWidget(cellBefore.center()), slotId);
 
+    // One gesture, one undo: the page returns exactly to its pre-drag state.
     QAction *undo = undoAction(window);
     QVERIFY(undo);
     undo->trigger();
@@ -937,138 +930,193 @@ void TestSlotUi::dragInsideSlotPansThePhoto()
     QVERIFY(window.document() == beforeDrag);
 }
 
-void TestSlotUi::wheelZoomsPhotoCtrlZoomsPage()
+void TestSlotUi::cropModePansTheImageInsideTheFrame()
 {
     QTemporaryDir dir;
     QVERIFY(dir.isValid());
-    const QString photo = makePhoto(dir.path(), QStringLiteral("zoom.png"), QColor(90, 140, 90));
-    MainWindow window;
-    window.resize(1280, 800);
-    window.show();
-    QTest::qWait(100);
-    QVERIFY(loadDocument(window, dir, documentWithLayout({photo}, 4), QStringLiteral("zoom.ppj")));
-    auto *view = window.findChild<PageView *>();
-    QVERIFY(view);
-    QVERIFY(window.waitForPreview(15000));
-
-    const Page page = window.document().pages.first();
-    const QString slotId = page.slotList.at(0).id;
-    const QString frameId = frameInSlot(page, slotId)->id;
-    const QPointF centre = view->slotRect(slotId).center();
-
-    // Selecting the cell and wheeling zooms the photograph, never the page.
-    QTest::mouseClick(view, Qt::LeftButton, Qt::NoModifier, centre.toPoint());
-    QCOMPARE(view->selectedFrame(), frameId);
-    // The inspector appears with a selection and the canvas changes width, so
-    // the cell is located again before the wheel.
-    const QPointF wheelPoint = view->slotRect(slotId).center();
-    QVERIFY2(view->slotAtWidget(wheelPoint) == slotId,
-             qPrintable(QStringLiteral("slot under wheel: '%1' wanted '%2'")
-                            .arg(view->slotAtWidget(wheelPoint), slotId)));
-    QVERIFY2(view->slotState(slotId) == PageView::SlotState::Filled,
-             qPrintable(QStringLiteral("state under wheel %1").arg(int(view->slotState(slotId)))));
-    const DocumentSnapshot beforeWheel = window.document();
-    const double pageZoom = view->viewZoom();
-    for (int notch = 0; notch < 5; ++notch) {
-        sendWheel(*view, wheelPoint, 120);
-        QTest::qWait(25);
-    }
-    QTest::qWait(kZoomBurstMs + 150);
-
-    QCOMPARE(view->viewZoom(), pageZoom);
-    const Frame zoomed = *SlotGeometry::frameInSlot(window.document().pages.first(), slotId);
-    QVERIFY2(zoomed.zoom > 1.0,
-             qPrintable(QStringLiteral("photo zoom %1").arg(zoomed.zoom)));
-
-    // The whole burst is one edit: one undo restores the exact pre-wheel page.
-    QAction *undo = undoAction(window);
-    QVERIFY(undo);
-    undo->trigger();
-    QTest::qWait(50);
-    QVERIFY(window.document() == beforeWheel);
-
-    // Ctrl+wheel moves the page view and leaves the photo alone.
-    const double frameZoom = SlotGeometry::frameInSlot(window.document().pages.first(), slotId)->zoom;
-    sendWheel(*view, view->slotRect(slotId).center(), 120, Qt::ControlModifier);
-    QTest::qWait(50);
-    QVERIFY(view->viewZoom() > pageZoom);
-    QCOMPARE(SlotGeometry::frameInSlot(window.document().pages.first(), slotId)->zoom, frameZoom);
-}
-
-void TestSlotUi::slotZoomControlScalesThePhoto()
-{
-    QTemporaryDir dir;
-    QVERIFY(dir.isValid());
-    const QString photo = makePhoto(dir.path(), QStringLiteral("zoomctl.png"), QColor(200, 40, 40));
+    const QString photo = makePhoto(dir.path(), QStringLiteral("crop-pan.png"), QColor(90, 140, 160));
     MainWindow window;
     window.resize(1280, 800);
     window.show();
     QTest::qWait(100);
     QVERIFY(loadDocument(window, dir, documentWithLayout({photo}, 4),
-                         QStringLiteral("zoomctl.ppj")));
+                         QStringLiteral("crop-pan.ppj")));
     auto *view = window.findChild<PageView *>();
     QVERIFY(view);
     QVERIFY(window.waitForPreview(15000));
 
     const Page page = window.document().pages.first();
     const QString slotId = page.slotList.at(0).id;
-    const QString frameId = frameInSlot(page, slotId)->id;
     QTest::mouseClick(view, Qt::LeftButton, Qt::NoModifier,
                       view->slotRect(slotId).center().toPoint());
-    QCOMPARE(view->selectedFrame(), frameId);
-
-    auto *slider = sliderNamed(window, "slotZoomSlider");
-    auto *valueLabel = window.findChild<QLabel *>(QStringLiteral("slotZoomValue"));
-    QVERIFY(slider);
-    QVERIFY(valueLabel);
-    QVERIFY(slider->isVisible());
-    QCOMPARE(slider->value(), 100);
+    // Crop mode is the gesture that pans the photograph inside its frame.
+    QTest::mouseDClick(view, Qt::LeftButton, Qt::NoModifier,
+                       view->slotRect(slotId).center().toPoint());
+    QVERIFY(view->cropMode());
 
     const Frame before = *frameInSlot(window.document().pages.first(), slotId);
-    const DocumentSnapshot beforeEdit = window.document();
-
-    slider->setValue(250);
+    const DocumentSnapshot beforePan = window.document();
+    const QPointF start = view->slotRect(slotId).center();
+    QTest::mousePress(view, Qt::LeftButton, Qt::NoModifier, start.toPoint());
+    QTest::mouseMove(view, (start + QPointF(40.0, 20.0)).toPoint());
+    QTest::mouseRelease(view, Qt::LeftButton, Qt::NoModifier,
+                        (start + QPointF(40.0, 20.0)).toPoint());
     QTest::qWait(50);
-    Frame after = *frameInSlot(window.document().pages.first(), slotId);
-    QVERIFY2(std::abs(after.zoom - 2.5) < 0.001,
-             qPrintable(QStringLiteral("zoom %1").arg(after.zoom)));
-    // The slot owns the rectangle: scaling the photograph never moves it.
+
+    const Frame after = *frameInSlot(window.document().pages.first(), slotId);
+    // The image moved inside the frame; the frame rectangle did not.
+    QVERIFY(after.cropCenter != before.cropCenter);
     QCOMPARE(after.cx, before.cx);
     QCOMPARE(after.cy, before.cy);
     QCOMPARE(after.width, before.width);
     QCOMPARE(after.height, before.height);
-    QCOMPARE(after.angleDeg, 0.0);
-    QCOMPARE(valueLabel->text(), QStringLiteral("250%"));
+    QCOMPARE(after.angleDeg, before.angleDeg);
 
-    // The top of the range is the model's own ceiling, 8x.
-    slider->setValue(800);
+    undoAction(window)->trigger();
+    QTest::qWait(50);
+    QVERIFY(window.document() == beforePan);
+}
+
+void TestSlotUi::wheelOverASlotFrameZoomsThePage()
+{
+    QTemporaryDir dir;
+    QVERIFY(dir.isValid());
+    const QString photo = makePhoto(dir.path(), QStringLiteral("wheel.png"), QColor(90, 140, 90));
+    MainWindow window;
+    window.resize(1280, 800);
+    window.show();
+    QTest::qWait(100);
+    QVERIFY(loadDocument(window, dir, documentWithLayout({photo}, 4),
+                         QStringLiteral("wheel.ppj")));
+    auto *view = window.findChild<PageView *>();
+    QVERIFY(view);
+    QVERIFY(window.waitForPreview(15000));
+
+    const Page page = window.document().pages.first();
+    const QString slotId = page.slotList.at(0).id;
+    QTest::mouseClick(view, Qt::LeftButton, Qt::NoModifier,
+                      view->slotRect(slotId).center().toPoint());
+    const Frame before = *frameInSlot(window.document().pages.first(), slotId);
+    const double pageZoom = view->viewZoom();
+    QUndoStack *stack = window.undoStackForTest();
+    QVERIFY(stack);
+    const int edits = stack->count();
+
+    // Outside crop mode the wheel is the page view's own zoom, even over a
+    // slotted photograph. It is a view state, not a document edit.
+    for (int notch = 0; notch < 3; ++notch) {
+        sendWheel(*view, view->slotRect(slotId).center(), 120);
+        QTest::qWait(20);
+    }
+    QTest::qWait(kZoomBurstMs + 150);
+    QVERIFY2(view->viewZoom() > pageZoom,
+             qPrintable(QStringLiteral("page zoom %1 -> %2").arg(pageZoom).arg(view->viewZoom())));
+    const Frame afterPageZoom = *frameInSlot(window.document().pages.first(), slotId);
+    QCOMPARE(afterPageZoom.zoom, before.zoom);
+    QCOMPARE(afterPageZoom.cx, before.cx);
+    QCOMPARE(afterPageZoom.width, before.width);
+    QCOMPARE(stack->count(), edits);
+
+    // Crop mode keeps the image zoom: the wheel magnifies the photograph inside
+    // its frame and leaves the page view alone.
+    QTest::mouseDClick(view, Qt::LeftButton, Qt::NoModifier,
+                       view->slotRect(slotId).center().toPoint());
+    QVERIFY(view->cropMode());
+    const double imageZoom = frameInSlot(window.document().pages.first(), slotId)->zoom;
+    const double cropPageZoom = view->viewZoom();
+    for (int notch = 0; notch < 3; ++notch) {
+        sendWheel(*view, view->slotRect(slotId).center(), 120);
+        QTest::qWait(20);
+    }
+    QTest::qWait(kZoomBurstMs + 150);
+    QVERIFY2(frameInSlot(window.document().pages.first(), slotId)->zoom > imageZoom,
+             "crop mode must magnify the photograph");
+    QCOMPARE(view->viewZoom(), cropPageZoom);
+}
+
+void TestSlotUi::widthHeightAndAngleSpinsEditASlottedFrame()
+{
+    QTemporaryDir dir;
+    QVERIFY(dir.isValid());
+    const QString photo = makePhoto(dir.path(), QStringLiteral("spins.png"), QColor(200, 60, 60));
+    MainWindow window;
+    window.resize(1280, 800);
+    window.show();
+    QTest::qWait(100);
+    QVERIFY(loadDocument(window, dir, documentWithLayout({photo}, 4),
+                         QStringLiteral("spins-edit.ppj")));
+    auto *view = window.findChild<PageView *>();
+    QVERIFY(view);
+    QVERIFY(window.waitForPreview(15000));
+
+    const Page page = window.document().pages.first();
+    const QString slotId = page.slotList.at(0).id;
+    QTest::mouseClick(view, Qt::LeftButton, Qt::NoModifier,
+                      view->slotRect(slotId).center().toPoint());
+
+    auto *width = spinNamed(window, "widthSpin");
+    auto *height = spinNamed(window, "heightSpin");
+    auto *angle = spinNamed(window, "angleSpin");
+    QVERIFY(width);
+    QVERIFY(height);
+    QVERIFY(angle);
+    // The original geometry controls belong to a slotted frame too.
+    QVERIFY(width->isEnabled());
+    QVERIFY(height->isEnabled());
+    QVERIFY(angle->isEnabled());
+
+    const Slot *slot = SlotGeometry::slotById(page, slotId);
+    QVERIFY(slot);
+    const QRectF cell = SlotGeometry::slotCellMm(page, *slot);
+    const Frame before = *frameInSlot(window.document().pages.first(), slotId);
+    const DocumentSnapshot beforeEdit = window.document();
+
+    width->setValue(cell.width() / 20.0); // the spin reads centimetres
+    commitSpin(width);
+    QTest::qWait(50);
+    Frame after = *frameInSlot(window.document().pages.first(), slotId);
+    QVERIFY2(std::abs(after.width - cell.width() / 2.0) < 0.06,
+             qPrintable(QStringLiteral("width %1 wanted %2").arg(after.width).arg(cell.width() / 2.0)));
+    QCOMPARE(after.cx, before.cx);
+    QCOMPARE(after.cy, before.cy);
+
+    height->setValue(cell.height() / 20.0);
+    commitSpin(height);
     QTest::qWait(50);
     after = *frameInSlot(window.document().pages.first(), slotId);
-    QCOMPARE(after.zoom, 8.0);
+    QVERIFY2(std::abs(after.height - cell.height() / 2.0) < 0.06,
+             qPrintable(QStringLiteral("height %1").arg(after.height)));
 
-    // Two slider actions, two undo steps; each restores the exact frame.
+    angle->setValue(20.0);
+    commitSpin(angle);
+    QTest::qWait(50);
+    after = *frameInSlot(window.document().pages.first(), slotId);
+    QCOMPARE(after.angleDeg, 20.0);
+
+    // Three committed edits, three undo steps, and the frame returns to the
+    // cell it was placed on.
     QAction *undo = undoAction(window);
     QVERIFY(undo);
     undo->trigger();
     QTest::qWait(50);
-    after = *frameInSlot(window.document().pages.first(), slotId);
-    QVERIFY(std::abs(after.zoom - 2.5) < 0.001);
+    undo->trigger();
+    QTest::qWait(50);
     undo->trigger();
     QTest::qWait(50);
     QVERIFY(window.document() == beforeEdit);
 }
 
-void TestSlotUi::slotRotationControlTurnsThePhoto()
+void TestSlotUi::canvasHandlesResizeAndTurnASlottedFrame()
 {
     QTemporaryDir dir;
     QVERIFY(dir.isValid());
-    const QString photo = makePhoto(dir.path(), QStringLiteral("rotctl.png"), QColor(40, 60, 200));
+    const QString photo = makePhoto(dir.path(), QStringLiteral("handles.png"), QColor(60, 90, 200));
     MainWindow window;
     window.resize(1280, 800);
     window.show();
     QTest::qWait(100);
     QVERIFY(loadDocument(window, dir, documentWithLayout({photo}, 4),
-                         QStringLiteral("rotctl.ppj")));
+                         QStringLiteral("handles.ppj")));
     auto *view = window.findChild<PageView *>();
     QVERIFY(view);
     QVERIFY(window.waitForPreview(15000));
@@ -1077,145 +1125,67 @@ void TestSlotUi::slotRotationControlTurnsThePhoto()
     const QString slotId = page.slotList.at(0).id;
     QTest::mouseClick(view, Qt::LeftButton, Qt::NoModifier,
                       view->slotRect(slotId).center().toPoint());
-
-    auto *rotation = sliderNamed(window, "slotRotationSlider");
-    auto *valueLabel = window.findChild<QLabel *>(QStringLiteral("slotRotationValue"));
-    QVERIFY(rotation);
-    QVERIFY(valueLabel);
-    QVERIFY(rotation->isVisible());
-    QCOMPARE(rotation->minimum(), -180);
-    QCOMPARE(rotation->maximum(), 180);
-    QCOMPARE(rotation->value(), 0);
-
     const Frame before = *frameInSlot(window.document().pages.first(), slotId);
 
-    rotation->setValue(45);
-    QTest::qWait(50);
-    Frame after = *frameInSlot(window.document().pages.first(), slotId);
-    QCOMPARE(after.imageRotationDeg, 45.0);
-    QCOMPARE(valueLabel->text(), QStringLiteral("45°"));
-    QCOMPARE(after.cx, before.cx);
-    QCOMPARE(after.width, before.width);
-    QCOMPARE(after.height, before.height);
-    QCOMPARE(after.angleDeg, 0.0);
-
-    // Both ends of the range are real stored values, not a wrap to the other.
-    rotation->setValue(-180);
-    QTest::qWait(50);
-    after = *frameInSlot(window.document().pages.first(), slotId);
-    QCOMPARE(after.imageRotationDeg, -180.0);
-    rotation->setValue(180);
-    QTest::qWait(50);
-    after = *frameInSlot(window.document().pages.first(), slotId);
-    QCOMPARE(after.imageRotationDeg, 180.0);
-
-    // Quarter turns wrap inside the same range: 180 + 90 reads as -90.
-    rotation->setValue(135);
-    QTest::qWait(50);
-    auto *right = window.findChild<QPushButton *>(QStringLiteral("slotRotateRight"));
-    auto *left = window.findChild<QPushButton *>(QStringLiteral("slotRotateLeft"));
-    QVERIFY(right);
-    QVERIFY(left);
-    right->click();
-    QTest::qWait(50);
-    after = *frameInSlot(window.document().pages.first(), slotId);
-    QCOMPARE(after.imageRotationDeg, -135.0);
-    QCOMPARE(rotation->value(), -135);
-    left->click();
-    QTest::qWait(50);
-    after = *frameInSlot(window.document().pages.first(), slotId);
-    // -135 - 90 reads back as +135, the same quarter turn from the other side.
-    QCOMPARE(after.imageRotationDeg, 135.0);
-
-    // The rotation is one edit per action; undo walks back exactly.
-    QAction *undo = undoAction(window);
-    QVERIFY(undo);
-    undo->trigger();
-    QTest::qWait(50);
-    after = *frameInSlot(window.document().pages.first(), slotId);
-    QCOMPARE(after.imageRotationDeg, -135.0);
-    undo->trigger();
-    QTest::qWait(50);
-    after = *frameInSlot(window.document().pages.first(), slotId);
-    QCOMPARE(after.imageRotationDeg, 135.0);
-    QCOMPARE(rotation->value(), 135);
-}
-
-void TestSlotUi::slotImageResetRestoresThePhoto()
-{
-    QTemporaryDir dir;
-    QVERIFY(dir.isValid());
-    const QString photo = makePhoto(dir.path(), QStringLiteral("reset.png"), QColor(120, 180, 60));
-    MainWindow window;
-    window.resize(1280, 800);
-    window.show();
-    QTest::qWait(100);
-    QVERIFY(loadDocument(window, dir, documentWithLayout({photo}, 4), QStringLiteral("reset.ppj")));
-    auto *view = window.findChild<PageView *>();
-    QVERIFY(view);
-    QVERIFY(window.waitForPreview(15000));
-
-    const Page page = window.document().pages.first();
-    const QString slotId = page.slotList.at(0).id;
-    QTest::mouseClick(view, Qt::LeftButton, Qt::NoModifier,
-                      view->slotRect(slotId).center().toPoint());
-
-    auto *zoom = sliderNamed(window, "slotZoomSlider");
-    auto *rotation = sliderNamed(window, "slotRotationSlider");
-    auto *reset = window.findChild<QPushButton *>(QStringLiteral("slotImageReset"));
-    QVERIFY(zoom);
-    QVERIFY(rotation);
-    QVERIFY(reset);
-
-    // Pan first, so the reset has a real crop centre to put back.
-    const QPointF start = view->slotRect(slotId).center();
-    QTest::mousePress(view, Qt::LeftButton, Qt::NoModifier, start.toPoint());
-    QTest::mouseMove(view, (start + QPointF(50.0, 20.0)).toPoint());
+    // The bottom-right resize handle sits on the frame corner, exactly where a
+    // free frame's handle sits.
+    const QPointF corner(before.cx + before.width / 2.0, before.cy + before.height / 2.0);
+    const QPointF cornerWidget = pageToWidget(*view, corner);
+    QTest::mousePress(view, Qt::LeftButton, Qt::NoModifier, cornerWidget.toPoint());
+    QTest::mouseMove(view, (cornerWidget + QPointF(40.0, 30.0)).toPoint());
     QTest::mouseRelease(view, Qt::LeftButton, Qt::NoModifier,
-                        (start + QPointF(50.0, 20.0)).toPoint());
-    QTest::qWait(50);
-    zoom->setValue(300);
-    QTest::qWait(50);
-    rotation->setValue(30);
+                        (cornerWidget + QPointF(40.0, 30.0)).toPoint());
     QTest::qWait(50);
 
-    const Frame beforeReset = *frameInSlot(window.document().pages.first(), slotId);
-    QVERIFY(beforeReset.cropCenter != QPointF(0.5, 0.5));
-    QVERIFY(std::abs(beforeReset.zoom - 3.0) < 0.001);
+    Frame resized = *frameInSlot(window.document().pages.first(), slotId);
+    QVERIFY2(resized.width > before.width,
+             qPrintable(QStringLiteral("width %1 -> %2").arg(before.width).arg(resized.width)));
+    QVERIFY2(resized.height > before.height,
+             qPrintable(QStringLiteral("height %1 -> %2").arg(before.height).arg(resized.height)));
+    // The opposite corner stayed put: a real resize, not a move.
+    QVERIFY(std::abs((resized.cx - resized.width / 2.0)
+                     - (before.cx - before.width / 2.0)) < 0.6);
 
-    reset->click();
-    QTest::qWait(50);
-    const Frame after = *frameInSlot(window.document().pages.first(), slotId);
-    QCOMPARE(after.zoom, 1.0);
-    QCOMPARE(after.cropCenter, QPointF(0.5, 0.5));
-    QCOMPARE(after.imageRotationDeg, 0.0);
-    // The cell rectangle is untouched by a reset too.
-    QCOMPARE(after.cx, beforeReset.cx);
-    QCOMPARE(after.cy, beforeReset.cy);
-    QCOMPARE(after.width, beforeReset.width);
-    QCOMPARE(after.height, beforeReset.height);
-
-    // Controls follow the reset, and one undo brings the whole state back.
-    QCOMPARE(zoom->value(), 100);
-    QCOMPARE(rotation->value(), 0);
+    // The rotate handle floats above the top edge. A press there starts a turn
+    // even though the handle is outside the cell.
     QAction *undo = undoAction(window);
     QVERIFY(undo);
     undo->trigger();
     QTest::qWait(50);
-    QVERIFY(*frameInSlot(window.document().pages.first(), slotId) == beforeReset);
+    const Frame again = *frameInSlot(window.document().pages.first(), slotId);
+    QCOMPARE(again.width, before.width);
+    const QPointF centreWidget = pageToWidget(*view, QPointF(again.cx, again.cy));
+    const QPointF topMid = pageToWidget(
+        *view, QPointF(again.cx, again.cy - again.height / 2.0));
+    QPointF direction = topMid - centreWidget;
+    const double length = std::hypot(direction.x(), direction.y());
+    QVERIFY(length > 1.0);
+    direction /= length;
+    const QPointF rotateHandle = topMid + direction * 30.0;
+    QTest::mousePress(view, Qt::LeftButton, Qt::NoModifier, rotateHandle.toPoint());
+    // Drag to the right of the centre: atan2(0, +x) + 90 is a quarter turn.
+    QTest::mouseMove(view, pageToWidget(*view, QPointF(again.cx + 40.0, again.cy)).toPoint());
+    QTest::mouseRelease(view, Qt::LeftButton, Qt::NoModifier,
+                        pageToWidget(*view, QPointF(again.cx + 40.0, again.cy)).toPoint());
+    QTest::qWait(50);
+    const Frame turned = *frameInSlot(window.document().pages.first(), slotId);
+    QVERIFY2(std::abs(turned.angleDeg - 90.0) < 6.0,
+             qPrintable(QStringLiteral("angle %1").arg(turned.angleDeg)));
+    QCOMPARE(turned.width, again.width);
+    QCOMPARE(turned.height, again.height);
 }
 
-void TestSlotUi::shiftWheelRotatesInsideTheSlot()
+void TestSlotUi::smallerPhotoShowsPaperInsideTheCell()
 {
     QTemporaryDir dir;
     QVERIFY(dir.isValid());
-    const QString photo = makePhoto(dir.path(), QStringLiteral("shift.png"), QColor(90, 90, 40));
+    const QString photo = makePhoto(dir.path(), QStringLiteral("small.png"), QColor(30, 120, 60));
     MainWindow window;
     window.resize(1280, 800);
     window.show();
     QTest::qWait(100);
     QVERIFY(loadDocument(window, dir, documentWithLayout({photo}, 4),
-                         QStringLiteral("shift.ppj")));
+                         QStringLiteral("small.ppj")));
     auto *view = window.findChild<PageView *>();
     QVERIFY(view);
     QVERIFY(window.waitForPreview(15000));
@@ -1224,464 +1194,126 @@ void TestSlotUi::shiftWheelRotatesInsideTheSlot()
     const QString slotId = page.slotList.at(0).id;
     QTest::mouseClick(view, Qt::LeftButton, Qt::NoModifier,
                       view->slotRect(slotId).center().toPoint());
-    const QPointF wheelPoint = view->slotRect(slotId).center();
-    QCOMPARE(view->slotAtWidget(wheelPoint), slotId);
-
-    const Frame before = *frameInSlot(window.document().pages.first(), slotId);
-    const DocumentSnapshot beforeBurst = window.document();
-    const double pageZoom = view->viewZoom();
-    for (int notch = 0; notch < 5; ++notch) {
-        sendWheel(*view, wheelPoint, 120, Qt::ShiftModifier);
-        QTest::qWait(25);
-    }
-    QTest::qWait(kZoomBurstMs + 150);
-
-    // Shift+wheel turned the photograph, it did not zoom it or the page. A Fill
-    // cell may raise the zoom to keep covering, which is allowed and bounded.
-    QCOMPARE(view->viewZoom(), pageZoom);
-    const Frame turned = *frameInSlot(window.document().pages.first(), slotId);
-    QVERIFY2(std::abs(turned.imageRotationDeg - 15.0) < 0.01,
-             qPrintable(QStringLiteral("rotation %1").arg(turned.imageRotationDeg)));
-    QVERIFY(turned.zoom >= before.zoom);
-    QVERIFY(turned.zoom <= kMaxFrameZoom);
-    QCOMPARE(turned.cx, before.cx);
-    QCOMPARE(turned.cy, before.cy);
-    QCOMPARE(turned.width, before.width);
-    QCOMPARE(turned.height, before.height);
-    QCOMPARE(turned.angleDeg, 0.0);
-
-    // A whole burst is one undo step.
-    QAction *undo = undoAction(window);
-    QVERIFY(undo);
-    undo->trigger();
+    auto *width = spinNamed(window, "widthSpin");
+    auto *height = spinNamed(window, "heightSpin");
+    QVERIFY(width);
+    QVERIFY(height);
+    const Slot *slot = SlotGeometry::slotById(page, slotId);
+    QVERIFY(slot);
+    const QRectF cell = SlotGeometry::slotCellMm(page, *slot);
+    width->setValue(cell.width() / 20.0);
+    commitSpin(width);
     QTest::qWait(50);
-    QVERIFY(window.document() == beforeBurst);
-}
+    height->setValue(cell.height() / 20.0);
+    commitSpin(height);
+    QTest::qWait(150);
 
-void TestSlotUi::fillRotationKeepsEveryCellCornerCovered()
-{
-    QTemporaryDir dir;
-    QVERIFY(dir.isValid());
-    const QString photo = makePhoto(dir.path(), QStringLiteral("portrait.png"),
-                                    QColor(220, 30, 30), QSize(400, 600));
-    MainWindow window;
-    window.resize(1280, 800);
-    window.show();
-    QTest::qWait(100);
-    QVERIFY(loadDocument(window, dir, documentWithPortraitSlot(photo),
-                         QStringLiteral("portrait.ppj")));
-    auto *view = window.findChild<PageView *>();
-    QVERIFY(view);
-    QVERIFY(window.waitForPreview(15000));
-
-    const QString slotId = window.document().pages.first().slotList.at(0).id;
-    QTest::mouseClick(view, Qt::LeftButton, Qt::NoModifier,
-                      view->slotRect(slotId).center().toPoint());
-    auto *rotation = sliderNamed(window, "slotRotationSlider");
-    auto *zoom = sliderNamed(window, "slotZoomSlider");
-    QVERIFY(rotation);
-    QVERIFY(zoom);
-
-    auto cornersAreOnThePhoto = [&](double degrees) {
-        const Frame *frame = frameInSlot(window.document().pages.first(), slotId);
-        if (!frame) {
-            QFAIL("the portrait cell lost its photograph");
-            return;
-        }
-        // The cover rule is a real zoom: at 45 degrees a 2:3 photo needs about
-        // 1.76x, at 90 degrees about 1.48x.
-        QVERIFY2(frame->zoom > 1.0,
-                 qPrintable(QStringLiteral("rotation %1 left zoom %2")
-                                .arg(degrees)
-                                .arg(frame->zoom)));
-        QCOMPARE(frame->cx, 45.0);
-        QCOMPARE(frame->width, 90.0);
-        QCOMPARE(frame->height, 133.5);
-
-        const QRectF rect = view->slotRect(slotId);
-        const QImage canvas = view->grab().toImage();
-        const QPointF inset(5.0, 5.0);
-        const QList<QPointF> corners = {
-            rect.topLeft() + inset, rect.topRight() + QPointF(-inset.x(), inset.y()),
-            rect.bottomLeft() + QPointF(inset.x(), -inset.y()), rect.bottomRight() - inset};
-        for (const QPointF &corner : corners) {
-            const QRgb pixel = canvas.pixel(corner.toPoint());
-            QVERIFY2(qRed(pixel) > 150 && qGreen(pixel) < 110 && qBlue(pixel) < 110,
-                     qPrintable(QStringLiteral("rotation %1 corner %2,%3 is paper: %4,%5,%6")
-                                    .arg(degrees)
-                                    .arg(corner.x())
-                                    .arg(corner.y())
-                                    .arg(qRed(pixel))
-                                    .arg(qGreen(pixel))
-                                    .arg(qBlue(pixel))));
-        }
+    const DocumentSnapshot document = window.document();
+    ImageStore store;
+    PageRenderer renderer(store);
+    const auto rendered = renderer.renderPage(document, 0, 200.0);
+    if (!rendered)
+        QFAIL(qPrintable(rendered.error().message));
+    const QImage printed = rendered.value();
+    const QSizeF sheet = pageSizeMm(document.pages.first());
+    auto isPaper = [](const QColor &colour) {
+        return colour.red() >= 245 && colour.green() >= 245 && colour.blue() >= 245;
+    };
+    auto isGreen = [](const QColor &colour) {
+        return colour.green() > 70 && colour.red() < 120 && colour.blue() < 160
+            && colour.green() > colour.red() + 30;
     };
 
-    for (const double degrees : {45.0, 90.0, 135.0, 180.0}) {
-        rotation->setValue(int(degrees));
-        QTest::qWait(600);
-        QCOMPARE(rotation->value(), int(degrees));
-        cornersAreOnThePhoto(degrees);
-    }
+    // The photograph is half the cell: the paper shows between it and the cell
+    // edge on every side.
+    QVERIFY2(isGreen(meanColourMm(printed, sheet, cell.center(), 1.5)),
+             "the smaller photograph did not print in the middle of its cell");
+    QVERIFY2(isPaper(meanColourMm(printed, sheet,
+                                  QPointF(cell.left() + 3.0, cell.top() + 3.0), 1.5)),
+             "the cell corner must stay paper around a smaller photograph");
+    QVERIFY2(isPaper(meanColourMm(printed, sheet,
+                                  QPointF(cell.right() - 3.0, cell.bottom() - 3.0), 1.5)),
+             "the far cell corner must stay paper around a smaller photograph");
+
+    // The screen uses the same painter, so the canvas agrees.
+    const QImage canvas = view->composedImage();
+    QVERIFY(!canvas.isNull());
+    const QSizeF canvasMm = view->pageMm();
+    QVERIFY(isPaper(meanColourMm(canvas, canvasMm,
+                                 QPointF(cell.left() + 3.0, cell.top() + 3.0), 1.5)));
+    QVERIFY(isGreen(meanColourMm(canvas, canvasMm, cell.center(), 1.5)));
 }
 
-void TestSlotUi::wheelToTheFloorKeepsTheSliderHonest()
+void TestSlotUi::largerPhotoIsClippedToTheCell()
 {
     QTemporaryDir dir;
     QVERIFY(dir.isValid());
-    const QString photo = makePhoto(dir.path(), QStringLiteral("floor.png"), QColor(120, 60, 170));
+    const QString photoA = makePhoto(dir.path(), QStringLiteral("big-a.png"), QColor(210, 40, 40));
     MainWindow window;
     window.resize(1280, 800);
     window.show();
     QTest::qWait(100);
-    QVERIFY(loadDocument(window, dir, documentWithLayout({photo}, 4),
-                         QStringLiteral("floor.ppj")));
+    QVERIFY(loadDocument(window, dir, documentWithLayout({photoA}, 4),
+                         QStringLiteral("big.ppj")));
     auto *view = window.findChild<PageView *>();
     QVERIFY(view);
     QVERIFY(window.waitForPreview(15000));
 
     const Page page = window.document().pages.first();
     const QString slotId = page.slotList.at(0).id;
+    const QString neighbourId = page.slotList.at(1).id;
     QTest::mouseClick(view, Qt::LeftButton, Qt::NoModifier,
                       view->slotRect(slotId).center().toPoint());
-    auto *zoom = sliderNamed(window, "slotZoomSlider");
-    auto *value = window.findChild<QLabel *>(QStringLiteral("slotZoomValue"));
-    QVERIFY(zoom);
-    QVERIFY(value);
-    // The slider covers the model's whole range, so a wheel zoom never leaves
-    // the thumb pointing at a value the frame does not hold.
-    QCOMPARE(zoom->minimum(), int(kMinFrameZoom * 100.0));
-    QCOMPARE(zoom->maximum(), int(kMaxFrameZoom * 100.0));
-
-    // Fill: zooming out with the wheel stops at the cover minimum, and the
-    // readout and the thumb both say 100 %.
-    for (int notch = 0; notch < 20; ++notch) {
-        sendWheel(*view, view->slotRect(slotId).center(), -120);
-        QTest::qWait(10);
-    }
-    QTest::qWait(kZoomBurstMs + 150);
-    QCOMPARE(frameInSlot(window.document().pages.first(), slotId)->zoom, 1.0);
-    QCOMPARE(zoom->value(), 100);
-    QCOMPARE(value->text(), QStringLiteral("100%"));
-
-    // Asking the slider for 20 % in a Fill cell lands on the same floor, and
-    // the readout neither lies nor leaves the thumb at 20.
-    zoom->setValue(20);
-    QTest::qWait(60);
-    QCOMPARE(frameInSlot(window.document().pages.first(), slotId)->zoom, 1.0);
-    QCOMPARE(zoom->value(), 100);
-    QCOMPARE(value->text(), QStringLiteral("100%"));
-
-    // Full: the same gesture reaches the model floor, and the first slider move
-    // from there is exactly the value asked for.
-    auto *fitFull = [&window] {
-        for (QPushButton *button : window.findChildren<QPushButton *>()) {
-            if (button->text() == QStringLiteral("Teljes kép"))
-                return button;
-        }
-        return static_cast<QPushButton *>(nullptr);
-    }();
-    QVERIFY(fitFull);
-    fitFull->click();
-    QTest::qWait(60);
-    QCOMPARE(frameInSlot(window.document().pages.first(), slotId)->fit, FitMode::Full);
-    for (int notch = 0; notch < 20; ++notch) {
-        sendWheel(*view, view->slotRect(slotId).center(), -120);
-        QTest::qWait(10);
-    }
-    QTest::qWait(kZoomBurstMs + 150);
-    const Frame *floorFrame = frameInSlot(window.document().pages.first(), slotId);
-    QVERIFY(floorFrame);
-    QVERIFY(std::abs(floorFrame->zoom - kMinFrameZoom) < 1e-9);
-    QCOMPARE(zoom->value(), int(kMinFrameZoom * 100.0));
-    QCOMPARE(value->text(), QStringLiteral("20%"));
-
-    zoom->setValue(50);
-    QTest::qWait(60);
-    const Frame *raised = frameInSlot(window.document().pages.first(), slotId);
-    QVERIFY(raised);
-    QVERIFY(std::abs(raised->zoom - 0.5) < 1e-9);
-    QCOMPARE(zoom->value(), 50);
-    QCOMPARE(value->text(), QStringLiteral("50%"));
-}
-
-void TestSlotUi::sliderDragPreviewsLiveAndCommitsOnce()
-{
-    QTemporaryDir dir;
-    QVERIFY(dir.isValid());
-    const QString photo = makePhoto(dir.path(), QStringLiteral("live.png"), QColor(60, 140, 120));
-    MainWindow window;
-    window.resize(1280, 800);
-    window.show();
-    QTest::qWait(100);
-    QVERIFY(loadDocument(window, dir, documentWithLayout({photo}, 4),
-                         QStringLiteral("live.ppj")));
-    auto *view = window.findChild<PageView *>();
-    QVERIFY(view);
-    QVERIFY(window.waitForPreview(15000));
-
-    const Page page = window.document().pages.first();
-    const QString slotId = page.slotList.at(0).id;
-    const QString frameId = frameInSlot(page, slotId)->id;
-    QTest::mouseClick(view, Qt::LeftButton, Qt::NoModifier,
-                      view->slotRect(slotId).center().toPoint());
-    auto *zoom = sliderNamed(window, "slotZoomSlider");
-    QVERIFY(zoom);
-
-    QUndoStack *stack = window.undoStackForTest();
-    QVERIFY(stack);
-    const int edits = stack->index();
-
-    zoom->setSliderDown(true);
-    zoom->setValue(180);
-    QTest::qWait(80);
-    // The canvas already shows the drag, the document has not changed yet.
-    const std::optional<Frame> live = view->liveFrame(frameId);
-    QVERIFY(live);
-    QVERIFY(std::abs(live->zoom - 1.8) < 1e-9);
-    QCOMPARE(frameInSlot(window.document().pages.first(), slotId)->zoom, 1.0);
-    QCOMPARE(stack->index(), edits);
-
-    zoom->setValue(240);
-    QTest::qWait(80);
-    QCOMPARE(view->liveFrame(frameId)->zoom, 2.4);
-    QCOMPARE(frameInSlot(window.document().pages.first(), slotId)->zoom, 1.0);
-    QCOMPARE(stack->index(), edits);
-
-    // One release, one edit, one undo.
-    zoom->setSliderDown(false);
-    QTest::qWait(80);
-    QCOMPARE(frameInSlot(window.document().pages.first(), slotId)->zoom, 2.4);
-    QCOMPARE(stack->index(), edits + 1);
-    undoAction(window)->trigger();
-    QTest::qWait(50);
-    QCOMPARE(frameInSlot(window.document().pages.first(), slotId)->zoom, 1.0);
-    QCOMPARE(stack->index(), edits);
-}
-
-void TestSlotUi::quarterTurnKeepsAPendingWheelBurst()
-{
-    QTemporaryDir dir;
-    QVERIFY(dir.isValid());
-    const QString photo = makePhoto(dir.path(), QStringLiteral("takeover.png"),
-                                    QColor(200, 130, 40));
-    MainWindow window;
-    window.resize(1280, 800);
-    window.show();
-    QTest::qWait(100);
-    QVERIFY(loadDocument(window, dir, documentWithLayout({photo}, 4),
-                         QStringLiteral("takeover.ppj")));
-    auto *view = window.findChild<PageView *>();
-    QVERIFY(view);
-    QVERIFY(window.waitForPreview(15000));
-
-    const Page page = window.document().pages.first();
-    const QString slotId = page.slotList.at(0).id;
-    QTest::mouseClick(view, Qt::LeftButton, Qt::NoModifier,
-                      view->slotRect(slotId).center().toPoint());
-    const DocumentSnapshot before = window.document();
-    const Frame beforeFrame = *frameInSlot(before.pages.first(), slotId);
-    QUndoStack *stack = window.undoStackForTest();
-    QVERIFY(stack);
-    const int edits = stack->index();
-
-    auto *right = window.findChild<QPushButton *>(QStringLiteral("slotRotateRight"));
-    QVERIFY(right);
-    // A wheel notch starts a burst; the quarter turn lands before its timer
-    // fires. The turn must build on the live zoom instead of the stale document.
-    sendWheel(*view, view->slotRect(slotId).center(), 120);
-    QTest::qWait(20);
-    right->click();
-    QTest::qWait(kZoomBurstMs + 200);
-
-    const Frame *after = frameInSlot(window.document().pages.first(), slotId);
-    QVERIFY(after);
-    QCOMPARE(after->imageRotationDeg, 90.0);
-    QVERIFY2(after->zoom > beforeFrame.zoom,
-             qPrintable(QStringLiteral("wheel zoom lost: %1").arg(after->zoom)));
-    QCOMPARE(stack->index(), edits + 1);
-
-    // The wheel notch and the turn are one edit and undo together.
-    undoAction(window)->trigger();
-    QTest::qWait(60);
-    QVERIFY(window.document() == before);
-}
-
-void TestSlotUi::mixedWheelBurstIsOneUndo()
-{
-    QTemporaryDir dir;
-    QVERIFY(dir.isValid());
-    const QString photo = makePhoto(dir.path(), QStringLiteral("mixed.png"), QColor(80, 110, 200));
-    MainWindow window;
-    window.resize(1280, 800);
-    window.show();
-    QTest::qWait(100);
-    QVERIFY(loadDocument(window, dir, documentWithLayout({photo}, 4),
-                         QStringLiteral("mixed.ppj")));
-    auto *view = window.findChild<PageView *>();
-    QVERIFY(view);
-    QVERIFY(window.waitForPreview(15000));
-
-    const Page page = window.document().pages.first();
-    const QString slotId = page.slotList.at(0).id;
-    QTest::mouseClick(view, Qt::LeftButton, Qt::NoModifier,
-                      view->slotRect(slotId).center().toPoint());
-    const DocumentSnapshot before = window.document();
-    QUndoStack *stack = window.undoStackForTest();
-    QVERIFY(stack);
-    const int edits = stack->index();
-
-    for (int notch = 0; notch < 3; ++notch) {
-        sendWheel(*view, view->slotRect(slotId).center(), 120);
-        QTest::qWait(10);
-    }
-    for (int notch = 0; notch < 3; ++notch) {
-        sendWheel(*view, view->slotRect(slotId).center(), 120, Qt::ShiftModifier);
-        QTest::qWait(10);
-    }
-    QTest::qWait(kZoomBurstMs + 200);
-
-    const Frame *after = frameInSlot(window.document().pages.first(), slotId);
-    QVERIFY(after);
-    QVERIFY(after->zoom > 1.0);
-    QCOMPARE(after->imageRotationDeg, 9.0);
-    QCOMPARE(stack->index(), edits + 1);
-    undoAction(window)->trigger();
-    QTest::qWait(60);
-    QVERIFY(window.document() == before);
-}
-
-void TestSlotUi::inSlotLabelsAreBuddyLinked()
-{
-    QTemporaryDir dir;
-    QVERIFY(dir.isValid());
-    const QString photo = makePhoto(dir.path(), QStringLiteral("buddy.png"), QColor(150, 90, 150));
-    MainWindow window;
-    window.resize(1280, 800);
-    window.show();
-    QTest::qWait(100);
-    QVERIFY(loadDocument(window, dir, documentWithLayout({photo}, 4),
-                         QStringLiteral("buddy.ppj")));
-    auto *view = window.findChild<PageView *>();
-    QVERIFY(view);
-    QVERIFY(window.waitForPreview(15000));
-    const QString slotId = window.document().pages.first().slotList.at(0).id;
-    QTest::mouseClick(view, Qt::LeftButton, Qt::NoModifier,
-                      view->slotRect(slotId).center().toPoint());
-
-    auto *zoom = sliderNamed(window, "slotZoomSlider");
-    auto *rotation = sliderNamed(window, "slotRotationSlider");
-    QVERIFY(zoom);
-    QVERIFY(rotation);
-    QLabel *zoomLabel = nullptr;
-    QLabel *rotationLabel = nullptr;
-    for (QLabel *label : window.findChildren<QLabel *>()) {
-        if (label->text() == QStringLiteral("Nagyítás") && label->buddy() == zoom)
-            zoomLabel = label;
-        if (label->text() == QStringLiteral("Forgatás") && label->buddy() == rotation)
-            rotationLabel = label;
-    }
-    QVERIFY2(zoomLabel, "the zoom label is not buddy-linked to its slider");
-    QVERIFY2(rotationLabel, "the rotation label is not buddy-linked to its slider");
-    // The screen reader gets a name for each slider as well.
-    QCOMPARE(zoom->accessibleName(), QStringLiteral("Nagyítás"));
-    QCOMPARE(rotation->accessibleName(), QStringLiteral("Forgatás"));
-}
-
-void TestSlotUi::inSlotControlsFollowSelectionAndUndo()
-{
-    QTemporaryDir dir;
-    QVERIFY(dir.isValid());
-    const QString photoA = makePhoto(dir.path(), QStringLiteral("sync-a.png"), QColor(180, 60, 60));
-    const QString photoB = makePhoto(dir.path(), QStringLiteral("sync-b.png"), QColor(60, 60, 180));
-    MainWindow window;
-    window.resize(1280, 800);
-    window.show();
-    QTest::qWait(100);
-    QVERIFY(loadDocument(window, dir, documentWithLayout({photoA, photoB}, 4),
-                         QStringLiteral("sync.ppj")));
-    auto *view = window.findChild<PageView *>();
-    QVERIFY(view);
-    QVERIFY(window.waitForPreview(15000));
-
-    Page page = window.document().pages.first();
-    const QString slotA = page.slotList.at(0).id;
-    const QString slotB = page.slotList.at(1).id;
-    QTest::mouseClick(view, Qt::LeftButton, Qt::NoModifier,
-                      view->slotRect(slotA).center().toPoint());
-
-    auto *zoom = sliderNamed(window, "slotZoomSlider");
-    auto *rotation = sliderNamed(window, "slotRotationSlider");
-    QVERIFY(zoom);
-    QVERIFY(rotation);
-    zoom->setValue(300);
-    QTest::qWait(50);
-    rotation->setValue(40);
-    QTest::qWait(50);
-
-    QUndoStack *stack = window.undoStackForTest();
-    QVERIFY(stack);
-    const int edits = stack->count();
-    const int position = stack->index();
-
-    // Selecting a different cell shows that photograph's own values ...
-    QTest::mouseClick(view, Qt::LeftButton, Qt::NoModifier,
-                      view->slotRect(slotB).center().toPoint());
-    QCOMPARE(zoom->value(), 100);
-    QCOMPARE(rotation->value(), 0);
-    // ... and selection itself is never an edit.
-    QCOMPARE(stack->count(), edits);
-    QCOMPARE(stack->index(), position);
-
-    // Back on the first cell the stored values return.
-    QTest::mouseClick(view, Qt::LeftButton, Qt::NoModifier,
-                      view->slotRect(slotA).center().toPoint());
-    QCOMPARE(zoom->value(), 300);
-    QCOMPARE(rotation->value(), 40);
-    QCOMPARE(stack->count(), edits);
-
-    // An undo updates the controls without pushing another edit.
-    QAction *undo = undoAction(window);
-    QVERIFY(undo);
-    undo->trigger();
-    QTest::qWait(50);
-    QCOMPARE(rotation->value(), 0);
-    QCOMPARE(zoom->value(), 300);
-    QCOMPARE(stack->count(), edits);
-    QCOMPARE(stack->index(), position - 1);
-    undo->trigger();
-    QTest::qWait(50);
-    QCOMPARE(zoom->value(), 100);
-    QCOMPARE(stack->count(), edits);
-    QCOMPARE(stack->index(), position - 2);
-}
-
-void TestSlotUi::freeFrameHasNoInSlotControls()
-{
-    QTemporaryDir dir;
-    QVERIFY(dir.isValid());
-    const QString photo = makePhoto(dir.path(), QStringLiteral("free.png"), QColor(90, 150, 150));
-    MainWindow window;
-    window.resize(1280, 800);
-    window.show();
-    QTest::qWait(100);
-    QVERIFY(loadDocument(window, dir, documentWithFreeFrames({photo}),
-                         QStringLiteral("free.ppj")));
-    auto *view = window.findChild<PageView *>();
-    QVERIFY(view);
-    QVERIFY(window.waitForPreview(15000));
-
-    QTest::mouseClick(view, Qt::LeftButton, Qt::NoModifier,
-                      pageToWidget(*view, QPointF(60.0, 80.0)).toPoint());
-    QCOMPARE(view->selectedFrame(), QStringLiteral("frame-free-0"));
-
-    auto *panel = window.findChild<QWidget *>(QStringLiteral("slotImagePanel"));
-    QVERIFY(panel);
-    QVERIFY(!panel->isVisible());
-    // The free frame's own geometry controls stay available instead.
     auto *width = spinNamed(window, "widthSpin");
+    auto *height = spinNamed(window, "heightSpin");
     QVERIFY(width);
-    QVERIFY(width->isEnabled());
+    QVERIFY(height);
+    const Slot *slot = SlotGeometry::slotById(page, slotId);
+    const Slot *neighbour = SlotGeometry::slotById(page, neighbourId);
+    QVERIFY(slot);
+    QVERIFY(neighbour);
+    const QRectF cell = SlotGeometry::slotCellMm(page, *slot);
+    const QRectF otherCell = SlotGeometry::slotCellMm(page, *neighbour);
+    width->setValue(cell.width() / 10.0 * 1.4);
+    commitSpin(width);
+    QTest::qWait(50);
+    height->setValue(cell.height() / 10.0 * 1.4);
+    commitSpin(height);
+    QTest::qWait(150);
+
+    const DocumentSnapshot document = window.document();
+    ImageStore store;
+    PageRenderer renderer(store);
+    const auto rendered = renderer.renderPage(document, 0, 200.0);
+    if (!rendered)
+        QFAIL(qPrintable(rendered.error().message));
+    const QImage printed = rendered.value();
+    const QSizeF sheet = pageSizeMm(document.pages.first());
+    auto isPaper = [](const QColor &colour) {
+        return colour.red() >= 245 && colour.green() >= 245 && colour.blue() >= 245;
+    };
+    auto isRed = [](const QColor &colour) {
+        return colour.red() > 150 && colour.green() < 120 && colour.blue() < 120;
+    };
+
+    // A photograph larger than the cell reaches every cell edge ...
+    QVERIFY(isRed(meanColourMm(printed, sheet, cell.center(), 1.0)));
+    QVERIFY2(isRed(meanColourMm(printed, sheet,
+                                QPointF(cell.left() + 0.6, cell.center().y()), 0.6)),
+             "the oversized photograph did not reach the cell edge");
+    // ... and stops there: the gap and the neighbour stay paper.
+    QVERIFY2(isPaper(meanColourMm(printed, sheet,
+                                  QPointF(cell.right() + 1.5, cell.center().y()), 1.0)),
+             "the photograph bled into the gap");
+    QVERIFY2(isPaper(meanColourMm(printed, sheet, otherCell.center(), 1.5)),
+             "the oversized photograph covered the neighbouring cell");
+
+    const QImage canvas = view->composedImage();
+    QVERIFY(!canvas.isNull());
+    const QSizeF canvasMm = view->pageMm();
+    QVERIFY(isPaper(meanColourMm(canvas, canvasMm,
+                                 QPointF(cell.right() + 1.5, cell.center().y()), 1.0)));
+    QVERIFY(isRed(meanColourMm(canvas, canvasMm, cell.center(), 1.0)));
 }
 
 void TestSlotUi::rotatedPhotoStaysInsideTheSlotOnCanvas()
@@ -1700,42 +1332,53 @@ void TestSlotUi::rotatedPhotoStaysInsideTheSlotOnCanvas()
     QVERIFY(view);
     QVERIFY(window.waitForPreview(15000));
 
-    Page page = window.document().pages.first();
+    const Page page = window.document().pages.first();
     const QString slotId = page.slotList.at(0).id;
     QTest::mouseClick(view, Qt::LeftButton, Qt::NoModifier,
                       view->slotRect(slotId).center().toPoint());
-    auto *zoom = sliderNamed(window, "slotZoomSlider");
-    auto *rotation = sliderNamed(window, "slotRotationSlider");
-    QVERIFY(zoom);
-    QVERIFY(rotation);
-    // A large, tilted photograph would bleed far past the cell without a clip.
-    zoom->setValue(800);
-    QTest::qWait(50);
-    rotation->setValue(45);
-    QTest::qWait(600);
-
-    page = window.document().pages.first();
+    auto *width = spinNamed(window, "widthSpin");
+    auto *height = spinNamed(window, "heightSpin");
+    auto *angle = spinNamed(window, "angleSpin");
+    QVERIFY(width);
+    QVERIFY(height);
+    QVERIFY(angle);
     const Slot *slot = SlotGeometry::slotById(page, slotId);
     QVERIFY(slot);
-    const QRectF photoRect = SlotGeometry::slotPhotoRectMm(page, *slot);
-    const QImage canvas = view->grab().toImage();
-    auto sample = [&](const QPointF &mm) {
-        const QPointF widget = pageToWidget(*view, mm);
-        return canvas.pixel(widget.toPoint());
-    };
-    const QRgb inside = sample(photoRect.center());
-    QVERIFY2(qRed(inside) > 150 && qGreen(inside) < 110,
-             qPrintable(QStringLiteral("slot centre %1,%2,%3")
-                            .arg(qRed(inside)).arg(qGreen(inside)).arg(qBlue(inside))));
+    const QRectF cell = SlotGeometry::slotCellMm(page, *slot);
+    // A large, tilted frame would bleed far past the cell without a clip.
+    width->setValue(cell.width() / 10.0 * 1.5);
+    commitSpin(width);
+    QTest::qWait(50);
+    height->setValue(cell.height() / 10.0 * 1.5);
+    commitSpin(height);
+    QTest::qWait(50);
+    angle->setValue(35.0);
+    commitSpin(angle);
+    QTest::qWait(600);
 
-    // The gutter between the two cells and the paper margin stay paper white.
+    const DocumentSnapshot document = window.document();
+    const QImage canvas = view->composedImage();
+    QVERIFY(!canvas.isNull());
     const QSizeF sheet = view->pageMm();
-    const QPointF gutter(sheet.width() / 2.0, photoRect.center().y());
-    QVERIFY(qRed(sample(gutter)) > 235 && qGreen(sample(gutter)) > 235
-            && qBlue(sample(gutter)) > 235);
+    auto sample = [&](const QPointF &mm) {
+        return meanColourMm(canvas, sheet, mm, 1.0);
+    };
+    auto isPaper = [](const QColor &colour) {
+        return colour.red() >= 245 && colour.green() >= 245 && colour.blue() >= 245;
+    };
+    auto isRed = [](const QColor &colour) {
+        return colour.red() > 150 && colour.green() < 120 && colour.blue() < 120;
+    };
+    QVERIFY(isRed(sample(cell.center())));
+    // The gutter between the two cells and the paper margin stay paper white
+    // even though the frame is larger than its cell and turned.
+    QVERIFY2(isPaper(sample(QPointF(sheet.width() / 2.0, cell.center().y()))),
+             "the turned photograph bled into the gap");
+    QVERIFY2(isPaper(sample(QPointF(cell.center().x(), cell.top() - 3.0))),
+             "the turned photograph bled into the margin");
 }
 
-void TestSlotUi::slottedImageStateSurvivesSaveAndLoad()
+void TestSlotUi::frameGeometryAndAngleSurviveSaveAndLoad()
 {
     QTemporaryDir dir;
     QVERIFY(dir.isValid());
@@ -1755,26 +1398,30 @@ void TestSlotUi::slottedImageStateSurvivesSaveAndLoad()
     const QString frameId = frameInSlot(page, slotId)->id;
     QTest::mouseClick(view, Qt::LeftButton, Qt::NoModifier,
                       view->slotRect(slotId).center().toPoint());
-    auto *zoom = sliderNamed(window, "slotZoomSlider");
-    auto *rotation = sliderNamed(window, "slotRotationSlider");
-    QVERIFY(zoom);
-    QVERIFY(rotation);
-    zoom->setValue(350);
-    QTest::qWait(50);
-    rotation->setValue(135);
-    QTest::qWait(50);
 
-    // Pan as well, so the round trip covers the crop centre the gesture wrote.
+    // Move it, resize it and turn it: the composition inside the section.
     const QPointF start = view->slotRect(slotId).center();
     QTest::mousePress(view, Qt::LeftButton, Qt::NoModifier, start.toPoint());
-    QTest::mouseMove(view, (start + QPointF(30.0, 0.0)).toPoint());
+    QTest::mouseMove(view, (start + QPointF(25.0, 15.0)).toPoint());
     QTest::mouseRelease(view, Qt::LeftButton, Qt::NoModifier,
-                        (start + QPointF(30.0, 0.0)).toPoint());
+                        (start + QPointF(25.0, 15.0)).toPoint());
+    QTest::qWait(50);
+    auto *width = spinNamed(window, "widthSpin");
+    auto *angle = spinNamed(window, "angleSpin");
+    QVERIFY(width);
+    QVERIFY(angle);
+    const Slot *slot = SlotGeometry::slotById(page, slotId);
+    QVERIFY(slot);
+    const QRectF cell = SlotGeometry::slotCellMm(page, *slot);
+    width->setValue(cell.width() / 10.0 * 0.75);
+    commitSpin(width);
+    QTest::qWait(50);
+    angle->setValue(-18.0);
+    commitSpin(angle);
     QTest::qWait(50);
 
     const Frame stored = *frameInSlot(window.document().pages.first(), slotId);
-    QVERIFY(std::abs(stored.zoom - 3.5) < 0.001);
-    QCOMPARE(stored.imageRotationDeg, 135.0);
+    QVERIFY(!SlotGeometry::slotGeometryMatches(window.document().pages.first(), stored));
 
     const QString path = dir.filePath(QStringLiteral("persisted.ppj"));
     ProjectStore store;
@@ -1782,14 +1429,172 @@ void TestSlotUi::slottedImageStateSurvivesSaveAndLoad()
     const auto loaded = store.load(path);
     if (!loaded)
         QFAIL(qPrintable(loaded.error().message));
-    const Frame *restored = findFrame(loaded.value().document, frameId);
+    const Page restoredPage = loaded.value().document.pages.first();
+    const Frame *restored = SlotGeometry::frameInSlot(restoredPage, slotId);
     QVERIFY(restored);
-    QCOMPARE(restored->zoom, stored.zoom);
-    QCOMPARE(restored->imageRotationDeg, stored.imageRotationDeg);
-    QCOMPARE(restored->cropCenter, stored.cropCenter);
+    QCOMPARE(restored->id, frameId);
     QCOMPARE(restored->slotId, slotId);
+    QCOMPARE(restored->cx, stored.cx);
+    QCOMPARE(restored->cy, stored.cy);
     QCOMPARE(restored->width, stored.width);
     QCOMPARE(restored->height, stored.height);
+    QCOMPARE(restored->angleDeg, stored.angleDeg);
+    QCOMPARE(restored->cropCenter, stored.cropCenter);
+    QVERIFY(SlotGeometry::layoutConsistent(restoredPage));
+}
+
+void TestSlotUi::paperChangeKeepsTheCompositionInsideTheSection()
+{
+    QTemporaryDir dir;
+    QVERIFY(dir.isValid());
+    const QString photo = makePhoto(dir.path(), QStringLiteral("remap.png"), QColor(120, 60, 180));
+    MainWindow window;
+    window.resize(1280, 800);
+    window.show();
+    QTest::qWait(100);
+    QVERIFY(loadDocument(window, dir, documentWithLayout({photo}, 4),
+                         QStringLiteral("remap.ppj")));
+    auto *view = window.findChild<PageView *>();
+    QVERIFY(view);
+    QVERIFY(window.waitForPreview(15000));
+
+    const Page page = window.document().pages.first();
+    const QString slotId = page.slotList.at(0).id;
+    QTest::mouseClick(view, Qt::LeftButton, Qt::NoModifier,
+                      view->slotRect(slotId).center().toPoint());
+    // Compose inside the section: smaller, moved and turned.
+    const QPointF start = view->slotRect(slotId).center();
+    QTest::mousePress(view, Qt::LeftButton, Qt::NoModifier, start.toPoint());
+    QTest::mouseMove(view, (start + QPointF(-30.0, 20.0)).toPoint());
+    QTest::mouseRelease(view, Qt::LeftButton, Qt::NoModifier,
+                        (start + QPointF(-30.0, 20.0)).toPoint());
+    QTest::qWait(50);
+    auto *width = spinNamed(window, "widthSpin");
+    auto *angle = spinNamed(window, "angleSpin");
+    QVERIFY(width);
+    QVERIFY(angle);
+    const Slot *slot = SlotGeometry::slotById(page, slotId);
+    QVERIFY(slot);
+    const QRectF oldCell = SlotGeometry::slotCellMm(page, *slot);
+    width->setValue(oldCell.width() / 10.0 * 0.6);
+    commitSpin(width);
+    QTest::qWait(50);
+    angle->setValue(14.0);
+    commitSpin(angle);
+    QTest::qWait(50);
+
+    const Page before = window.document().pages.first();
+    const Frame beforeFrame = *frameInSlot(before, slotId);
+    const double relX = (beforeFrame.cx - oldCell.center().x()) / oldCell.width();
+    const double relY = (beforeFrame.cy - oldCell.center().y()) / oldCell.height();
+    const double relW = beforeFrame.width / oldCell.width();
+    const double relH = beforeFrame.height / oldCell.height();
+    const QRectF unit = before.slotList.at(0).unitRect;
+
+    QComboBox *paper = paperCombo(window);
+    QVERIFY(paper);
+    int tenByFifteen = -1;
+    for (int i = 0; i < paper->count(); ++i) {
+        if (paper->itemText(i).startsWith(QStringLiteral("10 × 15 cm")))
+            tenByFifteen = i;
+    }
+    QVERIFY(tenByFifteen >= 0);
+    paper->setCurrentIndex(tenByFifteen);
+    QTest::qWait(150);
+
+    const Page after = window.document().pages.first();
+    QCOMPARE(after.paper.name, QStringLiteral("10 × 15 cm"));
+    const Slot *newSlot = SlotGeometry::slotById(after, slotId);
+    QVERIFY(newSlot);
+    const QRectF newCell = SlotGeometry::slotCellMm(after, *newSlot);
+    const Frame *afterFrame = frameInSlot(after, slotId);
+    QVERIFY(afterFrame);
+    QVERIFY2(std::abs((afterFrame->cx - newCell.center().x()) / newCell.width() - relX) < 1e-6,
+             "the horizontal composition did not survive the paper change");
+    QVERIFY2(std::abs((afterFrame->cy - newCell.center().y()) / newCell.height() - relY) < 1e-6,
+             "the vertical composition did not survive the paper change");
+    QVERIFY2(std::abs(afterFrame->width / newCell.width() - relW) < 1e-6,
+             "the width did not scale with the cell");
+    QVERIFY2(std::abs(afterFrame->height / newCell.height() - relH) < 1e-6,
+             "the height did not scale with the cell");
+    QCOMPARE(afterFrame->angleDeg, 14.0);
+    QCOMPARE(after.slotList.at(0).unitRect, unit);
+
+    // One paper change, one undo: the exact previous composition returns.
+    undoAction(window)->trigger();
+    QTest::qWait(100);
+    QVERIFY(window.document().pages.first() == before);
+}
+
+void TestSlotUi::frameControlsFollowSelectionAndUndo()
+{
+    QTemporaryDir dir;
+    QVERIFY(dir.isValid());
+    const QString photoA = makePhoto(dir.path(), QStringLiteral("sync-a.png"), QColor(180, 60, 60));
+    const QString photoB = makePhoto(dir.path(), QStringLiteral("sync-b.png"), QColor(60, 60, 180));
+    MainWindow window;
+    window.resize(1280, 800);
+    window.show();
+    QTest::qWait(100);
+    QVERIFY(loadDocument(window, dir, documentWithLayout({photoA, photoB}, 4),
+                         QStringLiteral("sync.ppj")));
+    auto *view = window.findChild<PageView *>();
+    QVERIFY(view);
+    QVERIFY(window.waitForPreview(15000));
+
+    const Page page = window.document().pages.first();
+    const QString slotA = page.slotList.at(0).id;
+    const QString slotB = page.slotList.at(1).id;
+    QTest::mouseClick(view, Qt::LeftButton, Qt::NoModifier,
+                      view->slotRect(slotA).center().toPoint());
+
+    auto *angle = spinNamed(window, "angleSpin");
+    auto *width = spinNamed(window, "widthSpin");
+    QVERIFY(angle);
+    QVERIFY(width);
+    angle->setValue(30.0);
+    commitSpin(angle);
+    QTest::qWait(50);
+    width->setValue(2.0);
+    commitSpin(width);
+    QTest::qWait(50);
+
+    QUndoStack *stack = window.undoStackForTest();
+    QVERIFY(stack);
+    const int edits = stack->count();
+    const int position = stack->index();
+    const Slot *slotBPtr = SlotGeometry::slotById(window.document().pages.first(), slotB);
+    QVERIFY(slotBPtr);
+    const QRectF cellB = SlotGeometry::slotCellMm(window.document().pages.first(), *slotBPtr);
+
+    // Selecting another cell shows that frame's own values ...
+    QTest::mouseClick(view, Qt::LeftButton, Qt::NoModifier,
+                      view->slotRect(slotB).center().toPoint());
+    QCOMPARE(angle->value(), 0.0);
+    QVERIFY(std::abs(width->value() - cellB.width() / 10.0) < 0.011);
+    // ... and selection itself is never an edit.
+    QCOMPARE(stack->count(), edits);
+    QCOMPARE(stack->index(), position);
+
+    // Back on the first cell the stored values return.
+    QTest::mouseClick(view, Qt::LeftButton, Qt::NoModifier,
+                      view->slotRect(slotA).center().toPoint());
+    QCOMPARE(angle->value(), 30.0);
+    QCOMPARE(width->value(), 2.0);
+    QCOMPARE(stack->count(), edits);
+
+    // An undo updates the controls without pushing another edit.
+    QAction *undo = undoAction(window);
+    QVERIFY(undo);
+    undo->trigger();
+    QTest::qWait(50);
+    QCOMPARE(angle->value(), 30.0);
+    QVERIFY(width->value() > 2.5);
+    QCOMPARE(stack->count(), edits);
+    undo->trigger();
+    QTest::qWait(50);
+    QCOMPARE(angle->value(), 0.0);
+    QCOMPARE(stack->count(), edits);
 }
 
 void TestSlotUi::addPhotoFillsFirstEmptySlot()
@@ -2378,6 +2183,10 @@ void TestSlotUi::externalReplacementCancelsWheelBurst()
     view.setFrameImages({{frameId, pixels}});
     view.show();
     QVERIFY(QTest::qWaitForWindowExposed(&view));
+    // The wheel only magnifies the photograph in crop mode; outside it the page
+    // zooms and there is no burst to cancel.
+    view.setSelectedFrame(frameId);
+    view.setCropMode(true);
     int commits = 0;
     view.onFrameCommitted = [&commits](const Frame &) { ++commits; };
 
@@ -2393,7 +2202,7 @@ void TestSlotUi::externalReplacementCancelsWheelBurst()
     QCOMPARE(commits, 0);
 }
 
-void TestSlotUi::slottedFrameControlsAreDisabled()
+void TestSlotUi::slottedFrameControlsAreEnabled()
 {
     QTemporaryDir dir;
     QVERIFY(dir.isValid());
@@ -2419,11 +2228,13 @@ void TestSlotUi::slottedFrameControlsAreDisabled()
     QVERIFY(width);
     QVERIFY(height);
     QVERIFY(angle);
-    QVERIFY(!width->isEnabled());
-    QVERIFY(!height->isEnabled());
-    QVERIFY(!angle->isEnabled());
+    // The original geometry controls are the slotted frame's controls too.
+    QVERIFY(width->isEnabled());
+    QVERIFY(height->isEnabled());
+    QVERIFY(angle->isEnabled());
 
-    // "Igazítás a laphoz" is a no-op on a laid-out page: no edit, no undo step.
+    // "Igazítás a laphoz" stays a no-op on a laid-out page: the cells already
+    // fit the sheet and the composition inside a section is the user's.
     const DocumentSnapshot before = window.document();
     QAction *undo = undoAction(window);
     QVERIFY(undo);
@@ -2433,7 +2244,7 @@ void TestSlotUi::slottedFrameControlsAreDisabled()
     QVERIFY(window.document() == before);
     QCOMPARE(undo->text(), undoText);
 
-    // A free canvas keeps its controls: nothing above is a blanket disable.
+    // A free canvas keeps the same controls: nothing above is a special case.
     MainWindow freeWindow;
     freeWindow.resize(1280, 800);
     freeWindow.show();

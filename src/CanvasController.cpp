@@ -198,26 +198,42 @@ private:
     int m_pageIndex;
 };
 
+void rotatePageTo(Page &page, bool targetLandscape);
+
 class SetPaperCommand : public QUndoCommand
 {
 public:
     SetPaperCommand(CanvasController *controller, int pageIndex, PaperSpec paper,
                     QUndoCommand *parent = nullptr)
-        : QUndoCommand(parent), m_controller(controller), m_pageIndex(pageIndex),
-          m_after(std::move(paper))
+        : QUndoCommand(parent), m_controller(controller), m_pageIndex(pageIndex)
     {
-        if (pageIndex >= 0 && pageIndex < m_controller->document().pages.size())
-            m_before = m_controller->document().pages.at(pageIndex).paper;
+        if (pageIndex < 0 || pageIndex >= m_controller->document().pages.size())
+            return;
+        // The whole page on both sides, because a paper change re-maps the
+        // slotted photographs proportionally with their cells. Storing the pages
+        // makes undo exact instead of relying on the inverse of a scale.
+        m_before = m_controller->document().pages.at(pageIndex);
+        m_after = m_before;
+        m_after.paper = std::move(paper);
+        m_after = SlotGeometry::remapToPaper(m_before, std::move(m_after));
     }
 
-    void undo() override { m_controller->setPaper(m_pageIndex, m_before); }
-    void redo() override { m_controller->setPaper(m_pageIndex, m_after); }
+    void undo() override
+    {
+        if (m_pageIndex >= 0)
+            m_controller->replacePage(m_pageIndex, m_before);
+    }
+    void redo() override
+    {
+        if (m_pageIndex >= 0)
+            m_controller->replacePage(m_pageIndex, m_after);
+    }
 
 private:
     CanvasController *m_controller;
     int m_pageIndex;
-    PaperSpec m_before;
-    PaperSpec m_after;
+    Page m_before;
+    Page m_after;
 };
 
 class RotatePageCommand : public QUndoCommand
@@ -226,31 +242,43 @@ public:
     RotatePageCommand(CanvasController *controller, int pageIndex, QUndoCommand *parent = nullptr)
         : QUndoCommand(parent), m_controller(controller), m_pageIndex(pageIndex)
     {
-        if (pageIndex >= 0 && pageIndex < m_controller->document().pages.size())
-            m_before = m_controller->document().pages.at(pageIndex).landscape;
+        if (pageIndex < 0 || pageIndex >= m_controller->document().pages.size())
+            return;
+        m_before = m_controller->document().pages.at(pageIndex);
+        m_after = m_before;
+        rotatePageTo(m_after, !m_before.landscape);
     }
 
-    void undo() override { m_controller->setPageLandscape(m_pageIndex, m_before); }
-    void redo() override { m_controller->setPageLandscape(m_pageIndex, !m_before); }
+    void undo() override
+    {
+        if (m_pageIndex >= 0)
+            m_controller->replacePage(m_pageIndex, m_before);
+    }
+    void redo() override
+    {
+        if (m_pageIndex >= 0)
+            m_controller->replacePage(m_pageIndex, m_after);
+    }
 
 private:
     CanvasController *m_controller;
     int m_pageIndex;
-    bool m_before = false;
+    Page m_before;
+    Page m_after;
 };
 
 void rotatePageTo(Page &page, bool targetLandscape)
 {
     if (page.landscape == targetLandscape)
         return;
+    // A slotted frame is re-mapped from the cell it had on the old sheet to the
+    // cell it has on the new one, so its composition inside the section
+    // survives the turn. The old page is the reference for that mapping.
+    const Page before = page;
     const QSizeF oldSize = pageSizeMm(page);
     const bool forward = targetLandscape;
     page.landscape = targetLandscape;
     for (Frame &frame : page.frames) {
-        // A slotted frame's rectangle is owned by its slot, which is stored in
-        // unit space and therefore survives the turn by construction. Rotating
-        // its geometry here would bank a 90 degree angle on every turn; the
-        // remap below re-derives it instead.
         if (!frame.slotId.isEmpty())
             continue;
         const double oldX = frame.cx;
@@ -269,11 +297,8 @@ void rotatePageTo(Page &page, bool targetLandscape)
         while (frame.angleDeg <= -180.0)
             frame.angleDeg += 360.0;
     }
-    if (page.hasLayout()) {
-        const auto remapped = SlotLayoutEngine::remap(page);
-        if (remapped)
-            page = remapped.value();
-    }
+    if (page.hasLayout())
+        page = SlotGeometry::remapToPaper(before, std::move(page));
 }
 
 Page fittedPage(const Page &page)
@@ -284,6 +309,11 @@ Page fittedPage(const Page &page)
         return fitted;
     double factor = 1.0;
     for (const Frame &frame : page.frames) {
+        // A slotted photograph is clipped to its cell, so it can never overflow
+        // the sheet and fitting it would only break the composition inside the
+        // section.
+        if (!frame.slotId.isEmpty())
+            continue;
         if (!LayoutEngine::validFrame(frame))
             continue;
         const double rad = qDegreesToRadians(frame.angleDeg);
@@ -300,6 +330,8 @@ Page fittedPage(const Page &page)
     }
     factor = std::clamp(factor, 0.02, 1.0);
     for (Frame &frame : fitted.frames) {
+        if (!frame.slotId.isEmpty())
+            continue;
         frame.cx = size.width() / 2.0 + (frame.cx - size.width() / 2.0) * factor;
         frame.cy = size.height() / 2.0 + (frame.cy - size.height() / 2.0) * factor;
         frame.width *= factor;
@@ -392,9 +424,10 @@ Result<void> CanvasController::apply(const DocumentEdit &edit)
                 const LocatedFrame located = locate(m_document, value.frameId);
                 if (located.frameIndex < 0)
                     return Result<void>();
-                // Repair the proposed state before the no-op comparison: a
-                // FrameChange that only drifts a slotted frame's geometry would
-                // otherwise push an undo step that undoes to the same document.
+                // Repair the proposed state before the no-op comparison, so a
+                // FrameChange that repairs to the current document (a dangling
+                // slot id, say) does not push a dead undo step. Geometry is not
+                // repaired: a slotted frame's rectangle is the user's.
                 DocumentSnapshot probe = m_document;
                 if (Frame *target = findFrame(probe, value.frameId)) {
                     *target = value.frame;
@@ -496,8 +529,13 @@ Result<void> CanvasController::apply(const DocumentEdit &edit)
                 if (!differs)
                     return Result<void>();
                 DocumentSnapshot after = m_document;
-                for (Page &page : after.pages)
+                for (Page &page : after.pages) {
+                    // Each page is re-mapped from its own old sheet, so the
+                    // composition inside every section survives the change.
+                    const Page before = page;
                     page.paper = value.paper;
+                    page = SlotGeometry::remapToPaper(before, std::move(page));
+                }
                 auto repaired = SlotLayoutEngine::repair(std::move(after));
                 if (!repaired)
                     return repaired.error();
@@ -534,9 +572,9 @@ Result<void> CanvasController::apply(const DocumentEdit &edit)
                     return Result<void>();
                 DocumentSnapshot after = m_document;
                 after.pages[value.pageIndex].frames = value.frames;
-                // A frames edit that leaves a slotted frame drifted is repaired
-                // first; if it then equals the current document it is not an
-                // edit and must not push a dead undo step.
+                // Repair the slot assignments first; if the result equals the
+                // current document it is not an edit and must not push a dead
+                // undo step. Frame geometry is the user's and is kept.
                 auto repaired = SlotLayoutEngine::repair(std::move(after));
                 if (!repaired)
                     return repaired.error();
@@ -681,15 +719,6 @@ void CanvasController::insertFrame(const Frame &frame)
     insertFrameAt(-1, frame);
 }
 
-void CanvasController::setPaper(int pageIndex, const PaperSpec &paper)
-{
-    if (pageIndex < 0 || pageIndex >= m_document.pages.size())
-        return;
-    m_document.pages[pageIndex].paper = paper;
-    repairDocument();
-    emit documentChanged(m_document);
-}
-
 void CanvasController::setCurrentPage(int index)
 {
     if (index < 0 || index >= m_document.pages.size() || index == m_document.currentPage)
@@ -704,9 +733,9 @@ void CanvasController::replaceSnapshot(const DocumentSnapshot &snapshot)
     if (m_document.currentPage < 0 || m_document.currentPage >= m_document.pages.size())
         m_document.currentPage = std::clamp(m_document.currentPage, 0,
                                             std::max(0, int(m_document.pages.size()) - 1));
-    // Undo and redo land here. Repairing rather than rotating is what keeps a
-    // slotted frame's angle at zero across a paper or orientation round trip: the
-    // geometry comes from the unit rectangle of the restored page.
+    // Undo and redo land here. Repairing keeps the slot invariant (at most one
+    // frame per slot, no dangling id) without touching the frame geometry a
+    // person composed inside a cell.
     repairDocument();
     emit documentChanged(m_document);
 }
@@ -726,20 +755,6 @@ void CanvasController::fitPageToPaper(int pageIndex)
         return;
     const Page fitted = fittedPage(m_document.pages.at(pageIndex));
     replacePage(pageIndex, fitted);
-}
-
-void CanvasController::setPageLandscape(int pageIndex, bool landscape)
-{
-    if (pageIndex < 0 || pageIndex >= m_document.pages.size())
-        return;
-    Page &page = m_document.pages[pageIndex];
-    if (page.landscape == landscape)
-        return;
-    // One rotation rule for the page and the project-wide setter: free frames
-    // turn, slotted frames are remapped from their unit rectangles.
-    rotatePageTo(page, landscape);
-    repairDocument();
-    emit documentChanged(m_document);
 }
 
 void CanvasController::insertFrameAt(int pageIndex, const Frame &frame)

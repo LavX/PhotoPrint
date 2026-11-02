@@ -1571,43 +1571,43 @@
     </message>
     <message>
         <source>Kép a helyén</source>
-        <translation>Photo in its place</translation>
+        <translation type="vanished">Photo in its place</translation>
     </message>
     <message>
         <source>Nagyítás</source>
-        <translation>Zoom</translation>
+        <translation type="vanished">Zoom</translation>
     </message>
     <message>
         <source>Forgatás</source>
-        <translation>Rotation</translation>
+        <translation type="vanished">Rotation</translation>
     </message>
     <message>
         <source>Balra 90°</source>
-        <translation>90° left</translation>
+        <translation type="vanished">90° left</translation>
     </message>
     <message>
         <source>Jobbra 90°</source>
-        <translation>90° right</translation>
+        <translation type="vanished">90° right</translation>
     </message>
     <message>
         <source>Alaphelyzet</source>
-        <translation>Reset</translation>
+        <translation type="vanished">Reset</translation>
     </message>
     <message>
         <source>Visszaállítja a kép nagyítását, helyét és forgatását.</source>
-        <translation>Restores the photo's zoom, position and rotation.</translation>
+        <translation type="vanished">Restores the photo's zoom, position and rotation.</translation>
     </message>
     <message>
         <source>Húzd a fotót a mozgatáshoz. A kerék nagyít, a Shift+kerék forgat, a Ctrl+kerék a lapot nagyítja.</source>
-        <translation>Drag the photo to move it. The wheel zooms, Shift+wheel rotates, Ctrl+wheel zooms the page.</translation>
+        <translation type="vanished">Drag the photo to move it. The wheel zooms, Shift+wheel rotates, Ctrl+wheel zooms the page.</translation>
     </message>
     <message>
         <source>A kerék nagyít, a Ctrl+kerék a lapot nagyítja.</source>
-        <translation>The wheel zooms, Ctrl+wheel zooms the page.</translation>
+        <translation type="vanished">The wheel zooms, Ctrl+wheel zooms the page.</translation>
     </message>
     <message>
         <source>A Shift+kerék forgatja a fotót.</source>
-        <translation>Shift+wheel rotates the photo.</translation>
+        <translation type="vanished">Shift+wheel rotates the photo.</translation>
     </message>
 </context>
 </TS>

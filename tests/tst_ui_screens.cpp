@@ -10,6 +10,7 @@
 #include <QAbstractButton>
 #include <QComboBox>
 #include <QDir>
+#include <QDoubleSpinBox>
 #include <QImage>
 #include <QImageWriter>
 #include <QAbstractItemView>
@@ -126,7 +127,7 @@ private slots:
     void captureStates();
     void captureSlotInteraction();
     void captureLayoutPanel();
-    void captureInSlotImageControls();
+    void captureSectionComposition();
 
 private:
     QTemporaryDir m_settingsDir;
@@ -493,7 +494,7 @@ void TestUiScreens::captureLayoutPanel()
     QVERIFY(window.grab().save(evidenceDir() + QStringLiteral("/ui-layout-dissolved.png")));
 }
 
-void TestUiScreens::captureInSlotImageControls()
+void TestUiScreens::captureSectionComposition()
 {
     QTemporaryDir dir;
     QVERIFY(dir.isValid());
@@ -507,7 +508,7 @@ void TestUiScreens::captureInSlotImageControls()
     painter.drawRect(QRect(40, 40, 820, 520));
     painter.drawEllipse(QPointF(450, 300), 180, 180);
     painter.end();
-    const QString photo = dir.filePath(QStringLiteral("in-slot-photo.png"));
+    const QString photo = dir.filePath(QStringLiteral("section-photo.png"));
     {
         QImageWriter writer(photo, "png");
         QVERIFY(writer.write(sample));
@@ -531,28 +532,31 @@ void TestUiScreens::captureInSlotImageControls()
                       view->slotRect(slotId).center().toPoint());
     QTest::qWait(150);
 
-    auto *zoom = window.findChild<QSlider *>(QStringLiteral("slotZoomSlider"));
-    auto *rotation = window.findChild<QSlider *>(QStringLiteral("slotRotationSlider"));
-    QVERIFY(zoom);
-    QVERIFY(rotation);
-    zoom->setValue(100);
+    // The section is a clipping window: make the photograph smaller than the
+    // cell, move it and turn it, so the capture shows paper around a composed
+    // picture instead of a forced cover.
+    auto *width = window.findChild<QDoubleSpinBox *>(QStringLiteral("widthSpin"));
+    auto *height = window.findChild<QDoubleSpinBox *>(QStringLiteral("heightSpin"));
+    auto *angle = window.findChild<QDoubleSpinBox *>(QStringLiteral("angleSpin"));
+    QVERIFY(width);
+    QVERIFY(height);
+    QVERIFY(angle);
+    const Slot *slot = SlotGeometry::slotById(page, slotId);
+    QVERIFY(slot);
+    const QRectF cell = SlotGeometry::slotCellMm(page, *slot);
+    width->setValue(cell.width() / 10.0 * 0.7);
+    QMetaObject::invokeMethod(width, "editingFinished");
     QTest::qWait(80);
-    rotation->setValue(45);
+    height->setValue(cell.height() / 10.0 * 0.7);
+    QMetaObject::invokeMethod(height, "editingFinished");
+    QTest::qWait(80);
+    angle->setValue(18.0);
+    QMetaObject::invokeMethod(angle, "editingFinished");
     QTest::qWait(500);
 
-    // The side column scrolls: bring the in-slot section into view before the
-    // capture, or the screenshot would only show the layout panel above it.
-    auto *panel = window.findChild<QWidget *>(QStringLiteral("slotImagePanel"));
-    QVERIFY(panel);
-    for (QScrollArea *area : window.findChildren<QScrollArea *>()) {
-        if (area->widget() && area->widget()->isAncestorOf(panel)) {
-            area->ensureWidgetVisible(panel);
-            QTest::qWait(150);
-        }
-    }
-
-    QVERIFY(window.grab().save(evidenceDir() + QStringLiteral("/ui-slot-image.png")));
-    QVERIFY(view->grab().save(evidenceDir() + QStringLiteral("/ui-slot-image-canvas.png")));
+    QVERIFY(window.grab().save(evidenceDir() + QStringLiteral("/ui-section-composition.png")));
+    QVERIFY(view->grab().save(evidenceDir() +
+                              QStringLiteral("/ui-section-composition-canvas.png")));
 }
 
 QTEST_MAIN(TestUiScreens)

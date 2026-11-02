@@ -308,13 +308,11 @@ bool layoutConsistent(const Page &page)
         if (assigned.contains(frame.slotId))
             return false;
         assigned.insert(frame.slotId);
-        if (!slotGeometryMatches(page, frame))
-            return false;
     }
     return true;
 }
 
-void applySlotGeometry(const Page &page, const Slot &slot, Frame &frame)
+void initialiseFrameInSlot(const Page &page, const Slot &slot, Frame &frame)
 {
     const QRectF photo = slotPhotoRectMm(page, slot);
     frame.cx = photo.center().x();
@@ -322,6 +320,45 @@ void applySlotGeometry(const Page &page, const Slot &slot, Frame &frame)
     frame.width = photo.width();
     frame.height = photo.height();
     frame.angleDeg = 0.0;
+}
+
+Page remapToPaper(const Page &before, Page after)
+{
+    for (Frame &frame : after.frames) {
+        if (frame.slotId.isEmpty())
+            continue;
+        const Slot *nowSlot = slotById(after, frame.slotId);
+        if (!nowSlot)
+            continue;
+        const QRectF now = slotPhotoRectMm(after, *nowSlot);
+        if (!(now.width() > 0.0) || !(now.height() > 0.0))
+            continue;
+
+        const Slot *wasSlot = slotById(before, frame.slotId);
+        const QRectF was = wasSlot ? slotPhotoRectMm(before, *wasSlot) : QRectF();
+        if (!(was.width() > 0.0) || !(was.height() > 0.0)) {
+            // A slot the previous page did not have: nothing to scale from, so
+            // the frame starts on its cell as a fresh placement would.
+            initialiseFrameInSlot(after, *nowSlot, frame);
+            continue;
+        }
+
+        const double sx = now.width() / was.width();
+        const double sy = now.height() / was.height();
+        if (!finite(sx) || !finite(sy) || sx <= 0.0 || sy <= 0.0) {
+            initialiseFrameInSlot(after, *nowSlot, frame);
+            continue;
+        }
+        const QPointF wasCentre = was.center();
+        const QPointF nowCentre = now.center();
+        frame.cx = nowCentre.x() + (frame.cx - wasCentre.x()) * sx;
+        frame.cy = nowCentre.y() + (frame.cy - wasCentre.y()) * sy;
+        frame.width *= sx;
+        frame.height *= sy;
+        // The frame angle is the user's own rotation on the paper, not a
+        // property of the cell, so a paper change never turns the photograph.
+    }
+    return after;
 }
 
 } // namespace SlotGeometry

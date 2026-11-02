@@ -1585,43 +1585,43 @@
     </message>
     <message>
         <source>Kép a helyén</source>
-        <translation>Фото на своём месте</translation>
+        <translation type="vanished">Фото на своём месте</translation>
     </message>
     <message>
         <source>Nagyítás</source>
-        <translation>Увеличение</translation>
+        <translation type="vanished">Увеличение</translation>
     </message>
     <message>
         <source>Forgatás</source>
-        <translation>Поворот</translation>
+        <translation type="vanished">Поворот</translation>
     </message>
     <message>
         <source>Balra 90°</source>
-        <translation>90° влево</translation>
+        <translation type="vanished">90° влево</translation>
     </message>
     <message>
         <source>Jobbra 90°</source>
-        <translation>90° вправо</translation>
+        <translation type="vanished">90° вправо</translation>
     </message>
     <message>
         <source>Alaphelyzet</source>
-        <translation>Сбросить</translation>
+        <translation type="vanished">Сбросить</translation>
     </message>
     <message>
         <source>Visszaállítja a kép nagyítását, helyét és forgatását.</source>
-        <translation>Возвращает масштаб, положение и поворот фото.</translation>
+        <translation type="vanished">Возвращает масштаб, положение и поворот фото.</translation>
     </message>
     <message>
         <source>Húzd a fotót a mozgatáshoz. A kerék nagyít, a Shift+kerék forgat, a Ctrl+kerék a lapot nagyítja.</source>
-        <translation>Перетащи фото, чтобы сдвинуть. Колесо увеличивает, Shift+колесо поворачивает, Ctrl+колесо увеличивает страницу.</translation>
+        <translation type="vanished">Перетащи фото, чтобы сдвинуть. Колесо увеличивает, Shift+колесо поворачивает, Ctrl+колесо увеличивает страницу.</translation>
     </message>
     <message>
         <source>A kerék nagyít, a Ctrl+kerék a lapot nagyítja.</source>
-        <translation>Колесо увеличивает, Ctrl+колесо увеличивает страницу.</translation>
+        <translation type="vanished">Колесо увеличивает, Ctrl+колесо увеличивает страницу.</translation>
     </message>
     <message>
         <source>A Shift+kerék forgatja a fotót.</source>
-        <translation>Shift+колесо поворачивает фото.</translation>
+        <translation type="vanished">Shift+колесо поворачивает фото.</translation>
     </message>
 </context>
 </TS>

@@ -166,7 +166,9 @@ Result<void> assignFrame(Page &page, const QString &slotId, Frame payload, bool 
     // A laid-out page is hand work as far as the first-use grid is concerned: a
     // photograph added later must never reflow it.
     frame.autoPlaced = false;
-    SlotGeometry::applySlotGeometry(page, *slot, frame);
+    // The drop puts the photograph on the cell. From here on the frame's
+    // rectangle, size and angle are the user's: the slot only clips it.
+    SlotGeometry::initialiseFrameInSlot(page, *slot, frame);
     return Result<void>();
 }
 
@@ -474,13 +476,8 @@ Result<Page> swapPhotos(Page page, const QString &frameId, const QString &slotId
         if (report)
             report->cropResetIds.append(target.id);
     }
-    // Both frames keep their own cell; re-deriving is a no-op for a slotted
-    // frame and makes a swap involving a free, drifted frame safe.
-    if (const Slot *slot = SlotGeometry::slotById(page, target.slotId))
-        SlotGeometry::applySlotGeometry(page, *slot, target);
-    if (const Slot *slot = SlotGeometry::slotById(page, source.slotId))
-        SlotGeometry::applySlotGeometry(page, *slot, source);
-
+    // Both frames keep their own rectangle, size and angle: a swap exchanges
+    // the photographs, not the places they were composed in.
     return finish(std::move(page), report);
 }
 
@@ -513,8 +510,9 @@ Page dissolve(const Page &page)
 
 Result<Page> setStyle(Page page, const SlotStyle &style)
 {
+    const Page before = page;
     page.slotStyle = SlotGeometry::sanitiseStyle(style);
-    return remap(std::move(page));
+    return SlotGeometry::remapToPaper(before, std::move(page));
 }
 
 Result<Page> addSlot(Page page, const QString &afterSlotId)
@@ -572,7 +570,7 @@ Result<Page> addSlot(Page page, const QString &afterSlotId)
                          .arg(paperReference(page)));
     }
 
-    return repair(std::move(candidate));
+    return repair(SlotGeometry::remapToPaper(page, std::move(candidate)));
 }
 
 Result<Page> removeSlot(Page page, const QString &slotId)
@@ -592,24 +590,6 @@ Result<Page> removeSlot(Page page, const QString &slotId)
     // name the slot that has just disappeared, and a style without slots is
     // dropped here exactly as the loader would drop it.
     return finish(std::move(page), nullptr);
-}
-
-Result<Page> remap(Page page)
-{
-    const QSizeF sheet = pageSizeMm(page);
-    if (!(std::isfinite(sheet.width()) && std::isfinite(sheet.height())
-          && sheet.width() > 0.0 && sheet.height() > 0.0)) {
-        return page;
-    }
-    for (Frame &frame : page.frames) {
-        if (frame.slotId.isEmpty())
-            continue;
-        const Slot *slot = SlotGeometry::slotById(page, frame.slotId);
-        if (!slot)
-            continue;
-        SlotGeometry::applySlotGeometry(page, *slot, frame);
-    }
-    return page;
 }
 
 Result<Page> repair(Page page)
@@ -657,7 +637,9 @@ Result<Page> repair(Page page)
         page.layoutId.clear();
     }
 
-    return remap(std::move(page));
+    // Geometry is not repaired: a slotted frame's rectangle, size and angle are
+    // the user's composition inside the cell, and the cell only clips it.
+    return page;
 }
 
 Result<DocumentSnapshot> repair(DocumentSnapshot document)

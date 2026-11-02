@@ -50,8 +50,8 @@ private slots:
     void cropBoundsKeepTheFrameCovered();
     void zoomAtKeepsThePointUnderTheCursor();
     void imageZoomAndRotationHelpersClampAndReset();
-    void fillCoverMinimumKeepsEveryCornerOnThePhoto();
-    void matchingAspectQuarterTurnNeedsNoExtraZoom();
+    void rotationNeverForcesACoverZoom();
+    void wheelZoomOutReachesTheModelFloor();
     void resolutionHintUsesDocumentedThresholds();
     void gridKeepsFourAspectsInsideThePage();
     void appendPhotoDoesNotDisturbManualWork();
@@ -322,9 +322,9 @@ void TestLayout::imageZoomAndRotationHelpersClampAndReset()
     QCOMPARE(zoomed.angleDeg, original.angleDeg);
 
     QCOMPARE(PhotoItem::setZoom(original, 99.0, pixels).zoom, kMaxFrameZoom);
-    // A Fill frame stops at the cover minimum, which is 1 for an unrotated
-    // photograph; a Full frame may still shrink to the model floor.
-    QCOMPARE(PhotoItem::setZoom(original, 0.01, pixels).zoom, 1.0);
+    // The model range is the only limit: a Fill frame may be zoomed out until
+    // paper shows, exactly like a Full one. Nothing forces a cover zoom.
+    QCOMPARE(PhotoItem::setZoom(original, 0.01, pixels).zoom, kMinFrameZoom);
     Frame full = original;
     full.fit = FitMode::Full;
     QCOMPARE(PhotoItem::setZoom(full, 0.01, pixels).zoom, kMinFrameZoom);
@@ -365,98 +365,56 @@ void TestLayout::imageZoomAndRotationHelpersClampAndReset()
     QCOMPARE(reset.height, worked.height);
 }
 
-void TestLayout::fillCoverMinimumKeepsEveryCornerOnThePhoto()
+void TestLayout::rotationNeverForcesACoverZoom()
 {
-    // The defect case: a portrait photograph in a 2:3 portrait cell. At zoom 1
-    // a 45 or 90 degree turn used to leave paper at the corners.
+    // The defect the old cover rule answered: a rotated Fill photograph leaves
+    // paper at the corners. That is now the user's composition, not something
+    // the model silently fixes. A turn must never change the zoom the user set.
     Frame frame = makeFrame(90.0, 133.5, FitMode::Fill);
     const QSize pixels(400, 600);
+    frame.zoom = 0.6;
+    frame.cropCenter = QPointF(0.4, 0.6);
 
-    // No rotation needs no extra zoom: Fill already covers the cell.
-    QCOMPARE(PhotoItem::minCoverZoom(frame, pixels), 1.0);
-    // 90 degrees needs the cell's height across the photograph's width.
-    {
-        Frame turned = frame;
-        turned.imageRotationDeg = 90.0;
-        QVERIFY(std::abs(PhotoItem::minCoverZoom(turned, pixels) - 133.5 / 90.0) < 1e-9);
-    }
-    // 45 degrees needs the rotated bounding box on both axes.
-    {
-        Frame turned = frame;
-        turned.imageRotationDeg = 45.0;
-        const double expected = (90.0 * std::cos(qDegreesToRadians(45.0))
-                                 + 133.5 * std::sin(qDegreesToRadians(45.0)))
-            / 90.0;
-        QVERIFY(std::abs(PhotoItem::minCoverZoom(turned, pixels) - expected) < 1e-9);
+    for (const double degrees : {45.0, 90.0, 135.0, 180.0, -30.0}) {
+        const Frame turned = PhotoItem::rotateImageTo(frame, degrees, pixels);
+        QCOMPARE(turned.imageRotationDeg, degrees);
+        QCOMPARE(turned.zoom, 0.6);
+        QCOMPARE(turned.cx, frame.cx);
+        QCOMPARE(turned.width, frame.width);
+        QCOMPARE(turned.height, frame.height);
+        QCOMPARE(turned.angleDeg, frame.angleDeg);
     }
 
-    auto everyCornerIsOnThePhoto = [&](const Frame &candidate) {
-        const QPolygonF quad = PhotoItem::frameQuadMm(candidate);
-        const QTransform inverse = LayoutEngine::pageToImage(candidate, pixels);
-        QVERIFY(inverse.isInvertible());
-        for (const QPointF &corner : quad) {
-            const QPointF pixel = inverse.map(corner);
-            const double nx = pixel.x() / pixels.width();
-            const double ny = pixel.y() / pixels.height();
-            if (!(nx >= -1e-6 && nx <= 1.0 + 1e-6 && ny >= -1e-6 && ny <= 1.0 + 1e-6)) {
-                QFAIL(qPrintable(QStringLiteral("corner %1,%2 outside the photo (rotation %3, "
-                                                "zoom %4)")
-                                     .arg(nx)
-                                     .arg(ny)
-                                     .arg(candidate.imageRotationDeg)
-                                     .arg(candidate.zoom)));
-            }
-        }
-    };
+    // The zoom setter is just as literal: it neither raises a Fill frame to a
+    // cover minimum nor invents a different value.
+    const Frame smaller = PhotoItem::setZoom(frame, 0.35, pixels);
+    QCOMPARE(smaller.zoom, 0.35);
+    const Frame larger = PhotoItem::setZoom(frame, 4.0, pixels);
+    QCOMPARE(larger.zoom, 4.0);
+    const Frame clamped = PhotoItem::setZoom(frame, 100.0, pixels);
+    QCOMPARE(clamped.zoom, kMaxFrameZoom);
 
-    for (const double degrees : {45.0, 90.0, 180.0}) {
-        const Frame covered = PhotoItem::rotateImageTo(frame, degrees, pixels);
-        QCOMPARE(covered.imageRotationDeg, degrees);
-        QVERIFY2(covered.zoom >= PhotoItem::minCoverZoom(covered, pixels) - 1e-9,
-                 qPrintable(QStringLiteral("rotation %1 zoom %2")
-                                .arg(degrees)
-                                .arg(covered.zoom)));
-        everyCornerIsOnThePhoto(covered);
-    }
-
-    // A Full frame keeps its bands; the cover rule is Fill-only.
-    Frame full = frame;
-    full.fit = FitMode::Full;
-    full.imageRotationDeg = 45.0;
-    const Frame turnedFull = PhotoItem::rotateImageTo(full, 45.0, pixels);
-    QCOMPARE(turnedFull.zoom, 1.0);
-    QCOMPARE(PhotoItem::minCoverZoom(full, pixels), 1.0);
-}
-
-void TestLayout::matchingAspectQuarterTurnNeedsNoExtraZoom()
-{
-    // A square photo in a square cell already covers at every quarter turn, so
-    // the cover rule must not invent a zoom it does not need.
-    Frame frame = makeFrame(100.0, 100.0, FitMode::Fill);
-    const QSize pixels(400, 400);
-    QCOMPARE(PhotoItem::minCoverZoom(frame, pixels), 1.0);
-
-    const Frame quarter = PhotoItem::rotateImageTo(frame, 90.0, pixels);
+    // A quarter turn of a square lands on 1x because the user asked for 1x, not
+    // because the model computed a cover.
+    Frame square = makeFrame(100.0, 100.0, FitMode::Fill);
+    const Frame quarter = PhotoItem::rotateImageTo(square, 90.0, pixels);
     QCOMPARE(quarter.imageRotationDeg, 90.0);
     QCOMPARE(quarter.zoom, 1.0);
-    const Frame half = PhotoItem::rotateImageTo(quarter, 180.0, pixels);
-    QCOMPARE(half.zoom, 1.0);
-    const Frame back = PhotoItem::rotateImageTo(half, 0.0, pixels);
-    QCOMPARE(back.zoom, 1.0);
+    const Frame diagonal = PhotoItem::rotateImageTo(square, 45.0, pixels);
+    QCOMPARE(diagonal.zoom, 1.0);
+}
 
-    // A 45 degree turn of a square is the one case that really does need
-    // sqrt(2): the corners leave the cell otherwise.
-    const Frame diagonal = PhotoItem::rotateImageTo(frame, 45.0, pixels);
-    QVERIFY(std::abs(diagonal.zoom - std::sqrt(2.0)) < 1e-9);
-    const QPolygonF quad = PhotoItem::frameQuadMm(diagonal);
-    const QTransform inverse = LayoutEngine::pageToImage(diagonal, pixels);
-    for (const QPointF &corner : quad) {
-        const QPointF pixel = inverse.map(corner);
-        const double nx = pixel.x() / pixels.width();
-        const double ny = pixel.y() / pixels.height();
-        QVERIFY(nx >= -1e-6 && nx <= 1.0 + 1e-6);
-        QVERIFY(ny >= -1e-6 && ny <= 1.0 + 1e-6);
-    }
+void TestLayout::wheelZoomOutReachesTheModelFloor()
+{
+    // Zooming out with the wheel used to stop at a Fill cover minimum. The
+    // model range is now the only limit, slotted or free.
+    Frame frame = makeFrame(90.0, 133.5, FitMode::Fill);
+    const QSize pixels(400, 600);
+    Frame zoomed = frame;
+    for (int notch = 0; notch < 40; ++notch)
+        zoomed = PhotoItem::zoomAt(zoomed, QPointF(frame.cx, frame.cy), 1.0 / 1.2, pixels);
+    QVERIFY(std::abs(zoomed.zoom - kMinFrameZoom) < 1e-9);
+    QCOMPARE(zoomed.fit, FitMode::Fill);
 }
 
 void TestLayout::resolutionHintUsesDocumentedThresholds()

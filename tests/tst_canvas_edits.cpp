@@ -173,7 +173,7 @@ private slots:
     void viewZoomOnlyChangesTheView();
     void pdfCarriesTheRotatedCrop();
     void slottedRotationStaysInsideItsCell();
-    void fillRotationNeverShowsPaperAtACorner();
+    void rotationKeepsTheUserZoomAndTheCellClips();
 
 private:
     QTemporaryDir m_dir;
@@ -572,7 +572,7 @@ void TestCanvasEdits::slottedRotationStaysInsideItsCell()
              "PDF must not bleed below the cell");
 }
 
-void TestCanvasEdits::fillRotationNeverShowsPaperAtACorner()
+void TestCanvasEdits::rotationKeepsTheUserZoomAndTheCellClips()
 {
     ImageStore store;
     const auto source = store.load(m_portraitImagePath, ImportPolicy{});
@@ -606,36 +606,42 @@ void TestCanvasEdits::fillRotationNeverShowsPaperAtACorner()
     auto isPhoto = [](QRgb pixel) {
         return qRed(pixel) > 150 && qGreen(pixel) < 110 && qBlue(pixel) < 110;
     };
+    auto isPaper = [](QRgb pixel) {
+        return qRed(pixel) > 240 && qGreen(pixel) > 240 && qBlue(pixel) > 240;
+    };
 
     for (const double degrees : {45.0, 90.0}) {
         *frame = PhotoItem::rotateImageTo(*frame, degrees, pixels);
         QCOMPARE(frame->imageRotationDeg, degrees);
-        // 45 degrees needs about 1.76x, 90 degrees about 1.48x.
-        QVERIFY2(frame->zoom > (degrees < 60.0 ? 1.7 : 1.4),
-                 qPrintable(QStringLiteral("rotation %1 zoom %2")
-                                .arg(degrees)
-                                .arg(frame->zoom)));
+        // A turn never forces a cover zoom: the user's 1x stays 1x.
+        QCOMPARE(frame->zoom, 1.0);
 
         const auto rendered = renderer.renderPage(document, 0, ppi, {}, RenderOptions{});
         if (!rendered)
             QFAIL(qPrintable(rendered.error().message));
         const QImage pageImage = rendered.value();
-        for (const QPointF &corner : corners) {
-            const QRgb pixel = pageImage.pixel(qRound(corner.x() * pxPerMm),
-                                               qRound(corner.y() * pxPerMm));
-            QVERIFY2(isPhoto(pixel),
-                     qPrintable(QStringLiteral("rotation %1: paper at %2,%3 (%4,%5,%6)")
-                                    .arg(degrees)
-                                    .arg(corner.x())
-                                    .arg(corner.y())
-                                    .arg(qRed(pixel))
-                                    .arg(qGreen(pixel))
-                                    .arg(qBlue(pixel))));
+        // The centre is the photograph; a 45 degree turn leaves the cell
+        // corners on the paper, which is the composition the user chose.
+        const QRgb centre = pageImage.pixel(qRound(photoRect.center().x() * pxPerMm),
+                                            qRound(photoRect.center().y() * pxPerMm));
+        QVERIFY2(isPhoto(centre), "the photograph must still be in the middle of its cell");
+        if (degrees == 45.0) {
+            for (const QPointF &corner : corners) {
+                const QRgb pixel = pageImage.pixel(qRound(corner.x() * pxPerMm),
+                                                   qRound(corner.y() * pxPerMm));
+                QVERIFY2(isPaper(pixel),
+                         qPrintable(QStringLiteral("rotation %1: the cell corner must be paper "
+                                                   "(%2,%3,%4)")
+                                        .arg(degrees)
+                                        .arg(qRed(pixel))
+                                        .arg(qGreen(pixel))
+                                        .arg(qBlue(pixel))));
+            }
         }
 
         const QString tag = QString::number(int(degrees));
         const QString pdfPath =
-            evidenceDir() + QStringLiteral("/fill-cover-%1.pdf").arg(tag);
+            evidenceDir() + QStringLiteral("/section-rotation-%1.pdf").arg(tag);
         RenderOptions options;
         options.printPpi = ppi;
         const auto artifact = renderer.writePdf(document, pdfPath, {}, options);
@@ -644,7 +650,7 @@ void TestCanvasEdits::fillRotationNeverShowsPaperAtACorner()
         QVERIFY(QFileInfo::exists(pdfPath));
 
         QProcess process;
-        const QString base = evidenceDir() + QStringLiteral("/fill-cover-%1").arg(tag);
+        const QString base = evidenceDir() + QStringLiteral("/section-rotation-%1").arg(tag);
         process.start(QStringLiteral("pdftoppm"),
                       {QStringLiteral("-r"), QString::number(ppi), QStringLiteral("-png"),
                        QStringLiteral("-singlefile"), pdfPath, base});
@@ -652,14 +658,19 @@ void TestCanvasEdits::fillRotationNeverShowsPaperAtACorner()
         QCOMPARE(process.exitCode(), 0);
         const QImage pdfPage(base + QStringLiteral(".png"));
         QVERIFY(!pdfPage.isNull());
-        for (const QPointF &corner : corners) {
-            const QRgb pixel = pdfPage.pixel(qRound(corner.x() * pxPerMm),
-                                             qRound(corner.y() * pxPerMm));
-            QVERIFY2(isPhoto(pixel),
-                     qPrintable(QStringLiteral("PDF rotation %1: paper at %2,%3")
-                                    .arg(degrees)
-                                    .arg(corner.x())
-                                    .arg(corner.y())));
+        const QRgb pdfCentre = pdfPage.pixel(qRound(photoRect.center().x() * pxPerMm),
+                                             qRound(photoRect.center().y() * pxPerMm));
+        QVERIFY2(isPhoto(pdfCentre), "PDF must show the photograph in its cell");
+        if (degrees == 45.0) {
+            for (const QPointF &corner : corners) {
+                const QRgb pixel = pdfPage.pixel(qRound(corner.x() * pxPerMm),
+                                                 qRound(corner.y() * pxPerMm));
+                QVERIFY2(isPaper(pixel),
+                         qPrintable(QStringLiteral("PDF rotation %1: paper at %2,%3")
+                                        .arg(degrees)
+                                        .arg(corner.x())
+                                        .arg(corner.y())));
+            }
         }
     }
 }

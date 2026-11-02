@@ -9,8 +9,6 @@
 
 namespace pp::PhotoItem {
 
-double minCoverZoom(const Frame &frame, const QSize &pixels);
-
 namespace {
 
 QPointF rotatePoint(const QPointF &point, double degrees)
@@ -28,19 +26,6 @@ void cornerSigns(int corner, double *sx, double *sy)
     const int index = ((corner % 4) + 4) % 4;
     *sx = xs[index];
     *sy = ys[index];
-}
-
-/// Raises a Fill frame's zoom to what the current rotation needs to keep all
-/// four frame corners inside the photograph. Any other fit is left alone: a
-/// Full frame is allowed to show its bands.
-Frame ensureCover(Frame frame, const QSize &pixels)
-{
-    if (frame.fit != FitMode::Fill)
-        return frame;
-    if (!std::isfinite(frame.zoom) || frame.zoom <= 0.0)
-        frame.zoom = 1.0;
-    frame.zoom = std::max(frame.zoom, minCoverZoom(frame, pixels));
-    return frame;
 }
 
 } // namespace
@@ -147,11 +132,6 @@ Frame zoomAt(Frame frame, const QPointF &pagePoint, double factor, const QSize &
     if (before.width() <= 0.0 || before.height() <= 0.0)
         return frame;
     double targetZoom = std::clamp(frame.zoom * factor, kMinFrameZoom, kMaxFrameZoom);
-    // Zooming out of a Fill cell stops at the point where the photograph still
-    // covers it; the cover minimum depends only on the current rotation. A
-    // Full frame keeps its bands and may use the whole model range.
-    if (frame.fit == FitMode::Fill)
-        targetZoom = std::max(targetZoom, minCoverZoom(frame, pixels));
     if (qFuzzyCompare(targetZoom, frame.zoom))
         return frame;
 
@@ -177,7 +157,7 @@ Frame setZoom(Frame frame, double zoom, const QSize &pixels)
     if (!std::isfinite(zoom))
         return frame;
     frame.zoom = std::clamp(zoom, kMinFrameZoom, kMaxFrameZoom);
-    return clampCrop(ensureCover(frame, pixels), pixels);
+    return clampCrop(frame, pixels);
 }
 
 Frame rotateImageTo(Frame frame, double degrees, const QSize &pixels)
@@ -189,40 +169,9 @@ Frame rotateImageTo(Frame frame, double degrees, const QSize &pixels)
         qFuzzyCompare(target + 360.0, frame.imageRotationDeg + 360.0);
     if (!sameRotation)
         frame.imageRotationDeg = target;
-    // A Fill frame must keep covering, and the rotation may have moved the
-    // cover minimum; even a no-op angle still settles a stale stored zoom from
-    // an older project, so the clamp runs either way.
-    Frame covered = ensureCover(frame, pixels);
-    covered = clampCrop(covered, pixels);
-    return covered;
-}
-
-double minCoverZoom(const Frame &frame, const QSize &pixels)
-{
-    if (frame.fit != FitMode::Fill || pixels.width() <= 0 || pixels.height() <= 0
-        || !(frame.width > 0.0) || !(frame.height > 0.0)) {
-        return 1.0;
-    }
-    Frame neutral = frame;
-    neutral.zoom = 1.0;
-    const QSizeF image = LayoutEngine::imageSizeMm(neutral, pixels);
-    if (!(image.width() > 0.0) || !(image.height() > 0.0))
-        return 1.0;
-
-    const double rad = qDegreesToRadians(normalizedImageRotationDeg(frame.imageRotationDeg));
-    const double c = std::abs(std::cos(rad));
-    const double s = std::abs(std::sin(rad));
-    // The rotated photograph must contain the frame's bounding box in the
-    // image's own axes: frame.width*|cos| + frame.height*|sin| across, and the
-    // swapped sum down. Both requirements scale linearly with the zoom.
-    const double needWidth = frame.width * c + frame.height * s;
-    const double needHeight = frame.width * s + frame.height * c;
-    const double required = std::max(needWidth / image.width(), needHeight / image.height());
-    if (!std::isfinite(required))
-        return 1.0;
-    // Fill covers at zoom 1 by construction; the floor also absorbs floating
-    // error that would otherwise leave a hairline of paper at 0 degrees.
-    return std::clamp(std::max(1.0, required), kMinFrameZoom, kMaxFrameZoom);
+    // A turn never changes the zoom: the photograph may show paper at the
+    // corners, which is the user's composition, not a defect to correct.
+    return clampCrop(frame, pixels);
 }
 
 Frame rotateImageBy(Frame frame, double delta, const QSize &pixels)

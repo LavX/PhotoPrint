@@ -1571,43 +1571,43 @@
     </message>
     <message>
         <source>Kép a helyén</source>
-        <translation>Foto en su sitio</translation>
+        <translation type="vanished">Foto en su sitio</translation>
     </message>
     <message>
         <source>Nagyítás</source>
-        <translation>Ampliación</translation>
+        <translation type="vanished">Ampliación</translation>
     </message>
     <message>
         <source>Forgatás</source>
-        <translation>Rotación</translation>
+        <translation type="vanished">Rotación</translation>
     </message>
     <message>
         <source>Balra 90°</source>
-        <translation>90° a la izquierda</translation>
+        <translation type="vanished">90° a la izquierda</translation>
     </message>
     <message>
         <source>Jobbra 90°</source>
-        <translation>90° a la derecha</translation>
+        <translation type="vanished">90° a la derecha</translation>
     </message>
     <message>
         <source>Alaphelyzet</source>
-        <translation>Restablecer</translation>
+        <translation type="vanished">Restablecer</translation>
     </message>
     <message>
         <source>Visszaállítja a kép nagyítását, helyét és forgatását.</source>
-        <translation>Restaura la ampliación, la posición y la rotación de la foto.</translation>
+        <translation type="vanished">Restaura la ampliación, la posición y la rotación de la foto.</translation>
     </message>
     <message>
         <source>Húzd a fotót a mozgatáshoz. A kerék nagyít, a Shift+kerék forgat, a Ctrl+kerék a lapot nagyítja.</source>
-        <translation>Arrastra la foto para moverla. La rueda amplía, Mayús+rueda gira y Ctrl+rueda amplía la página.</translation>
+        <translation type="vanished">Arrastra la foto para moverla. La rueda amplía, Mayús+rueda gira y Ctrl+rueda amplía la página.</translation>
     </message>
     <message>
         <source>A kerék nagyít, a Ctrl+kerék a lapot nagyítja.</source>
-        <translation>La rueda amplía, Ctrl+rueda amplía la página.</translation>
+        <translation type="vanished">La rueda amplía, Ctrl+rueda amplía la página.</translation>
     </message>
     <message>
         <source>A Shift+kerék forgatja a fotót.</source>
-        <translation>Mayús+rueda gira la foto.</translation>
+        <translation type="vanished">Mayús+rueda gira la foto.</translation>
     </message>
 </context>
 </TS>

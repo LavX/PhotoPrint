@@ -64,19 +64,20 @@ double effectiveMarginMm(const SlotStyle &style, const QSizeF &sheetMm);
 double effectiveGutterMm(const SlotStyle &style, const QSizeF &sheetMm);
 
 /// One slot's cell in page millimetres, from the unit rectangle and the paper.
-/// The cell is the photograph's rectangle: there is no inset, so the white
-/// paper between two cells is exactly `gutterMm`. An outer slot sits
-/// `marginMm` from the paper edge; for margin == gutter it reduces exactly to
-/// the catalogue's mapping. The result is always inside the sheet, finite,
-/// non-negative and at least 1 mm on both axes (or as large as the sheet
-/// allows), so no caller ever feeds a negative rectangle to a clamp.
+/// The cell is the clipping window of the photograph assigned to it: there is
+/// no inset, so the white paper between two cells is exactly `gutterMm`. An
+/// outer slot sits `marginMm` from the paper edge; for margin == gutter it
+/// reduces exactly to the catalogue's mapping. The result is always inside the
+/// sheet, finite, non-negative and at least 1 mm on both axes (or as large as
+/// the sheet allows), so no caller ever feeds a negative rectangle to a clamp.
 QRectF cellFromUnitRect(const QRectF &unitRect, const QSizeF &sheetMm, double marginMm,
                         double gutterMm);
 
 QRectF slotCellMm(const Page &page, const Slot &slot);
-/// The photograph's rectangle. With no mat it is the slot's cell; the name is
-/// kept because every caller that places a photograph means the picture, not
-/// the cell as a concept.
+/// The slot's cell in millimetres: the clipping window of the photograph
+/// assigned to it. The name is kept because every caller that places a
+/// photograph means the picture's window, not the cell as a concept. The
+/// photograph's own rectangle is the frame's, and may be smaller or larger.
 QRectF slotPhotoRectMm(const Page &page, const Slot &slot);
 QList<QRectF> cellsMm(const Page &page); ///< in slot order
 
@@ -92,7 +93,8 @@ bool keepCropAcrossAspect(double fromWidth, double fromHeight, double toWidth,
 
 /// The corner radius a frame's slot asks for, clamped to the cell's shorter
 /// side divided by two. Zero for a frame without a slot, so free frames stay
-/// rectangular. The radius clips the photograph; there is no ring around it.
+/// rectangular. The radius rounds the cell's clipping window; there is no ring
+/// around the photograph.
 double cornerRadiusMm(const SlotStyle &style, const QRectF &cellMm);
 
 const Slot *slotById(const Page &page, const QString &slotId);
@@ -104,21 +106,37 @@ const Frame *frameInSlot(const Page &page, const QString &slotId);
 /// The slot under a point, or null. Later slots win, matching the fill order.
 const Slot *slotAt(const Page &page, const QPointF &pagePointMm);
 
-/// True when the frame carries a slot that exists and its stored geometry is
-/// the slot's photo rectangle within kGeometryEpsilonMm, with a zero angle.
+/// True when the frame still sits exactly on its slot's cell: same centre and
+/// size within kGeometryEpsilonMm and a zero angle. This is a query, not an
+/// invariant: a slotted frame owns its geometry and may be smaller, larger,
+/// moved or turned inside the cell. It answers "has this frame been touched
+/// since it was placed", which the tests and the picker use.
 bool slotGeometryMatches(const Page &page, const Frame &frame);
 
-/// Structural and geometric invariant, for the loader, the controller and the
-/// tests: unique non-empty slot ids, normalised unit rectangles, at most 12
-/// slots, every non-empty slotId naming a slot, at most one frame per slot and
-/// every slotted frame matching its slot. A page without slots is consistent
-/// when no frame carries a slot id.
+/// Structural invariant, for the loader, the controller and the tests: unique
+/// non-empty slot ids, normalised unit rectangles, at most 12 slots, every
+/// non-empty slotId naming a slot and at most one frame per slot. Geometry is
+/// deliberately absent: the slot is a clipping window, not a box that owns the
+/// photograph's rectangle. A page without slots is consistent when no frame
+/// carries a slot id.
 bool layoutConsistent(const Page &page);
 
-/// The only writer of a slotted frame's geometry: the slot's photo rectangle
+/// Initial placement of a photograph on a cell: the slot's photo rectangle
 /// becomes the frame rectangle and the frame angle becomes zero. Crop, zoom,
-/// fit, image rotation and every image field are left alone.
-void applySlotGeometry(const Page &page, const Slot &slot, Frame &frame);
+/// fit, image rotation and every image field are left alone. Called only when a
+/// photograph is put into a slot (template apply, a file or library drop, a
+/// move); after that the frame's geometry belongs to the user and nothing
+/// re-derives it.
+void initialiseFrameInSlot(const Page &page, const Slot &slot, Frame &frame);
+
+/// Re-maps every slotted frame proportionally with its slot's cell, from the
+/// cell the slot had on `before` to the cell it has on `after`. The frame's
+/// centre offset from the cell centre and its size are scaled by the cell's
+/// scale factors; the angle is unchanged, so a composition inside a section
+/// survives a paper, orientation or margin change instead of being re-fitted.
+/// A slotted frame whose slot is new on `after` is initialised on its cell.
+/// Free frames are untouched.
+Page remapToPaper(const Page &before, Page after);
 
 } // namespace SlotGeometry
 } // namespace pp

@@ -1557,43 +1557,43 @@
     </message>
     <message>
         <source>Kép a helyén</source>
-        <translation>写真の位置</translation>
+        <translation type="vanished">写真の位置</translation>
     </message>
     <message>
         <source>Nagyítás</source>
-        <translation>拡大</translation>
+        <translation type="vanished">拡大</translation>
     </message>
     <message>
         <source>Forgatás</source>
-        <translation>回転</translation>
+        <translation type="vanished">回転</translation>
     </message>
     <message>
         <source>Balra 90°</source>
-        <translation>左へ90°</translation>
+        <translation type="vanished">左へ90°</translation>
     </message>
     <message>
         <source>Jobbra 90°</source>
-        <translation>右へ90°</translation>
+        <translation type="vanished">右へ90°</translation>
     </message>
     <message>
         <source>Alaphelyzet</source>
-        <translation>リセット</translation>
+        <translation type="vanished">リセット</translation>
     </message>
     <message>
         <source>Visszaállítja a kép nagyítását, helyét és forgatását.</source>
-        <translation>写真の拡大率、位置、回転を元に戻します。</translation>
+        <translation type="vanished">写真の拡大率、位置、回転を元に戻します。</translation>
     </message>
     <message>
         <source>Húzd a fotót a mozgatáshoz. A kerék nagyít, a Shift+kerék forgat, a Ctrl+kerék a lapot nagyítja.</source>
-        <translation>写真をドラッグすると移動します。ホイールで拡大、Shift+ホイールで回転、Ctrl+ホイールでページを拡大します。</translation>
+        <translation type="vanished">写真をドラッグすると移動します。ホイールで拡大、Shift+ホイールで回転、Ctrl+ホイールでページを拡大します。</translation>
     </message>
     <message>
         <source>A kerék nagyít, a Ctrl+kerék a lapot nagyítja.</source>
-        <translation>ホイールで拡大、Ctrl+ホイールでページを拡大します。</translation>
+        <translation type="vanished">ホイールで拡大、Ctrl+ホイールでページを拡大します。</translation>
     </message>
     <message>
         <source>A Shift+kerék forgatja a fotót.</source>
-        <translation>Shift+ホイールで写真を回転します。</translation>
+        <translation type="vanished">Shift+ホイールで写真を回転します。</translation>
     </message>
 </context>
 </TS>

@@ -1571,43 +1571,43 @@
     </message>
     <message>
         <source>Kép a helyén</source>
-        <translation>Photo à sa place</translation>
+        <translation type="vanished">Photo à sa place</translation>
     </message>
     <message>
         <source>Nagyítás</source>
-        <translation>Agrandissement</translation>
+        <translation type="vanished">Agrandissement</translation>
     </message>
     <message>
         <source>Forgatás</source>
-        <translation>Rotation</translation>
+        <translation type="vanished">Rotation</translation>
     </message>
     <message>
         <source>Balra 90°</source>
-        <translation>90° à gauche</translation>
+        <translation type="vanished">90° à gauche</translation>
     </message>
     <message>
         <source>Jobbra 90°</source>
-        <translation>90° à droite</translation>
+        <translation type="vanished">90° à droite</translation>
     </message>
     <message>
         <source>Alaphelyzet</source>
-        <translation>Réinitialiser</translation>
+        <translation type="vanished">Réinitialiser</translation>
     </message>
     <message>
         <source>Visszaállítja a kép nagyítását, helyét és forgatását.</source>
-        <translation>Rétablit l'agrandissement, la position et la rotation de la photo.</translation>
+        <translation type="vanished">Rétablit l'agrandissement, la position et la rotation de la photo.</translation>
     </message>
     <message>
         <source>Húzd a fotót a mozgatáshoz. A kerék nagyít, a Shift+kerék forgat, a Ctrl+kerék a lapot nagyítja.</source>
-        <translation>Fais glisser la photo pour la déplacer. La molette agrandit, Maj+molette pivote, Ctrl+molette agrandit la page.</translation>
+        <translation type="vanished">Fais glisser la photo pour la déplacer. La molette agrandit, Maj+molette pivote, Ctrl+molette agrandit la page.</translation>
     </message>
     <message>
         <source>A kerék nagyít, a Ctrl+kerék a lapot nagyítja.</source>
-        <translation>La molette agrandit, Ctrl+molette agrandit la page.</translation>
+        <translation type="vanished">La molette agrandit, Ctrl+molette agrandit la page.</translation>
     </message>
     <message>
         <source>A Shift+kerék forgatja a fotót.</source>
-        <translation>Maj+molette pivote la photo.</translation>
+        <translation type="vanished">Maj+molette pivote la photo.</translation>
     </message>
 </context>
 </TS>

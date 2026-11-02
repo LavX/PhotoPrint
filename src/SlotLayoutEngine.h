@@ -125,7 +125,8 @@ Result<Page> emptySlot(Page page, const QString &slotId, Report *report = nullpt
 /// keeps the frames exactly where they are as free frames.
 Page dissolve(const Page &page);
 
-/// Sanitises the style and re-derives every slotted frame's geometry.
+/// Sanitises the style and re-maps every slotted frame proportionally with its
+/// cell, so the composition inside a section survives a margin or gap change.
 Result<Page> setStyle(Page page, const SlotStyle &style);
 
 /// Splits one slot in two along its longer physical axis, in unit space, so the
@@ -139,15 +140,11 @@ Result<Page> addSlot(Page page, const QString &afterSlotId = QString());
 /// the layout: the page keeps its (now free) frames and loses the style.
 Result<Page> removeSlot(Page page, const QString &slotId);
 
-/// Re-derives every slotted frame's rectangle and angle from its slot. Dangling
-/// slot ids are ignored here; repair() clears them.
-Result<Page> remap(Page page);
-
 /// The repair point: sanitises the style, slot ids and unit rectangles, drops
-/// duplicate slots, clears dangling and duplicate frame assignments, then
-/// re-derives the geometry of every remaining slotted frame. A page with no
-/// usable sheet is left untouched, because there is no millimetre geometry to
-/// derive and both the preview and the renderer refuse to draw such a page.
+/// duplicate slots, then clears dangling and duplicate frame assignments. It
+/// never touches a slotted frame's geometry: the slot is a clipping window and
+/// the photograph's rectangle, size and angle belong to the user once it is
+/// placed.
 Result<Page> repair(Page page);
 
 /// Repairs every page of a document, in place order. Used by the loader and by

@@ -1557,43 +1557,43 @@
     </message>
     <message>
         <source>Kép a helyén</source>
-        <translation>照片在原位</translation>
+        <translation type="vanished">照片在原位</translation>
     </message>
     <message>
         <source>Nagyítás</source>
-        <translation>缩放</translation>
+        <translation type="vanished">缩放</translation>
     </message>
     <message>
         <source>Forgatás</source>
-        <translation>旋转</translation>
+        <translation type="vanished">旋转</translation>
     </message>
     <message>
         <source>Balra 90°</source>
-        <translation>向左 90°</translation>
+        <translation type="vanished">向左 90°</translation>
     </message>
     <message>
         <source>Jobbra 90°</source>
-        <translation>向右 90°</translation>
+        <translation type="vanished">向右 90°</translation>
     </message>
     <message>
         <source>Alaphelyzet</source>
-        <translation>重置</translation>
+        <translation type="vanished">重置</translation>
     </message>
     <message>
         <source>Visszaállítja a kép nagyítását, helyét és forgatását.</source>
-        <translation>恢复照片的缩放、位置和旋转。</translation>
+        <translation type="vanished">恢复照片的缩放、位置和旋转。</translation>
     </message>
     <message>
         <source>Húzd a fotót a mozgatáshoz. A kerék nagyít, a Shift+kerék forgat, a Ctrl+kerék a lapot nagyítja.</source>
-        <translation>拖动照片可移动。滚轮缩放，Shift+滚轮旋转，Ctrl+滚轮缩放页面。</translation>
+        <translation type="vanished">拖动照片可移动。滚轮缩放，Shift+滚轮旋转，Ctrl+滚轮缩放页面。</translation>
     </message>
     <message>
         <source>A kerék nagyít, a Ctrl+kerék a lapot nagyítja.</source>
-        <translation>滚轮缩放，Ctrl+滚轮缩放页面。</translation>
+        <translation type="vanished">滚轮缩放，Ctrl+滚轮缩放页面。</translation>
     </message>
     <message>
         <source>A Shift+kerék forgatja a fotót.</source>
-        <translation>Shift+滚轮旋转照片。</translation>
+        <translation type="vanished">Shift+滚轮旋转照片。</translation>
     </message>
 </context>
 </TS>

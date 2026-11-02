@@ -167,14 +167,14 @@ private:
     void removeFrame(const QString &frameId);
     void insertFrame(const Frame &frame);
     void insertFrameAt(int pageIndex, const Frame &frame);
-    void setPaper(int pageIndex, const PaperSpec &paper);
-    void setPageLandscape(int pageIndex, bool landscape);
     void fitPageToPaper(int pageIndex);
     void replacePage(int pageIndex, const Page &page);
     void replaceSnapshot(const DocumentSnapshot &snapshot);
     /// The single repair point. Every mutation below calls it before emitting,
-    /// so no other writer (an align, a paper setter, an undo) can leave a slotted
-    /// frame's geometry out of step with its slot.
+    /// so no other writer (an align, a paper setter, an undo) can leave a
+    /// dangling or duplicated slot assignment behind. It never rewrites a
+    /// slotted frame's geometry: the slot clips the photograph, it does not own
+    /// its rectangle.
     void repairDocument();
 
     DocumentSnapshot m_document;

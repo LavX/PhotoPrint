@@ -197,12 +197,36 @@ void drawFramePhoto(QPainter &painter, const Frame &frame, const QImage &image,
     if (cornerRadiusMm > 0.0) {
         QPainterPath clip;
         clip.addRoundedRect(photo, cornerRadiusMm, cornerRadiusMm);
-        painter.setClipPath(clip);
+        painter.setClipPath(clip, Qt::IntersectClip);
     } else {
-        painter.setClipRect(photo);
+        painter.setClipRect(photo, Qt::IntersectClip);
     }
     painter.setTransform(imageTransform * pageTransform);
     painter.drawImage(QRectF(0, 0, pixels.width(), pixels.height()), image);
+    painter.restore();
+}
+
+/// Draws one slotted photograph: the cell is the clipping window, and inside it
+/// the photograph is drawn at the frame's own rectangle, size and angle. A photo
+/// smaller than the cell leaves paper around it; a larger one is cut away at the
+/// cell edge. The optional corner radius rounds the window, not the photograph,
+/// so a smaller photo still gets the section's rounded shape.
+void drawSlottedFramePhoto(QPainter &painter, const Frame &frame, const QImage &image,
+                           const QTransform &pageTransform, const QRectF &cell,
+                           double cornerRadiusMm)
+{
+    if (cell.width() <= 0.0 || cell.height() <= 0.0)
+        return;
+    painter.save();
+    painter.setTransform(pageTransform);
+    if (cornerRadiusMm > 0.0) {
+        QPainterPath clip;
+        clip.addRoundedRect(cell, cornerRadiusMm, cornerRadiusMm);
+        painter.setClipPath(clip, Qt::IntersectClip);
+    } else {
+        painter.setClipRect(cell, Qt::IntersectClip);
+    }
+    drawFramePhoto(painter, frame, image, pageTransform, 0.0);
     painter.restore();
 }
 
@@ -263,9 +287,11 @@ void paintPageContent(QPainter &painter, const DocumentSnapshot &snapshot, int p
             const auto it = images.constFind(frame->id);
             if (it != images.constEnd() && !it->isNull()
                 && LayoutEngine::validFrame(*frame)) {
-                // The photograph fills the cell. The optional radius is a clip
-                // of the photograph, with no coloured ring around it.
-                drawFramePhoto(painter, *frame, *it, pageTransform, radius);
+                // The cell is the section's clipping window. The photograph is
+                // drawn at the frame's own geometry inside it: smaller leaves
+                // paper around it, larger is clipped. The optional radius rounds
+                // the window, with no coloured ring around it.
+                drawSlottedFramePhoto(painter, *frame, *it, pageTransform, cell, radius);
             }
         }
         // An empty cell prints paper and nothing else. Placeholders are painted
