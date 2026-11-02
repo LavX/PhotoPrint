@@ -11,6 +11,7 @@
 #include <QColor>
 #include <QComboBox>
 #include <QDir>
+#include <QDoubleSpinBox>
 #include <QFile>
 #include <QFileInfo>
 #include <QImage>
@@ -31,6 +32,7 @@
 #include <QtTest>
 
 #include <cmath>
+#include <limits>
 
 using namespace pp;
 
@@ -217,19 +219,30 @@ private slots:
     void solidOpacityBlendsInLinearSpace();
     void gradientRunsInLinearLight();
     void gradientAngleTurnsTheRamp();
+    void threeStopGradientRenders();
     void pictureFillCoversTheSheet();
     void pictureFitLeavesBands();
     void pictureTileRepeatsAndIsCapped();
+    void naturalTileSizeWhenTileMmIsZero();
+    void transparentPictureCompositesOverWhite();
     void backgroundShowsInGapsAndEmptyCells();
     void freeCanvasPagePaintsTheBackground();
+    void previewShowsTheBackground();
     void printMatchesTheScreenRender();
     void persistenceRoundTrips();
     void oldProjectWithoutBackgroundLoadsWhite();
     void portableCopyCarriesThePicture();
     void missingPicturePaintsWhiteAndReports();
+    void pathOnlyMissingPictureIsReported();
+    void hugePictureIsReported();
+    void sanitiserClampsAndKeepsTheEndpoints();
+    void opacityZeroAndOne();
     void undoRestoresThePreviousBackground();
     void resetReturnsToWhite();
+    void opacityBurstSurvivesAKindChange();
+    void tileBurstSurvivesAFitChange();
     void largeFontKeepsThePanelReachable();
+    void layoutEvidence();
     void evidenceScreenshots();
 
 private:
@@ -318,6 +331,34 @@ void TestPageBackground::gradientAngleTurnsTheRamp()
                             .arg(describe(left), describe(right))));
 }
 
+void TestPageBackground::threeStopGradientRenders()
+{
+    DocumentSnapshot document;
+    Page page = a4Page();
+    page.background.kind = BackgroundKind::Gradient;
+    page.background.stops = {BackgroundStop{0.0, qRgb(255, 0, 0)},
+                             BackgroundStop{0.5, qRgb(0, 255, 0)},
+                             BackgroundStop{1.0, qRgb(0, 0, 255)}};
+    page.background.angleDeg = 0.0;
+    document.pages.append(page);
+    document.currentPage = 0;
+
+    const QImage rendered = render(document);
+    QVERIFY(!rendered.isNull());
+    const QRgb left = probe(rendered, 0.0, 148.5);
+    const QRgb middle = probe(rendered, 105.0, 148.5);
+    const QRgb right = probe(rendered, 209.9, 148.5);
+    QVERIFY2(channelDistance(left, qRgb(255, 0, 0)) <= 3,
+             qPrintable(QStringLiteral("3-stop left is %1").arg(describe(left))));
+    QVERIFY2(channelDistance(middle, qRgb(0, 255, 0)) <= 3,
+             qPrintable(QStringLiteral("3-stop middle is %1").arg(describe(middle))));
+    // The last raster pixel is a fraction short of the last stop, and the
+    // linear-light ramp of a colour-managed blue carries a small green
+    // component there. The end is still blue, not green.
+    QVERIFY2(qBlue(right) >= 250 && qRed(right) <= 5 && qGreen(right) <= 20,
+             qPrintable(QStringLiteral("3-stop right is %1").arg(describe(right))));
+}
+
 void TestPageBackground::pictureFillCoversTheSheet()
 {
     const QImage page = render(pictureDocument(m_twoTonePath, BackgroundFit::Fill));
@@ -391,6 +432,41 @@ void TestPageBackground::pictureTileRepeatsAndIsCapped()
     QVERIFY(!capped.isNull());
 }
 
+void TestPageBackground::naturalTileSizeWhenTileMmIsZero()
+{
+    const QSizeF tile =
+        BackgroundGeometry::tileSizeMm(0.0, QSize(400, 200), QSizeF(210.0, 297.0));
+    QVERIFY(std::abs(tile.width() - 400.0 / 300.0 * 25.4) < 0.01);
+    QVERIFY(std::abs(tile.height() - 200.0 / 300.0 * 25.4) < 0.01);
+
+    // The renderer uses the same size: a 400 x 200 source tiles at 33.87 mm.
+    const QImage page = render(pictureDocument(m_twoTonePath, BackgroundFit::Tile, 0.0));
+    QVERIFY(!page.isNull());
+    const QRgb first = probe(page, 1.0, 1.0);
+    const QRgb second = probe(page, 34.87, 1.0);
+    QVERIFY2(channelDistance(first, second) <= 2,
+             qPrintable(QStringLiteral("natural tile repeat differs: %1 vs %2")
+                            .arg(describe(first), describe(second))));
+}
+
+void TestPageBackground::transparentPictureCompositesOverWhite()
+{
+    QImage image(400, 200, QImage::Format_ARGB32);
+    image.setColorSpace(QColorSpace(QColorSpace::SRgb));
+    image.fill(QColor(220, 30, 30, 128));
+    const QString path = writeImage(m_dir.path(), QStringLiteral("half-red.png"), image);
+    QVERIFY(!path.isEmpty());
+
+    const QImage page = render(pictureDocument(path, BackgroundFit::Fill));
+    QVERIFY(!page.isNull());
+    const QRgb expected =
+        blendInLinear(qRgb(255, 255, 255), qRgb(220, 30, 30), 128.0 / 255.0);
+    const QRgb actual = probe(page, 105.0, 148.5);
+    QVERIFY2(channelDistance(actual, expected) <= 2,
+             qPrintable(QStringLiteral("transparent picture is %1, expected %2")
+                            .arg(describe(actual), describe(expected))));
+}
+
 void TestPageBackground::backgroundShowsInGapsAndEmptyCells()
 {
     DocumentSnapshot document;
@@ -457,6 +533,41 @@ void TestPageBackground::freeCanvasPagePaintsTheBackground()
     const QRgb corner = probe(rendered, 5.0, 5.0);
     QVERIFY2(channelDistance(corner, qRgb(0xcc, 0x33, 0x33)) <= 2,
              qPrintable(QStringLiteral("free page corner is %1").arg(describe(corner))));
+}
+
+void TestPageBackground::previewShowsTheBackground()
+{
+    // The canvas and the print must agree about whether the page has a
+    // background. A regression in the preview job or in displayedPageImages
+    // would leave the canvas white while the print is coloured.
+    MainWindow window;
+    window.resize(1280, 800);
+    window.show();
+    QVERIFY(loadDocument(window, m_dir, solidDocument(qRgb(0x33, 0x66, 0xcc))));
+    QVERIFY(window.waitForPreview(15000));
+    auto *view = window.findChild<PageView *>();
+    QVERIFY(view);
+    const QImage composed = view->composedImage();
+    QVERIFY(!composed.isNull());
+    const QRgb centre = composed.pixel(composed.width() / 2, composed.height() / 2);
+    QVERIFY2(channelDistance(centre, qRgb(0x33, 0x66, 0xcc)) <= 3,
+             qPrintable(QStringLiteral("preview centre is %1").arg(describe(centre))));
+
+    // A picture background reaches the canvas too.
+    MainWindow pictureWindow;
+    pictureWindow.resize(1280, 800);
+    pictureWindow.show();
+    QVERIFY(loadDocument(pictureWindow, m_dir,
+                         pictureDocument(m_twoTonePath, BackgroundFit::Fill)));
+    QVERIFY(pictureWindow.waitForPreview(15000));
+    auto *pictureView = pictureWindow.findChild<PageView *>();
+    QVERIFY(pictureView);
+    const QImage pictureComposed = pictureView->composedImage();
+    QVERIFY(!pictureComposed.isNull());
+    const QRgb left = pictureComposed.pixel(pictureComposed.width() / 4,
+                                            pictureComposed.height() / 2);
+    QVERIFY2(channelDistance(left, qRgb(220, 30, 30)) <= 4,
+             qPrintable(QStringLiteral("preview picture is %1").arg(describe(left))));
 }
 
 void TestPageBackground::printMatchesTheScreenRender()
@@ -633,7 +744,8 @@ void TestPageBackground::missingPicturePaintsWhiteAndReports()
     QVERIFY2(channelDistance(centre, qRgb(255, 255, 255)) <= 2,
              qPrintable(QStringLiteral("missing picture painted %1").arg(describe(centre))));
 
-    // The panel and the notice bar say why.
+    // The panel and the notice bar say why. The bar is not just visible: its
+    // label carries the message.
     MainWindow window;
     window.resize(1280, 800);
     window.show();
@@ -641,10 +753,125 @@ void TestPageBackground::missingPicturePaintsWhiteAndReports()
     QTest::qWait(150);
     auto *hint = window.findChild<QLabel *>(QStringLiteral("backgroundMissingHint"));
     auto *relink = window.findChild<QPushButton *>(QStringLiteral("backgroundRelinkButton"));
+    auto *notice = window.findChild<QLabel *>(QStringLiteral("backgroundNotice"));
     QVERIFY(hint);
     QVERIFY(relink);
+    QVERIFY(notice);
     QVERIFY(hint->isVisible());
     QVERIFY(relink->isVisible());
+    QVERIFY(notice->isVisible());
+    QCOMPARE(notice->text(), QStringLiteral("A háttérkép nem található."));
+    QCOMPARE(hint->text(), notice->text());
+}
+
+void TestPageBackground::pathOnlyMissingPictureIsReported()
+{
+    // A hand-edited or older file with a path and no sha must not be silent.
+    DocumentSnapshot document;
+    Page page = a4Page();
+    page.background.kind = BackgroundKind::Image;
+    page.background.imagePath = m_dir.filePath(QStringLiteral("gone-path-only.png"));
+    document.pages.append(page);
+    document.currentPage = 0;
+
+    MainWindow window;
+    window.resize(1280, 800);
+    window.show();
+    QVERIFY(loadDocument(window, m_dir, document));
+    QTest::qWait(150);
+    auto *hint = window.findChild<QLabel *>(QStringLiteral("backgroundMissingHint"));
+    auto *notice = window.findChild<QLabel *>(QStringLiteral("backgroundNotice"));
+    QVERIFY(hint);
+    QVERIFY(notice);
+    QVERIFY(hint->isVisible());
+    QVERIFY(notice->isVisible());
+    QCOMPARE(notice->text(), QStringLiteral("A háttérkép nem található."));
+}
+
+void TestPageBackground::hugePictureIsReported()
+{
+    // A 12000 x 12000 source is 144 MP: it cannot be decoded within Qt's
+    // allocation limit, so the page paints white and the notice says why
+    // instead of leaving an empty strip.
+    QVERIFY(BackgroundGeometry::backgroundSourceTooLarge(QSize(12000, 12000)));
+    QVERIFY(!BackgroundGeometry::backgroundSourceTooLarge(QSize(4000, 3000)));
+    QVERIFY(!BackgroundGeometry::backgroundSourceTooLarge(QSize()));
+
+    const QString path = m_dir.filePath(QStringLiteral("not-an-image.png"));
+    QFile file(path);
+    QVERIFY(file.open(QIODevice::WriteOnly));
+    file.write("this is not an image");
+    file.close();
+
+    MainWindow window;
+    window.resize(1280, 800);
+    window.show();
+    QVERIFY(loadDocument(window, m_dir, pictureDocument(path, BackgroundFit::Fill)));
+    QTest::qWait(150);
+    auto *notice = window.findChild<QLabel *>(QStringLiteral("backgroundNotice"));
+    auto *hint = window.findChild<QLabel *>(QStringLiteral("backgroundMissingHint"));
+    QVERIFY(notice);
+    QVERIFY(hint);
+    QVERIFY(notice->isVisible());
+    QCOMPARE(notice->text(),
+             QStringLiteral("A háttérkép túl nagy vagy nem olvasható."));
+    QVERIFY(hint->isVisible());
+    QCOMPARE(hint->text(), notice->text());
+}
+
+void TestPageBackground::sanitiserClampsAndKeepsTheEndpoints()
+{
+    PageBackground background;
+    background.kind = static_cast<BackgroundKind>(99);
+    background.fit = static_cast<BackgroundFit>(99);
+    background.solid = 0x12345678u;
+    background.angleDeg = std::numeric_limits<double>::quiet_NaN();
+    background.tileMm = -5.0;
+    background.opacity = 500.0;
+    background.stops = {BackgroundStop{0.8, 0xff0000u},
+                        BackgroundStop{0.2, 0x00ff00u},
+                        BackgroundStop{std::numeric_limits<double>::quiet_NaN(), 0x0000ffu},
+                        BackgroundStop{1.0, 0x0000ffu}};
+    const PageBackground sane = sanitiseBackground(background);
+    QCOMPARE(sane.kind, BackgroundKind::None);
+    QCOMPARE(sane.fit, BackgroundFit::Fill);
+    QCOMPARE(sane.solid, 0xff345678u);
+    QCOMPARE(sane.angleDeg, 0.0);
+    QCOMPARE(sane.tileMm, 0.0);
+    QCOMPARE(sane.opacity, 100.0);
+    QCOMPARE(sane.stops.size(), 3);
+    QCOMPARE(sane.stops.at(0).first, 0.2);
+    QCOMPARE(sane.stops.at(1).first, 0.8);
+    QCOMPARE(sane.stops.at(2).first, 1.0);
+    QCOMPARE(sane.stops.at(0).second, 0xff00ff00u);
+    QCOMPARE(sane.stops.at(2).second, 0xff0000ffu);
+
+    // Twelve stops keep both endpoints and sample the middle, so the gradient
+    // still ends in its last colour.
+    PageBackground many;
+    for (int i = 0; i < 12; ++i)
+        many.stops.append(BackgroundStop{i / 11.0, qRgb(i * 20, 0, 0)});
+    const PageBackground sampled = sanitiseBackground(many);
+    QCOMPARE(sampled.stops.size(), kMaxGradientStops);
+    QCOMPARE(sampled.stops.first().first, 0.0);
+    QCOMPARE(sampled.stops.last().first, 1.0);
+    QCOMPARE(sampled.stops.first().second, qRgb(0, 0, 0));
+    QCOMPARE(sampled.stops.last().second, qRgb(220, 0, 0));
+}
+
+void TestPageBackground::opacityZeroAndOne()
+{
+    const QImage zero = render(solidDocument(qRgb(0x33, 0x66, 0xcc), 0.0));
+    QVERIFY(!zero.isNull());
+    QVERIFY2(channelDistance(probe(zero, 105.0, 148.5), qRgb(255, 255, 255)) <= 2,
+             "opacity 0 is not the white paper");
+
+    const QImage one = render(solidDocument(qRgb(0x33, 0x66, 0xcc), 1.0));
+    QVERIFY(!one.isNull());
+    const QRgb expected =
+        blendInLinear(qRgb(255, 255, 255), qRgb(0x33, 0x66, 0xcc), 0.01);
+    QVERIFY2(channelDistance(probe(one, 105.0, 148.5), expected) <= 2,
+             "opacity 1 is not a 1 % blend");
 }
 
 void TestPageBackground::undoRestoresThePreviousBackground()
@@ -687,6 +914,58 @@ void TestPageBackground::resetReturnsToWhite()
     QCOMPARE(window.document().pages.first().background.solid, qRgb(0x33, 0x66, 0xcc));
 }
 
+void TestPageBackground::opacityBurstSurvivesAKindChange()
+{
+    MainWindow window;
+    window.resize(1280, 800);
+    window.show();
+    QVERIFY(loadDocument(window, m_dir, solidDocument(qRgb(0x33, 0x66, 0xcc))));
+    QTest::qWait(150);
+
+    auto *opacity = window.findChild<QSlider *>(QStringLiteral("backgroundOpacitySlider"));
+    auto *kind = window.findChild<QComboBox *>(QStringLiteral("backgroundKindCombo"));
+    QVERIFY(opacity);
+    QVERIFY(kind);
+    QCOMPARE(opacity->value(), 100);
+
+    // A burst, then a different control before the debounce fires. The kind
+    // change must land the opacity first, not overwrite it with the document's
+    // stale 100.
+    opacity->setValue(50);
+    kind->setCurrentIndex(kind->findData(int(BackgroundKind::Image)));
+    QTest::qWait(300);
+
+    const PageBackground background = window.document().pages.first().background;
+    QCOMPARE(background.kind, BackgroundKind::Image);
+    QCOMPARE(background.opacity, 50.0);
+}
+
+void TestPageBackground::tileBurstSurvivesAFitChange()
+{
+    MainWindow window;
+    window.resize(1280, 800);
+    window.show();
+    QVERIFY(loadDocument(window, m_dir,
+                         pictureDocument(m_twoTonePath, BackgroundFit::Tile, 0.0)));
+    QTest::qWait(150);
+
+    auto *tile = window.findChild<QDoubleSpinBox *>(QStringLiteral("backgroundTileSpin"));
+    auto *fit = window.findChild<QComboBox *>(QStringLiteral("backgroundFitCombo"));
+    QVERIFY(tile);
+    QVERIFY(fit);
+    QVERIFY(tile->isVisible());
+
+    // A tile burst, then a fit change before the debounce fires. The fit change
+    // must land the tile first, not reset it to the document's 0.
+    tile->setValue(5.0); // 50 mm
+    fit->setCurrentIndex(fit->findData(int(BackgroundFit::Fill)));
+    QTest::qWait(300);
+
+    const PageBackground background = window.document().pages.first().background;
+    QCOMPARE(background.fit, BackgroundFit::Fill);
+    QCOMPARE(background.tileMm, 50.0);
+}
+
 void TestPageBackground::largeFontKeepsThePanelReachable()
 {
     const QFont saved = QApplication::font();
@@ -717,15 +996,79 @@ void TestPageBackground::largeFontKeepsThePanelReachable()
     QVERIFY(panel->isVisible());
     QVERIFY(kind->isVisible());
 
-    // The Lap page scrolls, so the background group is reachable even when the
-    // layout controls above it fill the column.
+    // The background group sits directly under the page info, so at a larger
+    // font it is on the first screen instead of below the long layout panel.
+    // The page still scrolls, and the panel stays full-width.
     auto *scroll = qobject_cast<QScrollArea *>(tabs->currentWidget());
     QVERIFY(scroll);
-    scroll->verticalScrollBar()->setValue(scroll->verticalScrollBar()->maximum());
+    scroll->verticalScrollBar()->setValue(0);
     QTest::qWait(120);
     QVERIFY(window.grab().save(
         evidenceDir() + QStringLiteral("/ui-background-large-font.png")));
     QApplication::setFont(saved);
+}
+
+void TestPageBackground::layoutEvidence()
+{
+    // A laid-out page with a dark background: the empty cells, the gutter and
+    // the margins show the background, and the editor furniture stays readable
+    // on it. This is the screenshot the first review asked for.
+    DocumentSnapshot document;
+    Page page = a4Page();
+    page.background.kind = BackgroundKind::Solid;
+    page.background.solid = qRgb(0x10, 0x2a, 0x6b);
+    page.slotList = {
+        Slot{QStringLiteral("slot-layout-0"), QRectF(0.0, 0.0, 0.5, 0.5)},
+        Slot{QStringLiteral("slot-layout-1"), QRectF(0.5, 0.0, 0.5, 0.5)},
+        Slot{QStringLiteral("slot-layout-2"), QRectF(0.0, 0.5, 0.5, 0.5)},
+        Slot{QStringLiteral("slot-layout-3"), QRectF(0.5, 0.5, 0.5, 0.5)},
+    };
+    page.layoutId = QStringLiteral("n04-grid-2x2");
+    Frame frame;
+    frame.id = QStringLiteral("frame-layout");
+    frame.sourcePath = m_solidPath;
+    frame.sourceSha256 = fileSha256(m_solidPath);
+    frame.slotId = QStringLiteral("slot-layout-0");
+    const QRectF cell = SlotGeometry::slotCellMm(page, page.slotList.first());
+    frame.cx = cell.center().x();
+    frame.cy = cell.center().y();
+    frame.width = cell.width();
+    frame.height = cell.height();
+    frame.fit = FitMode::Fill;
+    page.frames.append(frame);
+    document.pages.append(page);
+    document.currentPage = 0;
+
+    MainWindow window;
+    window.resize(1280, 800);
+    window.show();
+    QVERIFY(loadDocument(window, m_dir, document));
+    QTest::qWait(200);
+    QVERIFY(window.grab().save(evidenceDir()
+                               + QStringLiteral("/ui-background-layout.png")));
+
+    // The same page printed, so the gaps and the empty cells are visible on
+    // paper too.
+    ImageStore store;
+    PageRenderer renderer(store);
+    const double ppi = 150.0;
+    const auto rendered = renderer.renderPage(document, 0, ppi);
+    if (!rendered)
+        QFAIL(qPrintable(rendered.error().message));
+    const QString pdfPath = evidenceDir() + QStringLiteral("/background-layout.pdf");
+    RenderOptions options;
+    options.printPpi = ppi;
+    const auto artifact = renderer.writePdf(document, pdfPath, {}, options);
+    if (!artifact)
+        QFAIL(qPrintable(artifact.error().message));
+    QProcess process;
+    const QString base = evidenceDir() + QStringLiteral("/background-layout");
+    process.start(QStringLiteral("pdftoppm"),
+                  {QStringLiteral("-r"), QString::number(ppi), QStringLiteral("-png"),
+                   QStringLiteral("-singlefile"), pdfPath, base});
+    QVERIFY(process.waitForFinished(60000));
+    QCOMPARE(process.exitCode(), 0);
+    QVERIFY(QFileInfo::exists(base + QStringLiteral(".png")));
 }
 
 void TestPageBackground::evidenceScreenshots()

@@ -1737,5 +1737,29 @@
         <source>Képek (*.jpg *.jpeg *.png *.webp *.bmp)</source>
         <translation>Pictures (*.jpg *.jpeg *.png *.webp *.bmp)</translation>
     </message>
+    <message>
+        <source>Befoglalás</source>
+        <translation>Contain</translation>
+    </message>
+    <message>
+        <source>A háttérkép túl nagy vagy nem olvasható.</source>
+        <translation>The background picture is too large or cannot be read.</translation>
+    </message>
+    <message>
+        <source>Két szín és négy irány közül választhatsz.</source>
+        <translation>You can choose two colours and four directions.</translation>
+    </message>
+    <message>
+        <source>Háttér típusa</source>
+        <translation>Background type</translation>
+    </message>
+    <message>
+        <source>Háttérkép cseréje…</source>
+        <translation>Change background picture…</translation>
+    </message>
+    <message>
+        <source>A lap háttere: %1</source>
+        <translation>The page background: %1</translation>
+    </message>
 </context>
 </TS>

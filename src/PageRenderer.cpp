@@ -13,6 +13,7 @@
 #include <QFileInfo>
 #include <QFont>
 #include <QImage>
+#include <QImageReader>
 #include <QLinearGradient>
 #include <QPainter>
 #include <QPainterPath>
@@ -246,10 +247,15 @@ void drawBackgroundImage(QPainter &painter, const PageBackground &background,
         return;
     switch (background.fit) {
     case BackgroundFit::Fill: {
-        const QRectF source = BackgroundGeometry::fillSourcePixels(sheet, pixels);
+        // A one-millimetre overhang keeps the last raster row covered: the
+        // sheet height in pixels is rounded, so a rect that ends exactly on the
+        // edge leaves a partially covered row that blends with the white
+        // canvas. The overhang is clipped by the raster.
+        const QSizeF bleed(sheet.width() + 2.0, sheet.height() + 2.0);
+        const QRectF source = BackgroundGeometry::fillSourcePixels(bleed, pixels);
         if (source.isEmpty())
             return;
-        painter.drawImage(QRectF(QPointF(0, 0), sheet), image, source);
+        painter.drawImage(QRectF(-1.0, -1.0, bleed.width(), bleed.height()), image, source);
         break;
     }
     case BackgroundFit::Fit: {
@@ -266,10 +272,10 @@ void drawBackgroundImage(QPainter &painter, const PageBackground &background,
             BackgroundGeometry::tileSizeMm(background.tileMm, sourcePixels, sheet);
         if (tile.isEmpty())
             return;
-        const int columns =
-            std::min(kMaxTilesPerAxis, int(std::ceil(sheet.width() / tile.width())));
-        const int rows =
-            std::min(kMaxTilesPerAxis, int(std::ceil(sheet.height() / tile.height())));
+        const int columns = std::min(
+            kMaxTilesPerAxis, int(std::ceil((sheet.width() + 1.0) / tile.width())));
+        const int rows = std::min(
+            kMaxTilesPerAxis, int(std::ceil((sheet.height() + 1.0) / tile.height())));
         for (int row = 0; row < rows; ++row) {
             for (int column = 0; column < columns; ++column) {
                 const QRectF target(column * tile.width(), row * tile.height(),
@@ -302,9 +308,14 @@ void paintBackground(QPainter &painter, const Page &page, const PageImages &imag
     painter.save();
     painter.setOpacity(opacity);
     const QRectF sheetRect(QPointF(0, 0), sheet);
+    // The raster is rounded to whole pixels, so a rect that ends exactly on the
+    // sheet edge leaves the last row partially covered and blends with the
+    // white canvas. A one-millimetre overhang is clipped by the raster and
+    // keeps a full-bleed background solid to the edge.
+    const QRectF bleedRect = sheetRect.adjusted(-1.0, -1.0, 1.0, 1.0);
     switch (background.kind) {
     case BackgroundKind::Solid:
-        painter.fillRect(sheetRect, ColorPipeline::linearColor(background.solid));
+        painter.fillRect(bleedRect, ColorPipeline::linearColor(background.solid));
         break;
     case BackgroundKind::Gradient: {
         const QLineF line = BackgroundGeometry::gradientLineMm(sheet, background.angleDeg);
@@ -321,7 +332,7 @@ void paintBackground(QPainter &painter, const Page &page, const PageImages &imag
             gradient.setColorAt(0.0, ColorPipeline::linearColor(colour));
             gradient.setColorAt(1.0, ColorPipeline::linearColor(colour));
         }
-        painter.fillRect(sheetRect, gradient);
+        painter.fillRect(bleedRect, gradient);
         break;
     }
     case BackgroundKind::Image:
@@ -602,21 +613,29 @@ Result<QImage> PageRenderer::renderPageUsing(const DocumentSnapshot &snapshot, i
     // picture the user can relink.
     if (page.background.kind == BackgroundKind::Image
         && !page.background.imagePath.isEmpty()) {
-        Result<SourceImage> source =
-            m_store.load(page.background.imagePath, ImportPolicy{}, token);
-        if (source) {
-            // The background is not a photograph: it has no per-frame tone and
-            // no filter. It does share the document's paper component, so it
-            // matches the photographs on the same sheet.
-            ColorRecipe recipe = baseRecipe;
-            recipe.tone = PhotoTone{};
-            const int bound = std::clamp(std::max(pixelWidth, pixelHeight), 1,
-                                         kBackgroundMaxDimension);
-            Result<QImage> converted =
-                m_store.linear(source.value(), recipe, bound, token);
-            if (converted) {
-                pageImages.background = converted.value();
-                pageImages.backgroundPixels = source.value().size();
+        // A source that cannot be read, or that is too large to decode within
+        // Qt's allocation limit, is skipped before the store tries: a
+        // 12000 x 12000 picture is 144 MP and would fail the decode anyway.
+        QImageReader probe(page.background.imagePath);
+        probe.setDecideFormatFromContent(true);
+        if (probe.canRead()
+            && !BackgroundGeometry::backgroundSourceTooLarge(probe.size())) {
+            Result<SourceImage> source =
+                m_store.load(page.background.imagePath, ImportPolicy{}, token);
+            if (source) {
+                // The background is not a photograph: it has no per-frame tone
+                // and no filter. It does share the document's paper component,
+                // so it matches the photographs on the same sheet.
+                ColorRecipe recipe = baseRecipe;
+                recipe.tone = PhotoTone{};
+                const int bound = std::clamp(std::max(pixelWidth, pixelHeight), 1,
+                                             kBackgroundMaxDimension);
+                Result<QImage> converted =
+                    m_store.linear(source.value(), recipe, bound, token);
+                if (converted) {
+                    pageImages.background = converted.value();
+                    pageImages.backgroundPixels = source.value().size();
+                }
             }
         }
     }

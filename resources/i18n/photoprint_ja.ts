@@ -1723,5 +1723,29 @@
         <source>Képek (*.jpg *.jpeg *.png *.webp *.bmp)</source>
         <translation>画像 (*.jpg *.jpeg *.png *.webp *.bmp)</translation>
     </message>
+    <message>
+        <source>Befoglalás</source>
+        <translation>全体を表示</translation>
+    </message>
+    <message>
+        <source>A háttérkép túl nagy vagy nem olvasható.</source>
+        <translation>背景画像が大きすぎるか、読み込めません。</translation>
+    </message>
+    <message>
+        <source>Két szín és négy irány közül választhatsz.</source>
+        <translation>2色と4方向から選べます。</translation>
+    </message>
+    <message>
+        <source>Háttér típusa</source>
+        <translation>背景の種類</translation>
+    </message>
+    <message>
+        <source>Háttérkép cseréje…</source>
+        <translation>背景画像を変更…</translation>
+    </message>
+    <message>
+        <source>A lap háttere: %1</source>
+        <translation>ページの背景: %1</translation>
+    </message>
 </context>
 </TS>

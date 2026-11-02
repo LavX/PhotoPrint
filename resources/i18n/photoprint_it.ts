@@ -1737,5 +1737,29 @@
         <source>Képek (*.jpg *.jpeg *.png *.webp *.bmp)</source>
         <translation>Immagini (*.jpg *.jpeg *.png *.webp *.bmp)</translation>
     </message>
+    <message>
+        <source>Befoglalás</source>
+        <translation>Adatta</translation>
+    </message>
+    <message>
+        <source>A háttérkép túl nagy vagy nem olvasható.</source>
+        <translation>L'immagine di sfondo è troppo grande o non leggibile.</translation>
+    </message>
+    <message>
+        <source>Két szín és négy irány közül választhatsz.</source>
+        <translation>Puoi scegliere due colori e quattro direzioni.</translation>
+    </message>
+    <message>
+        <source>Háttér típusa</source>
+        <translation>Tipo di sfondo</translation>
+    </message>
+    <message>
+        <source>Háttérkép cseréje…</source>
+        <translation>Cambia immagine di sfondo…</translation>
+    </message>
+    <message>
+        <source>A lap háttere: %1</source>
+        <translation>Lo sfondo della pagina: %1</translation>
+    </message>
 </context>
 </TS>

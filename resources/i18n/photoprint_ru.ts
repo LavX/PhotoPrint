@@ -1751,5 +1751,29 @@
         <source>Képek (*.jpg *.jpeg *.png *.webp *.bmp)</source>
         <translation>Изображения (*.jpg *.jpeg *.png *.webp *.bmp)</translation>
     </message>
+    <message>
+        <source>Befoglalás</source>
+        <translation>Вписать</translation>
+    </message>
+    <message>
+        <source>A háttérkép túl nagy vagy nem olvasható.</source>
+        <translation>Фоновое изображение слишком большое или не читается.</translation>
+    </message>
+    <message>
+        <source>Két szín és négy irány közül választhatsz.</source>
+        <translation>Можно выбрать два цвета и четыре направления.</translation>
+    </message>
+    <message>
+        <source>Háttér típusa</source>
+        <translation>Тип фона</translation>
+    </message>
+    <message>
+        <source>Háttérkép cseréje…</source>
+        <translation>Заменить фоновое изображение…</translation>
+    </message>
+    <message>
+        <source>A lap háttere: %1</source>
+        <translation>Фон страницы: %1</translation>
+    </message>
 </context>
 </TS>

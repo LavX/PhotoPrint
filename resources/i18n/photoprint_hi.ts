@@ -1737,5 +1737,29 @@
         <source>Képek (*.jpg *.jpeg *.png *.webp *.bmp)</source>
         <translation>चित्र (*.jpg *.jpeg *.png *.webp *.bmp)</translation>
     </message>
+    <message>
+        <source>Befoglalás</source>
+        <translation>समाहित करें</translation>
+    </message>
+    <message>
+        <source>A háttérkép túl nagy vagy nem olvasható.</source>
+        <translation>पृष्ठभूमि चित्र बहुत बड़ा है या पढ़ा नहीं जा सकता।</translation>
+    </message>
+    <message>
+        <source>Két szín és négy irány közül választhatsz.</source>
+        <translation>आप दो रंग और चार दिशाएँ चुन सकते हैं।</translation>
+    </message>
+    <message>
+        <source>Háttér típusa</source>
+        <translation>पृष्ठभूमि का प्रकार</translation>
+    </message>
+    <message>
+        <source>Háttérkép cseréje…</source>
+        <translation>पृष्ठभूमि चित्र बदलें…</translation>
+    </message>
+    <message>
+        <source>A lap háttere: %1</source>
+        <translation>पृष्ठ की पृष्ठभूमि: %1</translation>
+    </message>
 </context>
 </TS>

@@ -8,6 +8,13 @@
 namespace pp {
 namespace BackgroundGeometry {
 
+bool backgroundSourceTooLarge(const QSize &pixels)
+{
+    if (pixels.width() <= 0 || pixels.height() <= 0)
+        return false;
+    return qint64(pixels.width()) * qint64(pixels.height()) > kBackgroundMaxSourcePixels;
+}
+
 QLineF gradientLineMm(const QSizeF &sheetMm, double angleDeg)
 {
     if (!(sheetMm.width() > 0.0) || !(sheetMm.height() > 0.0))

@@ -211,8 +211,21 @@ PageBackground sanitiseBackground(PageBackground background)
                      [](const BackgroundStop &a, const BackgroundStop &b) {
                          return a.first < b.first;
                      });
-    if (stops.size() > kMaxGradientStops)
-        stops = stops.mid(0, kMaxGradientStops);
+    if (stops.size() > kMaxGradientStops) {
+        // Keep both endpoints and sample the middle evenly. Dropping the tail
+        // would change the gradient's end colour and dropping the head would
+        // change its start; a hand-edited 12-stop file still renders its first
+        // and last colour at the right places.
+        QList<BackgroundStop> sampled;
+        sampled.reserve(kMaxGradientStops);
+        const int last = int(stops.size()) - 1;
+        for (int i = 0; i < kMaxGradientStops; ++i) {
+            const int index = int(std::lround(
+                double(i) * double(last) / double(kMaxGradientStops - 1)));
+            sampled.append(stops.at(std::clamp(index, 0, last)));
+        }
+        stops = sampled;
+    }
     background.stops = stops;
 
     // A non-finite angle is corruption, so it becomes the neutral direction

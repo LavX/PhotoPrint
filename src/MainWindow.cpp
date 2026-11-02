@@ -1,6 +1,7 @@
 #include "MainWindow.h"
 
 #include "AboutDialog.h"
+#include "BackgroundGeometry.h"
 #include "CollageTemplates.h"
 #include "ColorPipeline.h"
 #include "EffectBrowserDialog.h"
@@ -44,6 +45,7 @@
 #include <QScrollBar>
 #include <QHBoxLayout>
 #include <QIcon>
+#include <QImageReader>
 #include <QKeyEvent>
 #include <QLabel>
 #include <QLineEdit>
@@ -100,6 +102,10 @@ constexpr int kStyleDebounceMs = 180;
 // at most a couple of thousand pixels wide, and a 100 MP source would otherwise
 // be converted in full for every document change.
 constexpr int kBackgroundPreviewBound = 1600;
+// Choosing "Szín" from a white page would otherwise look like nothing happened.
+// The swatch starts on a soft blue-grey, which is visible on the paper and is
+// one click away from white if the user wants it.
+constexpr QRgb kNeutralBackgroundSolid = 0xffcfd8e3u;
 // A raster is kept while it is between 0.98x and 2x the view target: a slightly
 // larger raster is free and sharper than rebuilding a smaller one, and a 2x
 // surplus is still worth keeping. Outside that band the settle rebuilds.
@@ -119,6 +125,29 @@ QIcon swatchIcon(QRgb colour)
     painter.drawRoundedRect(QRectF(0.5, 0.5, 23.0, 23.0), 4.0, 4.0);
     painter.end();
     return QIcon(pixmap);
+}
+
+/// Draws a ring that stays visible on white paper and on a dark or busy
+/// background: a light underlay and the coloured line on top. The underlay is
+/// invisible on white and provides the contrast on a dark page, so the same
+/// furniture works on every background without a luminance guess.
+void drawTwoToneRing(QPainter &painter, const QRectF &rect, const QColor &colour,
+                     double radius, double width, Qt::PenStyle style,
+                     const QList<qreal> &dash = {})
+{
+    QPen underlay(QColor(255, 255, 255, 220), width + 2.0, style);
+    if (!dash.isEmpty())
+        underlay.setDashPattern(dash);
+    painter.setPen(underlay);
+    painter.setBrush(Qt::NoBrush);
+    painter.drawRoundedRect(rect, radius, radius);
+
+    QPen inner(colour, width, style);
+    if (!dash.isEmpty())
+        inner.setDashPattern(dash);
+    painter.setPen(inner);
+    painter.setBrush(Qt::NoBrush);
+    painter.drawRoundedRect(rect, radius, radius);
 }
 
 /// Marks a label as secondary text. The theme stylesheet owns the colour, so
@@ -1245,16 +1274,39 @@ void PageView::clearSelection()
 
 void PageView::updateAccessibleDescription()
 {
-    QString description;
+    QStringList parts;
     const Page *page = currentPage();
     if (page) {
         if (const Frame *frame = selectedFramePtr()) {
             if (SlotGeometry::frameIsClipped(*page, *frame)) {
-                description = QCoreApplication::translate(
+                parts << QCoreApplication::translate(
                     "PhotoPrint", "A kép egy része le van vágva.");
             }
         }
+        // The background is a page-level property with its own panel, so a
+        // screen reader should hear it the same way it hears the clipped-photo
+        // warning.
+        const PageBackground &background = page->background;
+        if (background.kind != BackgroundKind::None) {
+            QString kind;
+            switch (background.kind) {
+            case BackgroundKind::Solid:
+                kind = QCoreApplication::translate("PhotoPrint", "Szín");
+                break;
+            case BackgroundKind::Gradient:
+                kind = QCoreApplication::translate("PhotoPrint", "Színátmenet");
+                break;
+            case BackgroundKind::Image:
+                kind = QCoreApplication::translate("PhotoPrint", "Kép");
+                break;
+            case BackgroundKind::None:
+                break;
+            }
+            parts << QCoreApplication::translate("PhotoPrint", "A lap háttere: %1")
+                         .arg(kind);
+        }
     }
+    const QString description = parts.join(QLatin1Char(' '));
     if (m_accessibleBase == description)
         return;
     m_accessibleBase = description;
@@ -1264,7 +1316,8 @@ void PageView::updateAccessibleDescription()
 
 QColor PageView::handleOutlineColor() const
 {
-    // The page is always white, so a light theme colour would vanish on it.
+    // The page may now carry a background, so a light theme colour would
+    // vanish on a light one; the handles also get a light underlay.
     QColor colour = palette().color(QPalette::Text);
     if (colour.lightness() > 140)
         colour = QColor(0x2c, 0x2c, 0x30);
@@ -1393,8 +1446,13 @@ void PageView::paintEvent(QPaintEvent *)
         }
     }
 
-    painter.setPen(QPen(m_pageBorderColor, 1));
+    // A light line just outside the page keeps the sheet edge visible when the
+    // page and the canvas are both dark; on a light canvas it is invisible and
+    // the theme border does the work.
+    painter.setPen(QPen(QColor(255, 255, 255, 120), 1));
     painter.setBrush(Qt::NoBrush);
+    painter.drawRect(page.adjusted(-1, -1, 1, 1));
+    painter.setPen(QPen(m_pageBorderColor, 1));
     painter.drawRect(page);
 
     if (!m_emptyHint.isEmpty()) {
@@ -1431,16 +1489,23 @@ void PageView::paintEvent(QPaintEvent *)
     }
 
     const QPolygonF quad = frameQuadWidget(*frame);
+    // A light underlay keeps the selection visible on a dark background; the
+    // accent line on top keeps it visible on white paper.
+    QPen outlineUnderlay(QColor(255, 255, 255, 220));
+    outlineUnderlay.setWidthF(3.6);
+    painter.setPen(outlineUnderlay);
+    painter.setBrush(Qt::NoBrush);
+    painter.drawPolygon(quad);
     QPen outline(palette().color(QPalette::Highlight));
     outline.setWidthF(1.6);
     painter.setPen(outline);
-    painter.setBrush(Qt::NoBrush);
     painter.drawPolygon(quad);
 
     // Every frame keeps the original handles, slotted or free: the section's
     // cell clips the photograph but does not take the frame's rectangle away
     // from the user. The fill and the outline are theme-aware, and the outline
-    // is forced dark enough to stay visible on the always-white page.
+    // is forced dark enough to stay visible on a light page; the light
+    // underlay keeps it visible on a dark one.
     const QColor handleFill = palette().color(QPalette::Base);
     const QColor handleOutline = handleOutlineColor();
     painter.setPen(QPen(handleOutline, 1.2));
@@ -1554,13 +1619,13 @@ void PageView::paintSlotOverlays(QPainter &painter, const Page &page) const
         }
 
         // The clip window is always visible, filled or not: without it a
-        // photograph that fills its cell would look like a free frame.
-        QPen sectionPen(muted, 1.0, state == SlotState::Filled ? Qt::SolidLine : Qt::DashLine);
-        if (state != SlotState::Filled)
-            sectionPen.setDashPattern({5.0, 4.0});
-        painter.setPen(sectionPen);
-        painter.setBrush(Qt::NoBrush);
-        painter.drawRoundedRect(ring, 3.0, 3.0);
+        // photograph that fills its cell would look like a free frame. The
+        // two-tone ring keeps it readable on a coloured page.
+        const Qt::PenStyle sectionStyle =
+            state == SlotState::Filled ? Qt::SolidLine : Qt::DashLine;
+        const QList<qreal> sectionDash =
+            state == SlotState::Filled ? QList<qreal>{} : QList<qreal>{5.0, 4.0};
+        drawTwoToneRing(painter, ring, muted, 3.0, 1.0, sectionStyle, sectionDash);
 
         if (state != SlotState::Filled) {
             painter.setPen(Qt::NoPen);
@@ -1570,10 +1635,16 @@ void PageView::paintSlotOverlays(QPainter &painter, const Page &page) const
                 QFont font = baseFont;
                 font.setPointSizeF(std::max(7.0, baseFont.pointSizeF() * 0.85));
                 painter.setFont(font);
-                painter.setPen(state == SlotState::Missing ? border.darker(115) : border);
                 const QString elided =
                     painter.fontMetrics().elidedText(text, Qt::ElideRight,
                                                      qRound(ring.width() - 10.0));
+                const QRectF textRect = painter.boundingRect(
+                    ring.adjusted(4, 2, -4, -2), Qt::AlignCenter, elided);
+                // The cue sits on a plate for the same reason the empty-page
+                // hint does: a fixed grey disappears on a dark background.
+                painter.fillRect(textRect.adjusted(-4, -2, 4, 2),
+                                 QColor(255, 255, 255, 210));
+                painter.setPen(state == SlotState::Missing ? border.darker(115) : border);
                 painter.drawText(ring.adjusted(4, 2, -4, -2), Qt::AlignCenter, elided);
             }
         }
@@ -1582,11 +1653,9 @@ void PageView::paintSlotOverlays(QPainter &painter, const Page &page) const
             // Part of the photograph is outside the window. A dashed orange
             // ring and a short badge say so before the user wonders where the
             // rest of the picture went; the inspector carries the full hint.
-            QPen clipPen(QColor(0xc4, 0x55, 0x00), 1.6, Qt::DashLine);
-            clipPen.setDashPattern({3.0, 3.0});
-            painter.setPen(clipPen);
-            painter.setBrush(Qt::NoBrush);
-            painter.drawRoundedRect(ring.adjusted(2.0, 2.0, -2.0, -2.0), 3.0, 3.0);
+            drawTwoToneRing(painter, ring.adjusted(2.0, 2.0, -2.0, -2.0),
+                            QColor(0xc4, 0x55, 0x00), 3.0, 1.6, Qt::DashLine,
+                            {3.0, 3.0});
             const QString label = QCoreApplication::translate("PhotoPrint", "Levágva");
             QFont font = baseFont;
             font.setBold(true);
@@ -1608,10 +1677,7 @@ void PageView::paintSlotOverlays(QPainter &painter, const Page &page) const
         if (selected) {
             // A selected cell reads as one object even when the cell is filled:
             // the photograph's outline and this ring are the same rectangle.
-            QPen pen(accent, 2.0, Qt::SolidLine);
-            painter.setPen(pen);
-            painter.setBrush(Qt::NoBrush);
-            painter.drawRoundedRect(ring, 3.0, 3.0);
+            drawTwoToneRing(painter, ring, accent, 3.0, 2.0, Qt::SolidLine);
         }
 
         if (hovered) {
@@ -1620,10 +1686,8 @@ void PageView::paintSlotOverlays(QPainter &painter, const Page &page) const
             // will do before the photo disappears.
             const bool occupied = SlotGeometry::frameInSlot(page, slot.id) != nullptr;
             const QColor cue = occupied ? QColor(0xc4, 0x55, 0x00) : accent;
-            QPen pen(cue, 2.4, Qt::SolidLine);
-            painter.setPen(pen);
-            painter.setBrush(Qt::NoBrush);
-            painter.drawRoundedRect(cell.adjusted(1.5, 1.5, -1.5, -1.5), 4.0, 4.0);
+            drawTwoToneRing(painter, cell.adjusted(1.5, 1.5, -1.5, -1.5), cue, 4.0,
+                            2.4, Qt::SolidLine);
             if (occupied) {
                 const QString label = QCoreApplication::translate("PhotoPrint", "Csere");
                 QFont font = baseFont;
@@ -2602,7 +2666,8 @@ void MainWindow::buildUi()
 
     m_backgroundKindCombo = new QComboBox(backgroundPanel);
     m_backgroundKindCombo->setObjectName(QStringLiteral("backgroundKindCombo"));
-    m_backgroundKindCombo->setAccessibleName(backgroundTitle->text());
+    m_backgroundKindCombo->setAccessibleName(
+        QCoreApplication::translate("PhotoPrint", "Háttér típusa"));
     m_backgroundKindCombo->addItem(QCoreApplication::translate("PhotoPrint", "Nincs"),
                                    int(BackgroundKind::None));
     m_backgroundKindCombo->addItem(QCoreApplication::translate("PhotoPrint", "Szín"),
@@ -2637,7 +2702,10 @@ void MainWindow::buildUi()
     m_backgroundColorButton->setToolTip(
         QCoreApplication::translate("PhotoPrint", "Válassz színt a háttérnek."));
     solidLayout->addWidget(m_backgroundColorButton);
-    solidLayout->addStretch(1);
+    auto *solidLabel = new QLabel(
+        QCoreApplication::translate("PhotoPrint", "Szín"), m_backgroundSolidRow);
+    solidLabel->setWordWrap(true);
+    solidLayout->addWidget(solidLabel, 1);
     backgroundLayout->addWidget(m_backgroundSolidRow);
     connect(m_backgroundColorButton, &QPushButton::clicked, this,
             &MainWindow::chooseBackgroundColor);
@@ -2690,6 +2758,14 @@ void MainWindow::buildUi()
     gradientLayout->addWidget(m_gradientAngleCombo);
     connect(m_gradientAngleCombo, &QComboBox::currentIndexChanged, this,
             &MainWindow::gradientAngleChanged);
+    m_gradientHint = new QLabel(
+        QCoreApplication::translate(
+            "PhotoPrint", "Két szín és négy irány közül választhatsz."),
+        m_backgroundGradientRow);
+    m_gradientHint->setObjectName(QStringLiteral("gradientHint"));
+    m_gradientHint->setWordWrap(true);
+    markSecondaryText(m_gradientHint);
+    gradientLayout->addWidget(m_gradientHint);
     backgroundLayout->addWidget(m_backgroundGradientRow);
 
     m_backgroundImageRow = new QWidget(backgroundPanel);
@@ -2703,6 +2779,11 @@ void MainWindow::buildUi()
     imageLayout->addWidget(m_backgroundImageButton);
     connect(m_backgroundImageButton, &QPushButton::clicked, this,
             &MainWindow::chooseBackgroundImage);
+    m_backgroundFileLabel = new QLabel(m_backgroundImageRow);
+    m_backgroundFileLabel->setObjectName(QStringLiteral("backgroundFileLabel"));
+    m_backgroundFileLabel->setWordWrap(true);
+    markSecondaryText(m_backgroundFileLabel);
+    imageLayout->addWidget(m_backgroundFileLabel);
 
     auto *fitLabel = new QLabel(
         QCoreApplication::translate("PhotoPrint", "Kép illesztése"), m_backgroundImageRow);
@@ -2713,7 +2794,7 @@ void MainWindow::buildUi()
     m_backgroundFitCombo->setAccessibleName(fitLabel->text());
     m_backgroundFitCombo->addItem(QCoreApplication::translate("PhotoPrint", "Kitöltés"),
                                   int(BackgroundFit::Fill));
-    m_backgroundFitCombo->addItem(QCoreApplication::translate("PhotoPrint", "Teljes kép"),
+    m_backgroundFitCombo->addItem(QCoreApplication::translate("PhotoPrint", "Befoglalás"),
                                   int(BackgroundFit::Fit));
     m_backgroundFitCombo->addItem(QCoreApplication::translate("PhotoPrint", "Csempézés"),
                                   int(BackgroundFit::Tile));
@@ -2792,7 +2873,10 @@ void MainWindow::buildUi()
     m_backgroundHint->setWordWrap(true);
     markSecondaryText(m_backgroundHint);
     backgroundLayout->addWidget(m_backgroundHint);
-    pageTabLayout->addWidget(backgroundPanel);
+    // The background is the page's dress, and the layout panel is long: the
+    // group sits directly under the page info so it is not below the fold on a
+    // small window or at a larger font.
+    pageTabLayout->insertWidget(0, backgroundPanel);
 
     if (!m_backgroundTimer) {
         m_backgroundTimer = new QTimer(this);
@@ -2801,6 +2885,7 @@ void MainWindow::buildUi()
         connect(m_backgroundTimer, &QTimer::timeout, this, &MainWindow::flushBackground);
     }
     m_pendingBackground.reset();
+    m_pendingBackgroundField.reset();
 
     // --- Lap: tools that belong to the sheet, not to one photograph ---------
     // Always in the Lap tab: a page with no layout and no selection can still be
@@ -3185,6 +3270,11 @@ void MainWindow::buildUi()
     m_paperHint = new QLabel(m_noticeBar);
     m_paperHint->setWordWrap(true);
     noticeLayout->addWidget(m_paperHint);
+    m_backgroundNotice = new QLabel(m_noticeBar);
+    m_backgroundNotice->setObjectName(QStringLiteral("backgroundNotice"));
+    m_backgroundNotice->setWordWrap(true);
+    m_backgroundNotice->setVisible(false);
+    noticeLayout->addWidget(m_backgroundNotice);
     m_overflowLabel = new QLabel(QCoreApplication::translate("PhotoPrint", "A kép egy része lemarad."), m_noticeBar);
     m_overflowLabel->setWordWrap(true);
     m_overflowLabel->setVisible(false);
@@ -4201,22 +4291,28 @@ void MainWindow::startPreviewJob()
                 result.images.insert(frame.id, converted.value());
         }
         // The background is loaded by the same job, so the canvas and the print
-        // cannot disagree about whether the page has one. A missing file leaves
-        // the layer null and the page white; the panel says why.
+        // cannot disagree about whether the page has one. A missing or
+        // unreadable file leaves the layer null and the page white; the panel
+        // and the notice bar say why.
         const PageBackground &background = page.background;
         if (background.kind == BackgroundKind::Image && !background.imagePath.isEmpty()
             && !token.stop_requested()) {
-            Result<SourceImage> source =
-                store->load(background.imagePath, ImportPolicy{}, token);
-            if (source) {
-                ColorRecipe recipe = sanitiseRecipe(job->document.recipe);
-                recipe.tone = PhotoTone{};
-                Result<QImage> converted =
-                    store->linear(source.value(), recipe, kBackgroundPreviewBound, token);
-                if (converted) {
-                    result.background = converted.value();
-                    result.backgroundPixels = source.value().size();
-                    result.backgroundPath = background.imagePath;
+            QImageReader probe(background.imagePath);
+            probe.setDecideFormatFromContent(true);
+            if (probe.canRead()
+                && !BackgroundGeometry::backgroundSourceTooLarge(probe.size())) {
+                Result<SourceImage> source =
+                    store->load(background.imagePath, ImportPolicy{}, token);
+                if (source) {
+                    ColorRecipe recipe = sanitiseRecipe(job->document.recipe);
+                    recipe.tone = PhotoTone{};
+                    Result<QImage> converted = store->linear(
+                        source.value(), recipe, kBackgroundPreviewBound, token);
+                    if (converted) {
+                        result.background = converted.value();
+                        result.backgroundPixels = source.value().size();
+                        result.backgroundPath = background.imagePath;
+                    }
                 }
             }
         }
@@ -6545,11 +6641,28 @@ void MainWindow::borderlessChanged(int index)
     }
 }
 
-void MainWindow::queueBackground(const PageBackground &background)
+PageBackground MainWindow::currentBackgroundFor(BackgroundField field)
+{
+    // A burst belongs to the control it was started in. Moving to another
+    // control lands the burst first, so the new edit builds on the value the
+    // user just set instead of overwriting it with a stale copy of the page.
+    // This is the background counterpart of queueSlotStyle's field guard.
+    if (m_pendingBackgroundField && *m_pendingBackgroundField != field)
+        flushBackground();
+    const DocumentSnapshot document = m_controller.document();
+    if (document.pages.isEmpty())
+        return {};
+    return document.pages.at(document.currentPage).background;
+}
+
+void MainWindow::queueBackground(const PageBackground &background, BackgroundField field)
 {
     if (m_syncing)
         return;
+    if (m_pendingBackgroundField && *m_pendingBackgroundField != field)
+        flushBackground();
     m_pendingBackground = sanitiseBackground(background);
+    m_pendingBackgroundField = field;
     if (m_backgroundTimer)
         m_backgroundTimer->start();
 }
@@ -6562,6 +6675,7 @@ void MainWindow::flushBackground()
         return;
     const PageBackground background = *m_pendingBackground;
     m_pendingBackground.reset();
+    m_pendingBackgroundField.reset();
     const DocumentSnapshot document = m_controller.document();
     if (document.pages.isEmpty())
         return;
@@ -6583,41 +6697,43 @@ void MainWindow::cancelPendingBackground()
     if (m_backgroundTimer)
         m_backgroundTimer->stop();
     m_pendingBackground.reset();
+    m_pendingBackgroundField.reset();
 }
 
 void MainWindow::backgroundKindChanged(int index)
 {
     if (m_syncing || index < 0)
         return;
-    const DocumentSnapshot document = m_controller.document();
-    if (document.pages.isEmpty())
+    if (m_controller.document().pages.isEmpty())
         return;
-    PageBackground background = document.pages.at(document.currentPage).background;
+    PageBackground background = currentBackgroundFor(BackgroundField::Kind);
     background.kind =
         static_cast<BackgroundKind>(m_backgroundKindCombo->itemData(index).toInt());
-    // A gradient with no stops starts as white to white: the page does not
-    // change until a colour is picked, which is the least surprising result.
+    // A new solid starts on a visible neutral instead of the default white, so
+    // choosing "Szín" changes the page at once. A gradient with no stops starts
+    // as white to white; the two swatches are the next step.
+    if (background.kind == BackgroundKind::Solid && background.solid == 0xffffffffu)
+        background.solid = kNeutralBackgroundSolid;
     if (background.kind == BackgroundKind::Gradient && background.stops.size() < 2) {
         background.stops = {BackgroundStop{0.0, 0xffffffffu},
                             BackgroundStop{1.0, 0xffffffffu}};
     }
-    queueBackground(background);
+    queueBackground(background, BackgroundField::Kind);
     flushBackground();
 }
 
 void MainWindow::chooseBackgroundColor()
 {
-    const DocumentSnapshot document = m_controller.document();
-    if (document.pages.isEmpty())
+    if (m_controller.document().pages.isEmpty())
         return;
-    PageBackground background = document.pages.at(document.currentPage).background;
+    PageBackground background = currentBackgroundFor(BackgroundField::Solid);
     const QColor chosen = QColorDialog::getColor(
         QColor(background.solid), this,
         QCoreApplication::translate("PhotoPrint", "Háttér színe"));
     if (!chosen.isValid())
         return;
     background.solid = 0xff000000u | (chosen.rgb() & 0x00ffffffu);
-    queueBackground(background);
+    queueBackground(background, BackgroundField::Solid);
     flushBackground();
 }
 
@@ -6633,10 +6749,9 @@ void MainWindow::chooseGradientEnd()
 
 void MainWindow::chooseGradientStop(int which)
 {
-    const DocumentSnapshot document = m_controller.document();
-    if (document.pages.isEmpty())
+    if (m_controller.document().pages.isEmpty())
         return;
-    PageBackground background = document.pages.at(document.currentPage).background;
+    PageBackground background = currentBackgroundFor(BackgroundField::Stops);
     if (background.stops.size() < 2) {
         background.stops = {BackgroundStop{0.0, 0xffffffffu},
                             BackgroundStop{1.0, 0xffffffffu}};
@@ -6651,7 +6766,7 @@ void MainWindow::chooseGradientStop(int which)
         return;
     background.stops[index].second = 0xff000000u | (chosen.rgb() & 0x00ffffffu);
     background.kind = BackgroundKind::Gradient;
-    queueBackground(background);
+    queueBackground(background, BackgroundField::Stops);
     flushBackground();
 }
 
@@ -6659,22 +6774,20 @@ void MainWindow::gradientAngleChanged(int index)
 {
     if (m_syncing || index < 0)
         return;
-    const DocumentSnapshot document = m_controller.document();
-    if (document.pages.isEmpty())
+    if (m_controller.document().pages.isEmpty())
         return;
-    PageBackground background = document.pages.at(document.currentPage).background;
+    PageBackground background = currentBackgroundFor(BackgroundField::Angle);
     background.angleDeg = m_gradientAngleCombo->itemData(index).toDouble();
     background.kind = BackgroundKind::Gradient;
-    queueBackground(background);
+    queueBackground(background, BackgroundField::Angle);
     flushBackground();
 }
 
 void MainWindow::chooseBackgroundImage()
 {
-    const DocumentSnapshot document = m_controller.document();
-    if (document.pages.isEmpty())
+    if (m_controller.document().pages.isEmpty())
         return;
-    PageBackground background = document.pages.at(document.currentPage).background;
+    PageBackground background = currentBackgroundFor(BackgroundField::Image);
     const QString startDir = background.imagePath.isEmpty()
         ? QStandardPaths::writableLocation(QStandardPaths::PicturesLocation)
         : QFileInfo(background.imagePath).absolutePath();
@@ -6693,7 +6806,7 @@ void MainWindow::chooseBackgroundImage()
     background.kind = BackgroundKind::Image;
     background.imagePath = loaded.value().path;
     background.imageSha256 = loaded.value().sha256;
-    queueBackground(background);
+    queueBackground(background, BackgroundField::Image);
     flushBackground();
 }
 
@@ -6701,14 +6814,13 @@ void MainWindow::backgroundFitChanged(int index)
 {
     if (m_syncing || index < 0)
         return;
-    const DocumentSnapshot document = m_controller.document();
-    if (document.pages.isEmpty())
+    if (m_controller.document().pages.isEmpty())
         return;
-    PageBackground background = document.pages.at(document.currentPage).background;
+    PageBackground background = currentBackgroundFor(BackgroundField::Fit);
     background.fit =
         static_cast<BackgroundFit>(m_backgroundFitCombo->itemData(index).toInt());
     background.kind = BackgroundKind::Image;
-    queueBackground(background);
+    queueBackground(background, BackgroundField::Fit);
     flushBackground();
 }
 
@@ -6716,57 +6828,84 @@ void MainWindow::backgroundTileChanged(double value)
 {
     if (m_syncing)
         return;
-    const DocumentSnapshot document = m_controller.document();
-    if (document.pages.isEmpty())
+    if (m_controller.document().pages.isEmpty())
         return;
-    PageBackground background = document.pages.at(document.currentPage).background;
+    PageBackground background = currentBackgroundFor(BackgroundField::Tile);
     // The panel is in centimetres, the model in millimetres. Zero is the
     // special value: the picture's natural size at 300 ppi.
     background.tileMm = value * 10.0;
-    queueBackground(background);
+    queueBackground(background, BackgroundField::Tile);
 }
 
 void MainWindow::backgroundOpacityChanged(int value)
 {
     if (m_syncing)
         return;
-    const DocumentSnapshot document = m_controller.document();
-    if (document.pages.isEmpty())
+    if (m_controller.document().pages.isEmpty())
         return;
-    PageBackground background = document.pages.at(document.currentPage).background;
+    PageBackground background = currentBackgroundFor(BackgroundField::Opacity);
     background.opacity = value;
     if (m_backgroundOpacityValue)
         m_backgroundOpacityValue->setText(QStringLiteral("%1 %").arg(value));
-    queueBackground(background);
+    queueBackground(background, BackgroundField::Opacity);
 }
 
 void MainWindow::resetBackground()
 {
-    const DocumentSnapshot document = m_controller.document();
-    if (document.pages.isEmpty())
+    if (m_controller.document().pages.isEmpty())
         return;
-    PageBackground background = document.pages.at(document.currentPage).background;
-    // Back to the white sheet. The other fields are kept, so switching to a
-    // colour or a picture again restores what the user had.
+    PageBackground background = currentBackgroundFor(BackgroundField::Kind);
+    // Back to the white sheet. The colour, the stops and the picture path are
+    // kept, so switching back restores what the user had; the presentation
+    // fields are reset so the next background starts at full strength and the
+    // default fit instead of inheriting a half-transparent tile.
     background.kind = BackgroundKind::None;
-    queueBackground(background);
+    background.opacity = 100.0;
+    background.fit = BackgroundFit::Fill;
+    background.tileMm = 0.0;
+    queueBackground(background, BackgroundField::Kind);
     flushBackground();
 }
 
-bool MainWindow::backgroundImageMissing() const
+MainWindow::BackgroundProblem MainWindow::backgroundProblem() const
 {
     const DocumentSnapshot document = m_controller.document();
     if (document.pages.isEmpty())
-        return false;
+        return BackgroundProblem::None;
     const PageBackground &background = document.pages.at(document.currentPage).background;
     if (background.kind != BackgroundKind::Image)
-        return false;
-    // A freshly chosen "Kép" with no file yet is not a missing picture: the
-    // chooser is the obvious next step. A recorded identity with no usable path
-    // is: the file was moved, deleted or refused by the loader.
-    if (background.imageSha256.isEmpty())
-        return false;
-    return background.imagePath.isEmpty() || !QFileInfo::exists(background.imagePath);
+        return BackgroundProblem::None;
+    if (background.imagePath.isEmpty()) {
+        // An empty path with a recorded identity is a picture that was chosen
+        // and lost. An empty path with no identity is simply "no picture yet".
+        return background.imageSha256.isEmpty() ? BackgroundProblem::None
+                                                : BackgroundProblem::Missing;
+    }
+    const QFileInfo info(background.imagePath);
+    if (!info.exists() || !info.isFile())
+        return BackgroundProblem::Missing;
+    QImageReader reader(background.imagePath);
+    reader.setDecideFormatFromContent(true);
+    if (!reader.canRead())
+        return BackgroundProblem::Unreadable;
+    if (BackgroundGeometry::backgroundSourceTooLarge(reader.size()))
+        return BackgroundProblem::TooLarge;
+    return BackgroundProblem::None;
+}
+
+QString MainWindow::backgroundProblemText(MainWindow::BackgroundProblem problem) const
+{
+    switch (problem) {
+    case BackgroundProblem::Missing:
+        return QCoreApplication::translate("PhotoPrint", "A háttérkép nem található.");
+    case BackgroundProblem::Unreadable:
+    case BackgroundProblem::TooLarge:
+        return QCoreApplication::translate(
+            "PhotoPrint", "A háttérkép túl nagy vagy nem olvasható.");
+    case BackgroundProblem::None:
+        break;
+    }
+    return QString();
 }
 
 void MainWindow::syncBackgroundPanel()
@@ -6831,9 +6970,28 @@ void MainWindow::syncBackgroundPanel()
     m_backgroundOpacitySlider->setVisible(background.kind != BackgroundKind::None);
     m_backgroundOpacityValue->setVisible(background.kind != BackgroundKind::None);
     m_backgroundResetButton->setEnabled(background.kind != BackgroundKind::None);
-    const bool missing = backgroundImageMissing();
-    m_backgroundMissingHint->setVisible(missing);
-    m_backgroundRelinkButton->setVisible(missing);
+
+    // The picture row names the file it is using, so the user can confirm the
+    // choice without reading the page. The name is user data, not a label.
+    if (m_backgroundFileLabel) {
+        const QString name = background.imagePath.isEmpty()
+            ? QString()
+            : QFileInfo(background.imagePath).fileName();
+        m_backgroundFileLabel->setText(name);
+        m_backgroundFileLabel->setVisible(image && !name.isEmpty());
+    }
+    if (m_backgroundImageButton) {
+        m_backgroundImageButton->setText(
+            background.imagePath.isEmpty()
+                ? QCoreApplication::translate("PhotoPrint", "Háttérkép kiválasztása…")
+                : QCoreApplication::translate("PhotoPrint", "Háttérkép cseréje…"));
+    }
+
+    const BackgroundProblem problem = backgroundProblem();
+    const QString problemText = backgroundProblemText(problem);
+    m_backgroundMissingHint->setText(problemText);
+    m_backgroundMissingHint->setVisible(problem != BackgroundProblem::None);
+    m_backgroundRelinkButton->setVisible(problem != BackgroundProblem::None);
 }
 
 bool MainWindow::confirmCutGuides()
@@ -6870,15 +7028,20 @@ void MainWindow::updateNoticeBar()
         return;
     const bool printer = m_printerStatus && !m_printerStatus->text().isEmpty();
     const bool paper = m_paperHint && !m_paperHint->text().isEmpty();
-    // A background picture that cannot be found is a page problem the user has
+    // A background picture that cannot be shown is a page problem the user has
     // to see without opening the Lap tab: the page prints white and the notice
-    // says why.
-    const bool background = backgroundImageMissing();
+    // says why. The label carries the message, not just the bar's visibility.
+    const BackgroundProblem problem = backgroundProblem();
+    if (m_backgroundNotice) {
+        m_backgroundNotice->setText(backgroundProblemText(problem));
+        m_backgroundNotice->setVisible(problem != BackgroundProblem::None);
+    }
     // The overflow state is the page's own, not the label's effective
     // visibility: a child of a hidden bar reports itself hidden, which would
     // keep the bar hidden and the warning could never appear.
     const bool overflow = pageOverflows();
-    m_noticeBar->setVisible(printer || paper || background || overflow);
+    m_noticeBar->setVisible(printer || paper || problem != BackgroundProblem::None
+                            || overflow);
 }
 
 void MainWindow::applyTheme()

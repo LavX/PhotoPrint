@@ -18,6 +18,17 @@ namespace pp {
 /// X to the right, Y down, exactly like Frame and SlotGeometry.
 namespace BackgroundGeometry {
 
+/// The largest source a background picture may have. Above this the decode is
+/// slow and pointless: the page raster is at most a few thousand pixels, and a
+/// 144 MP source cannot be read within Qt's default allocation limit anyway.
+/// The panel reports it instead of silently painting white.
+constexpr qint64 kBackgroundMaxSourcePixels = 100'000'000; // 100 MP
+
+/// True when the source is larger than kBackgroundMaxSourcePixels. A zero or
+/// negative size is "unknown", not "too large", so a reader that cannot report
+/// a size still gets a chance to decode.
+bool backgroundSourceTooLarge(const QSize &pixels);
+
 /// The gradient line through the sheet centre, long enough that its projection
 /// covers the whole sheet. `angleDeg` is clockwise, 0 = left to right.
 QLineF gradientLineMm(const QSizeF &sheetMm, double angleDeg);

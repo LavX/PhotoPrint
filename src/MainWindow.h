@@ -248,8 +248,9 @@ private:
     int hitHandle(const QPointF &widgetPoint) const;
     SlotState slotStateFor(const Slot &slot) const;
     void paintSlotOverlays(QPainter &painter, const Page &page) const;
-    /// A dark outline that stays visible on the always-white page, even when
-    /// the theme's text colour is light.
+    /// A dark outline that stays visible on a light page, even when the
+    /// theme's text colour is light. The handles also carry a light underlay,
+    /// so they stay visible on a dark background.
     QColor handleOutlineColor() const;
     /// Recomputes the base accessible description: the clipped-photo warning
     /// when the selected frame is partly outside its cell.
@@ -399,6 +400,16 @@ private:
     /// display over the stored value.
     enum class SlotStyleField { Margin, Gutter, Radius };
 
+    /// Which background control a burst belongs to. A burst is landed before a
+    /// different control reads the page, so a value the user just set is never
+    /// overwritten by the next control's stale copy of the document.
+    enum class BackgroundField { Kind, Solid, Stops, Angle, Image, Fit, Tile, Opacity };
+
+    /// Why the page's background picture cannot be shown. `None` is a healthy
+    /// picture or no picture at all; the other values carry a message for the
+    /// panel and the notice bar.
+    enum class BackgroundProblem { None, Missing, Unreadable, TooLarge };
+
 private slots:
     void addPhotos();
     /// Fills the selected empty section with the pictures the picker returns. The
@@ -501,9 +512,13 @@ private slots:
     void backgroundTileChanged(double value);
     void backgroundOpacityChanged(int value);
     void resetBackground();
-    void queueBackground(const PageBackground &background);
+    void queueBackground(const PageBackground &background, BackgroundField field);
     void flushBackground();
     void cancelPendingBackground();
+    /// The page's background with any pending burst landed first when the new
+    /// edit belongs to a different control. This is the background counterpart
+    /// of queueSlotStyle's field guard.
+    PageBackground currentBackgroundFor(BackgroundField field);
     /// Applies one catalogue template to the current page as one page edit, so
     /// one undo restores the layout. The slot engine creates the cells (and the
     /// layout label) and assigns the photographs in display order; the page's
@@ -581,9 +596,11 @@ private:
     /// Only the controls of the selected kind are visible, so the panel never
     /// shows a fit combo for a solid page.
     void syncBackgroundPanel();
-    /// True when the page asks for a picture that is not on disk. The panel and
-    /// the notice bar say so; the renderer paints white and never aborts.
-    bool backgroundImageMissing() const;
+    /// The precise reason the picture cannot be shown, so the panel and the
+    /// notice bar can say "not found" or "too large or unreadable" instead of
+    /// leaving an empty strip.
+    BackgroundProblem backgroundProblem() const;
+    QString backgroundProblemText(BackgroundProblem problem) const;
     /// The page's layout name for the panel: the English catalogue name when the
     /// layout came from the catalogue, a neutral label for a hand-made one.
     QString layoutDisplayName(const Page &page) const;
@@ -752,8 +769,10 @@ private:
     QPushButton *m_gradientStartButton = nullptr;
     QPushButton *m_gradientEndButton = nullptr;
     QComboBox *m_gradientAngleCombo = nullptr;
+    QLabel *m_gradientHint = nullptr;
     QWidget *m_backgroundImageRow = nullptr;
     QPushButton *m_backgroundImageButton = nullptr;
+    QLabel *m_backgroundFileLabel = nullptr;
     QComboBox *m_backgroundFitCombo = nullptr;
     QLabel *m_backgroundTileLabel = nullptr;
     QDoubleSpinBox *m_backgroundTileSpin = nullptr;
@@ -764,10 +783,13 @@ private:
     QLabel *m_backgroundHint = nullptr;
     QLabel *m_backgroundMissingHint = nullptr;
     QPushButton *m_backgroundRelinkButton = nullptr;
+    /// The notice bar's own line for a background picture that cannot be shown.
+    QLabel *m_backgroundNotice = nullptr;
     /// The live background burst: every opacity or tile change restarts the
     /// timer, and the whole burst lands as one undo step.
     QTimer *m_backgroundTimer = nullptr;
     std::optional<PageBackground> m_pendingBackground;
+    std::optional<BackgroundField> m_pendingBackgroundField;
     /// The live style burst: every value change restarts the timer, and the page
     /// is updated once the user stops, so a spin that is held down is one undo.
     QTimer *m_styleTimer = nullptr;
