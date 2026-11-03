@@ -16,8 +16,10 @@ namespace pp {
 inline constexpr char kBuiltinStickerPrefix[] = "builtin:";
 
 /// The artwork version a new sticker is pinned to. A future artwork change
-/// bumps this and keeps the old file under its own versioned alias, so a saved
-/// project keeps the pixels it was saved with instead of silently changing.
+/// bumps this, ships the new file as `<alias>-v<new>.png`, and keeps the old
+/// one, so a project saved at an older version still resolves to the pixels it
+/// was saved with. The resolver accepts any version whose file ships; the
+/// version is compared with the stored sha, not with this constant.
 constexpr int kBuiltinStickerVersion = 1;
 
 /// True when the stored path is a shipped-sticker alias rather than a file.
@@ -37,6 +39,11 @@ QString builtinStickerResource(const QString &path);
 /// the stored path for an imported picture. Empty when an alias cannot be
 /// resolved, which the caller reports as a missing picture.
 QString stickerSourcePath(const Sticker &sticker);
+
+/// The folder a relink dialog should open in. A shipped sticker lives in the
+/// resource tree, which no file dialog can show, so it falls back to the last
+/// folder the user picked from; an imported picture starts beside its file.
+QString stickerPickerDirectory(const Sticker &sticker, const QString &lastDir);
 
 /// One decoded sticker layer, or the reason there is none.
 struct StickerLayer {

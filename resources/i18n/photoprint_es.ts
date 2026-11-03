@@ -2029,5 +2029,37 @@
         <source>Válassz színt a szövegnek.</source>
         <translation>Elige un color para el texto.</translation>
     </message>
+    <message>
+        <source>Matrica: %1 / %2</source>
+        <translation>Pegatina: %1 de %2</translation>
+    </message>
+    <message>
+        <source>Matrica hozzáadása</source>
+        <translation>Añadir pegatina</translation>
+    </message>
+    <message>
+        <source>Matrica fedettsége</source>
+        <translation>Opacidad de la pegatina</translation>
+    </message>
+    <message>
+        <source>Egy lépéssel előrébb.</source>
+        <translation>Un paso adelante.</translation>
+    </message>
+    <message>
+        <source>Egy lépéssel hátrébb.</source>
+        <translation>Un paso atrás.</translation>
+    </message>
+    <message>
+        <source>A matrica képe megváltozott.</source>
+        <translation>La imagen de la pegatina ha cambiado.</translation>
+    </message>
+    <message>
+        <source>Képek (*.png *.jpg *.jpeg *.webp)</source>
+        <translation>Imágenes (*.png *.jpg *.jpeg *.webp)</translation>
+    </message>
+    <message>
+        <source>Szöveg: %1 / %2</source>
+        <translation>Texto: %1 de %2</translation>
+    </message>
 </context>
 </TS>

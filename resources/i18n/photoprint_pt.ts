@@ -2029,5 +2029,37 @@
         <source>Válassz színt a szövegnek.</source>
         <translation>Escolha uma cor para o texto.</translation>
     </message>
+    <message>
+        <source>Matrica: %1 / %2</source>
+        <translation>Adesivo: %1 de %2</translation>
+    </message>
+    <message>
+        <source>Matrica hozzáadása</source>
+        <translation>Adicionar adesivo</translation>
+    </message>
+    <message>
+        <source>Matrica fedettsége</source>
+        <translation>Opacidade do adesivo</translation>
+    </message>
+    <message>
+        <source>Egy lépéssel előrébb.</source>
+        <translation>Um passo à frente.</translation>
+    </message>
+    <message>
+        <source>Egy lépéssel hátrébb.</source>
+        <translation>Um passo atrás.</translation>
+    </message>
+    <message>
+        <source>A matrica képe megváltozott.</source>
+        <translation>A imagem do adesivo mudou.</translation>
+    </message>
+    <message>
+        <source>Képek (*.png *.jpg *.jpeg *.webp)</source>
+        <translation>Imagens (*.png *.jpg *.jpeg *.webp)</translation>
+    </message>
+    <message>
+        <source>Szöveg: %1 / %2</source>
+        <translation>Texto: %1 de %2</translation>
+    </message>
 </context>
 </TS>

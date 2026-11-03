@@ -2029,5 +2029,37 @@
         <source>Válassz színt a szövegnek.</source>
         <translation>Choose a colour for the text.</translation>
     </message>
+    <message>
+        <source>Matrica: %1 / %2</source>
+        <translation>Sticker: %1 of %2</translation>
+    </message>
+    <message>
+        <source>Matrica hozzáadása</source>
+        <translation>Add sticker</translation>
+    </message>
+    <message>
+        <source>Matrica fedettsége</source>
+        <translation>Sticker opacity</translation>
+    </message>
+    <message>
+        <source>Egy lépéssel előrébb.</source>
+        <translation>One step forward.</translation>
+    </message>
+    <message>
+        <source>Egy lépéssel hátrébb.</source>
+        <translation>One step backward.</translation>
+    </message>
+    <message>
+        <source>A matrica képe megváltozott.</source>
+        <translation>The sticker's picture has changed.</translation>
+    </message>
+    <message>
+        <source>Képek (*.png *.jpg *.jpeg *.webp)</source>
+        <translation>Pictures (*.png *.jpg *.jpeg *.webp)</translation>
+    </message>
+    <message>
+        <source>Szöveg: %1 / %2</source>
+        <translation>Text: %1 of %2</translation>
+    </message>
 </context>
 </TS>

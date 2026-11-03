@@ -741,9 +741,10 @@ Sticker stickerFromJson(const QJsonObject &object, const QString &projectDir)
         sticker.imagePath = resolved.path;
     }
     // A sticker whose file cannot be resolved still loads, with an empty path:
-    // the Elem panel shows the hint and the picker, the page paints the
-    // placeholder, and saving keeps the rest of the page instead of silently
-    // dropping the layer. Sanitising happens in the repair point.
+    // the Elem panel shows the hint and the picker, the canvas draws its
+    // placeholder, the page raster stays clean, and saving keeps the rest of the
+    // page instead of silently dropping the layer. Sanitising happens in the
+    // repair point.
     return sticker;
 }
 

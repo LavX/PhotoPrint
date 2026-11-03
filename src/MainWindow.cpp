@@ -1650,6 +1650,16 @@ void PageView::flushWheelBurst()
     flushWheelZoom();
 }
 
+void PageView::flushStickerBurst()
+{
+    flushStickerNudge();
+}
+
+void PageView::flushTextBurst()
+{
+    flushTextNudge();
+}
+
 void PageView::flushStickerNudge()
 {
     if (m_stickerNudgeTimer)
@@ -3845,7 +3855,8 @@ void MainWindow::buildUi()
     connect(m_addStickerButton, &QPushButton::clicked, this, &MainWindow::addSticker);
 
     auto *stickerSetTitle =
-        new QLabel(QCoreApplication::translate("PhotoPrint", "Készlet"), m_stickerAddPanel);
+        new QLabel(QCoreApplication::translate("PhotoPrint", "Matricakészlet"),
+                   m_stickerAddPanel);
     stickerSetTitle->setObjectName(QStringLiteral("stickerSetTitle"));
     stickerSetTitle->setWordWrap(true);
     QFont stickerSetFont = stickerSetTitle->font();
@@ -3889,19 +3900,21 @@ void MainWindow::buildUi()
             auto *button = new QToolButton(m_stickerSetGrid);
             button->setObjectName(QStringLiteral("stickerSet_") + alias);
             button->setIcon(QIcon(builtinStickerResource(builtinStickerPath(alias))));
-            button->setIconSize(QSize(36, 36));
-            button->setFixedSize(44, 44);
+            button->setIconSize(QSize(30, 30));
+            button->setFixedSize(40, 40);
             button->setAutoRaise(true);
             button->setToolTip(label);
             button->setAccessibleName(label);
             button->setProperty("stickerAlias", alias);
             connect(button, &QToolButton::clicked, this,
                     [this, alias] { addBuiltInSticker(alias); });
-            stickerSetLayout->addWidget(button, index / 4, index % 4);
+            // A 6 x 2 palette: one row less than 4 x 3 leaves room for the
+            // properties and the actions at the contract window size.
+            stickerSetLayout->addWidget(button, index / 6, index % 6);
             ++index;
         }
-        // One spacer column so four buttons do not stretch across the panel.
-        stickerSetLayout->setColumnStretch(4, 1);
+        // One spacer column so the buttons do not stretch across the panel.
+        stickerSetLayout->setColumnStretch(6, 1);
     }
     stickerAddLayout->addWidget(m_stickerSetGrid);
     elemLayout->addWidget(m_stickerAddPanel);
@@ -3923,32 +3936,37 @@ void MainWindow::buildUi()
 
     // The selected sticker's own controls. Each one writes the whole page as one
     // edit, so one action is one undo step, exactly like the background group.
+    // The fields share one grid so the labels sit beside their controls: the
+    // panel has to keep delete and the order buttons on screen at 1280 x 720
+    // with a large system font, under the palette.
     m_stickerPanel = new QWidget(elemTab);
     m_stickerPanel->setObjectName(QStringLiteral("stickerPanel"));
     auto *stickerLayout = new QVBoxLayout(m_stickerPanel);
     stickerLayout->setContentsMargins(0, 0, 0, 0);
-
-    auto *stickerTitle =
-        new QLabel(QCoreApplication::translate("PhotoPrint", "Matrica"), m_stickerPanel);
-    stickerTitle->setObjectName(QStringLiteral("stickerTitle"));
-    stickerTitle->setWordWrap(true);
-    QFont stickerTitleFont = stickerTitle->font();
-    stickerTitleFont.setWeight(QFont::DemiBold);
-    stickerTitle->setFont(stickerTitleFont);
-    stickerLayout->addWidget(stickerTitle);
+    auto *stickerFields = new QGridLayout;
+    stickerFields->setContentsMargins(0, 0, 0, 0);
+    stickerFields->setHorizontalSpacing(8);
+    stickerFields->setVerticalSpacing(6);
 
     m_stickerPreview = new QLabel(m_stickerPanel);
     m_stickerPreview->setObjectName(QStringLiteral("stickerPreview"));
-    m_stickerPreview->setFixedSize(72, 72);
+    m_stickerPreview->setFixedSize(56, 56);
     m_stickerPreview->setAlignment(Qt::AlignCenter);
     m_stickerPreview->setAccessibleName(
         QCoreApplication::translate("PhotoPrint", "Matrica"));
-    stickerLayout->addWidget(m_stickerPreview);
+    // A plate behind the picture, so a pale or transparent sticker is visible
+    // against the panel as well.
+    m_stickerPreview->setStyleSheet(QStringLiteral(
+        "border: 1px solid #d2d2d7; border-radius: 6px; background: #f5f5f7;"));
+    // The preview sits beside the fields rather than above them: the panel has
+    // to keep the order and delete buttons on screen at 1280 x 720 with a
+    // large system font, and one row is the cheapest space to give back.
+    stickerFields->addWidget(m_stickerPreview, 0, 0, 3, 1, Qt::AlignLeft);
 
     auto *stickerSizeLabel =
         new QLabel(QCoreApplication::translate("PhotoPrint", "Méret"), m_stickerPanel);
-    stickerSizeLabel->setWordWrap(true);
-    stickerLayout->addWidget(stickerSizeLabel);
+    stickerSizeLabel->setWordWrap(false);
+    stickerFields->addWidget(stickerSizeLabel, 0, 1);
     m_stickerSizeSpin = new QDoubleSpinBox(m_stickerPanel);
     m_stickerSizeSpin->setObjectName(QStringLiteral("stickerSizeSpin"));
     m_stickerSizeSpin->setAccessibleName(stickerSizeLabel->text());
@@ -3958,14 +3976,14 @@ void MainWindow::buildUi()
     m_stickerSizeSpin->setRange(kMinStickerMm / 10.0, kMaxStickerMm / 10.0);
     m_stickerSizeSpin->setSingleStep(0.5);
     m_stickerSizeSpin->setSuffix(QStringLiteral(" cm"));
-    stickerLayout->addWidget(m_stickerSizeSpin);
+    stickerFields->addWidget(m_stickerSizeSpin, 0, 2);
     connect(m_stickerSizeSpin, &QDoubleSpinBox::editingFinished, this,
             &MainWindow::stickerSizeChanged);
 
     auto *stickerAngleLabel =
         new QLabel(QCoreApplication::translate("PhotoPrint", "Elforgatás"), m_stickerPanel);
-    stickerAngleLabel->setWordWrap(true);
-    stickerLayout->addWidget(stickerAngleLabel);
+    stickerAngleLabel->setWordWrap(false);
+    stickerFields->addWidget(stickerAngleLabel, 1, 1);
     m_stickerAngleSpin = new QDoubleSpinBox(m_stickerPanel);
     m_stickerAngleSpin->setObjectName(QStringLiteral("stickerAngleSpin"));
     m_stickerAngleSpin->setAccessibleName(stickerAngleLabel->text());
@@ -3973,14 +3991,15 @@ void MainWindow::buildUi()
     m_stickerAngleSpin->setRange(-180.0, 180.0);
     m_stickerAngleSpin->setSingleStep(5.0);
     m_stickerAngleSpin->setSuffix(QStringLiteral("°"));
-    stickerLayout->addWidget(m_stickerAngleSpin);
+    stickerFields->addWidget(m_stickerAngleSpin, 1, 2);
     connect(m_stickerAngleSpin, &QDoubleSpinBox::editingFinished, this,
             &MainWindow::stickerAngleChanged);
 
     auto *stickerOpacityLabel =
         new QLabel(QCoreApplication::translate("PhotoPrint", "Fedettség"), m_stickerPanel);
-    stickerOpacityLabel->setWordWrap(true);
-    stickerLayout->addWidget(stickerOpacityLabel);
+    stickerOpacityLabel->setWordWrap(false);
+    stickerFields->addWidget(stickerOpacityLabel, 2, 1);
+    auto *stickerOpacityRow = new QHBoxLayout;
     m_stickerOpacitySlider = new QSlider(Qt::Horizontal, m_stickerPanel);
     m_stickerOpacitySlider->setObjectName(QStringLiteral("stickerOpacitySlider"));
     m_stickerOpacitySlider->setAccessibleName(stickerOpacityLabel->text());
@@ -3988,11 +4007,13 @@ void MainWindow::buildUi()
     // Tracking on, so the canvas follows the drag; the burst timer lands the
     // whole drag as one edit.
     m_stickerOpacitySlider->setTracking(true);
-    stickerLayout->addWidget(m_stickerOpacitySlider);
     m_stickerOpacityValue = new QLabel(QStringLiteral("100 %"), m_stickerPanel);
     m_stickerOpacityValue->setObjectName(QStringLiteral("stickerOpacityValue"));
+    m_stickerOpacityValue->setMinimumWidth(38);
     markSecondaryText(m_stickerOpacityValue);
-    stickerLayout->addWidget(m_stickerOpacityValue);
+    stickerOpacityRow->addWidget(m_stickerOpacitySlider, 1);
+    stickerOpacityRow->addWidget(m_stickerOpacityValue);
+    stickerFields->addLayout(stickerOpacityRow, 2, 2);
     connect(m_stickerOpacitySlider, &QSlider::valueChanged, this,
             &MainWindow::stickerOpacityChanged);
     connect(m_stickerOpacitySlider, &QSlider::sliderReleased, this,
@@ -4006,13 +4027,19 @@ void MainWindow::buildUi()
     }
     m_pendingStickerOpacity.reset();
 
+    stickerLayout->addLayout(stickerFields);
+
     auto *stickerOrderRow = new QHBoxLayout;
     m_stickerRaiseButton =
-        new QPushButton(QCoreApplication::translate("PhotoPrint", "Előrébb"), m_stickerPanel);
+        new QPushButton(QCoreApplication::translate("PhotoPrint", "Előtérbe"), m_stickerPanel);
     m_stickerRaiseButton->setObjectName(QStringLiteral("stickerRaiseButton"));
+    m_stickerRaiseButton->setToolTip(
+        QCoreApplication::translate("PhotoPrint", "Egy lépéssel előrébb."));
     m_stickerLowerButton =
-        new QPushButton(QCoreApplication::translate("PhotoPrint", "Hátrébb"), m_stickerPanel);
+        new QPushButton(QCoreApplication::translate("PhotoPrint", "Háttérbe"), m_stickerPanel);
     m_stickerLowerButton->setObjectName(QStringLiteral("stickerLowerButton"));
+    m_stickerLowerButton->setToolTip(
+        QCoreApplication::translate("PhotoPrint", "Egy lépéssel hátrébb."));
     stickerOrderRow->addWidget(m_stickerRaiseButton);
     stickerOrderRow->addWidget(m_stickerLowerButton);
     stickerLayout->addLayout(stickerOrderRow);
@@ -4022,7 +4049,8 @@ void MainWindow::buildUi()
             [this] { reorderStickerLayer(-1); });
 
     m_stickerDeleteButton =
-        new QPushButton(QCoreApplication::translate("PhotoPrint", "Törlés"), m_stickerPanel);
+        new QPushButton(QCoreApplication::translate("PhotoPrint", "Eltávolítás"),
+                        m_stickerPanel);
     m_stickerDeleteButton->setObjectName(QStringLiteral("stickerDeleteButton"));
     stickerLayout->addWidget(m_stickerDeleteButton);
     connect(m_stickerDeleteButton, &QPushButton::clicked, this,
@@ -4046,15 +4074,18 @@ void MainWindow::buildUi()
 
     // --- Elem: the text half --------------------------------------------------
     // The add button is the tab's way into a caption, and it stays visible while
-    // a text is selected, exactly like the sticker palette.
+    // a text is selected, exactly like the sticker palette. The title and the
+    // button share one row so the section costs a line, not a block: the Elem
+    // tab has to keep the sticker actions on screen at 1280 x 720 with a large
+    // system font.
     m_textAddPanel = new QWidget(elemTab);
     m_textAddPanel->setObjectName(QStringLiteral("textAddPanel"));
-    auto *textAddLayout = new QVBoxLayout(m_textAddPanel);
+    auto *textAddLayout = new QHBoxLayout(m_textAddPanel);
     textAddLayout->setContentsMargins(0, 0, 0, 0);
     auto *textAddTitle =
         new QLabel(QCoreApplication::translate("PhotoPrint", "Szöveg"), m_textAddPanel);
     textAddTitle->setObjectName(QStringLiteral("textAddTitle"));
-    textAddTitle->setWordWrap(true);
+    textAddTitle->setWordWrap(false);
     QFont textAddFont = textAddTitle->font();
     textAddFont.setWeight(QFont::DemiBold);
     textAddTitle->setFont(textAddFont);
@@ -4066,7 +4097,7 @@ void MainWindow::buildUi()
     m_addTextButton->setAccessibleName(
         QCoreApplication::translate("PhotoPrint", "Szöveg hozzáadása…"));
     m_addTextButton->setMinimumHeight(32);
-    textAddLayout->addWidget(m_addTextButton);
+    textAddLayout->addWidget(m_addTextButton, 1);
     connect(m_addTextButton, &QPushButton::clicked, this, &MainWindow::addText);
     elemLayout->addWidget(m_textAddPanel);
 
@@ -4269,8 +4300,9 @@ void MainWindow::buildUi()
     elemLayout->addWidget(m_textPanel);
 
     // The keyboard-only route to an existing overlay: cycling the shared paint
-    // order. Always visible and always enabled, so a sticker or a caption can be
-    // stepped through without deselecting.
+    // order, with the position and the count between the two buttons so the user
+    // knows where in the stack they are. Always visible and always enabled, so a
+    // sticker or a caption can be stepped through without deselecting.
     auto *stickerNavRow = new QHBoxLayout;
     m_previousStickerButton =
         new QPushButton(QCoreApplication::translate("PhotoPrint", "Előző elem"), elemTab);
@@ -4278,7 +4310,12 @@ void MainWindow::buildUi()
     m_nextStickerButton =
         new QPushButton(QCoreApplication::translate("PhotoPrint", "Következő elem"), elemTab);
     m_nextStickerButton->setObjectName(QStringLiteral("nextStickerButton"));
+    m_stickerPositionLabel = new QLabel(elemTab);
+    m_stickerPositionLabel->setObjectName(QStringLiteral("stickerPositionLabel"));
+    markSecondaryText(m_stickerPositionLabel);
+    m_stickerPositionLabel->setAlignment(Qt::AlignCenter);
     stickerNavRow->addWidget(m_previousStickerButton);
+    stickerNavRow->addWidget(m_stickerPositionLabel, 1);
     stickerNavRow->addWidget(m_nextStickerButton);
     elemLayout->addLayout(stickerNavRow);
     connect(m_previousStickerButton, &QPushButton::clicked, this,
@@ -4618,7 +4655,28 @@ void MainWindow::buildUi()
     m_stickerNotice->setWordWrap(true);
     m_stickerNotice->setVisible(false);
     noticeLayout->addWidget(m_stickerNotice);
+    // The sentence alone is a dead end: the one repair lives three clicks deep
+    // in the panel. This is the way in, and it selects the sticker so the
+    // relink picker is already on screen.
+    m_stickerNoticeButton = new QPushButton(
+        QCoreApplication::translate("PhotoPrint", "Matrica kiválasztása"), m_noticeBar);
+    m_stickerNoticeButton->setObjectName(QStringLiteral("stickerNoticeButton"));
+    m_stickerNoticeButton->setVisible(false);
+    noticeLayout->addWidget(m_stickerNoticeButton);
+    connect(m_stickerNoticeButton, &QPushButton::clicked, this, [this] {
+        const DocumentSnapshot document = m_controller.document();
+        if (document.pages.isEmpty())
+            return;
+        for (const Sticker &sticker :
+             OverlayGeometry::stickersInPaintOrder(document.pages.at(document.currentPage))) {
+            if (stickerProblem(sticker) != StickerProblem::None) {
+                selectSticker(sticker.id);
+                break;
+            }
+        }
+    });
     m_overflowLabel = new QLabel(QCoreApplication::translate("PhotoPrint", "A kép egy része lemarad."), m_noticeBar);
+    m_overflowLabel->setObjectName(QStringLiteral("overflowLabel"));
     m_overflowLabel->setWordWrap(true);
     m_overflowLabel->setVisible(false);
     noticeLayout->addWidget(m_overflowLabel);
@@ -5040,11 +5098,13 @@ void MainWindow::rebuildUi()
     m_stickerDeleteButton = nullptr;
     m_addStickerButton = nullptr;
     m_stickerSetGrid = nullptr;
+    m_stickerPositionLabel = nullptr;
     m_previousStickerButton = nullptr;
     m_nextStickerButton = nullptr;
     m_stickerMissingHint = nullptr;
     m_stickerRelinkButton = nullptr;
     m_stickerNotice = nullptr;
+    m_stickerNoticeButton = nullptr;
     m_stickerPreviewPath.clear();
     m_textAddPanel = nullptr;
     m_textPanel = nullptr;
@@ -5950,8 +6010,8 @@ PageImages MainWindow::displayedPageImages() const
     PageImages images;
     images.frames = m_previewImages;
     // Sticker layers are keyed by id, so a layer for a sticker on another page
-    // is simply never looked up. The missing set is what makes the painter draw
-    // the placeholder instead of nothing.
+    // is simply never looked up. The canvas holds its own missing set and draws
+    // the placeholder; the page painter never does.
     images.stickers = m_previewStickers;
     const DocumentSnapshot document = m_controller.document();
     if (!document.pages.isEmpty()) {
@@ -6517,6 +6577,9 @@ bool MainWindow::addTextForTest(const TextItem &item)
 
 bool MainWindow::addTextWithItem(const TextItem &item)
 {
+    // Adding a layer touches the shared stack, so a pending nudge of either kind
+    // lands first instead of publishing a stale page afterwards.
+    flushPendingOverlayEdits();
     const DocumentSnapshot document = m_controller.document();
     if (document.pages.isEmpty())
         return false;
@@ -6604,6 +6667,8 @@ void MainWindow::editSelectedText()
 
 void MainWindow::applyTextEdit(const TextItem &item)
 {
+    // A panel action inside a nudge burst must not publish a stale position.
+    flushPendingTextEdit();
     const DocumentSnapshot document = m_controller.document();
     if (document.pages.isEmpty())
         return;
@@ -6662,6 +6727,7 @@ void MainWindow::textFontChanged(int index)
     Q_UNUSED(index)
     if (m_syncing)
         return;
+    flushPendingTextEdit();
     const std::optional<TextItem> text = selectedText();
     if (!text || !m_textFontCombo)
         return;
@@ -6677,6 +6743,7 @@ void MainWindow::textSizeChanged()
 {
     if (m_syncing)
         return;
+    flushPendingTextEdit();
     const std::optional<TextItem> text = selectedText();
     if (!text || !m_textSizeSpin)
         return;
@@ -6691,6 +6758,7 @@ void MainWindow::textStyleChanged()
 {
     if (m_syncing)
         return;
+    flushPendingTextEdit();
     const std::optional<TextItem> text = selectedText();
     if (!text)
         return;
@@ -6706,6 +6774,7 @@ void MainWindow::textStyleChanged()
 
 void MainWindow::chooseTextColor()
 {
+    flushPendingTextEdit();
     const std::optional<TextItem> text = selectedText();
     if (!text)
         return;
@@ -6725,6 +6794,7 @@ void MainWindow::applyTextAlign(TextAlign align)
 {
     if (m_syncing)
         return;
+    flushPendingTextEdit();
     const std::optional<TextItem> text = selectedText();
     if (!text)
         return;
@@ -6750,6 +6820,7 @@ void MainWindow::textSpacingChanged()
 {
     if (m_syncing)
         return;
+    flushPendingTextEdit();
     const std::optional<TextItem> text = selectedText();
     if (!text || !m_textSpacingSpin)
         return;
@@ -6765,6 +6836,7 @@ void MainWindow::textOpacityChanged(int value)
 {
     if (m_syncing)
         return;
+    flushPendingTextEdit();
     if (m_textOpacityValue)
         m_textOpacityValue->setText(QStringLiteral("%1 %").arg(value));
     const std::optional<TextItem> text = selectedText();
@@ -6785,6 +6857,7 @@ void MainWindow::textOpacityChanged(int value)
 
 void MainWindow::flushTextOpacity()
 {
+    flushPendingTextEdit();
     if (m_textOpacityTimer)
         m_textOpacityTimer->stop();
     if (!m_pendingTextOpacity)
@@ -6819,6 +6892,7 @@ void MainWindow::cancelPendingTextOpacity()
 
 void MainWindow::deleteSelectedText()
 {
+    flushPendingTextEdit();
     const std::optional<TextItem> text = selectedText();
     if (!text)
         return;
@@ -6837,6 +6911,8 @@ void MainWindow::deleteSelectedText()
 
 void MainWindow::reorderOverlayLayer(int delta)
 {
+    // A reorder reads the whole stack, so both pending nudges land first.
+    flushPendingOverlayEdits();
     const DocumentSnapshot document = m_controller.document();
     if (document.pages.isEmpty())
         return;
@@ -6929,6 +7005,24 @@ bool MainWindow::eventFilter(QObject *watched, QEvent *event)
         }
     }
     return QMainWindow::eventFilter(watched, event);
+}
+
+void MainWindow::flushPendingStickerEdit()
+{
+    if (m_pageView)
+        m_pageView->flushStickerBurst();
+}
+
+void MainWindow::flushPendingTextEdit()
+{
+    if (m_pageView)
+        m_pageView->flushTextBurst();
+}
+
+void MainWindow::flushPendingOverlayEdits()
+{
+    flushPendingStickerEdit();
+    flushPendingTextEdit();
 }
 
 bool MainWindow::publishStickers(const QList<Sticker> &stickers, const QString &actionText,
@@ -7152,6 +7246,7 @@ void MainWindow::updateInspectorTabs(const QString &frameId, const QString &slot
         : (hasPhoto ? QStringLiteral("photo:") + frameId
                     : (hasSection ? QStringLiteral("section:") + slotId
                                   : QStringLiteral("page")));
+    const QString previousContext = m_inspectorContext;
     const bool contextChanged = context != m_inspectorContext;
     m_inspectorContext = context;
 
@@ -7173,7 +7268,16 @@ void MainWindow::updateInspectorTabs(const QString &frameId, const QString &slot
     int wanted = previous;
     const bool previousUsable =
         previous >= 0 && m_inspectorTabs->isTabEnabled(previous);
-    if (!previousUsable || (!m_inspectorTabChosen)) {
+    // Deselecting an overlay by clicking empty paper is part of decorating, not
+    // a request to leave the palette: a stray click must not throw the panel
+    // back to Lap mid-flow. A deselect from a photograph still goes to Lap.
+    const bool keepElem = context == QLatin1String("page")
+        && (previousContext.startsWith(QStringLiteral("sticker:"))
+            || previousContext.startsWith(QStringLiteral("text:")))
+        && previous == 3;
+    if (keepElem) {
+        wanted = 3;
+    } else if (!previousUsable || (!m_inspectorTabChosen)) {
         // The automatic page, in the order a document is worked on: the overlay
         // that was picked, the photo, the empty section, the sheet itself.
         wanted = hasOverlay ? 3 : (hasPhoto ? 0 : (emptySection ? 1 : 2));
@@ -7568,24 +7672,10 @@ bool MainWindow::pageOverflows() const
             || frame.cy + height / 2.0 > size.height() + 0.05)
             return true;
     }
-    // A sticker may legitimately hang over the edge, but then "Igazítás a
-    // laphoz" is the action that brings it back onto the paper, so the notice
-    // and the button have to count it too.
-    for (const Sticker &sticker : page.stickers) {
-        const QRectF box = OverlayGeometry::stickerQuadMm(sticker).boundingRect();
-        if (box.left() < -0.05 || box.top() < -0.05
-            || box.right() > size.width() + 0.05
-            || box.bottom() > size.height() + 0.05)
-            return true;
-    }
-    // A text block is part of the composition for the same reason.
-    for (const TextItem &text : page.texts) {
-        const QRectF box = OverlayGeometry::textQuadMm(text).boundingRect();
-        if (box.left() < -0.05 || box.top() < -0.05
-            || box.right() > size.width() + 0.05
-            || box.bottom() > size.height() + 0.05)
-            return true;
-    }
+    // A sticker is deliberately allowed to bleed over the edge: that is a
+    // decoration, not a photograph the user meant to keep whole. Counting it
+    // here would warn about "a part of the picture is cut" and offer a fit that
+    // shrinks perfectly placed photos to chase a decoration.
     return false;
 }
 
@@ -9021,7 +9111,7 @@ void MainWindow::addSticker()
         : m_lastStickerDir;
     const QString path = QFileDialog::getOpenFileName(
         this, QCoreApplication::translate("PhotoPrint", "Matrica hozzáadása…"), startDir,
-        QCoreApplication::translate("PhotoPrint", "Képek (*.png *.jpg *.jpeg *.webp *.gif)"));
+        QCoreApplication::translate("PhotoPrint", "Képek (*.png *.jpg *.jpeg *.webp)"));
     if (path.isEmpty())
         return;
     m_lastStickerDir = QFileInfo(path).absolutePath();
@@ -9078,6 +9168,9 @@ void MainWindow::addBuiltInSticker(const QString &alias)
 bool MainWindow::addStickerWithSource(const QString &storedPath, const QByteArray &sha256,
                                       const QSize &pixels)
 {
+    // Adding a layer touches the shared stack, so a pending nudge of either kind
+    // lands first instead of publishing a stale page afterwards.
+    flushPendingOverlayEdits();
     const DocumentSnapshot document = m_controller.document();
     if (document.pages.isEmpty() || storedPath.isEmpty())
         return false;
@@ -9089,18 +9182,20 @@ bool MainWindow::addStickerWithSource(const QString &storedPath, const QByteArra
         return false;
     }
 
-    // Default placement: centred on the sheet, a quarter of the short side
-    // wide, the height from the picture's own aspect (bounded so a tall picture
-    // is smaller instead of squashed), on top of the overlays already there.
-    // One edit, one undo step, and the new sticker is selected.
+    // Default placement: a quarter of the short side wide, the height from the
+    // picture's own aspect (bounded so a tall picture is smaller instead of
+    // squashed), on top of the overlays already there. Each new layer steps
+    // away from the centre so a second click on the same shape is visibly a
+    // second object. One edit, one undo step, and the new sticker is selected.
     const QSizeF sheet = pageSizeMm(page);
     const QSizeF size = OverlayGeometry::defaultStickerSizeMm(sheet, pixels);
+    const QPointF centre = OverlayGeometry::cascadedStickerCentreMm(page, sheet, size);
     Sticker sticker;
     sticker.id = makeId(QStringLiteral("sticker"));
     sticker.imagePath = storedPath;
     sticker.imageSha256 = sha256;
-    sticker.cx = sheet.width() / 2.0;
-    sticker.cy = sheet.height() / 2.0;
+    sticker.cx = centre.x();
+    sticker.cy = centre.y();
     sticker.width = size.width();
     sticker.height = size.height();
     int top = 0;
@@ -9110,21 +9205,23 @@ bool MainWindow::addStickerWithSource(const QString &storedPath, const QByteArra
 
     QList<Sticker> stickers = page.stickers;
     stickers.append(sticker);
-    return publishStickers(stickers, QCoreApplication::translate("PhotoPrint", "Matrica"),
+    return publishStickers(stickers,
+                           QCoreApplication::translate("PhotoPrint", "Matrica hozzáadása"),
                            sticker.id);
 }
 
 void MainWindow::chooseStickerImage()
 {
+    flushPendingStickerEdit();
     const std::optional<Sticker> sticker = selectedSticker();
     if (!sticker)
         return;
-    const QString source = stickerSourcePath(*sticker);
-    const QString startDir = source.isEmpty() ? m_lastStickerDir
-                                              : QFileInfo(source).absolutePath();
+    QString startDir = stickerPickerDirectory(*sticker, m_lastStickerDir);
+    if (startDir.isEmpty())
+        startDir = QStandardPaths::writableLocation(QStandardPaths::PicturesLocation);
     const QString path = QFileDialog::getOpenFileName(
         this, QCoreApplication::translate("PhotoPrint", "Matrica kiválasztása"), startDir,
-        QCoreApplication::translate("PhotoPrint", "Képek (*.png *.jpg *.jpeg *.webp *.gif)"));
+        QCoreApplication::translate("PhotoPrint", "Képek (*.png *.jpg *.jpeg *.webp)"));
     if (path.isEmpty())
         return;
     relinkStickerFromPath(path);
@@ -9132,6 +9229,7 @@ void MainWindow::chooseStickerImage()
 
 void MainWindow::relinkStickerFromPath(const QString &path)
 {
+    flushPendingStickerEdit();
     const std::optional<Sticker> sticker = selectedSticker();
     if (!sticker || path.isEmpty())
         return;
@@ -9175,29 +9273,36 @@ void MainWindow::stickerSizeChanged()
 {
     if (m_syncing)
         return;
+    flushPendingStickerEdit();
     const std::optional<Sticker> sticker = selectedSticker();
     if (!sticker)
-        return;
-    Sticker updated = *sticker;
-    // The panel is in centimetres, the model in millimetres. The height follows
-    // the width through the stored aspect, so the gesture the panel offers can
-    // never stretch the picture.
-    const double aspect =
-        sticker->width > 0.0 ? sticker->height / sticker->width : 1.0;
-    updated.width = std::max(m_stickerSizeSpin->value() * 10.0, kMinStickerMm);
-    updated.height = std::max(updated.width * aspect, kMinStickerMm);
-    if (updated.width == sticker->width && updated.height == sticker->height)
         return;
     const DocumentSnapshot document = m_controller.document();
     if (document.pages.isEmpty())
         return;
     const Page &page = document.pages.at(document.currentPage);
+    // The panel is in centimetres, the model in millimetres. The height follows
+    // the width through the stored aspect, and the pair goes through the same
+    // uniform bound as every other gesture: at the spin minimum a 1:40 sticker
+    // stays 1:40 instead of becoming a square because each axis hit the minimum
+    // first.
+    const double aspect =
+        sticker->width > 0.0 ? sticker->height / sticker->width : 1.0;
+    const double width = std::max(m_stickerSizeSpin->value() * 10.0, kMinStickerMm);
+    const QSizeF box = boundedStickerSizeMm(QSizeF(width, width * aspect),
+                                            pageSizeMm(page));
+    Sticker updated = *sticker;
+    updated.width = box.width();
+    updated.height = box.height();
+    if (updated.width == sticker->width && updated.height == sticker->height)
+        return;
     publishStickers(withSticker(page.stickers, updated),
                     QCoreApplication::translate("PhotoPrint", "Matrica átméretezése"));
 }
 
 void MainWindow::stickerAngleChanged()
 {
+    flushPendingStickerEdit();
     if (m_syncing)
         return;
     const std::optional<Sticker> sticker = selectedSticker();
@@ -9219,6 +9324,7 @@ void MainWindow::stickerOpacityChanged(int value)
 {
     if (m_syncing)
         return;
+    flushPendingStickerEdit();
     if (m_stickerOpacityValue)
         m_stickerOpacityValue->setText(QStringLiteral("%1 %").arg(value));
     const std::optional<Sticker> sticker = selectedSticker();
@@ -9239,6 +9345,7 @@ void MainWindow::stickerOpacityChanged(int value)
 
 void MainWindow::flushStickerOpacity()
 {
+    flushPendingStickerEdit();
     if (m_stickerOpacityTimer)
         m_stickerOpacityTimer->stop();
     if (!m_pendingStickerOpacity)
@@ -9257,7 +9364,7 @@ void MainWindow::flushStickerOpacity()
     if (!changed)
         return;
     publishStickers(withSticker(page.stickers, updated),
-                    QCoreApplication::translate("PhotoPrint", "Matrica"));
+                    QCoreApplication::translate("PhotoPrint", "Matrica fedettsége"));
 }
 
 void MainWindow::cancelPendingStickerOpacity()
@@ -9276,6 +9383,7 @@ void MainWindow::reorderStickerLayer(int delta)
 
 void MainWindow::deleteSelectedSticker()
 {
+    flushPendingStickerEdit();
     const std::optional<Sticker> sticker = selectedSticker();
     if (!sticker)
         return;
@@ -9456,6 +9564,14 @@ MainWindow::StickerProblem MainWindow::stickerProblem(const Sticker &sticker) co
         return StickerProblem::Unreadable;
     if (OverlayGeometry::stickerSourceTooLarge(reader.size()))
         return StickerProblem::TooLarge;
+    // A shipped sticker is pinned twice: by the version in its alias and by the
+    // content hash recorded when it was placed. If the file under that version
+    // no longer hashes to the recorded identity, the artwork changed under the
+    // project, so say so instead of printing different pixels without a word.
+    if (isBuiltinStickerPath(sticker.imagePath) && !sticker.imageSha256.isEmpty()
+        && fileSha256(source) != sticker.imageSha256) {
+        return StickerProblem::Changed;
+    }
     return StickerProblem::None;
 }
 
@@ -9468,6 +9584,9 @@ QString MainWindow::stickerProblemText(MainWindow::StickerProblem problem) const
     case StickerProblem::TooLarge:
         return QCoreApplication::translate(
             "PhotoPrint", "A matrica túl nagy vagy nem olvasható.");
+    case StickerProblem::Changed:
+        return QCoreApplication::translate("PhotoPrint",
+                                           "A matrica képe megváltozott.");
     case StickerProblem::None:
         break;
     }
@@ -9536,6 +9655,37 @@ void MainWindow::syncStickerPanel()
     if (m_nextStickerButton)
         m_nextStickerButton->setEnabled(true);
 
+    // The position in the shared stack: one place, used by the caption and by
+    // the order buttons below, so the two cannot disagree. The stack holds both
+    // kinds, so a caption counts as a step too.
+    const QList<OverlayGeometry::OverlayRef> order = OverlayGeometry::paintOrder(*page);
+    int index = -1;
+    if (sticker) {
+        for (int i = 0; i < order.size(); ++i) {
+            const OverlayGeometry::OverlayRef &ref = order.at(i);
+            if (ref.kind != OverlayGeometry::OverlayKind::Sticker)
+                continue;
+            if (page->stickers.at(ref.index).id == sticker->id) {
+                index = i;
+                break;
+            }
+        }
+    }
+    if (m_stickerPositionLabel) {
+        if (index >= 0) {
+            m_stickerPositionLabel->setText(
+                QStringLiteral("%1 / %2").arg(index + 1).arg(order.size()));
+            m_stickerPositionLabel->setAccessibleName(
+                QCoreApplication::translate("PhotoPrint", "Matrica: %1 / %2")
+                    .arg(index + 1)
+                    .arg(order.size()));
+        } else {
+            m_stickerPositionLabel->setText(
+                order.isEmpty() ? QString() : QStringLiteral("– / %1").arg(order.size()));
+            m_stickerPositionLabel->setAccessibleName(QString());
+        }
+    }
+
     if (!sticker)
         return;
 
@@ -9564,18 +9714,6 @@ void MainWindow::syncStickerPanel()
     // A move at either end would change nothing, so the button says so. The
     // index is in the shared stack, because raising a sticker above a text is a
     // real step too.
-    const QList<OverlayGeometry::OverlayRef> order =
-        OverlayGeometry::paintOrder(*page);
-    int index = -1;
-    for (int i = 0; i < order.size(); ++i) {
-        const OverlayGeometry::OverlayRef &ref = order.at(i);
-        if (ref.kind != OverlayGeometry::OverlayKind::Sticker)
-            continue;
-        if (page->stickers.at(ref.index).id == sticker->id) {
-            index = i;
-            break;
-        }
-    }
     if (m_stickerRaiseButton)
         m_stickerRaiseButton->setEnabled(index >= 0 && index < order.size() - 1);
     if (m_stickerLowerButton)
@@ -9676,6 +9814,23 @@ void MainWindow::syncTextPanel()
     if (m_textLowerButton)
         m_textLowerButton->setEnabled(index > 0);
 
+    // The position caption is shared with the sticker panel, so a text shows
+    // where it sits in the same stack.
+    if (m_stickerPositionLabel) {
+        if (index >= 0) {
+            m_stickerPositionLabel->setText(
+                QStringLiteral("%1 / %2").arg(index + 1).arg(order.size()));
+            m_stickerPositionLabel->setAccessibleName(
+                QCoreApplication::translate("PhotoPrint", "Szöveg: %1 / %2")
+                    .arg(index + 1)
+                    .arg(order.size()));
+        } else {
+            m_stickerPositionLabel->setText(
+                order.isEmpty() ? QString() : QStringLiteral("– / %1").arg(order.size()));
+            m_stickerPositionLabel->setAccessibleName(QString());
+        }
+    }
+
     if (m_textFontHint)
         m_textFontHint->setVisible(textFontMissing());
     if (m_textOverflowHint)
@@ -9730,6 +9885,8 @@ void MainWindow::updateNoticeBar()
         m_stickerNotice->setText(stickerProblemText(stickerIssue));
         m_stickerNotice->setVisible(stickerIssue != StickerProblem::None);
     }
+    if (m_stickerNoticeButton)
+        m_stickerNoticeButton->setVisible(stickerIssue != StickerProblem::None);
     // The overflow state is the page's own, not the label's effective
     // visibility: a child of a hidden bar reports itself hidden, which would
     // keep the bar hidden and the warning could never appear.

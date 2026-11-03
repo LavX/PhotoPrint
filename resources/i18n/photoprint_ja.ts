@@ -2015,5 +2015,37 @@
         <source>Válassz színt a szövegnek.</source>
         <translation>テキストの色を選んでください。</translation>
     </message>
+    <message>
+        <source>Matrica: %1 / %2</source>
+        <translation>ステッカー: %1 / %2</translation>
+    </message>
+    <message>
+        <source>Matrica hozzáadása</source>
+        <translation>ステッカーを追加</translation>
+    </message>
+    <message>
+        <source>Matrica fedettsége</source>
+        <translation>ステッカーの不透明度</translation>
+    </message>
+    <message>
+        <source>Egy lépéssel előrébb.</source>
+        <translation>1 段階前へ。</translation>
+    </message>
+    <message>
+        <source>Egy lépéssel hátrébb.</source>
+        <translation>1 段階後ろへ。</translation>
+    </message>
+    <message>
+        <source>A matrica képe megváltozott.</source>
+        <translation>ステッカーの画像が変更されています。</translation>
+    </message>
+    <message>
+        <source>Képek (*.png *.jpg *.jpeg *.webp)</source>
+        <translation>画像 (*.png *.jpg *.jpeg *.webp)</translation>
+    </message>
+    <message>
+        <source>Szöveg: %1 / %2</source>
+        <translation>テキスト: %1 / %2</translation>
+    </message>
 </context>
 </TS>

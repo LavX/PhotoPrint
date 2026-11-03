@@ -2043,5 +2043,37 @@
         <source>Válassz színt a szövegnek.</source>
         <translation>Выберите цвет текста.</translation>
     </message>
+    <message>
+        <source>Matrica: %1 / %2</source>
+        <translation>Наклейка: %1 из %2</translation>
+    </message>
+    <message>
+        <source>Matrica hozzáadása</source>
+        <translation>Добавить наклейку</translation>
+    </message>
+    <message>
+        <source>Matrica fedettsége</source>
+        <translation>Прозрачность наклейки</translation>
+    </message>
+    <message>
+        <source>Egy lépéssel előrébb.</source>
+        <translation>На один шаг вперёд.</translation>
+    </message>
+    <message>
+        <source>Egy lépéssel hátrébb.</source>
+        <translation>На один шаг назад.</translation>
+    </message>
+    <message>
+        <source>A matrica képe megváltozott.</source>
+        <translation>Изображение наклейки изменилось.</translation>
+    </message>
+    <message>
+        <source>Képek (*.png *.jpg *.jpeg *.webp)</source>
+        <translation>Изображения (*.png *.jpg *.jpeg *.webp)</translation>
+    </message>
+    <message>
+        <source>Szöveg: %1 / %2</source>
+        <translation>Текст: %1 из %2</translation>
+    </message>
 </context>
 </TS>

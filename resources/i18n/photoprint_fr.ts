@@ -2029,5 +2029,37 @@
         <source>Válassz színt a szövegnek.</source>
         <translation>Choisis une couleur pour le texte.</translation>
     </message>
+    <message>
+        <source>Matrica: %1 / %2</source>
+        <translation>Autocollant : %1 sur %2</translation>
+    </message>
+    <message>
+        <source>Matrica hozzáadása</source>
+        <translation>Ajouter un autocollant</translation>
+    </message>
+    <message>
+        <source>Matrica fedettsége</source>
+        <translation>Opacité de l'autocollant</translation>
+    </message>
+    <message>
+        <source>Egy lépéssel előrébb.</source>
+        <translation>Un pas en avant.</translation>
+    </message>
+    <message>
+        <source>Egy lépéssel hátrébb.</source>
+        <translation>Un pas en arrière.</translation>
+    </message>
+    <message>
+        <source>A matrica képe megváltozott.</source>
+        <translation>L'image de l'autocollant a changé.</translation>
+    </message>
+    <message>
+        <source>Képek (*.png *.jpg *.jpeg *.webp)</source>
+        <translation>Images (*.png *.jpg *.jpeg *.webp)</translation>
+    </message>
+    <message>
+        <source>Szöveg: %1 / %2</source>
+        <translation>Texte : %1 sur %2</translation>
+    </message>
 </context>
 </TS>

@@ -140,6 +140,12 @@ public:
     /// Lands a pending wheel burst now as one edit. An inspector action calls
     /// this first, so a wheel gesture and the action stay separate undo steps.
     void flushWheelBurst();
+    /// Lands a pending arrow-key nudge now as one edit, for the same reason: a
+    /// panel action inside the burst must not publish a stale position.
+    void flushStickerBurst();
+    /// The same for a text block's nudge burst. The two bursts have their own
+    /// timers, so one kind's pending move can never swallow the other's.
+    void flushTextBurst();
 
     /// How a laid-out cell looks on screen right now. The three placeholder
     /// states are screen-only; they are never part of the page raster.
@@ -647,6 +653,15 @@ private slots:
     void chooseStickerImage();
     /// The file-dialog-free relink: the picker and the tests land here.
     void relinkStickerFromPath(const QString &path);
+    /// Lands a pending arrow-key nudge before another edit reads the page, so a
+    /// panel action inside the 200 ms burst cannot publish a stale position.
+    void flushPendingStickerEdit();
+    /// The same for a text block's nudge burst.
+    void flushPendingTextEdit();
+    /// Lands both pending bursts. A shared-stack action (add, reorder, delete)
+    /// touches both kinds, so it must not leave either burst to publish a stale
+    /// page afterwards.
+    void flushPendingOverlayEdits();
     void stickerSizeChanged();
     void stickerAngleChanged();
     void stickerOpacityChanged(int value);
@@ -802,11 +817,13 @@ private:
     /// file dialog, the built-in set and the relink picker all land here.
     bool addStickerWithSource(const QString &storedPath, const QByteArray &sha256,
                               const QSize &pixels);
-    /// Why a sticker's picture cannot be shown. `None` is a healthy one.
-    enum class StickerProblem { None, Missing, Unreadable, TooLarge };
+    /// Why a sticker's picture cannot be shown. `None` is a healthy one,
+    /// `Changed` means the file under a pinned alias no longer matches the
+    /// content the project recorded.
+    enum class StickerProblem { None, Missing, Unreadable, TooLarge, Changed };
     StickerProblem stickerProblem(const Sticker &sticker) const;
     QString stickerProblemText(StickerProblem problem) const;
-    /// The worst problem on the current page, so the notice bar speaks once.
+    /// The first problem on the current page, so the notice bar speaks once.
     StickerProblem pageStickerProblem() const;
     /// A small preview icon, decoded at its final size so a large source is
     /// never decoded in full on the GUI thread.
@@ -1019,12 +1036,16 @@ private:
     QPushButton *m_stickerDeleteButton = nullptr;
     QPushButton *m_addStickerButton = nullptr;
     QWidget *m_stickerSetGrid = nullptr;
+    QLabel *m_stickerPositionLabel = nullptr;
     QPushButton *m_previousStickerButton = nullptr;
     QPushButton *m_nextStickerButton = nullptr;
     QLabel *m_stickerMissingHint = nullptr;
     QPushButton *m_stickerRelinkButton = nullptr;
     /// The notice bar's own line for a sticker that cannot be shown.
     QLabel *m_stickerNotice = nullptr;
+    /// The way in from that line: selects the first missing sticker, so the
+    /// relink picker is one click away instead of three.
+    QPushButton *m_stickerNoticeButton = nullptr;
     /// The Elem tab's text half: the add button, the selected text's controls
     /// and the two hints. The panel switches between the sticker and the text
     /// properties, so only the selected kind's controls are visible.
@@ -1069,10 +1090,9 @@ private:
     /// not re-read the picture on every nudge.
     QString m_stickerPreviewPath;
     QPixmap m_stickerPreviewPixmap;
-    /// The opacity and nudge bursts: the canvas follows live and one edit lands
-    /// when the burst stops.
+    /// The opacity burst: the canvas follows live and one edit lands when the
+    /// drag stops. The nudge burst belongs to PageView, which owns the geometry.
     QTimer *m_stickerOpacityTimer = nullptr;
-    QTimer *m_stickerNudgeTimer = nullptr;
     std::optional<Sticker> m_pendingStickerOpacity;
     QString m_lastStickerDir;
     QString m_selectedSticker;

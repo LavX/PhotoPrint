@@ -322,12 +322,14 @@ private slots:
     void textClipsAtThePageEdge();
     void textOverStickerAndStickerOverTextByZ();
     void sharedZReorderSwapsKinds();
+    void stickerRaiseCrossesTheText();
     void hitTestingFollowsTheRotatedBlock();
     void addTextPlacesAndSelects();
     void dragCommitsOneUndoStep();
     void resizeChangesTheFontSize();
     void rotateHandleTurnsTheText();
     void nudgeIsOneUndoPerBurst();
+    void textNudgeThenOpacityKeepsTheMove();
     void deleteIsOneUndoStep();
     void dialogAddsEditsAndRefusesEmpty();
     void persistenceRoundTrips();
@@ -726,6 +728,49 @@ void TestPageText::sharedZReorderSwapsKinds()
     QCOMPARE(controller.document().pages.first().stickers.first().z, 0);
 }
 
+void TestPageText::stickerRaiseCrossesTheText()
+{
+    MainWindow window;
+    window.resize(1280, 800);
+    window.show();
+    QTest::qWait(120);
+    QVERIFY(QMetaObject::invokeMethod(&window, "addStickerFromPath", Qt::DirectConnection,
+                                      Q_ARG(QString, m_redPath)));
+    QTest::qWait(150);
+    TextItem item = makeText(QStringLiteral("Hello"), 105.0, 148.5, 24.0, 2);
+    QVERIFY(window.addTextForTest(item));
+    QTest::qWait(150);
+
+    // The text is on top. Select the sticker and raise it: the shared stack
+    // swaps them, and the sticker's z is now above the text's.
+    const QString stickerId = window.document().pages.first().stickers.first().id;
+    QVERIFY(QMetaObject::invokeMethod(&window, "selectSticker", Qt::DirectConnection,
+                                      Q_ARG(QString, stickerId)));
+    QTest::qWait(100);
+    auto *raise = window.findChild<QPushButton *>(QStringLiteral("stickerRaiseButton"));
+    QVERIFY(raise);
+    QVERIFY(raise->isEnabled());
+    const int before = window.undoStackForTest()->count();
+    QTest::mouseClick(raise, Qt::LeftButton);
+    QTest::qWait(120);
+
+    const Page page = window.document().pages.first();
+    QVERIFY(page.stickers.first().z > page.texts.first().z);
+    QCOMPARE(window.undoStackForTest()->count(), before + 1);
+
+    // The text's own raise button puts it back on top.
+    QVERIFY(QMetaObject::invokeMethod(&window, "selectText", Qt::DirectConnection,
+                                      Q_ARG(QString, item.id)));
+    QTest::qWait(100);
+    auto *textRaise = window.findChild<QPushButton *>(QStringLiteral("textRaiseButton"));
+    QVERIFY(textRaise);
+    QVERIFY(textRaise->isEnabled());
+    QTest::mouseClick(textRaise, Qt::LeftButton);
+    QTest::qWait(120);
+    const Page restored = window.document().pages.first();
+    QVERIFY(restored.texts.first().z > restored.stickers.first().z);
+}
+
 void TestPageText::hitTestingFollowsTheRotatedBlock()
 {
     TextItem item = makeText(QStringLiteral("MMMM"), 100.0, 100.0, 40.0);
@@ -924,6 +969,44 @@ void TestPageText::nudgeIsOneUndoPerBurst()
     QTest::qWait(400);
     QCOMPARE(window.document().pages.first().texts.first().cx, startX + 2.9);
     QCOMPARE(window.undoStackForTest()->count(), before + 2);
+}
+
+void TestPageText::textNudgeThenOpacityKeepsTheMove()
+{
+    MainWindow window;
+    window.resize(1280, 800);
+    window.show();
+    QTest::qWait(120);
+    TextItem item = makeText(QStringLiteral("Hello"), 105.0, 148.5, 24.0, 1);
+    QVERIFY(window.addTextForTest(item));
+    QTest::qWait(120);
+
+    auto *view = window.findChild<PageView *>();
+    auto *slider = window.findChild<QSlider *>(QStringLiteral("textOpacitySlider"));
+    QVERIFY(view);
+    QVERIFY(slider);
+    const double startX = window.document().pages.first().texts.first().cx;
+    const int before = window.undoStackForTest()->count();
+
+    view->setFocus();
+    QTest::keyClick(view, Qt::Key_Right);
+    // Inside the 200 ms burst: the panel action must land the nudge first, not
+    // publish a document that still has the old position.
+    slider->setValue(40);
+    QTest::qWait(450);
+
+    const TextItem text = window.document().pages.first().texts.first();
+    QCOMPARE(text.cx, startX + 1.0);
+    QCOMPARE(text.opacity, 40);
+    QCOMPARE(window.undoStackForTest()->count(), before + 2);
+
+    // The undo pair restores the opacity and then the position.
+    window.undoStackForTest()->undo();
+    QTest::qWait(80);
+    QCOMPARE(window.document().pages.first().texts.first().opacity, 100);
+    window.undoStackForTest()->undo();
+    QTest::qWait(80);
+    QCOMPARE(window.document().pages.first().texts.first().cx, startX);
 }
 
 void TestPageText::deleteIsOneUndoStep()

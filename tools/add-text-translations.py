@@ -148,6 +148,13 @@ MESSAGES = {
         "ja": "テキストが選択されています: %1", "zh_CN": "已选中文字：%1",
         "hi": "टेक्स्ट चुना गया है: %1",
     },
+    "Szöveg: %1 / %2": {
+        "en": "Text: %1 of %2", "de": "Text: %1 von %2",
+        "es": "Texto: %1 de %2", "fr": "Texte : %1 sur %2",
+        "it": "Testo: %1 di %2", "pt": "Texto: %1 de %2",
+        "ru": "Текст: %1 из %2", "ja": "テキスト: %1 / %2",
+        "zh_CN": "文字：%1 / %2", "hi": "टेक्स्ट: %1 / %2",
+    },
     "Szöveg mozgatása": {
         "en": "Move text", "de": "Text verschieben", "es": "Mover texto",
         "fr": "Déplacer le texte", "it": "Sposta testo", "pt": "Mover texto",

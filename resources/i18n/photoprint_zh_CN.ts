@@ -2015,5 +2015,37 @@
         <source>Válassz színt a szövegnek.</source>
         <translation>为文字选择颜色。</translation>
     </message>
+    <message>
+        <source>Matrica: %1 / %2</source>
+        <translation>贴纸：%1 / %2</translation>
+    </message>
+    <message>
+        <source>Matrica hozzáadása</source>
+        <translation>添加贴纸</translation>
+    </message>
+    <message>
+        <source>Matrica fedettsége</source>
+        <translation>贴纸不透明度</translation>
+    </message>
+    <message>
+        <source>Egy lépéssel előrébb.</source>
+        <translation>向前一层。</translation>
+    </message>
+    <message>
+        <source>Egy lépéssel hátrébb.</source>
+        <translation>向后一层。</translation>
+    </message>
+    <message>
+        <source>A matrica képe megváltozott.</source>
+        <translation>贴纸的图片已更改。</translation>
+    </message>
+    <message>
+        <source>Képek (*.png *.jpg *.jpeg *.webp)</source>
+        <translation>图片 (*.png *.jpg *.jpeg *.webp)</translation>
+    </message>
+    <message>
+        <source>Szöveg: %1 / %2</source>
+        <translation>文字：%1 / %2</translation>
+    </message>
 </context>
 </TS>

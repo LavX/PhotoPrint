@@ -38,11 +38,12 @@ QString builtinStickerResource(const QString &path)
     const QString alias = rest.left(at);
     bool ok = false;
     const int version = rest.mid(at + 1).toInt(&ok);
-    if (!ok || version != kBuiltinStickerVersion)
+    if (!ok || version < 1)
         return {};
-    // The versioned alias is what pins the artwork. A future version ships its
-    // own file under its own alias, and this one keeps resolving to the pixels
-    // it always had instead of quietly following the new artwork.
+    // The shipped file is the only authority on whether a version is available.
+    // The resolver must not compare the version with this build's own: a build
+    // at v2 has to answer a project saved at v1 with the v1 file it still
+    // ships, or every older project would lose its stickers on the upgrade.
     const QString resource = QStringLiteral("%1%2-v%3.png")
                                  .arg(QLatin1String(kResourcePrefix), alias)
                                  .arg(version);
@@ -56,6 +57,24 @@ QString stickerSourcePath(const Sticker &sticker)
     if (isBuiltinStickerPath(sticker.imagePath))
         return builtinStickerResource(sticker.imagePath);
     return sticker.imagePath;
+}
+
+QString stickerPickerDirectory(const Sticker &sticker, const QString &lastDir)
+{
+    if (!isBuiltinStickerPath(sticker.imagePath)) {
+        const QString source = stickerSourcePath(sticker);
+        if (!source.isEmpty() && !source.startsWith(QLatin1Char(':'))) {
+            const QString directory = QFileInfo(source).absolutePath();
+            if (!directory.isEmpty())
+                return directory;
+        }
+    }
+    // A shipped sticker lives in the resource tree, and a missing one may have
+    // no path at all: the last real folder the user picked from is the only
+    // sensible start.
+    if (!lastDir.isEmpty() && !lastDir.startsWith(QLatin1Char(':')))
+        return lastDir;
+    return {};
 }
 
 StickerLayer loadStickerLayer(ImageStore &store, const Sticker &sticker,
