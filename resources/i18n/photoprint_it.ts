@@ -1937,5 +1937,13 @@
         <source>Egy lépéssel hátrébb.</source>
         <translation>Un passo indietro.</translation>
     </message>
+    <message>
+        <source>A matrica képe megváltozott.</source>
+        <translation>L'immagine dell'adesivo è cambiata.</translation>
+    </message>
+    <message>
+        <source>Képek (*.png *.jpg *.jpeg *.webp)</source>
+        <translation>Immagini (*.png *.jpg *.jpeg *.webp)</translation>
+    </message>
 </context>
 </TS>

@@ -14,6 +14,30 @@ I18N = os.path.join(ROOT, "resources", "i18n")
 
 # source -> {locale: translation}
 MESSAGES = {
+    "A matrica képe megváltozott.": {
+        "en": "The sticker's picture has changed.",
+        "de": "Das Bild des Aufklebers hat sich geändert.",
+        "es": "La imagen de la pegatina ha cambiado.",
+        "fr": "L'image de l'autocollant a changé.",
+        "it": "L'immagine dell'adesivo è cambiata.",
+        "pt": "A imagem do adesivo mudou.",
+        "ru": "Изображение наклейки изменилось.",
+        "ja": "ステッカーの画像が変更されています。",
+        "zh_CN": "贴纸的图片已更改。",
+        "hi": "स्टिकर की तस्वीर बदल गई है।",
+    },
+	"Képek (*.png *.jpg *.jpeg *.webp)": {
+        "en": "Pictures (*.png *.jpg *.jpeg *.webp)",
+        "de": "Bilder (*.png *.jpg *.jpeg *.webp)",
+        "es": "Imágenes (*.png *.jpg *.jpeg *.webp)",
+        "fr": "Images (*.png *.jpg *.jpeg *.webp)",
+        "it": "Immagini (*.png *.jpg *.jpeg *.webp)",
+        "pt": "Imagens (*.png *.jpg *.jpeg *.webp)",
+        "ru": "Изображения (*.png *.jpg *.jpeg *.webp)",
+        "ja": "画像 (*.png *.jpg *.jpeg *.webp)",
+        "zh_CN": "图片 (*.png *.jpg *.jpeg *.webp)",
+        "hi": "चित्र (*.png *.jpg *.jpeg *.webp)",
+    },
     "Egy lépéssel előrébb.": {
         "en": "One step forward.",
         "de": "Einen Schritt nach vorne.",

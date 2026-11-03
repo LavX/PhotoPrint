@@ -924,6 +924,7 @@ void TestI18n::everyCatalogueTranslatesTheStickerMessages()
              QStringLiteral("Egy lépéssel hátrébb."),
              QStringLiteral("Eltávolítás"),
              QStringLiteral("Ezt a matricát nem találjuk."),
+             QStringLiteral("A matrica képe megváltozott."),
              QStringLiteral("A matrica túl nagy vagy nem olvasható."),
              QStringLiteral("Matrica kiválasztása"),
              QStringLiteral("Előző elem"),
@@ -939,7 +940,7 @@ void TestI18n::everyCatalogueTranslatesTheStickerMessages()
              QStringLiteral("Matrica fedettsége"),
              QStringLiteral("Matrica: %1 / %2"),
              QStringLiteral("A matrica ki van jelölve."),
-             QStringLiteral("Képek (*.png *.jpg *.jpeg *.webp *.gif)"),
+             QStringLiteral("Képek (*.png *.jpg *.jpeg *.webp)"),
              QStringLiteral("Egy lapon legfeljebb %1 matrica lehet."),
              QStringLiteral("A matricát nem sikerült a helyére tenni."),
          }) {

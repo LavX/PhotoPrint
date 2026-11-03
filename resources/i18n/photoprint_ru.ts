@@ -1951,5 +1951,13 @@
         <source>Egy lépéssel hátrébb.</source>
         <translation>На один шаг назад.</translation>
     </message>
+    <message>
+        <source>A matrica képe megváltozott.</source>
+        <translation>Изображение наклейки изменилось.</translation>
+    </message>
+    <message>
+        <source>Képek (*.png *.jpg *.jpeg *.webp)</source>
+        <translation>Изображения (*.png *.jpg *.jpeg *.webp)</translation>
+    </message>
 </context>
 </TS>

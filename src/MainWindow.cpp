@@ -1467,6 +1467,11 @@ void PageView::flushWheelBurst()
     flushWheelZoom();
 }
 
+void PageView::flushStickerBurst()
+{
+    flushStickerNudge();
+}
+
 void PageView::flushStickerNudge()
 {
     if (m_stickerNudgeTimer)
@@ -5287,8 +5292,8 @@ PageImages MainWindow::displayedPageImages() const
     PageImages images;
     images.frames = m_previewImages;
     // Sticker layers are keyed by id, so a layer for a sticker on another page
-    // is simply never looked up. The missing set is what makes the painter draw
-    // the placeholder instead of nothing.
+    // is simply never looked up. The canvas holds its own missing set and draws
+    // the placeholder; the page painter never does.
     images.stickers = m_previewStickers;
     const DocumentSnapshot document = m_controller.document();
     if (!document.pages.isEmpty()) {
@@ -5759,6 +5764,12 @@ void MainWindow::selectSticker(const QString &stickerId)
         return;
     syncListSelection();
     syncFrameControls();
+}
+
+void MainWindow::flushPendingStickerEdit()
+{
+    if (m_pageView)
+        m_pageView->flushStickerBurst();
 }
 
 bool MainWindow::publishStickers(const QList<Sticker> &stickers, const QString &actionText,
@@ -7838,7 +7849,7 @@ void MainWindow::addSticker()
         : m_lastStickerDir;
     const QString path = QFileDialog::getOpenFileName(
         this, QCoreApplication::translate("PhotoPrint", "Matrica hozzáadása…"), startDir,
-        QCoreApplication::translate("PhotoPrint", "Képek (*.png *.jpg *.jpeg *.webp *.gif)"));
+        QCoreApplication::translate("PhotoPrint", "Képek (*.png *.jpg *.jpeg *.webp)"));
     if (path.isEmpty())
         return;
     m_lastStickerDir = QFileInfo(path).absolutePath();
@@ -7895,6 +7906,7 @@ void MainWindow::addBuiltInSticker(const QString &alias)
 bool MainWindow::addStickerWithSource(const QString &storedPath, const QByteArray &sha256,
                                       const QSize &pixels)
 {
+    flushPendingStickerEdit();
     const DocumentSnapshot document = m_controller.document();
     if (document.pages.isEmpty() || storedPath.isEmpty())
         return false;
@@ -7936,15 +7948,16 @@ bool MainWindow::addStickerWithSource(const QString &storedPath, const QByteArra
 
 void MainWindow::chooseStickerImage()
 {
+    flushPendingStickerEdit();
     const std::optional<Sticker> sticker = selectedSticker();
     if (!sticker)
         return;
-    const QString source = stickerSourcePath(*sticker);
-    const QString startDir = source.isEmpty() ? m_lastStickerDir
-                                              : QFileInfo(source).absolutePath();
+    QString startDir = stickerPickerDirectory(*sticker, m_lastStickerDir);
+    if (startDir.isEmpty())
+        startDir = QStandardPaths::writableLocation(QStandardPaths::PicturesLocation);
     const QString path = QFileDialog::getOpenFileName(
         this, QCoreApplication::translate("PhotoPrint", "Matrica kiválasztása"), startDir,
-        QCoreApplication::translate("PhotoPrint", "Képek (*.png *.jpg *.jpeg *.webp *.gif)"));
+        QCoreApplication::translate("PhotoPrint", "Képek (*.png *.jpg *.jpeg *.webp)"));
     if (path.isEmpty())
         return;
     relinkStickerFromPath(path);
@@ -7952,6 +7965,7 @@ void MainWindow::chooseStickerImage()
 
 void MainWindow::relinkStickerFromPath(const QString &path)
 {
+    flushPendingStickerEdit();
     const std::optional<Sticker> sticker = selectedSticker();
     if (!sticker || path.isEmpty())
         return;
@@ -7995,29 +8009,36 @@ void MainWindow::stickerSizeChanged()
 {
     if (m_syncing)
         return;
+    flushPendingStickerEdit();
     const std::optional<Sticker> sticker = selectedSticker();
     if (!sticker)
-        return;
-    Sticker updated = *sticker;
-    // The panel is in centimetres, the model in millimetres. The height follows
-    // the width through the stored aspect, so the gesture the panel offers can
-    // never stretch the picture.
-    const double aspect =
-        sticker->width > 0.0 ? sticker->height / sticker->width : 1.0;
-    updated.width = std::max(m_stickerSizeSpin->value() * 10.0, kMinStickerMm);
-    updated.height = std::max(updated.width * aspect, kMinStickerMm);
-    if (updated.width == sticker->width && updated.height == sticker->height)
         return;
     const DocumentSnapshot document = m_controller.document();
     if (document.pages.isEmpty())
         return;
     const Page &page = document.pages.at(document.currentPage);
+    // The panel is in centimetres, the model in millimetres. The height follows
+    // the width through the stored aspect, and the pair goes through the same
+    // uniform bound as every other gesture: at the spin minimum a 1:40 sticker
+    // stays 1:40 instead of becoming a square because each axis hit the minimum
+    // first.
+    const double aspect =
+        sticker->width > 0.0 ? sticker->height / sticker->width : 1.0;
+    const double width = std::max(m_stickerSizeSpin->value() * 10.0, kMinStickerMm);
+    const QSizeF box = boundedStickerSizeMm(QSizeF(width, width * aspect),
+                                            pageSizeMm(page));
+    Sticker updated = *sticker;
+    updated.width = box.width();
+    updated.height = box.height();
+    if (updated.width == sticker->width && updated.height == sticker->height)
+        return;
     publishStickers(withSticker(page.stickers, updated),
                     QCoreApplication::translate("PhotoPrint", "Matrica átméretezése"));
 }
 
 void MainWindow::stickerAngleChanged()
 {
+    flushPendingStickerEdit();
     if (m_syncing)
         return;
     const std::optional<Sticker> sticker = selectedSticker();
@@ -8039,6 +8060,7 @@ void MainWindow::stickerOpacityChanged(int value)
 {
     if (m_syncing)
         return;
+    flushPendingStickerEdit();
     if (m_stickerOpacityValue)
         m_stickerOpacityValue->setText(QStringLiteral("%1 %").arg(value));
     const std::optional<Sticker> sticker = selectedSticker();
@@ -8059,6 +8081,7 @@ void MainWindow::stickerOpacityChanged(int value)
 
 void MainWindow::flushStickerOpacity()
 {
+    flushPendingStickerEdit();
     if (m_stickerOpacityTimer)
         m_stickerOpacityTimer->stop();
     if (!m_pendingStickerOpacity)
@@ -8089,6 +8112,7 @@ void MainWindow::cancelPendingStickerOpacity()
 
 void MainWindow::reorderStickerLayer(int delta)
 {
+    flushPendingStickerEdit();
     const std::optional<Sticker> sticker = selectedSticker();
     if (!sticker)
         return;
@@ -8107,6 +8131,7 @@ void MainWindow::reorderStickerLayer(int delta)
 
 void MainWindow::deleteSelectedSticker()
 {
+    flushPendingStickerEdit();
     const std::optional<Sticker> sticker = selectedSticker();
     if (!sticker)
         return;
@@ -8312,6 +8337,14 @@ MainWindow::StickerProblem MainWindow::stickerProblem(const Sticker &sticker) co
         return StickerProblem::Unreadable;
     if (OverlayGeometry::stickerSourceTooLarge(reader.size()))
         return StickerProblem::TooLarge;
+    // A shipped sticker is pinned twice: by the version in its alias and by the
+    // content hash recorded when it was placed. If the file under that version
+    // no longer hashes to the recorded identity, the artwork changed under the
+    // project, so say so instead of printing different pixels without a word.
+    if (isBuiltinStickerPath(sticker.imagePath) && !sticker.imageSha256.isEmpty()
+        && fileSha256(source) != sticker.imageSha256) {
+        return StickerProblem::Changed;
+    }
     return StickerProblem::None;
 }
 
@@ -8324,6 +8357,9 @@ QString MainWindow::stickerProblemText(MainWindow::StickerProblem problem) const
     case StickerProblem::TooLarge:
         return QCoreApplication::translate(
             "PhotoPrint", "A matrica túl nagy vagy nem olvasható.");
+    case StickerProblem::Changed:
+        return QCoreApplication::translate("PhotoPrint",
+                                           "A matrica képe megváltozott.");
     case StickerProblem::None:
         break;
     }

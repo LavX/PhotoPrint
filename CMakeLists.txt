@@ -169,6 +169,14 @@ photoprint_test(tst_slot_layout)
 photoprint_test(tst_slot_ui)
 photoprint_test(tst_page_background)
 photoprint_test(tst_page_stickers)
+# A test-only version of a shipped sticker. The resolver must answer any
+# version whose file exists, so this fixture stands in for the artwork a
+# future build would ship under a newer version.
+set_source_files_properties("${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/sticker-v2.png"
+  PROPERTIES QT_RESOURCE_ALIAS "test-v2.png")
+qt_add_resources(tst_page_stickers "tst_sticker_fixtures"
+  PREFIX "/stickers"
+  FILES "${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/sticker-v2.png")
 photoprint_test(tst_template_browser)
 photoprint_test(tst_ui_screens)
 photoprint_test(tst_i18n)

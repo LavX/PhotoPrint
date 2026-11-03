@@ -23,6 +23,7 @@ import zlib
 from array import array
 
 SIZE = 1024         # output pixels per side, before the trim
+VERSION = 1         # artwork version, part of the file name and the alias
 SUPERSAMPLE = 2     # 2x2 samples per output pixel, antialiasing by coverage
 GRID = SIZE * SUPERSAMPLE
 KEYLINE = 3         # white die-cut edge, in output pixels
@@ -383,7 +384,9 @@ def write_png(path, width, height, rgba):
 def main():
     os.makedirs(OUT_DIR, exist_ok=True)
     for alias, layers in sorted(shape_layers().items()):
-        path = os.path.join(OUT_DIR, alias + ".png")
+        # The version is in the physical name, so a future bump adds a file
+        # instead of overwriting the pixels an older project points at.
+        path = os.path.join(OUT_DIR, "%s-v%d.png" % (alias, VERSION))
         render(layers, path)
         print("wrote", os.path.relpath(path))
 

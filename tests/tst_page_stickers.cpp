@@ -310,6 +310,10 @@ private slots:
     void addStickerFromPathPlacesAndSelects();
     void builtinStickerIsStoredAsAnAlias();
     void builtinArtworkIsVersionPinned();
+    void resolverAcceptsAnyShippedVersion();
+    void changedArtworkIsReported();
+    void shippedArtworkIsPrintGrade();
+    void pickerDirectoryAvoidsTheResourceTree();
     void hugeSourceIsRejectedBeforeAdding();
     void elemTabEmptyStateAndSelection();
     void paletteStaysAvailableWithSelection();
@@ -319,6 +323,8 @@ private slots:
     void dragCommitsOneUndoStep();
     void handleDragResizesAndKeepsTheAspect();
     void opacitySliderPreviewsLive();
+    void nudgeThenOpacityKeepsTheMove();
+    void sizeSpinKeepsTheAspectAtTheBounds();
     void tallStickerKeepsItsAspect();
     void relinkingResetsTheBoxToTheNewAspect();
     void sizeSpinIsBoundedByThePage();
@@ -1217,6 +1223,9 @@ void TestPageStickers::builtinArtworkIsVersionPinned()
     const QString current = builtinStickerResource(QStringLiteral("builtin:star@1"));
     QVERIFY(!current.isEmpty());
     QVERIFY(QFileInfo::exists(current));
+    // Empty because no v2 file ships, not because the constant says 1: the
+    // resolver is expected to answer any version whose file exists (see
+    // resolverAcceptsAnyShippedVersion).
     QVERIFY(builtinStickerResource(QStringLiteral("builtin:star@2")).isEmpty());
     QVERIFY(builtinStickerResource(QStringLiteral("builtin:nope@1")).isEmpty());
     QVERIFY(builtinStickerResource(QStringLiteral("builtin:star")).isEmpty());
@@ -1473,16 +1482,30 @@ void TestPageStickers::largeFontKeepsElemReachable()
     // says so instead of blessing a page whose action is below the fold.
     auto *scroll = qobject_cast<QScrollArea *>(tabs->currentWidget());
     QVERIFY(scroll);
+    // The measured fit, not isVisible(): the palette plus the whole selected
+    // state has to be inside the contract viewport at 1.35x.
+    const int contentHeight = scroll->widget()->sizeHint().height();
+    const int viewportHeight = scroll->viewport()->height();
+    QVERIFY2(contentHeight <= viewportHeight + 1,
+             qPrintable(QStringLiteral("the Elem panel needs %1 px in a %2 px viewport")
+                            .arg(contentHeight)
+                            .arg(viewportHeight)));
+
     const auto visibleInViewport = [scroll](QWidget *widget) {
         if (!widget || !widget->isVisible())
             return false;
         const QRect mapped(widget->mapTo(scroll->viewport(), QPoint(0, 0)), widget->size());
         return scroll->viewport()->rect().contains(mapped);
     };
-    QVERIFY2(visibleInViewport(remove), "the delete button is below the fold");
-    QVERIFY2(visibleInViewport(window.findChild<QPushButton *>(
-                 QStringLiteral("stickerRaiseButton"))),
-             "the order buttons are below the fold");
+    // Reachability is asserted after scrolling to the end of the tab, which is
+    // a no-op when the panel already fits.
+    scroll->verticalScrollBar()->setValue(scroll->verticalScrollBar()->maximum());
+    QTest::qWait(60);
+    auto *raise = window.findChild<QPushButton *>(QStringLiteral("stickerRaiseButton"));
+    auto *lower = window.findChild<QPushButton *>(QStringLiteral("stickerLowerButton"));
+    QVERIFY2(visibleInViewport(raise), "the raise button is not reachable");
+    QVERIFY2(visibleInViewport(lower), "the lower button is not reachable");
+    QVERIFY2(visibleInViewport(remove), "the delete button is not reachable");
     QVERIFY(window.grab().save(
         evidenceDir() + QStringLiteral("/ui-sticker-large-font.png")));
     QApplication::setFont(saved);
@@ -1805,6 +1828,259 @@ void TestPageStickers::evidenceScreenshots()
     const QImage printed(base + QStringLiteral(".png"));
     QVERIFY(!printed.isNull());
     QCOMPARE(placeholderPixels(printed), 0);
+}
+
+
+void TestPageStickers::resolverAcceptsAnyShippedVersion()
+{
+    // This test binary ships :/stickers/test-v2.png, a version the code does
+    // not write today. The resolver must answer it because the file exists:
+    // that is what lets a build whose current version is 3 keep serving a
+    // project saved at v1, which is the whole point of the pin.
+    QVERIFY(kBuiltinStickerVersion != 2);
+    const QString older = builtinStickerResource(QStringLiteral("builtin:test@2"));
+    QVERIFY2(!older.isEmpty(), "a shipped non-current version did not resolve");
+    QVERIFY(QFileInfo::exists(older));
+    // A version with no shipped file is still missing, not a fallback to the
+    // current artwork.
+    QVERIFY(builtinStickerResource(QStringLiteral("builtin:test@3")).isEmpty());
+    QVERIFY(builtinStickerResource(QStringLiteral("builtin:test@0")).isEmpty());
+    // The real v1 asset keeps resolving whatever the current version becomes.
+    QVERIFY(!builtinStickerResource(builtinStickerPath(QStringLiteral("star"))).isEmpty());
+    QVERIFY(!builtinStickerResource(QStringLiteral("builtin:star@1")).isEmpty());
+}
+
+void TestPageStickers::changedArtworkIsReported()
+{
+    // A project recorded one identity for its shipped sticker; the file now
+    // hashes differently. The page still resolves the layer, but the panel and
+    // the notice say the artwork changed instead of silently printing the new
+    // pixels as if they were the saved ones.
+    Sticker star = makeSticker(builtinStickerPath(QStringLiteral("star")), 105.0, 130.0,
+                               45.0, 45.0);
+    star.imageSha256 = QByteArrayLiteral("00112233445566778899aabbccddeeff");
+    DocumentSnapshot document;
+    Page page = a4Page();
+    page.stickers = {star};
+    document.pages.append(page);
+    document.currentPage = 0;
+
+    MainWindow window;
+    window.resize(1280, 800);
+    window.show();
+    QVERIFY(loadDocument(window, m_dir, document));
+    QTest::qWait(200);
+    auto *notice = window.findChild<QLabel *>(QStringLiteral("stickerNotice"));
+    QVERIFY(notice);
+    QVERIFY(notice->isVisible());
+    QCOMPARE(notice->text(), QStringLiteral("A matrica képe megváltozott."));
+
+    const QString id = window.document().pages.first().stickers.first().id;
+    QVERIFY(QMetaObject::invokeMethod(&window, "selectSticker", Qt::DirectConnection,
+                                      Q_ARG(QString, id)));
+    QTest::qWait(120);
+    auto *hint = window.findChild<QLabel *>(QStringLiteral("stickerMissingHint"));
+    QVERIFY(hint);
+    QVERIFY(hint->isVisible());
+    QCOMPARE(hint->text(), notice->text());
+
+    // An alias whose version never shipped reports the missing picture instead.
+    Sticker absent = makeSticker(QStringLiteral("builtin:star@99"), 105.0, 130.0, 40.0, 40.0);
+    absent.imageSha256 = QByteArrayLiteral("0123456789abcdef");
+    MainWindow missingWindow;
+    missingWindow.resize(1280, 800);
+    missingWindow.show();
+    QVERIFY(loadDocument(missingWindow, m_dir, stickerDocument({absent})));
+    QTest::qWait(200);
+    auto *missingNotice = missingWindow.findChild<QLabel *>(QStringLiteral("stickerNotice"));
+    QVERIFY(missingNotice);
+    QVERIFY(missingNotice->isVisible());
+    QCOMPARE(missingNotice->text(), QStringLiteral("Ezt a matricát nem találjuk."));
+}
+
+void TestPageStickers::shippedArtworkIsPrintGrade()
+{
+    // The shipped set is part of the contract: a SIZE regression in the
+    // generator must not pass the suite silently.
+    const QStringList aliases = {
+        QStringLiteral("star"),   QStringLiteral("heart"),  QStringLiteral("arrow"),
+        QStringLiteral("speech"), QStringLiteral("sun"),    QStringLiteral("flower"),
+        QStringLiteral("confetti"), QStringLiteral("frame"), QStringLiteral("ring"),
+        QStringLiteral("sparkle"), QStringLiteral("ribbon"), QStringLiteral("badge"),
+    };
+    // The default placement is a quarter of the short side of A4; the long side
+    // of the trimmed art maps onto that 52.5 mm at 300 dpi or better.
+    const double defaultWidthMm = 210.0 * 0.25;
+    for (const QString &alias : aliases) {
+        const QString resource = builtinStickerResource(builtinStickerPath(alias));
+        QVERIFY2(!resource.isEmpty(), qPrintable(alias));
+        const QImage image(resource);
+        QVERIFY2(!image.isNull(), qPrintable(alias));
+        QVERIFY2(image.hasAlphaChannel(), qPrintable(alias));
+
+        const int longSide = std::max(image.width(), image.height());
+        const double dpi = longSide / (defaultWidthMm / 25.4);
+        QVERIFY2(dpi >= 300.0,
+                 qPrintable(QStringLiteral("%1 is only %2 dpi at the default size")
+                                .arg(alias)
+                                .arg(dpi)));
+
+        // A die-cut sticker: real transparency (a full-width band can fill two
+        // of its corners, so at least one corner and the coverage bound are the
+        // honest test, not all four) and a shape inside.
+        int transparentCorners = 0;
+        for (const QPoint &corner : {QPoint(0, 0), QPoint(image.width() - 1, 0),
+                                     QPoint(0, image.height() - 1),
+                                     QPoint(image.width() - 1, image.height() - 1)}) {
+            if (qAlpha(image.pixel(corner)) == 0)
+                ++transparentCorners;
+        }
+        QVERIFY2(transparentCorners >= 1,
+                 qPrintable(QStringLiteral("%1 is a full opaque square").arg(alias)));
+        int opaque = 0;
+        for (int y = 0; y < image.height(); ++y) {
+            for (int x = 0; x < image.width(); ++x) {
+                if (qAlpha(image.pixel(x, y)) > 0)
+                    ++opaque;
+            }
+        }
+        const double coverage = double(opaque) / double(image.width() * image.height());
+        QVERIFY2(coverage > 0.05 && coverage < 0.95,
+                 qPrintable(QStringLiteral("%1 covers %2 of its box").arg(alias).arg(coverage)));
+
+        // "Opaque centre": a real shape reaches the middle. The ring and the
+        // frame are hollow by design, so their content is the band and the
+        // centre check does not apply to them.
+        const bool hollow = alias == QLatin1String("ring") || alias == QLatin1String("frame");
+        if (!hollow) {
+            bool centreArt = false;
+            const int half = std::max(2, std::min(image.width(), image.height()) / 5);
+            for (int y = image.height() / 2 - half;
+                 y <= image.height() / 2 + half && !centreArt; ++y) {
+                for (int x = image.width() / 2 - half; x <= image.width() / 2 + half; ++x) {
+                    if (qAlpha(image.pixel(x, y)) == 255) {
+                        centreArt = true;
+                        break;
+                    }
+                }
+            }
+            QVERIFY2(centreArt,
+                     qPrintable(QStringLiteral("%1 has no opaque centre").arg(alias)));
+        }
+    }
+}
+
+void TestPageStickers::pickerDirectoryAvoidsTheResourceTree()
+{
+    // A shipped sticker resolves into :/stickers, which no file dialog can
+    // show, so the relink picker starts at the last real folder instead.
+    Sticker builtin = makeSticker(builtinStickerPath(QStringLiteral("star")), 0.0, 0.0, 10.0,
+                                  10.0);
+    QCOMPARE(stickerPickerDirectory(builtin, QStringLiteral("/home/someone/Pictures")),
+             QStringLiteral("/home/someone/Pictures"));
+    QVERIFY(!stickerPickerDirectory(builtin, QString()).startsWith(QLatin1Char(':')));
+
+    // An imported sticker starts beside its own file.
+    Sticker imported = makeSticker(m_redPath, 0.0, 0.0, 10.0, 10.0);
+    QCOMPARE(stickerPickerDirectory(imported, QStringLiteral("/elsewhere")),
+             QFileInfo(m_redPath).absolutePath());
+
+    // A sticker with no picture at all (a hand-edited file) falls back to the
+    // remembered folder; a missing imported file starts beside where it was.
+    Sticker empty;
+    empty.imagePath.clear();
+    QCOMPARE(stickerPickerDirectory(empty, QStringLiteral("/home/someone/Pictures")),
+             QStringLiteral("/home/someone/Pictures"));
+    Sticker lost = makeSticker(m_dir.filePath(QStringLiteral("gone.png")), 0.0, 0.0, 10.0, 10.0);
+    QCOMPARE(stickerPickerDirectory(lost, QStringLiteral("/elsewhere")),
+             QFileInfo(m_dir.filePath(QStringLiteral("gone.png"))).absolutePath());
+}
+
+void TestPageStickers::nudgeThenOpacityKeepsTheMove()
+{
+    MainWindow window;
+    window.resize(1280, 800);
+    window.show();
+    QTest::qWait(120);
+    QVERIFY(QMetaObject::invokeMethod(&window, "addStickerFromPath", Qt::DirectConnection,
+                                      Q_ARG(QString, m_redPath)));
+    QTest::qWait(120);
+
+    auto *view = window.findChild<PageView *>();
+    auto *slider = window.findChild<QSlider *>(QStringLiteral("stickerOpacitySlider"));
+    QVERIFY(view);
+    QVERIFY(slider);
+    const double startX = window.document().pages.first().stickers.first().cx;
+    const int before = window.undoStackForTest()->count();
+
+    view->setFocus();
+    QTest::keyClick(view, Qt::Key_Right);
+    // Inside the 200 ms burst: the panel action must land the nudge first, not
+    // publish a document that still has the old position.
+    slider->setValue(40);
+    QTest::qWait(450);
+
+    const Sticker sticker = window.document().pages.first().stickers.first();
+    QCOMPARE(sticker.cx, startX + 1.0);
+    QCOMPARE(sticker.opacity, 40);
+    QCOMPARE(window.undoStackForTest()->count(), before + 2);
+
+    // The undo pair restores the opacity and then the position.
+    window.undoStackForTest()->undo();
+    QTest::qWait(80);
+    QCOMPARE(window.document().pages.first().stickers.first().opacity, 100);
+    window.undoStackForTest()->undo();
+    QTest::qWait(80);
+    QCOMPARE(window.document().pages.first().stickers.first().cx, startX);
+}
+
+void TestPageStickers::sizeSpinKeepsTheAspectAtTheBounds()
+{
+    // A 1:40 picture, then the spin at its minimum and maximum: the aspect is
+    // kept, because the pair goes through the same uniform bound as every other
+    // gesture.
+    const QString tallPath = writeImage(m_dir.path(), QStringLiteral("very-tall.png"),
+                                        solidImage(QColor(40, 160, 90), QSize(100, 4000)));
+    QVERIFY(!tallPath.isEmpty());
+
+    MainWindow window;
+    window.resize(1280, 800);
+    window.show();
+    QTest::qWait(120);
+    QVERIFY(QMetaObject::invokeMethod(&window, "addStickerFromPath", Qt::DirectConnection,
+                                      Q_ARG(QString, m_redPath)));
+    QTest::qWait(150);
+    QVERIFY(QMetaObject::invokeMethod(&window, "relinkStickerFromPath", Qt::DirectConnection,
+                                      Q_ARG(QString, tallPath)));
+    QTest::qWait(150);
+    const Sticker tall = window.document().pages.first().stickers.first();
+    QVERIFY(std::abs(tall.width / tall.height - 0.025) < 0.0001);
+
+    auto *size = window.findChild<QDoubleSpinBox *>(QStringLiteral("stickerSizeSpin"));
+    QVERIFY(size);
+    const int before = window.undoStackForTest()->count();
+
+    size->setValue(size->minimum());
+    emit size->editingFinished();
+    QTest::qWait(150);
+    const Sticker smallest = window.document().pages.first().stickers.first();
+    QVERIFY2(std::abs(smallest.width / smallest.height - 0.025) < 0.0001,
+             qPrintable(QStringLiteral("the minimum squashed the aspect to %1 x %2")
+                            .arg(smallest.width)
+                            .arg(smallest.height)));
+    QCOMPARE(smallest.width, kMinStickerMm);
+    QCOMPARE(window.undoStackForTest()->count(), before + 1);
+
+    size->setValue(size->maximum());
+    emit size->editingFinished();
+    QTest::qWait(150);
+    const Sticker largest = window.document().pages.first().stickers.first();
+    QVERIFY2(std::abs(largest.width / largest.height - 0.025) < 0.0001,
+             qPrintable(QStringLiteral("the maximum squashed the aspect to %1 x %2")
+                            .arg(largest.width)
+                            .arg(largest.height)));
+    QVERIFY(largest.height <= std::hypot(210.0, 297.0) + 0.001);
+    QCOMPARE(window.undoStackForTest()->count(), before + 2);
 }
 
 QTEST_MAIN(TestPageStickers)

@@ -127,6 +127,9 @@ public:
     /// Lands a pending wheel burst now as one edit. An inspector action calls
     /// this first, so a wheel gesture and the action stay separate undo steps.
     void flushWheelBurst();
+    /// Lands a pending arrow-key nudge now as one edit, for the same reason: a
+    /// panel action inside the burst must not publish a stale position.
+    void flushStickerBurst();
 
     /// How a laid-out cell looks on screen right now. The three placeholder
     /// states are screen-only; they are never part of the page raster.
@@ -601,6 +604,9 @@ private slots:
     void chooseStickerImage();
     /// The file-dialog-free relink: the picker and the tests land here.
     void relinkStickerFromPath(const QString &path);
+    /// Lands a pending arrow-key nudge before another edit reads the page, so a
+    /// panel action inside the 200 ms burst cannot publish a stale position.
+    void flushPendingStickerEdit();
     void stickerSizeChanged();
     void stickerAngleChanged();
     void stickerOpacityChanged(int value);
@@ -705,11 +711,13 @@ private:
     /// file dialog, the built-in set and the relink picker all land here.
     bool addStickerWithSource(const QString &storedPath, const QByteArray &sha256,
                               const QSize &pixels);
-    /// Why a sticker's picture cannot be shown. `None` is a healthy one.
-    enum class StickerProblem { None, Missing, Unreadable, TooLarge };
+    /// Why a sticker's picture cannot be shown. `None` is a healthy one,
+    /// `Changed` means the file under a pinned alias no longer matches the
+    /// content the project recorded.
+    enum class StickerProblem { None, Missing, Unreadable, TooLarge, Changed };
     StickerProblem stickerProblem(const Sticker &sticker) const;
     QString stickerProblemText(StickerProblem problem) const;
-    /// The worst problem on the current page, so the notice bar speaks once.
+    /// The first problem on the current page, so the notice bar speaks once.
     StickerProblem pageStickerProblem() const;
     /// A small preview icon, decoded at its final size so a large source is
     /// never decoded in full on the GUI thread.
@@ -940,10 +948,9 @@ private:
     /// not re-read the picture on every nudge.
     QString m_stickerPreviewPath;
     QPixmap m_stickerPreviewPixmap;
-    /// The opacity and nudge bursts: the canvas follows live and one edit lands
-    /// when the burst stops.
+    /// The opacity burst: the canvas follows live and one edit lands when the
+    /// drag stops. The nudge burst belongs to PageView, which owns the geometry.
     QTimer *m_stickerOpacityTimer = nullptr;
-    QTimer *m_stickerNudgeTimer = nullptr;
     std::optional<Sticker> m_pendingStickerOpacity;
     QString m_lastStickerDir;
     QString m_selectedSticker;

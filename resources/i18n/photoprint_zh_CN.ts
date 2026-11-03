@@ -1923,5 +1923,13 @@
         <source>Egy lépéssel hátrébb.</source>
         <translation>向后一层。</translation>
     </message>
+    <message>
+        <source>A matrica képe megváltozott.</source>
+        <translation>贴纸的图片已更改。</translation>
+    </message>
+    <message>
+        <source>Képek (*.png *.jpg *.jpeg *.webp)</source>
+        <translation>图片 (*.png *.jpg *.jpeg *.webp)</translation>
+    </message>
 </context>
 </TS>
