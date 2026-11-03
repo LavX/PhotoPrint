@@ -238,6 +238,7 @@ private slots:
     void portableCopyWorksAfterMoving();
     void unusedSourceRoundTripAndOldFile();
     void missingUnusedSourceSurvivesSave();
+    void missingUnusedSourceOutsideTheProjectSurvivesSave();
     void portableCopyCarriesUnusedSource();
     void corruptAndUnknownProjectsAreRejected();
     void changedSourceStopsPrintPreparation();
@@ -1407,6 +1408,43 @@ void TestProjectStore::missingUnusedSourceSurvivesSave()
 
     // Put the file back so the shared temp folder is left as it was found.
     QVERIFY(QFile::rename(away, sparePath));
+}
+
+void TestProjectStore::missingUnusedSourceOutsideTheProjectSurvivesSave()
+{
+    // A photograph kept outside the project folder is stored as a relative
+    // path that escapes it, with the absolute original beside it. When the
+    // card is unplugged both are gone, and the entry must still survive: the
+    // library is the project's memory of what was added, not a cache of what
+    // happens to be mounted.
+    QTemporaryDir outside;
+    QVERIFY(outside.isValid());
+    const QString sparePath = outside.filePath(QStringLiteral("card-photo.png"));
+    QVERIFY(writeImage(sparePath, QColor(30, 90, 200)));
+    const QByteArray spareSha = fileSha256(sparePath);
+
+    DocumentSnapshot document = sampleDocument(m_red, m_blue);
+    document.pages[0].unusedPhotos.append(PhotoSource{sparePath, spareSha});
+
+    const QString path = m_dir.filePath(QStringLiteral("unused-outside.ppj"));
+    ProjectStore store;
+    QVERIFY(store.save(path, document, SaveMode::Normal).ok());
+
+    QVERIFY(QFile::remove(sparePath));
+    const auto loaded = store.load(path);
+    if (!loaded)
+        QFAIL(qPrintable(loaded.error().message));
+    const Page &restored = loaded.value().document.pages.at(0);
+    QCOMPARE(restored.unusedPhotos.size(), 1);
+    QCOMPARE(restored.unusedPhotos.first().sha256, spareSha);
+    QVERIFY(!restored.unusedPhotos.first().path.isEmpty());
+
+    QVERIFY(store.save(path, loaded.value().document, SaveMode::Normal).ok());
+    const auto reopened = store.load(path);
+    if (!reopened)
+        QFAIL(qPrintable(reopened.error().message));
+    QCOMPARE(reopened.value().document.pages.at(0).unusedPhotos.size(), 1);
+    QCOMPARE(reopened.value().document.pages.at(0).unusedPhotos.first().sha256, spareSha);
 }
 
 void TestProjectStore::portableCopyCarriesUnusedSource()

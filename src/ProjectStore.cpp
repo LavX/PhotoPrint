@@ -589,8 +589,18 @@ std::optional<PhotoSource> unusedSourceFromJson(const QJsonObject &object,
     // refuses with a notice, exactly as a frame keeps a missing photograph and
     // waits for a relink. Only an untrusted or empty path is dropped, because
     // there is nothing left to point at.
-    if (resolved.path.isEmpty())
-        return std::nullopt;
+    if (resolved.path.isEmpty()) {
+        // A photograph kept outside the project folder is stored as a relative
+        // path that escapes it, with the absolute original beside it. The
+        // resolver refuses the escape, and the original is gone when the card
+        // is unplugged, so the lexical join is the only thing left to keep.
+        // Dropping it here would delete the entry from the project on the next
+        // save, which is exactly what the library must not do.
+        if (stored.isEmpty() || QDir::isAbsolutePath(stored) || projectDir.isEmpty())
+            return std::nullopt;
+        source.path = QDir::cleanPath(QDir(projectDir).absoluteFilePath(stored));
+        return source;
+    }
     source.path = resolved.path;
     return source;
 }
