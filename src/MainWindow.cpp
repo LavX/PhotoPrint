@@ -4465,6 +4465,10 @@ void MainWindow::buildUi()
     m_textFontCombo = new QFontComboBox(m_textPanel);
     m_textFontCombo->setObjectName(QStringLiteral("textFontCombo"));
     m_textFontCombo->setAccessibleName(textFontLabel->text());
+    // A font family is picked from the installed list, not typed: a typo used
+    // to leave a text on the application font with no hint why.
+    m_textFontCombo->setEditable(false);
+    m_textFontCombo->setInsertPolicy(QComboBox::NoInsert);
     textFields->addWidget(m_textFontCombo, 0, 1);
     connect(m_textFontCombo, &QFontComboBox::currentFontChanged, this,
             [this] { textFontChanged(0); });

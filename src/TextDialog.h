@@ -44,6 +44,10 @@ private:
     void syncStyleButtons();
 
     TextItem m_item;
+    /// A family the project stores but this machine does not have. The closed
+    /// font list cannot show it, so the combo shows the fallback while this
+    /// keeps the original name for the hint and for the saved item.
+    QString m_requestedFamily;
     QPlainTextEdit *m_editor = nullptr;
     QFontComboBox *m_fontCombo = nullptr;
     QDoubleSpinBox *m_sizeSpin = nullptr;

@@ -1,5 +1,5 @@
 Name:           photoprint
-Version:        1.2.0
+Version:        1.2.1
 Release:        1%{?dist}
 Summary:        Simple local photo printing
 License:        MIT
@@ -79,6 +79,10 @@ install -D -m 0644 resources/photoprint.svg %{buildroot}%{_datadir}/icons/hicolo
 %{_datadir}/icons/hicolor/scalable/apps/photoprint.svg
 
 %changelog
+* Tue Nov 03 2026 Laszlo Toth <lavx@lavx.hu> - 1.2.1-1
+- Font pickers are closed lists instead of free text fields
+- An unknown font stored in a project is kept instead of replaced
+
 * Tue Nov 03 2026 Laszlo Toth <lavx@lavx.hu> - 1.2.0-1
 - Page background: solid colour, gradient or picture, with opacity
 - Stickers: twelve built-in shapes plus import, with a shared layer order

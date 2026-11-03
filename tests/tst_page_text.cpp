@@ -1509,9 +1509,14 @@ void TestPageText::dialogAddsEditsAndRefusesEmpty()
         auto *size = dialog.findChild<QDoubleSpinBox *>(QStringLiteral("textDialogSizeSpin"));
         auto *spacing =
             dialog.findChild<QDoubleSpinBox *>(QStringLiteral("textDialogSpacingSpin"));
+        auto *font = dialog.findChild<QFontComboBox *>(QStringLiteral("textDialogFontCombo"));
         QVERIFY(editor);
         QVERIFY(size);
         QVERIFY(spacing);
+        QVERIFY(font);
+        // A family is chosen from the installed list; typing a name was never
+        // a route to a font that exists.
+        QVERIFY(!font->isEditable());
         editor->setPlainText(QStringLiteral("Nyár\n2026"));
         size->setValue(30.0);
         spacing->setValue(150.0);
@@ -1817,7 +1822,10 @@ void TestPageText::textPanelControlsWriteOneEdit()
     auto *size = window.findChild<QDoubleSpinBox *>(QStringLiteral("textSizeSpin"));
     auto *spacing = window.findChild<QDoubleSpinBox *>(QStringLiteral("textSpacingSpin"));
     auto *opacity = window.findChild<QSlider *>(QStringLiteral("textOpacitySlider"));
+    auto *fontCombo = window.findChild<QFontComboBox *>(QStringLiteral("textFontCombo"));
     QVERIFY(view);
+    QVERIFY(fontCombo);
+    QVERIFY(!fontCombo->isEditable());
     QVERIFY(align);
     QVERIFY(bold);
     QCOMPARE(align->count(), 3);

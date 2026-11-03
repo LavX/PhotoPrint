@@ -92,10 +92,20 @@ TextDialog::TextDialog(const TextItem &item, bool editing, QWidget *parent)
     m_fontCombo = new QFontComboBox(this);
     m_fontCombo->setObjectName(QStringLiteral("textDialogFontCombo"));
     m_fontCombo->setAccessibleName(QCoreApplication::translate("PhotoPrint", "Betűtípus"));
+    // A font family is picked from the installed list, not typed.
+    m_fontCombo->setEditable(false);
+    m_fontCombo->setInsertPolicy(QComboBox::NoInsert);
     // An empty family is the application font. The combo shows it as the app
     // font's own family, so the panel never reads as "no font chosen".
     const QString family = item.fontFamily.isEmpty() ? QApplication::font().family()
                                                      : item.fontFamily;
+    // A closed list snaps an unknown family to the first installed one. Keep
+    // the stored name so the hint can say it is missing and an edit of another
+    // property does not silently replace it.
+    if (!family.isEmpty()
+        && !QFontDatabase::families().contains(family, Qt::CaseInsensitive)) {
+        m_requestedFamily = family;
+    }
     m_fontCombo->setCurrentFont(QFont(family));
     form->addRow(QCoreApplication::translate("PhotoPrint", "Betűtípus"), m_fontCombo);
 
@@ -212,6 +222,8 @@ TextDialog::TextDialog(const TextItem &item, bool editing, QWidget *parent)
         updatePreview();
     });
     connect(m_fontCombo, &QFontComboBox::currentFontChanged, this, [this] {
+        // A pick from the list is a real family; the missing one is gone.
+        m_requestedFamily.clear();
         updateFontHint();
         updatePreview();
     });
@@ -243,7 +255,9 @@ TextItem TextDialog::item() const
     // An empty family is the application font. The combo always shows a real
     // family, so the app font's own name is stored as empty again: a project
     // written on one machine must not pin a family the next may lack.
-    const QString family = m_fontCombo->currentFont().family();
+    const QString family = m_requestedFamily.isEmpty()
+        ? m_fontCombo->currentFont().family()
+        : m_requestedFamily;
     result.fontFamily = family == QApplication::font().family() ? QString() : family;
     result.fontPt = m_sizeSpin->value();
     result.bold = m_boldButton->isChecked();
@@ -291,7 +305,9 @@ void TextDialog::updateFontHint()
 {
     if (!m_fontHint)
         return;
-    const QString family = m_fontCombo->currentFont().family();
+    const QString family = m_requestedFamily.isEmpty()
+        ? m_fontCombo->currentFont().family()
+        : m_requestedFamily;
     const bool installed = family.isEmpty()
         || QFontDatabase::families().contains(family, Qt::CaseInsensitive);
     m_fontHint->setVisible(!installed);
