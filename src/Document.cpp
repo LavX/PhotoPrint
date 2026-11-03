@@ -3,6 +3,7 @@
 #include <QCryptographicHash>
 #include <QDataStream>
 #include <QIODevice>
+#include <QSet>
 
 namespace pp {
 
@@ -246,6 +247,65 @@ PageBackground sanitiseBackground(PageBackground background)
         ? std::clamp(background.opacity, 0.0, 100.0)
         : 100.0;
     return background;
+}
+
+Sticker sanitiseSticker(Sticker sticker, const QSizeF &sheetMm)
+{
+    const bool validSheet = sheetMm.width() > 0.0 && sheetMm.height() > 0.0
+        && std::isfinite(sheetMm.width()) && std::isfinite(sheetMm.height());
+    const double sheetWidth = validSheet ? sheetMm.width() : kMaxStickerMm;
+    const double sheetHeight = validSheet ? sheetMm.height() : kMaxStickerMm;
+    const double diagonal = std::hypot(sheetWidth, sheetHeight);
+    const double maxSize = std::min(kMaxStickerMm, std::max(kMinStickerMm, diagonal));
+
+    // A size that cannot be drawn is raised to the minimum instead of becoming
+    // zero: a zero-size sticker could never be seen or clicked again, so the
+    // page would carry an invisible layer only undo could remove. A finite
+    // value is clamped, because an extreme one has an obvious nearest size.
+    sticker.width = std::isfinite(sticker.width)
+        ? std::clamp(sticker.width, kMinStickerMm, maxSize)
+        : kMinStickerMm;
+    sticker.height = std::isfinite(sticker.height)
+        ? std::clamp(sticker.height, kMinStickerMm, maxSize)
+        : kMinStickerMm;
+
+    // Reachability invariant: a sticker may hang over the edge (a legitimate
+    // bleed look), but its centre always stays on the paper, so it can be
+    // clicked, nudged and deleted. Without this a layer dragged off the sheet
+    // would be unreachable and only undo could bring it back.
+    sticker.cx = std::isfinite(sticker.cx)
+        ? std::clamp(sticker.cx, 0.0, sheetWidth)
+        : sheetWidth / 2.0;
+    sticker.cy = std::isfinite(sticker.cy)
+        ? std::clamp(sticker.cy, 0.0, sheetHeight)
+        : sheetHeight / 2.0;
+
+    // The renderer, the handles and the panel all read the same normalised
+    // angle, so a hand-edited 720 becomes 0 and a NaN becomes no rotation.
+    sticker.angleDeg = normalizedImageRotationDeg(sticker.angleDeg);
+    sticker.opacity = std::clamp(sticker.opacity, 0, 100);
+    sticker.z = std::clamp(sticker.z, kMinStickerZ, kMaxStickerZ);
+    return sticker;
+}
+
+QList<Sticker> sanitiseStickers(const QList<Sticker> &stickers, const QSizeF &sheetMm)
+{
+    QList<Sticker> kept;
+    QSet<QString> ids;
+    kept.reserve(std::min<int>(stickers.size(), kMaxStickersPerPage));
+    for (const Sticker &stored : stickers) {
+        if (kept.size() >= kMaxStickersPerPage)
+            break;
+        // An empty or repeated id cannot be referenced, selected or undone
+        // through, so it is dropped rather than given a fresh one: a repair
+        // point that invents identity would make a hand-edited file change
+        // every time it is loaded.
+        if (stored.id.isEmpty() || ids.contains(stored.id))
+            continue;
+        ids.insert(stored.id);
+        kept.append(sanitiseSticker(stored, sheetMm));
+    }
+    return kept;
 }
 
 BorderlessOverride borderlessOverrideFromKey(const QString &key)

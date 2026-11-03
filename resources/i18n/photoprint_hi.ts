@@ -1761,5 +1761,157 @@
         <source>A lap háttere: %1</source>
         <translation>पृष्ठ की पृष्ठभूमि: %1</translation>
     </message>
+    <message>
+        <source>Elem</source>
+        <translation>तत्व</translation>
+    </message>
+    <message>
+        <source>Beszúrás</source>
+        <translation>सम्मिलित करें</translation>
+    </message>
+    <message>
+        <source>Matrica…</source>
+        <translation>स्टिकर…</translation>
+    </message>
+    <message>
+        <source>Matrica hozzáadása…</source>
+        <translation>स्टिकर जोड़ें…</translation>
+    </message>
+    <message>
+        <source>Készlet</source>
+        <translation>सेट</translation>
+    </message>
+    <message>
+        <source>Matricakészlet</source>
+        <translation>स्टिकर सेट</translation>
+    </message>
+    <message>
+        <source>Csillag</source>
+        <translation>तारा</translation>
+    </message>
+    <message>
+        <source>Szív</source>
+        <translation>दिल</translation>
+    </message>
+    <message>
+        <source>Nyíl</source>
+        <translation>तीर</translation>
+    </message>
+    <message>
+        <source>Beszédbuborék</source>
+        <translation>संवाद गुब्बारा</translation>
+    </message>
+    <message>
+        <source>Nap</source>
+        <translation>सूरज</translation>
+    </message>
+    <message>
+        <source>Virág</source>
+        <translation>फूल</translation>
+    </message>
+    <message>
+        <source>Konfetti</source>
+        <translation>कॉन्फ़ेटी</translation>
+    </message>
+    <message>
+        <source>Keret</source>
+        <translation>फ़्रेम</translation>
+    </message>
+    <message>
+        <source>Kör</source>
+        <translation>वृत्त</translation>
+    </message>
+    <message>
+        <source>Szikra</source>
+        <translation>चमक</translation>
+    </message>
+    <message>
+        <source>Szalag</source>
+        <translation>रिबन</translation>
+    </message>
+    <message>
+        <source>Jelvény</source>
+        <translation>बैज</translation>
+    </message>
+    <message>
+        <source>Matrica</source>
+        <translation>स्टिकर</translation>
+    </message>
+    <message>
+        <source>Elforgatás</source>
+        <translation>घुमाव</translation>
+    </message>
+    <message>
+        <source>Előrébb</source>
+        <translation>आगे लाएँ</translation>
+    </message>
+    <message>
+        <source>Hátrébb</source>
+        <translation>पीछे भेजें</translation>
+    </message>
+    <message>
+        <source>Ezt a matricát nem találjuk.</source>
+        <translation>यह स्टिकर नहीं मिल रहा.</translation>
+    </message>
+    <message>
+        <source>Matrica kiválasztása</source>
+        <translation>स्टिकर चुनें</translation>
+    </message>
+    <message>
+        <source>Előző elem</source>
+        <translation>पिछला तत्व</translation>
+    </message>
+    <message>
+        <source>Következő elem</source>
+        <translation>अगला तत्व</translation>
+    </message>
+    <message>
+        <source>A matrica a fotók fölött látszik.</source>
+        <translation>स्टिकर फ़ोटो के ऊपर दिखता है।</translation>
+    </message>
+    <message>
+        <source>Még nincs matrica a lapon.</source>
+        <translation>इस पेज पर अभी कोई स्टिकर नहीं है।</translation>
+    </message>
+    <message>
+        <source>Válassz egy matricát a lapon vagy a készletből.</source>
+        <translation>पेज पर या सेट से स्टिकर चुनें।</translation>
+    </message>
+    <message>
+        <source>Matrica mozgatása</source>
+        <translation>स्टिकर हिलाएँ</translation>
+    </message>
+    <message>
+        <source>Matrica átméretezése</source>
+        <translation>स्टिकर का आकार बदलें</translation>
+    </message>
+    <message>
+        <source>Matrica forgatása</source>
+        <translation>स्टिकर घुमाएँ</translation>
+    </message>
+    <message>
+        <source>Matrica törlése</source>
+        <translation>स्टिकर हटाएँ</translation>
+    </message>
+    <message>
+        <source>Képek (*.png *.jpg *.jpeg *.webp *.gif)</source>
+        <translation>चित्र (*.png *.jpg *.jpeg *.webp *.gif)</translation>
+    </message>
+    <message>
+        <source>Egy lapon legfeljebb %1 matrica lehet.</source>
+        <translation>एक पेज पर अधिकतम %1 स्टिकर रखे जा सकते हैं।</translation>
+    </message>
+    <message>
+        <source>A matricát nem sikerült a helyére tenni.</source>
+        <translation>स्टिकर नहीं रखा जा सका।</translation>
+    </message>
+    <message>
+        <source>A matrica túl nagy vagy nem olvasható.</source>
+        <translation>स्टिकर बहुत बड़ा है या पढ़ा नहीं जा सकता।</translation>
+    </message>
+    <message>
+        <source>Kiválasztott elem eltávolítása</source>
+        <translation>चुना हुआ तत्व हटाएँ</translation>
+    </message>
 </context>
 </TS>

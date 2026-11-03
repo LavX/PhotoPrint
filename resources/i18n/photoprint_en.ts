@@ -1761,5 +1761,157 @@
         <source>A lap háttere: %1</source>
         <translation>The page background: %1</translation>
     </message>
+    <message>
+        <source>Elem</source>
+        <translation>Element</translation>
+    </message>
+    <message>
+        <source>Beszúrás</source>
+        <translation>Insert</translation>
+    </message>
+    <message>
+        <source>Matrica…</source>
+        <translation>Sticker…</translation>
+    </message>
+    <message>
+        <source>Matrica hozzáadása…</source>
+        <translation>Add sticker…</translation>
+    </message>
+    <message>
+        <source>Készlet</source>
+        <translation>Set</translation>
+    </message>
+    <message>
+        <source>Matricakészlet</source>
+        <translation>Sticker set</translation>
+    </message>
+    <message>
+        <source>Csillag</source>
+        <translation>Star</translation>
+    </message>
+    <message>
+        <source>Szív</source>
+        <translation>Heart</translation>
+    </message>
+    <message>
+        <source>Nyíl</source>
+        <translation>Arrow</translation>
+    </message>
+    <message>
+        <source>Beszédbuborék</source>
+        <translation>Speech bubble</translation>
+    </message>
+    <message>
+        <source>Nap</source>
+        <translation>Sun</translation>
+    </message>
+    <message>
+        <source>Virág</source>
+        <translation>Flower</translation>
+    </message>
+    <message>
+        <source>Konfetti</source>
+        <translation>Confetti</translation>
+    </message>
+    <message>
+        <source>Keret</source>
+        <translation>Frame</translation>
+    </message>
+    <message>
+        <source>Kör</source>
+        <translation>Circle</translation>
+    </message>
+    <message>
+        <source>Szikra</source>
+        <translation>Sparkle</translation>
+    </message>
+    <message>
+        <source>Szalag</source>
+        <translation>Ribbon</translation>
+    </message>
+    <message>
+        <source>Jelvény</source>
+        <translation>Badge</translation>
+    </message>
+    <message>
+        <source>Matrica</source>
+        <translation>Sticker</translation>
+    </message>
+    <message>
+        <source>Elforgatás</source>
+        <translation>Rotation</translation>
+    </message>
+    <message>
+        <source>Előrébb</source>
+        <translation>Bring forward</translation>
+    </message>
+    <message>
+        <source>Hátrébb</source>
+        <translation>Send backward</translation>
+    </message>
+    <message>
+        <source>Ezt a matricát nem találjuk.</source>
+        <translation>This sticker cannot be found.</translation>
+    </message>
+    <message>
+        <source>Matrica kiválasztása</source>
+        <translation>Choose sticker</translation>
+    </message>
+    <message>
+        <source>Előző elem</source>
+        <translation>Previous element</translation>
+    </message>
+    <message>
+        <source>Következő elem</source>
+        <translation>Next element</translation>
+    </message>
+    <message>
+        <source>A matrica a fotók fölött látszik.</source>
+        <translation>The sticker shows above the photos.</translation>
+    </message>
+    <message>
+        <source>Még nincs matrica a lapon.</source>
+        <translation>There is no sticker on the page yet.</translation>
+    </message>
+    <message>
+        <source>Válassz egy matricát a lapon vagy a készletből.</source>
+        <translation>Pick a sticker on the page or from the set.</translation>
+    </message>
+    <message>
+        <source>Matrica mozgatása</source>
+        <translation>Move sticker</translation>
+    </message>
+    <message>
+        <source>Matrica átméretezése</source>
+        <translation>Resize sticker</translation>
+    </message>
+    <message>
+        <source>Matrica forgatása</source>
+        <translation>Rotate sticker</translation>
+    </message>
+    <message>
+        <source>Matrica törlése</source>
+        <translation>Delete sticker</translation>
+    </message>
+    <message>
+        <source>Képek (*.png *.jpg *.jpeg *.webp *.gif)</source>
+        <translation>Pictures (*.png *.jpg *.jpeg *.webp *.gif)</translation>
+    </message>
+    <message>
+        <source>Egy lapon legfeljebb %1 matrica lehet.</source>
+        <translation>A page can hold at most %1 stickers.</translation>
+    </message>
+    <message>
+        <source>A matricát nem sikerült a helyére tenni.</source>
+        <translation>The sticker could not be placed.</translation>
+    </message>
+    <message>
+        <source>A matrica túl nagy vagy nem olvasható.</source>
+        <translation>The sticker is too large or cannot be read.</translation>
+    </message>
+    <message>
+        <source>Kiválasztott elem eltávolítása</source>
+        <translation>Remove selected element</translation>
+    </message>
 </context>
 </TS>

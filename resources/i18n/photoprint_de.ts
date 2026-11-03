@@ -1761,5 +1761,157 @@
         <source>A lap háttere: %1</source>
         <translation>Der Seitenhintergrund: %1</translation>
     </message>
+    <message>
+        <source>Elem</source>
+        <translation>Element</translation>
+    </message>
+    <message>
+        <source>Beszúrás</source>
+        <translation>Einfügen</translation>
+    </message>
+    <message>
+        <source>Matrica…</source>
+        <translation>Aufkleber…</translation>
+    </message>
+    <message>
+        <source>Matrica hozzáadása…</source>
+        <translation>Aufkleber hinzufügen…</translation>
+    </message>
+    <message>
+        <source>Készlet</source>
+        <translation>Auswahl</translation>
+    </message>
+    <message>
+        <source>Matricakészlet</source>
+        <translation>Aufkleber-Auswahl</translation>
+    </message>
+    <message>
+        <source>Csillag</source>
+        <translation>Stern</translation>
+    </message>
+    <message>
+        <source>Szív</source>
+        <translation>Herz</translation>
+    </message>
+    <message>
+        <source>Nyíl</source>
+        <translation>Pfeil</translation>
+    </message>
+    <message>
+        <source>Beszédbuborék</source>
+        <translation>Sprechblase</translation>
+    </message>
+    <message>
+        <source>Nap</source>
+        <translation>Sonne</translation>
+    </message>
+    <message>
+        <source>Virág</source>
+        <translation>Blume</translation>
+    </message>
+    <message>
+        <source>Konfetti</source>
+        <translation>Konfetti</translation>
+    </message>
+    <message>
+        <source>Keret</source>
+        <translation>Rahmen</translation>
+    </message>
+    <message>
+        <source>Kör</source>
+        <translation>Kreis</translation>
+    </message>
+    <message>
+        <source>Szikra</source>
+        <translation>Funkeln</translation>
+    </message>
+    <message>
+        <source>Szalag</source>
+        <translation>Band</translation>
+    </message>
+    <message>
+        <source>Jelvény</source>
+        <translation>Abzeichen</translation>
+    </message>
+    <message>
+        <source>Matrica</source>
+        <translation>Aufkleber</translation>
+    </message>
+    <message>
+        <source>Elforgatás</source>
+        <translation>Drehung</translation>
+    </message>
+    <message>
+        <source>Előrébb</source>
+        <translation>Nach vorne</translation>
+    </message>
+    <message>
+        <source>Hátrébb</source>
+        <translation>Nach hinten</translation>
+    </message>
+    <message>
+        <source>Ezt a matricát nem találjuk.</source>
+        <translation>Dieser Aufkleber wurde nicht gefunden.</translation>
+    </message>
+    <message>
+        <source>Matrica kiválasztása</source>
+        <translation>Aufkleber auswählen</translation>
+    </message>
+    <message>
+        <source>Előző elem</source>
+        <translation>Vorheriges Element</translation>
+    </message>
+    <message>
+        <source>Következő elem</source>
+        <translation>Nächstes Element</translation>
+    </message>
+    <message>
+        <source>A matrica a fotók fölött látszik.</source>
+        <translation>Der Aufkleber liegt über den Fotos.</translation>
+    </message>
+    <message>
+        <source>Még nincs matrica a lapon.</source>
+        <translation>Auf dieser Seite ist noch kein Aufkleber.</translation>
+    </message>
+    <message>
+        <source>Válassz egy matricát a lapon vagy a készletből.</source>
+        <translation>Wähle einen Aufkleber auf der Seite oder aus der Auswahl.</translation>
+    </message>
+    <message>
+        <source>Matrica mozgatása</source>
+        <translation>Aufkleber verschieben</translation>
+    </message>
+    <message>
+        <source>Matrica átméretezése</source>
+        <translation>Aufkleber skalieren</translation>
+    </message>
+    <message>
+        <source>Matrica forgatása</source>
+        <translation>Aufkleber drehen</translation>
+    </message>
+    <message>
+        <source>Matrica törlése</source>
+        <translation>Aufkleber löschen</translation>
+    </message>
+    <message>
+        <source>Képek (*.png *.jpg *.jpeg *.webp *.gif)</source>
+        <translation>Bilder (*.png *.jpg *.jpeg *.webp *.gif)</translation>
+    </message>
+    <message>
+        <source>Egy lapon legfeljebb %1 matrica lehet.</source>
+        <translation>Eine Seite fasst höchstens %1 Aufkleber.</translation>
+    </message>
+    <message>
+        <source>A matricát nem sikerült a helyére tenni.</source>
+        <translation>Der Aufkleber konnte nicht abgelegt werden.</translation>
+    </message>
+    <message>
+        <source>A matrica túl nagy vagy nem olvasható.</source>
+        <translation>Der Aufkleber ist zu groß oder nicht lesbar.</translation>
+    </message>
+    <message>
+        <source>Kiválasztott elem eltávolítása</source>
+        <translation>Ausgewähltes Element entfernen</translation>
+    </message>
 </context>
 </TS>

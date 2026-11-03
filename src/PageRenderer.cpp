@@ -4,6 +4,7 @@
 #include "ColorPipeline.h"
 #include "EffectEngine.h"
 #include "LayoutEngine.h"
+#include "OverlayGeometry.h"
 #include "SheetLayout.h"
 #include "SlotGeometry.h"
 
@@ -345,6 +346,76 @@ void paintBackground(QPainter &painter, const Page &page, const PageImages &imag
     painter.restore();
 }
 
+/// Draws one sticker: the layer is already linear and premultiplied, and the
+/// painter only places it. The box is centred on the sticker's centre and
+/// turned about it, so the geometry the editor shows is the geometry that
+/// prints. Clipping to the sheet is implicit: the raster is exactly page-sized
+/// and the PDF embeds that raster, so an overflowing sticker is cut at the edge
+/// with no second code path.
+void drawSticker(QPainter &painter, const Sticker &sticker, const QImage &layer,
+                 const QTransform &pageTransform)
+{
+    if (layer.isNull())
+        return;
+    const double opacity = std::clamp(sticker.opacity, 0, 100) / 100.0;
+    if (!(opacity > 0.0))
+        return;
+    painter.save();
+    QTransform local;
+    local.translate(sticker.cx, sticker.cy);
+    local.rotate(sticker.angleDeg);
+    painter.setTransform(local * pageTransform);
+    painter.setOpacity(opacity);
+    painter.drawImage(QRectF(-sticker.width / 2.0, -sticker.height / 2.0, sticker.width,
+                             sticker.height),
+                      layer);
+    painter.restore();
+}
+
+/// A missing, unreadable or too-large sticker still occupies the page: a red
+/// dashed box with a cross, converted through the working space like every
+/// other non-photographic colour. It is painted by the page painter, so the
+/// screen, the PDF and the printer show the same thing and a lost decoration is
+/// never silent.
+void drawStickerPlaceholder(QPainter &painter, const Sticker &sticker,
+                            const QTransform &pageTransform)
+{
+    if (!(sticker.width > 0.0) || !(sticker.height > 0.0))
+        return;
+    painter.save();
+    QTransform local;
+    local.translate(sticker.cx, sticker.cy);
+    local.rotate(sticker.angleDeg);
+    painter.setTransform(local * pageTransform);
+    painter.setOpacity(std::clamp(sticker.opacity, 20, 100) / 100.0);
+    QPen pen(ColorPipeline::linearColor(0xffb3261e), 0.5, Qt::DashLine);
+    pen.setDashPattern({4.0, 3.0});
+    painter.setPen(pen);
+    painter.setBrush(Qt::NoBrush);
+    const QRectF box(-sticker.width / 2.0, -sticker.height / 2.0, sticker.width, sticker.height);
+    painter.drawRect(box);
+    painter.drawLine(box.topLeft(), box.bottomRight());
+    painter.drawLine(box.topRight(), box.bottomLeft());
+    painter.restore();
+}
+
+/// Paints the page's stickers above every photograph. Text will join this pass
+/// later, merged by the same `z`, which is why the order comes from
+/// OverlayGeometry and not from the list here.
+void paintStickers(QPainter &painter, const Page &page, const PageImages &images,
+                   const QTransform &pageTransform)
+{
+    if (page.stickers.isEmpty())
+        return;
+    for (const Sticker &sticker : OverlayGeometry::stickersInPaintOrder(page)) {
+        const auto layer = images.stickers.constFind(sticker.id);
+        if (layer != images.stickers.constEnd() && !layer->isNull())
+            drawSticker(painter, sticker, layer.value(), pageTransform);
+        else if (images.missingStickers.contains(sticker.id))
+            drawStickerPlaceholder(painter, sticker, pageTransform);
+    }
+}
+
 } // namespace
 
 PageRenderer::PageRenderer(ImageStore &store) : m_store(store) {}
@@ -424,6 +495,11 @@ void paintPageContent(QPainter &painter, const DocumentSnapshot &snapshot, int p
             continue;
         drawFramePhoto(painter, frame, *it, pageTransform, 0.0);
     }
+
+    // Overlays last: a sticker is above every photograph, and the pass takes
+    // its order from the model, so the canvas, the PDF and the printer cannot
+    // disagree about which sticker is on top.
+    paintStickers(painter, page, images, pageTransform);
 }
 
 void paintFrameLabels(QPainter &painter, const DocumentSnapshot &snapshot, int pageIndex,
@@ -638,6 +714,45 @@ Result<QImage> PageRenderer::renderPageUsing(const DocumentSnapshot &snapshot, i
                 }
             }
         }
+    }
+
+    // The stickers are decorative too. Each layer is converted through the same
+    // working space as a photograph, so the print matches the screen instead of
+    // printing a raw sRGB blob too bright. A source that cannot be read is
+    // recorded as missing: the painter draws the placeholder for it and the
+    // page still renders, so one lost decoration never stops a sheet or a PDF.
+    for (const Sticker &sticker : page.stickers) {
+        if (token.stop_requested())
+            return error(QStringLiteral("cancelled"), QCoreApplication::translate("PhotoPrint", "A művelet megszakadt."));
+        if (sticker.imagePath.isEmpty()) {
+            pageImages.missingStickers.insert(sticker.id);
+            continue;
+        }
+        QImageReader probe(sticker.imagePath);
+        probe.setDecideFormatFromContent(true);
+        if (!probe.canRead() || OverlayGeometry::stickerSourceTooLarge(probe.size())) {
+            pageImages.missingStickers.insert(sticker.id);
+            continue;
+        }
+        Result<SourceImage> source = m_store.load(sticker.imagePath, ImportPolicy{}, token);
+        if (!source) {
+            pageImages.missingStickers.insert(sticker.id);
+            continue;
+        }
+        ColorRecipe recipe = baseRecipe;
+        recipe.tone = PhotoTone{};
+        // The layer follows the drawn size, so a 4000 px sticker drawn at 20 mm
+        // is not converted at full resolution; the painter scales the bounded
+        // layer into the box.
+        int bound = qRound(std::max(sticker.width, sticker.height) / 25.4 * ppi);
+        bound = std::clamp(bound, 1, kStickerMaxLayer);
+        if (options.sourceMaxDimension > 0)
+            bound = std::min(bound, options.sourceMaxDimension);
+        Result<QImage> converted = m_store.linear(source.value(), recipe, bound, token);
+        if (converted)
+            pageImages.stickers.insert(sticker.id, converted.value());
+        else
+            pageImages.missingStickers.insert(sticker.id);
     }
 
     QImage canvas(pixelWidth, pixelHeight, QImage::Format_RGBA64_Premultiplied);

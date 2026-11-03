@@ -301,6 +301,48 @@ constexpr int kMaxTilesPerAxis = 64; ///< tileMm is raised until the count fits
 /// invariant point every mutation and the loader pass through.
 PageBackground sanitiseBackground(PageBackground background);
 
+/// One decorative picture placed on a page, above every photograph. The box is
+/// stored on both axes, like a Frame: the renderer draws into it, so a
+/// hand-edited file that disagrees with the picture's aspect stretches it. The
+/// editor never produces that, because every gesture keeps the pixel aspect.
+/// `z` orders the stickers among themselves; photographs keep their own stack
+/// underneath, so a sticker can never be lost behind a photo.
+struct Sticker {
+    QString id; ///< makeId("sticker"), unique on its page
+    QString imagePath; ///< resolved absolute path, like Frame::sourcePath
+    QByteArray imageSha256; ///< identity of the file content
+    double cx = 0.0; ///< centre X in mm
+    double cy = 0.0; ///< centre Y in mm
+    double width = 0.0; ///< box width in mm
+    double height = 0.0; ///< box height in mm
+    double angleDeg = 0.0; ///< clockwise about the centre, (-180, 180]
+    int opacity = 100; ///< 0..100 over the page beneath it
+    int z = 0; ///< paint order among the page's stickers, ascending
+    bool operator==(const Sticker &) const = default;
+};
+
+/// Bounds shared by the model, the renderer and the panel, so none of them can
+/// drift away from the others. A page cap bounds a corrupt file; the minimum
+/// size keeps every sticker big enough to be clicked again; the z range keeps a
+/// hand-edited layer order representable.
+constexpr int kMaxStickersPerPage = 64;
+constexpr double kMinStickerMm = 2.0;
+constexpr double kMaxStickerMm = 2000.0;
+constexpr int kMinStickerZ = -10000;
+constexpr int kMaxStickerZ = 10000;
+
+/// The sticker the renderer and the editor may see. Finite geometry is clamped
+/// to the paper and to the size range, a non-finite one becomes a drawable
+/// value rather than vanishing, and an empty or duplicated id is dropped by the
+/// caller. Called from SlotLayoutEngine::repair with the page's own size, the
+/// same single repair point the background and the slot style use.
+Sticker sanitiseSticker(Sticker sticker, const QSizeF &sheetMm);
+
+/// The page's sticker list after the same rule: at most kMaxStickersPerPage
+/// entries, each with a non-empty unique id, each sanitised against the sheet.
+/// Document order is kept, because it is the tie-break for equal `z`.
+QList<Sticker> sanitiseStickers(const QList<Sticker> &stickers, const QSizeF &sheetMm);
+
 struct Page {
     QString id;
     PaperSpec paper;
@@ -322,6 +364,10 @@ struct Page {
     /// The sheet's own background, painted under the photographs. The default
     /// is the white paper, so a page that never chose one is unchanged.
     PageBackground background;
+    /// The page's stickers, painted above every photograph in `z` order. The
+    /// empty list is the default, so a page without stickers is unchanged and
+    /// serialises exactly as it did before the feature.
+    QList<Sticker> stickers;
 
     bool hasLayout() const { return !slotList.isEmpty(); }
     bool operator==(const Page &) const = default;

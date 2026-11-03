@@ -511,6 +511,10 @@ void TestDailyFlow::selectionReadsStayValidAcrossSelections()
         // photograph's size.
         if (spin->objectName() == QStringLiteral("backgroundTileSpin"))
             continue;
+        // The sticker's size is a centimetre field too, but it is not a
+        // photograph's width or height.
+        if (spin->objectName() == QStringLiteral("stickerSizeSpin"))
+            continue;
         if (spin->suffix() == QStringLiteral(" cm"))
             sizeSpins.append(spin);
     }

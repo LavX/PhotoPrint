@@ -1775,5 +1775,157 @@
         <source>A lap háttere: %1</source>
         <translation>Фон страницы: %1</translation>
     </message>
+    <message>
+        <source>Elem</source>
+        <translation>Элемент</translation>
+    </message>
+    <message>
+        <source>Beszúrás</source>
+        <translation>Вставка</translation>
+    </message>
+    <message>
+        <source>Matrica…</source>
+        <translation>Наклейка…</translation>
+    </message>
+    <message>
+        <source>Matrica hozzáadása…</source>
+        <translation>Добавить наклейку…</translation>
+    </message>
+    <message>
+        <source>Készlet</source>
+        <translation>Набор</translation>
+    </message>
+    <message>
+        <source>Matricakészlet</source>
+        <translation>Набор наклеек</translation>
+    </message>
+    <message>
+        <source>Csillag</source>
+        <translation>Звезда</translation>
+    </message>
+    <message>
+        <source>Szív</source>
+        <translation>Сердце</translation>
+    </message>
+    <message>
+        <source>Nyíl</source>
+        <translation>Стрелка</translation>
+    </message>
+    <message>
+        <source>Beszédbuborék</source>
+        <translation>Облачко</translation>
+    </message>
+    <message>
+        <source>Nap</source>
+        <translation>Солнце</translation>
+    </message>
+    <message>
+        <source>Virág</source>
+        <translation>Цветок</translation>
+    </message>
+    <message>
+        <source>Konfetti</source>
+        <translation>Конфетти</translation>
+    </message>
+    <message>
+        <source>Keret</source>
+        <translation>Рамка</translation>
+    </message>
+    <message>
+        <source>Kör</source>
+        <translation>Круг</translation>
+    </message>
+    <message>
+        <source>Szikra</source>
+        <translation>Искра</translation>
+    </message>
+    <message>
+        <source>Szalag</source>
+        <translation>Лента</translation>
+    </message>
+    <message>
+        <source>Jelvény</source>
+        <translation>Значок</translation>
+    </message>
+    <message>
+        <source>Matrica</source>
+        <translation>Наклейка</translation>
+    </message>
+    <message>
+        <source>Elforgatás</source>
+        <translation>Поворот</translation>
+    </message>
+    <message>
+        <source>Előrébb</source>
+        <translation>Вперёд</translation>
+    </message>
+    <message>
+        <source>Hátrébb</source>
+        <translation>Назад</translation>
+    </message>
+    <message>
+        <source>Ezt a matricát nem találjuk.</source>
+        <translation>Эта наклейка не найдена.</translation>
+    </message>
+    <message>
+        <source>Matrica kiválasztása</source>
+        <translation>Выбрать наклейку</translation>
+    </message>
+    <message>
+        <source>Előző elem</source>
+        <translation>Предыдущий элемент</translation>
+    </message>
+    <message>
+        <source>Következő elem</source>
+        <translation>Следующий элемент</translation>
+    </message>
+    <message>
+        <source>A matrica a fotók fölött látszik.</source>
+        <translation>Наклейка видна поверх фотографий.</translation>
+    </message>
+    <message>
+        <source>Még nincs matrica a lapon.</source>
+        <translation>На этой странице пока нет наклеек.</translation>
+    </message>
+    <message>
+        <source>Válassz egy matricát a lapon vagy a készletből.</source>
+        <translation>Выберите наклейку на странице или в наборе.</translation>
+    </message>
+    <message>
+        <source>Matrica mozgatása</source>
+        <translation>Переместить наклейку</translation>
+    </message>
+    <message>
+        <source>Matrica átméretezése</source>
+        <translation>Изменить размер наклейки</translation>
+    </message>
+    <message>
+        <source>Matrica forgatása</source>
+        <translation>Повернуть наклейку</translation>
+    </message>
+    <message>
+        <source>Matrica törlése</source>
+        <translation>Удалить наклейку</translation>
+    </message>
+    <message>
+        <source>Képek (*.png *.jpg *.jpeg *.webp *.gif)</source>
+        <translation>Изображения (*.png *.jpg *.jpeg *.webp *.gif)</translation>
+    </message>
+    <message>
+        <source>Egy lapon legfeljebb %1 matrica lehet.</source>
+        <translation>На странице может быть не больше %1 наклеек.</translation>
+    </message>
+    <message>
+        <source>A matricát nem sikerült a helyére tenni.</source>
+        <translation>Не удалось разместить наклейку.</translation>
+    </message>
+    <message>
+        <source>A matrica túl nagy vagy nem olvasható.</source>
+        <translation>Наклейка слишком большая или не читается.</translation>
+    </message>
+    <message>
+        <source>Kiválasztott elem eltávolítása</source>
+        <translation>Удалить выбранный элемент</translation>
+    </message>
 </context>
 </TS>

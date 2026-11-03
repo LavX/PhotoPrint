@@ -56,6 +56,13 @@ struct PageImages {
     /// The source's pixel size, kept for the natural tile size. The converted
     /// layer may be smaller than the source, and a tile must not shrink with it.
     QSize backgroundPixels;
+    /// Sticker id -> linear premultiplied layer, already colour converted.
+    QHash<QString, QImage> stickers;
+    /// Stickers whose source is missing, unreadable or too large. The painter
+    /// draws a placeholder for exactly these, so a page with a lost decoration
+    /// looks the same on screen and on paper instead of silently printing
+    /// nothing. A sticker that is merely still decoding is not in here.
+    QSet<QString> missingStickers;
     bool operator==(const PageImages &) const = default;
 };
 
@@ -63,6 +70,11 @@ struct PageImages {
 /// does not need 1200 ppi, and a page-sized layer at that resolution would be
 /// over a gigabyte; the painter upscales the bounded layer instead.
 constexpr int kBackgroundMaxDimension = 4096;
+
+/// The longest side a sticker layer is converted at. A sticker is drawn at a
+/// few centimetres, so this is already far more than print needs; it bounds the
+/// cost of one decorative PNG on a 1200 ppi page.
+constexpr int kStickerMaxLayer = 2048;
 
 /// Paints one page from prepared linear layers. The painter is expected to map
 /// page millimetres to device pixels; nothing editor-only is drawn here. The

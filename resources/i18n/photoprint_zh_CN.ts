@@ -1747,5 +1747,157 @@
         <source>A lap háttere: %1</source>
         <translation>页面背景：%1</translation>
     </message>
+    <message>
+        <source>Elem</source>
+        <translation>元素</translation>
+    </message>
+    <message>
+        <source>Beszúrás</source>
+        <translation>插入</translation>
+    </message>
+    <message>
+        <source>Matrica…</source>
+        <translation>贴纸…</translation>
+    </message>
+    <message>
+        <source>Matrica hozzáadása…</source>
+        <translation>添加贴纸…</translation>
+    </message>
+    <message>
+        <source>Készlet</source>
+        <translation>套装</translation>
+    </message>
+    <message>
+        <source>Matricakészlet</source>
+        <translation>贴纸套装</translation>
+    </message>
+    <message>
+        <source>Csillag</source>
+        <translation>星星</translation>
+    </message>
+    <message>
+        <source>Szív</source>
+        <translation>爱心</translation>
+    </message>
+    <message>
+        <source>Nyíl</source>
+        <translation>箭头</translation>
+    </message>
+    <message>
+        <source>Beszédbuborék</source>
+        <translation>对话气泡</translation>
+    </message>
+    <message>
+        <source>Nap</source>
+        <translation>太阳</translation>
+    </message>
+    <message>
+        <source>Virág</source>
+        <translation>花朵</translation>
+    </message>
+    <message>
+        <source>Konfetti</source>
+        <translation>彩纸</translation>
+    </message>
+    <message>
+        <source>Keret</source>
+        <translation>边框</translation>
+    </message>
+    <message>
+        <source>Kör</source>
+        <translation>圆形</translation>
+    </message>
+    <message>
+        <source>Szikra</source>
+        <translation>闪光</translation>
+    </message>
+    <message>
+        <source>Szalag</source>
+        <translation>丝带</translation>
+    </message>
+    <message>
+        <source>Jelvény</source>
+        <translation>徽章</translation>
+    </message>
+    <message>
+        <source>Matrica</source>
+        <translation>贴纸</translation>
+    </message>
+    <message>
+        <source>Elforgatás</source>
+        <translation>旋转</translation>
+    </message>
+    <message>
+        <source>Előrébb</source>
+        <translation>上移一层</translation>
+    </message>
+    <message>
+        <source>Hátrébb</source>
+        <translation>下移一层</translation>
+    </message>
+    <message>
+        <source>Ezt a matricát nem találjuk.</source>
+        <translation>找不到这个贴纸。</translation>
+    </message>
+    <message>
+        <source>Matrica kiválasztása</source>
+        <translation>选择贴纸</translation>
+    </message>
+    <message>
+        <source>Előző elem</source>
+        <translation>上一个元素</translation>
+    </message>
+    <message>
+        <source>Következő elem</source>
+        <translation>下一个元素</translation>
+    </message>
+    <message>
+        <source>A matrica a fotók fölött látszik.</source>
+        <translation>贴纸显示在照片上方。</translation>
+    </message>
+    <message>
+        <source>Még nincs matrica a lapon.</source>
+        <translation>这一页还没有贴纸。</translation>
+    </message>
+    <message>
+        <source>Válassz egy matricát a lapon vagy a készletből.</source>
+        <translation>请选择页面上的贴纸或套装中的贴纸。</translation>
+    </message>
+    <message>
+        <source>Matrica mozgatása</source>
+        <translation>移动贴纸</translation>
+    </message>
+    <message>
+        <source>Matrica átméretezése</source>
+        <translation>调整贴纸大小</translation>
+    </message>
+    <message>
+        <source>Matrica forgatása</source>
+        <translation>旋转贴纸</translation>
+    </message>
+    <message>
+        <source>Matrica törlése</source>
+        <translation>删除贴纸</translation>
+    </message>
+    <message>
+        <source>Képek (*.png *.jpg *.jpeg *.webp *.gif)</source>
+        <translation>图片 (*.png *.jpg *.jpeg *.webp *.gif)</translation>
+    </message>
+    <message>
+        <source>Egy lapon legfeljebb %1 matrica lehet.</source>
+        <translation>一页最多可以有 %1 个贴纸。</translation>
+    </message>
+    <message>
+        <source>A matricát nem sikerült a helyére tenni.</source>
+        <translation>无法放置贴纸。</translation>
+    </message>
+    <message>
+        <source>A matrica túl nagy vagy nem olvasható.</source>
+        <translation>贴纸太大或无法读取。</translation>
+    </message>
+    <message>
+        <source>Kiválasztott elem eltávolítása</source>
+        <translation>移除所选元素</translation>
+    </message>
 </context>
 </TS>

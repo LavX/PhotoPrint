@@ -599,6 +599,11 @@ Result<Page> repair(Page page)
     // to print a NaN angle, an out-of-range opacity or a colour with alpha.
     page.background = sanitiseBackground(page.background);
 
+    // The stickers are the same kind of invariant. Their centres are clamped to
+    // the sheet here, because this is the one point every mutation and the
+    // loader pass through, and an unreachable sticker could only be undone.
+    page.stickers = sanitiseStickers(page.stickers, pageSizeMm(page));
+
     // Style first: ranges and finiteness are model rules, and a caller that
     // filled the struct directly must not be able to print a negative margin
     // or a NaN gap.

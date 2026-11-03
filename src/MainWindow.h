@@ -18,6 +18,7 @@
 #include <QImage>
 #include <QListWidget>
 #include <QMainWindow>
+#include <QPixmap>
 #include <QPointer>
 #include <QSet>
 
@@ -98,6 +99,16 @@ public:
     /// the layout panel exists. An empty id means no cell is selected.
     void setSelectedSlot(const QString &slotId);
     QString selectedSlot() const { return m_selectedSlotId; }
+    /// The page's overlays. Stickers sit above the photographs, so a click on a
+    /// sticker selects it; the Fotók list is the way back to the photograph.
+    /// A frame, a cell and a sticker are three exclusive selections.
+    void setSelectedSticker(const QString &stickerId);
+    QString selectedSticker() const { return m_selectedStickerId; }
+    /// A sticker's rotated box in widget coordinates, empty when it is not on
+    /// the current page. Shared by the paint path, the hit test and the tests,
+    /// so the outline a person sees is the outline that answers the pointer.
+    QPolygonF stickerQuad(const QString &stickerId) const;
+    std::optional<Sticker> liveSticker(const QString &stickerId) const;
     /// The frame as the canvas currently shows it, including an uncommitted
     /// wheel burst. The inspector builds its next action on this.
     std::optional<Frame> liveFrame(const QString &frameId) const;
@@ -171,6 +182,12 @@ public:
 
     std::function<void(const QString &)> onSelectionChanged;
     std::function<void(const QString &)> onSlotSelectionChanged;
+    /// The sticker gesture that produced a commit, so the window can name the
+    /// undo step without the view carrying interface text.
+    enum class StickerAction { Move, Resize, Rotate };
+    std::function<void(const QString &)> onStickerSelectionChanged;
+    std::function<void(const Sticker &, StickerAction)> onStickerCommitted;
+    std::function<void(const QString &)> onStickerDeleteRequested;
     std::function<void(const Frame &)> onFrameCommitted;
     std::function<void(const QString &)> onDeleteRequested;
     std::function<void(const QString &)> onEmptySlotRequested;
@@ -205,13 +222,23 @@ protected:
     void dropEvent(QDropEvent *event) override;
 
 private:
-    enum class DragKind { None, Move, Resize, Rotate, CropPan };
+    enum class DragKind {
+        None,
+        Move,
+        Resize,
+        Rotate,
+        CropPan,
+        MoveSticker,
+        ResizeSticker,
+        RotateSticker
+    };
 
     struct DragState {
         DragKind kind = DragKind::None;
         int handle = -1;
         QPointF startPage;
         Frame startFrame;
+        Sticker startSticker;
         QSize pixels;
         bool changed = false;
     };
@@ -239,12 +266,20 @@ private:
     };
 
     const Frame *selectedFramePtr() const;
+    const Sticker *selectedStickerPtr() const;
     const Page *currentPage() const;
     QTransform pageToWidget() const;
     QPointF widgetToPage(const QPointF &point) const;
     QPolygonF frameQuadWidget(const Frame &frame) const;
+    QPolygonF stickerQuadWidgetFor(const Sticker &sticker) const;
     int hitFrame(const QPointF &widgetPoint) const;
     int hitSlot(const QPointF &widgetPoint) const;
+    /// The topmost sticker under a widget point, as an index into the page's
+    /// list, or -1. The order is the reverse of painting.
+    int hitSticker(const QPointF &widgetPoint) const;
+    /// The corner handle under the pointer (0..3) or the rotate handle (4), for
+    /// the selected sticker.
+    int hitStickerHandle(const QPointF &widgetPoint) const;
     int hitHandle(const QPointF &widgetPoint) const;
     SlotState slotStateFor(const Slot &slot) const;
     void paintSlotOverlays(QPainter &painter, const Page &page) const;
@@ -280,6 +315,13 @@ private:
     static QSize capRasterSize(QSize pixels, qint64 maxPixels);
     static ComposeResult composePage(const ComposeJob &job);
     void updateLiveFrame(const Frame &frame, bool markDragChanged = true);
+    /// The live sticker under a drag. Like a frame, it is applied to the copy
+    /// the canvas holds, so the composition follows the pointer and one commit
+    /// lands when the button is released.
+    void updateLiveSticker(const Sticker &sticker, bool markDragChanged = true);
+    Sticker draggedSticker(const QPointF &pagePoint, bool fine) const;
+    void beginStickerDrag(DragKind kind, int handle, const QPointF &pagePoint,
+                          const Sticker &sticker);
     /// The end of a wheel burst publishes one edit, not one per notch, so one
     /// Ctrl+Z restores the photo's crop and zoom as the user saw it before.
     void flushWheelZoom();
@@ -291,6 +333,7 @@ private:
     QSet<QString> m_unavailable;
     QString m_selectedId;
     QString m_selectedSlotId;
+    QString m_selectedStickerId;
     QString m_dropSlotId;
     QString m_dropCue;
     QString m_accessibleBase;
@@ -519,6 +562,31 @@ private slots:
     /// edit belongs to a different control. This is the background counterpart
     /// of queueSlotStyle's field guard.
     PageBackground currentBackgroundFor(BackgroundField field);
+    /// The sticker layer. A file dialog or the built-in set adds one at the page
+    /// centre, above every existing overlay, and selects it. Each property
+    /// control writes one page edit, so one action is one undo step.
+    void addSticker();
+    /// The file-dialog-free entry point: the built-in set, the relink picker and
+    /// the tests all land here.
+    void addStickerFromPath(const QString &path);
+    /// Selects a sticker, or clears the overlay selection with an empty id. A
+    /// slot so a test can drive the same path the canvas uses.
+    void selectSticker(const QString &stickerId);
+    /// Adds one of the shipped stickers. The resource is copied into the app's
+    /// own data folder first, so the project stores a real file path that a
+    /// portable copy can carry like a photograph.
+    void addBuiltInSticker(const QString &alias);
+    /// Picks a replacement file for a sticker whose picture is lost.
+    void chooseStickerImage();
+    void stickerSizeChanged();
+    void stickerAngleChanged();
+    void stickerOpacityChanged(int value);
+    /// Moves the selected sticker one real step in the paint order.
+    void reorderStickerLayer(int delta);
+    void deleteSelectedSticker();
+    /// Selects the previous (-1) or next (+1) sticker in paint order. The
+    /// keyboard-only route to an existing overlay.
+    void cycleSticker(int delta);
     /// Applies one catalogue template to the current page as one page edit, so
     /// one undo restores the layout. The slot engine creates the cells (and the
     /// layout label) and assigns the photographs in display order; the page's
@@ -581,7 +649,7 @@ private:
     /// flips the panel under the pointer. Tabs without content are disabled, Lap
     /// never is.
     void updateInspectorTabs(const QString &frameId, const QString &slotId,
-                             bool emptySection);
+                             bool emptySection, const QString &stickerId);
     /// Switches the inspector tab programmatically. A user switch goes through
     /// QTabWidget itself, which is what records the manual choice.
     void setInspectorTab(int index);
@@ -596,6 +664,24 @@ private:
     /// Only the controls of the selected kind are visible, so the panel never
     /// shows a fit combo for a solid page.
     void syncBackgroundPanel();
+    /// Writes the selected sticker into the Elem tab: the preview, the size, the
+    /// rotation, the opacity and the two order buttons. With nothing selected the
+    /// tab shows its empty state, which is also where a new sticker starts.
+    void syncStickerPanel();
+    std::optional<Sticker> selectedSticker() const;
+    /// Applies a sticker list to the current page as one undo step and selects
+    /// `selectId` when it is given.
+    bool publishStickers(const QList<Sticker> &stickers, const QString &actionText,
+                         const QString &selectId = QString());
+    /// Why a sticker's picture cannot be shown. `None` is a healthy one.
+    enum class StickerProblem { None, Missing, Unreadable, TooLarge };
+    StickerProblem stickerProblem(const Sticker &sticker) const;
+    QString stickerProblemText(StickerProblem problem) const;
+    /// The worst problem on the current page, so the notice bar speaks once.
+    StickerProblem pageStickerProblem() const;
+    /// A small preview icon, decoded at its final size so a large source is
+    /// never decoded in full on the GUI thread.
+    QPixmap stickerThumbnail(const Sticker &sticker, int size) const;
     /// The precise reason the picture cannot be shown, so the panel and the
     /// notice bar can say "not found" or "too large or unreadable" instead of
     /// leaving an empty strip.
@@ -649,6 +735,8 @@ private:
         QImage background;
         QSize backgroundPixels;
         QString backgroundPath;
+        QHash<QString, QImage> stickers;
+        QSet<QString> missingStickers;
     };
 
     /// One untouched layer, rendered only when the user first asks for it and
@@ -785,6 +873,37 @@ private:
     QPushButton *m_backgroundRelinkButton = nullptr;
     /// The notice bar's own line for a background picture that cannot be shown.
     QLabel *m_backgroundNotice = nullptr;
+    /// The Elem tab: the sticker properties of the selected layer, and the empty
+    /// state that adds one.
+    QWidget *m_stickerPanel = nullptr;
+    QWidget *m_stickerEmptyPanel = nullptr;
+    QLabel *m_stickerEmptyHint = nullptr;
+    QLabel *m_stickerPreview = nullptr;
+    QDoubleSpinBox *m_stickerSizeSpin = nullptr;
+    QDoubleSpinBox *m_stickerAngleSpin = nullptr;
+    QSlider *m_stickerOpacitySlider = nullptr;
+    QLabel *m_stickerOpacityValue = nullptr;
+    QPushButton *m_stickerRaiseButton = nullptr;
+    QPushButton *m_stickerLowerButton = nullptr;
+    QPushButton *m_stickerDeleteButton = nullptr;
+    QPushButton *m_addStickerButton = nullptr;
+    QWidget *m_stickerSetGrid = nullptr;
+    QPushButton *m_previousStickerButton = nullptr;
+    QPushButton *m_nextStickerButton = nullptr;
+    QLabel *m_stickerMissingHint = nullptr;
+    QPushButton *m_stickerRelinkButton = nullptr;
+    /// The notice bar's own line for a sticker that cannot be shown.
+    QLabel *m_stickerNotice = nullptr;
+    /// The canvas layers of the current page's stickers, loaded by the preview
+    /// job so the canvas and the print cannot disagree about what is on the page.
+    QHash<QString, QImage> m_previewStickers;
+    QSet<QString> m_missingStickers;
+    /// The file the panel preview was decoded from, so a document change does
+    /// not re-read the picture on every nudge.
+    QString m_stickerPreviewPath;
+    QPixmap m_stickerPreviewPixmap;
+    QString m_lastStickerDir;
+    QString m_selectedSticker;
     /// The live background burst: every opacity or tile change restarts the
     /// timer, and the whole burst lands as one undo step.
     QTimer *m_backgroundTimer = nullptr;

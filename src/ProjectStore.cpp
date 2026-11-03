@@ -246,6 +246,9 @@ QHash<QString, QString> portableFileNames(const DocumentSnapshot &document)
         // page adds nothing.
         if (page.background.kind == BackgroundKind::Image)
             addSource(page.background.imagePath, page.background.imageSha256);
+        // A sticker travels like a photograph: its own file, copied once.
+        for (const Sticker &sticker : page.stickers)
+            addSource(sticker.imagePath, sticker.imageSha256);
     }
 
     QSet<QString> used;
@@ -670,6 +673,67 @@ PageBackground backgroundFromJson(const QJsonObject &object, const QString &proj
     return sanitiseBackground(background);
 }
 
+QJsonObject stickerToJson(const Sticker &sticker, const QString &projectDir,
+                          const QString &portableDir,
+                          const QHash<QString, QString> &portableNames)
+{
+    QJsonObject object;
+    object.insert(QStringLiteral("id"), sticker.id);
+
+    // The picture path follows the frame rule exactly: a normal project stores
+    // the project-relative path plus the absolute original, a portable copy
+    // stores only a contained relative path and no original.
+    if (!portableDir.isEmpty()) {
+        const QString source = lexicalPath(sticker.imagePath);
+        const QString name = portableNames.value(source);
+        if (name.isEmpty()) {
+            object.insert(QStringLiteral("image"), QString());
+        } else {
+            const QString target = QDir(portableDir).filePath(name);
+            object.insert(QStringLiteral("image"), QDir(projectDir).relativeFilePath(target));
+        }
+    } else if (!sticker.imagePath.isEmpty()) {
+        const QString relative = QDir(projectDir).relativeFilePath(sticker.imagePath);
+        object.insert(QStringLiteral("image"), relative.isEmpty() ? sticker.imagePath : relative);
+        object.insert(QStringLiteral("original"), sticker.imagePath);
+    }
+    object.insert(QStringLiteral("sha256"), QString::fromLatin1(sticker.imageSha256.toHex()));
+    object.insert(QStringLiteral("cx"), sticker.cx);
+    object.insert(QStringLiteral("cy"), sticker.cy);
+    object.insert(QStringLiteral("width"), sticker.width);
+    object.insert(QStringLiteral("height"), sticker.height);
+    object.insert(QStringLiteral("angleDeg"), sticker.angleDeg);
+    object.insert(QStringLiteral("opacity"), sticker.opacity);
+    object.insert(QStringLiteral("z"), sticker.z);
+    return object;
+}
+
+Sticker stickerFromJson(const QJsonObject &object, const QString &projectDir)
+{
+    Sticker sticker;
+    sticker.id = object.value(QStringLiteral("id")).toString();
+    sticker.imageSha256 =
+        QByteArray::fromHex(object.value(QStringLiteral("sha256")).toString().toLatin1());
+    sticker.cx = object.value(QStringLiteral("cx")).toDouble();
+    sticker.cy = object.value(QStringLiteral("cy")).toDouble();
+    sticker.width = object.value(QStringLiteral("width")).toDouble();
+    sticker.height = object.value(QStringLiteral("height")).toDouble();
+    sticker.angleDeg = object.value(QStringLiteral("angleDeg")).toDouble();
+    sticker.opacity = object.value(QStringLiteral("opacity")).toInt(100);
+    sticker.z = object.value(QStringLiteral("z")).toInt(0);
+
+    const QString stored = object.value(QStringLiteral("image")).toString();
+    const QString original = object.value(QStringLiteral("original")).toString();
+    const ResolvedSource resolved =
+        resolveStoredSource(projectDir, stored, original, sticker.imageSha256);
+    sticker.imagePath = resolved.path;
+    // A sticker whose file cannot be resolved still loads, with an empty path:
+    // the Elem panel shows the hint and the picker, the page paints the
+    // placeholder, and saving keeps the rest of the page instead of silently
+    // dropping the layer. Sanitising happens in the repair point.
+    return sticker;
+}
+
 QJsonObject recipeToJson(const ColorRecipe &recipe)
 {
     QJsonObject tone;
@@ -728,6 +792,20 @@ Result<ParsedProject> parseDocument(const QJsonObject &root, const QString &proj
         page.layoutId = layout.layoutId;
         page.background = backgroundFromJson(
             pageObject.value(QStringLiteral("background")).toObject(), projectDir);
+        // Stickers are optional and independent of the layout: a page without
+        // them writes nothing, so every existing project loads as the page it
+        // was. A malformed entry is dropped by the sanitiser, not the page.
+        const QJsonValue stickersValue = pageObject.value(QStringLiteral("stickers"));
+        if (stickersValue.isArray()) {
+            for (const QJsonValue &stickerValue : stickersValue.toArray()) {
+                if (page.stickers.size() >= kMaxStickersPerPage)
+                    break;
+                if (!stickerValue.isObject())
+                    continue;
+                page.stickers.append(
+                    stickerFromJson(stickerValue.toObject(), projectDir));
+            }
+        }
         for (const QJsonValue &frameValue : pageObject.value(QStringLiteral("frames")).toArray()) {
             const QJsonObject frameObject = frameValue.toObject();
             Frame frame = frameFromJson(frameObject);
@@ -896,6 +974,14 @@ Result<void> copyPortableSources(const DocumentSnapshot &document, const QString
             if (!copied)
                 return copied;
         }
+        // A sticker is decoration, like a background picture: a missing file is
+        // skipped so the rest of the bundle still saves, and the page reports
+        // the lost sticker in the panel.
+        for (const Sticker &sticker : page.stickers) {
+            const auto copied = copySource(sticker.imagePath, sticker.imageSha256, false);
+            if (!copied)
+                return copied;
+        }
     }
     return Result<void>();
 }
@@ -957,6 +1043,17 @@ QByteArray ProjectStore::serialize(const DocumentSnapshot &document, const QStri
             pageObject.insert(QStringLiteral("background"),
                               backgroundToJson(page.background, projectDir, portableDir,
                                                portableNames));
+        }
+        // Optional array, omitted when empty, so a page that never carried a
+        // sticker stays byte-identical to a 1.0.1 file and an older build
+        // ignores the key.
+        if (!page.stickers.isEmpty()) {
+            QJsonArray stickerArray;
+            for (const Sticker &sticker : page.stickers) {
+                stickerArray.append(
+                    stickerToJson(sticker, projectDir, portableDir, portableNames));
+            }
+            pageObject.insert(QStringLiteral("stickers"), stickerArray);
         }
         QJsonArray frames;
         for (const Frame &frame : page.frames)

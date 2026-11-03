@@ -4274,10 +4274,13 @@ void TestSlotUi::inspectorTabsFollowTheSelection()
     QTest::qWait(80);
     auto *emptyTabs = inspectorTabs(emptyWindow);
     QVERIFY(emptyTabs);
-    QCOMPARE(emptyTabs->count(), 3);
+    QCOMPARE(emptyTabs->count(), 4);
     QCOMPARE(emptyTabs->currentIndex(), 2);
     QVERIFY(!emptyTabs->isTabEnabled(0));
     QVERIFY(!emptyTabs->isTabEnabled(1));
+    // Elem is always available: with nothing selected it is where a sticker is
+    // added from, so it is never a dead tab.
+    QVERIFY(emptyTabs->isTabEnabled(3));
     // No photograph and no section: only Lap. The "no layout yet" line belongs to
     // a page that has something on it, so a brand-new document stays quiet.
     QVERIFY2(!emptyWindow.findChild<QWidget *>(QStringLiteral("pageSummaryPanel"))->isVisible(),
@@ -4298,14 +4301,16 @@ void TestSlotUi::inspectorTabsFollowTheSelection()
 
     auto *tabs = inspectorTabs(window);
     QVERIFY(tabs);
-    QCOMPARE(tabs->count(), 3);
+    QCOMPARE(tabs->count(), 4);
     QCOMPARE(tabs->tabText(0), QStringLiteral("Fotó"));
     QCOMPARE(tabs->tabText(1), QStringLiteral("Hely"));
     QCOMPARE(tabs->tabText(2), QStringLiteral("Lap"));
+    QCOMPARE(tabs->tabText(3), QStringLiteral("Elem"));
     QCOMPARE(tabs->accessibleName(), QStringLiteral("Beállítások"));
     QCOMPARE(tabs->widget(0)->accessibleName(), QStringLiteral("Fotó"));
     QCOMPARE(tabs->widget(1)->accessibleName(), QStringLiteral("Hely"));
     QCOMPARE(tabs->widget(2)->accessibleName(), QStringLiteral("Lap"));
+    QCOMPARE(tabs->widget(3)->accessibleName(), QStringLiteral("Elem"));
     // A laid-out page with nothing selected opens on Lap.
     QCOMPARE(tabs->currentIndex(), 2);
     QVERIFY(!tabs->isTabEnabled(0));
@@ -5021,7 +5026,7 @@ void TestSlotUi::languageRebuildKeepsTheOpenTab()
     QVERIFY(triggerLanguage(QStringLiteral("Deutsch")));
     auto *rebuilt = inspectorTabs(window);
     QVERIFY(rebuilt);
-    QCOMPARE(rebuilt->count(), 3);
+    QCOMPARE(rebuilt->count(), 4);
     QCOMPARE(rebuilt->currentIndex(), 2);
     QVERIFY2(rebuilt->tabText(0) != QStringLiteral("Fotó"),
              "the rebuilt window kept the old language");

@@ -1761,5 +1761,157 @@
         <source>A lap háttere: %1</source>
         <translation>Le fond de la page : %1</translation>
     </message>
+    <message>
+        <source>Elem</source>
+        <translation>Élément</translation>
+    </message>
+    <message>
+        <source>Beszúrás</source>
+        <translation>Insérer</translation>
+    </message>
+    <message>
+        <source>Matrica…</source>
+        <translation>Autocollant…</translation>
+    </message>
+    <message>
+        <source>Matrica hozzáadása…</source>
+        <translation>Ajouter un autocollant…</translation>
+    </message>
+    <message>
+        <source>Készlet</source>
+        <translation>Collection</translation>
+    </message>
+    <message>
+        <source>Matricakészlet</source>
+        <translation>Collection d'autocollants</translation>
+    </message>
+    <message>
+        <source>Csillag</source>
+        <translation>Étoile</translation>
+    </message>
+    <message>
+        <source>Szív</source>
+        <translation>Cœur</translation>
+    </message>
+    <message>
+        <source>Nyíl</source>
+        <translation>Flèche</translation>
+    </message>
+    <message>
+        <source>Beszédbuborék</source>
+        <translation>Bulle</translation>
+    </message>
+    <message>
+        <source>Nap</source>
+        <translation>Soleil</translation>
+    </message>
+    <message>
+        <source>Virág</source>
+        <translation>Fleur</translation>
+    </message>
+    <message>
+        <source>Konfetti</source>
+        <translation>Confettis</translation>
+    </message>
+    <message>
+        <source>Keret</source>
+        <translation>Cadre</translation>
+    </message>
+    <message>
+        <source>Kör</source>
+        <translation>Cercle</translation>
+    </message>
+    <message>
+        <source>Szikra</source>
+        <translation>Étincelle</translation>
+    </message>
+    <message>
+        <source>Szalag</source>
+        <translation>Ruban</translation>
+    </message>
+    <message>
+        <source>Jelvény</source>
+        <translation>Écusson</translation>
+    </message>
+    <message>
+        <source>Matrica</source>
+        <translation>Autocollant</translation>
+    </message>
+    <message>
+        <source>Elforgatás</source>
+        <translation>Rotation</translation>
+    </message>
+    <message>
+        <source>Előrébb</source>
+        <translation>Avancer</translation>
+    </message>
+    <message>
+        <source>Hátrébb</source>
+        <translation>Reculer</translation>
+    </message>
+    <message>
+        <source>Ezt a matricát nem találjuk.</source>
+        <translation>Cet autocollant est introuvable.</translation>
+    </message>
+    <message>
+        <source>Matrica kiválasztása</source>
+        <translation>Choisir un autocollant</translation>
+    </message>
+    <message>
+        <source>Előző elem</source>
+        <translation>Élément précédent</translation>
+    </message>
+    <message>
+        <source>Következő elem</source>
+        <translation>Élément suivant</translation>
+    </message>
+    <message>
+        <source>A matrica a fotók fölött látszik.</source>
+        <translation>L'autocollant apparaît au-dessus des photos.</translation>
+    </message>
+    <message>
+        <source>Még nincs matrica a lapon.</source>
+        <translation>Cette page n'a pas encore d'autocollant.</translation>
+    </message>
+    <message>
+        <source>Válassz egy matricát a lapon vagy a készletből.</source>
+        <translation>Choisis un autocollant sur la page ou dans la collection.</translation>
+    </message>
+    <message>
+        <source>Matrica mozgatása</source>
+        <translation>Déplacer l'autocollant</translation>
+    </message>
+    <message>
+        <source>Matrica átméretezése</source>
+        <translation>Redimensionner l'autocollant</translation>
+    </message>
+    <message>
+        <source>Matrica forgatása</source>
+        <translation>Faire pivoter l'autocollant</translation>
+    </message>
+    <message>
+        <source>Matrica törlése</source>
+        <translation>Supprimer l'autocollant</translation>
+    </message>
+    <message>
+        <source>Képek (*.png *.jpg *.jpeg *.webp *.gif)</source>
+        <translation>Images (*.png *.jpg *.jpeg *.webp *.gif)</translation>
+    </message>
+    <message>
+        <source>Egy lapon legfeljebb %1 matrica lehet.</source>
+        <translation>Une page peut contenir au maximum %1 autocollants.</translation>
+    </message>
+    <message>
+        <source>A matricát nem sikerült a helyére tenni.</source>
+        <translation>L'autocollant n'a pas pu être placé.</translation>
+    </message>
+    <message>
+        <source>A matrica túl nagy vagy nem olvasható.</source>
+        <translation>L'autocollant est trop volumineux ou illisible.</translation>
+    </message>
+    <message>
+        <source>Kiválasztott elem eltávolítása</source>
+        <translation>Supprimer l'élément sélectionné</translation>
+    </message>
 </context>
 </TS>

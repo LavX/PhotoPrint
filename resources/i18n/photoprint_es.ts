@@ -1761,5 +1761,157 @@
         <source>A lap háttere: %1</source>
         <translation>El fondo de la página: %1</translation>
     </message>
+    <message>
+        <source>Elem</source>
+        <translation>Elemento</translation>
+    </message>
+    <message>
+        <source>Beszúrás</source>
+        <translation>Insertar</translation>
+    </message>
+    <message>
+        <source>Matrica…</source>
+        <translation>Pegatina…</translation>
+    </message>
+    <message>
+        <source>Matrica hozzáadása…</source>
+        <translation>Añadir pegatina…</translation>
+    </message>
+    <message>
+        <source>Készlet</source>
+        <translation>Colección</translation>
+    </message>
+    <message>
+        <source>Matricakészlet</source>
+        <translation>Colección de pegatinas</translation>
+    </message>
+    <message>
+        <source>Csillag</source>
+        <translation>Estrella</translation>
+    </message>
+    <message>
+        <source>Szív</source>
+        <translation>Corazón</translation>
+    </message>
+    <message>
+        <source>Nyíl</source>
+        <translation>Flecha</translation>
+    </message>
+    <message>
+        <source>Beszédbuborék</source>
+        <translation>Bocadillo</translation>
+    </message>
+    <message>
+        <source>Nap</source>
+        <translation>Sol</translation>
+    </message>
+    <message>
+        <source>Virág</source>
+        <translation>Flor</translation>
+    </message>
+    <message>
+        <source>Konfetti</source>
+        <translation>Confeti</translation>
+    </message>
+    <message>
+        <source>Keret</source>
+        <translation>Marco</translation>
+    </message>
+    <message>
+        <source>Kör</source>
+        <translation>Círculo</translation>
+    </message>
+    <message>
+        <source>Szikra</source>
+        <translation>Destello</translation>
+    </message>
+    <message>
+        <source>Szalag</source>
+        <translation>Cinta</translation>
+    </message>
+    <message>
+        <source>Jelvény</source>
+        <translation>Insignia</translation>
+    </message>
+    <message>
+        <source>Matrica</source>
+        <translation>Pegatina</translation>
+    </message>
+    <message>
+        <source>Elforgatás</source>
+        <translation>Rotación</translation>
+    </message>
+    <message>
+        <source>Előrébb</source>
+        <translation>Traer adelante</translation>
+    </message>
+    <message>
+        <source>Hátrébb</source>
+        <translation>Enviar atrás</translation>
+    </message>
+    <message>
+        <source>Ezt a matricát nem találjuk.</source>
+        <translation>No se encuentra esta pegatina.</translation>
+    </message>
+    <message>
+        <source>Matrica kiválasztása</source>
+        <translation>Elegir pegatina</translation>
+    </message>
+    <message>
+        <source>Előző elem</source>
+        <translation>Elemento anterior</translation>
+    </message>
+    <message>
+        <source>Következő elem</source>
+        <translation>Elemento siguiente</translation>
+    </message>
+    <message>
+        <source>A matrica a fotók fölött látszik.</source>
+        <translation>La pegatina se ve sobre las fotos.</translation>
+    </message>
+    <message>
+        <source>Még nincs matrica a lapon.</source>
+        <translation>Esta página aún no tiene pegatinas.</translation>
+    </message>
+    <message>
+        <source>Válassz egy matricát a lapon vagy a készletből.</source>
+        <translation>Elige una pegatina de la página o de la colección.</translation>
+    </message>
+    <message>
+        <source>Matrica mozgatása</source>
+        <translation>Mover pegatina</translation>
+    </message>
+    <message>
+        <source>Matrica átméretezése</source>
+        <translation>Cambiar el tamaño de la pegatina</translation>
+    </message>
+    <message>
+        <source>Matrica forgatása</source>
+        <translation>Girar pegatina</translation>
+    </message>
+    <message>
+        <source>Matrica törlése</source>
+        <translation>Eliminar pegatina</translation>
+    </message>
+    <message>
+        <source>Képek (*.png *.jpg *.jpeg *.webp *.gif)</source>
+        <translation>Imágenes (*.png *.jpg *.jpeg *.webp *.gif)</translation>
+    </message>
+    <message>
+        <source>Egy lapon legfeljebb %1 matrica lehet.</source>
+        <translation>Una página admite como máximo %1 pegatinas.</translation>
+    </message>
+    <message>
+        <source>A matricát nem sikerült a helyére tenni.</source>
+        <translation>No se pudo colocar la pegatina.</translation>
+    </message>
+    <message>
+        <source>A matrica túl nagy vagy nem olvasható.</source>
+        <translation>La pegatina es demasiado grande o no se puede leer.</translation>
+    </message>
+    <message>
+        <source>Kiválasztott elem eltávolítása</source>
+        <translation>Quitar el elemento seleccionado</translation>
+    </message>
 </context>
 </TS>

@@ -1747,5 +1747,157 @@
         <source>A lap háttere: %1</source>
         <translation>ページの背景: %1</translation>
     </message>
+    <message>
+        <source>Elem</source>
+        <translation>要素</translation>
+    </message>
+    <message>
+        <source>Beszúrás</source>
+        <translation>挿入</translation>
+    </message>
+    <message>
+        <source>Matrica…</source>
+        <translation>ステッカー…</translation>
+    </message>
+    <message>
+        <source>Matrica hozzáadása…</source>
+        <translation>ステッカーを追加…</translation>
+    </message>
+    <message>
+        <source>Készlet</source>
+        <translation>セット</translation>
+    </message>
+    <message>
+        <source>Matricakészlet</source>
+        <translation>ステッカーセット</translation>
+    </message>
+    <message>
+        <source>Csillag</source>
+        <translation>星</translation>
+    </message>
+    <message>
+        <source>Szív</source>
+        <translation>ハート</translation>
+    </message>
+    <message>
+        <source>Nyíl</source>
+        <translation>矢印</translation>
+    </message>
+    <message>
+        <source>Beszédbuborék</source>
+        <translation>吹き出し</translation>
+    </message>
+    <message>
+        <source>Nap</source>
+        <translation>太陽</translation>
+    </message>
+    <message>
+        <source>Virág</source>
+        <translation>花</translation>
+    </message>
+    <message>
+        <source>Konfetti</source>
+        <translation>紙吹雪</translation>
+    </message>
+    <message>
+        <source>Keret</source>
+        <translation>フレーム</translation>
+    </message>
+    <message>
+        <source>Kör</source>
+        <translation>円</translation>
+    </message>
+    <message>
+        <source>Szikra</source>
+        <translation>きらめき</translation>
+    </message>
+    <message>
+        <source>Szalag</source>
+        <translation>リボン</translation>
+    </message>
+    <message>
+        <source>Jelvény</source>
+        <translation>バッジ</translation>
+    </message>
+    <message>
+        <source>Matrica</source>
+        <translation>ステッカー</translation>
+    </message>
+    <message>
+        <source>Elforgatás</source>
+        <translation>回転</translation>
+    </message>
+    <message>
+        <source>Előrébb</source>
+        <translation>前面へ</translation>
+    </message>
+    <message>
+        <source>Hátrébb</source>
+        <translation>背面へ</translation>
+    </message>
+    <message>
+        <source>Ezt a matricát nem találjuk.</source>
+        <translation>このステッカーが見つかりません。</translation>
+    </message>
+    <message>
+        <source>Matrica kiválasztása</source>
+        <translation>ステッカーを選ぶ</translation>
+    </message>
+    <message>
+        <source>Előző elem</source>
+        <translation>前の要素</translation>
+    </message>
+    <message>
+        <source>Következő elem</source>
+        <translation>次の要素</translation>
+    </message>
+    <message>
+        <source>A matrica a fotók fölött látszik.</source>
+        <translation>ステッカーは写真の上に表示されます。</translation>
+    </message>
+    <message>
+        <source>Még nincs matrica a lapon.</source>
+        <translation>このページにはまだステッカーがありません。</translation>
+    </message>
+    <message>
+        <source>Válassz egy matricát a lapon vagy a készletből.</source>
+        <translation>ページ上またはセットからステッカーを選んでください。</translation>
+    </message>
+    <message>
+        <source>Matrica mozgatása</source>
+        <translation>ステッカーを移動</translation>
+    </message>
+    <message>
+        <source>Matrica átméretezése</source>
+        <translation>ステッカーのサイズ変更</translation>
+    </message>
+    <message>
+        <source>Matrica forgatása</source>
+        <translation>ステッカーを回転</translation>
+    </message>
+    <message>
+        <source>Matrica törlése</source>
+        <translation>ステッカーを削除</translation>
+    </message>
+    <message>
+        <source>Képek (*.png *.jpg *.jpeg *.webp *.gif)</source>
+        <translation>画像 (*.png *.jpg *.jpeg *.webp *.gif)</translation>
+    </message>
+    <message>
+        <source>Egy lapon legfeljebb %1 matrica lehet.</source>
+        <translation>1ページに置けるステッカーは %1 個までです。</translation>
+    </message>
+    <message>
+        <source>A matricát nem sikerült a helyére tenni.</source>
+        <translation>ステッカーを配置できませんでした。</translation>
+    </message>
+    <message>
+        <source>A matrica túl nagy vagy nem olvasható.</source>
+        <translation>ステッカーが大きすぎるか、読み取れません。</translation>
+    </message>
+    <message>
+        <source>Kiválasztott elem eltávolítása</source>
+        <translation>選択した要素を削除</translation>
+    </message>
 </context>
 </TS>

@@ -129,6 +129,8 @@ private slots:
     void everyCataloguePluralisesTheSheetToolCounts();
     void everyCatalogueTranslatesTheBackgroundMessages_data();
     void everyCatalogueTranslatesTheBackgroundMessages();
+    void everyCatalogueTranslatesTheStickerMessages_data();
+    void everyCatalogueTranslatesTheStickerMessages();
     void sourceLanguageInstallsTheQtCatalogue();
     void hungarianSourceSubstitutesTheCount();
     void repeatedLanguageSwitchingLeavesTranslatorsUnparented();
@@ -877,8 +879,75 @@ void TestI18n::everyCatalogueTranslatesTheBackgroundMessages()
     }
 }
 
+void TestI18n::everyCatalogueTranslatesTheStickerMessages_data()
+{
+    QTest::addColumn<QString>("code");
+    for (const QString &code : i18n::targetCodes())
+        QTest::newRow(qPrintable(code)) << code;
+}
+
+void TestI18n::everyCatalogueTranslatesTheStickerMessages()
+{
+    QFETCH(QString, code);
+
+    InstalledCatalogue catalogue(code);
+    QVERIFY2(catalogue.loaded(), qPrintable(code));
+
+    // The Elem tab, the insert menu, the built-in set's names and every sentence
+    // the sticker layer can show: the properties, the two order buttons, the
+    // missing-picture hint and the four undo labels.
+    for (const QString &source : {
+             QStringLiteral("Elem"),
+             QStringLiteral("Beszúrás"),
+             QStringLiteral("Matrica…"),
+             QStringLiteral("Matrica hozzáadása…"),
+             QStringLiteral("Készlet"),
+             QStringLiteral("Matricakészlet"),
+             QStringLiteral("Csillag"),
+             QStringLiteral("Szív"),
+             QStringLiteral("Nyíl"),
+             QStringLiteral("Beszédbuborék"),
+             QStringLiteral("Nap"),
+             QStringLiteral("Virág"),
+             // Konfetti is left out on purpose: the German word is spelled the
+             // same as the Hungarian source, so it cannot be told apart from
+             // the fallback here. The English sweep still covers it.
+             QStringLiteral("Keret"),
+             QStringLiteral("Kör"),
+             QStringLiteral("Szikra"),
+             QStringLiteral("Szalag"),
+             QStringLiteral("Jelvény"),
+             QStringLiteral("Matrica"),
+             QStringLiteral("Elforgatás"),
+             QStringLiteral("Előrébb"),
+             QStringLiteral("Hátrébb"),
+             QStringLiteral("Ezt a matricát nem találjuk."),
+             QStringLiteral("A matrica túl nagy vagy nem olvasható."),
+             QStringLiteral("Matrica kiválasztása"),
+             QStringLiteral("Előző elem"),
+             QStringLiteral("Következő elem"),
+             QStringLiteral("A matrica a fotók fölött látszik."),
+             QStringLiteral("Még nincs matrica a lapon."),
+             QStringLiteral("Válassz egy matricát a lapon vagy a készletből."),
+             QStringLiteral("Matrica mozgatása"),
+             QStringLiteral("Matrica átméretezése"),
+             QStringLiteral("Matrica forgatása"),
+             QStringLiteral("Matrica törlése"),
+             QStringLiteral("Képek (*.png *.jpg *.jpeg *.webp *.gif)"),
+             QStringLiteral("Egy lapon legfeljebb %1 matrica lehet."),
+             QStringLiteral("A matricát nem sikerült a helyére tenni."),
+         }) {
+        const QString text = translated("PhotoPrint", source);
+        const QString where = QStringLiteral("%1: %2").arg(code, source);
+        QVERIFY2(!text.isEmpty(), qPrintable(where + QStringLiteral(" is empty")));
+        QVERIFY2(text != source,
+                 qPrintable(where + QStringLiteral(" is still the Hungarian source")));
+    }
+}
+
 void TestI18n::sourceLanguageInstallsTheQtCatalogue()
-{    // Hungarian is the source language, so PhotoPrint needs no catalogue of its
+{
+    // Hungarian is the source language, so PhotoPrint needs no catalogue of its
     // own. Qt's stock strings do, or every standard dialog button and the colour
     // picker would stay English in a Hungarian window.
     QVERIFY(i18n::installLanguage(QString()));

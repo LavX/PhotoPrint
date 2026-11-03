@@ -297,6 +297,23 @@ void rotatePageTo(Page &page, bool targetLandscape)
         while (frame.angleDeg <= -180.0)
             frame.angleDeg += 360.0;
     }
+    // A sticker is placed in page millimetres like a free frame, so it turns
+    // with the sheet instead of staying behind at a coordinate that now means
+    // something else. Its box keeps its size; the angle carries the turn.
+    for (Sticker &sticker : page.stickers) {
+        const double oldX = sticker.cx;
+        const double oldY = sticker.cy;
+        if (forward) {
+            sticker.cx = oldSize.height() - oldY;
+            sticker.cy = oldX;
+            sticker.angleDeg += 90.0;
+        } else {
+            sticker.cx = oldY;
+            sticker.cy = oldSize.width() - oldX;
+            sticker.angleDeg -= 90.0;
+        }
+        sticker.angleDeg = normalizedImageRotationDeg(sticker.angleDeg);
+    }
     if (page.hasLayout())
         page = SlotGeometry::remapToPaper(before, std::move(page));
 }
@@ -482,6 +499,10 @@ Result<void> CanvasController::apply(const DocumentEdit &edit)
                 copy.id = makeId(QStringLiteral("page"));
                 for (Frame &frame : copy.frames)
                     frame.id = makeId(QStringLiteral("frame"));
+                // Sticker ids are unique per page and travel with the copy; a
+                // duplicated page is a new page, so its layers get new ids too.
+                for (Sticker &sticker : copy.stickers)
+                    sticker.id = makeId(QStringLiteral("sticker"));
                 after.pages.insert(value.pageIndex + 1, copy);
                 after.currentPage = value.pageIndex + 1;
                 m_undo->push(new SnapshotCommand(this, m_document, after,
@@ -608,6 +629,8 @@ Result<void> CanvasController::apply(const DocumentEdit &edit)
                         page.layoutId = *change.layoutId;
                     if (change.background)
                         page.background = *change.background;
+                    if (change.stickers)
+                        page.stickers = *change.stickers;
                     if (firstChanged < 0 || change.pageIndex < firstChanged)
                         firstChanged = change.pageIndex;
                 }
@@ -686,6 +709,7 @@ Result<void> CanvasController::publishPage(const Page &page, const QString &acti
     change.slotStyle = page.slotStyle;
     change.layoutId = page.layoutId;
     change.background = page.background;
+    change.stickers = page.stickers;
     edit.pages.append(change);
     edit.actionText = actionText;
     edit.selectPage = index;

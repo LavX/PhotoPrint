@@ -1761,5 +1761,157 @@
         <source>A lap háttere: %1</source>
         <translation>Lo sfondo della pagina: %1</translation>
     </message>
+    <message>
+        <source>Elem</source>
+        <translation>Elemento</translation>
+    </message>
+    <message>
+        <source>Beszúrás</source>
+        <translation>Inserisci</translation>
+    </message>
+    <message>
+        <source>Matrica…</source>
+        <translation>Adesivo…</translation>
+    </message>
+    <message>
+        <source>Matrica hozzáadása…</source>
+        <translation>Aggiungi adesivo…</translation>
+    </message>
+    <message>
+        <source>Készlet</source>
+        <translation>Collezione</translation>
+    </message>
+    <message>
+        <source>Matricakészlet</source>
+        <translation>Collezione di adesivi</translation>
+    </message>
+    <message>
+        <source>Csillag</source>
+        <translation>Stella</translation>
+    </message>
+    <message>
+        <source>Szív</source>
+        <translation>Cuore</translation>
+    </message>
+    <message>
+        <source>Nyíl</source>
+        <translation>Freccia</translation>
+    </message>
+    <message>
+        <source>Beszédbuborék</source>
+        <translation>Fumetto</translation>
+    </message>
+    <message>
+        <source>Nap</source>
+        <translation>Sole</translation>
+    </message>
+    <message>
+        <source>Virág</source>
+        <translation>Fiore</translation>
+    </message>
+    <message>
+        <source>Konfetti</source>
+        <translation>Coriandoli</translation>
+    </message>
+    <message>
+        <source>Keret</source>
+        <translation>Cornice</translation>
+    </message>
+    <message>
+        <source>Kör</source>
+        <translation>Cerchio</translation>
+    </message>
+    <message>
+        <source>Szikra</source>
+        <translation>Scintilla</translation>
+    </message>
+    <message>
+        <source>Szalag</source>
+        <translation>Nastro</translation>
+    </message>
+    <message>
+        <source>Jelvény</source>
+        <translation>Distintivo</translation>
+    </message>
+    <message>
+        <source>Matrica</source>
+        <translation>Adesivo</translation>
+    </message>
+    <message>
+        <source>Elforgatás</source>
+        <translation>Rotazione</translation>
+    </message>
+    <message>
+        <source>Előrébb</source>
+        <translation>Porta avanti</translation>
+    </message>
+    <message>
+        <source>Hátrébb</source>
+        <translation>Porta indietro</translation>
+    </message>
+    <message>
+        <source>Ezt a matricát nem találjuk.</source>
+        <translation>Impossibile trovare questo adesivo.</translation>
+    </message>
+    <message>
+        <source>Matrica kiválasztása</source>
+        <translation>Scegli adesivo</translation>
+    </message>
+    <message>
+        <source>Előző elem</source>
+        <translation>Elemento precedente</translation>
+    </message>
+    <message>
+        <source>Következő elem</source>
+        <translation>Elemento successivo</translation>
+    </message>
+    <message>
+        <source>A matrica a fotók fölött látszik.</source>
+        <translation>L'adesivo appare sopra le foto.</translation>
+    </message>
+    <message>
+        <source>Még nincs matrica a lapon.</source>
+        <translation>Questa pagina non ha ancora adesivi.</translation>
+    </message>
+    <message>
+        <source>Válassz egy matricát a lapon vagy a készletből.</source>
+        <translation>Scegli un adesivo sulla pagina o dalla collezione.</translation>
+    </message>
+    <message>
+        <source>Matrica mozgatása</source>
+        <translation>Sposta adesivo</translation>
+    </message>
+    <message>
+        <source>Matrica átméretezése</source>
+        <translation>Ridimensiona adesivo</translation>
+    </message>
+    <message>
+        <source>Matrica forgatása</source>
+        <translation>Ruota adesivo</translation>
+    </message>
+    <message>
+        <source>Matrica törlése</source>
+        <translation>Elimina adesivo</translation>
+    </message>
+    <message>
+        <source>Képek (*.png *.jpg *.jpeg *.webp *.gif)</source>
+        <translation>Immagini (*.png *.jpg *.jpeg *.webp *.gif)</translation>
+    </message>
+    <message>
+        <source>Egy lapon legfeljebb %1 matrica lehet.</source>
+        <translation>Una pagina può contenere al massimo %1 adesivi.</translation>
+    </message>
+    <message>
+        <source>A matricát nem sikerült a helyére tenni.</source>
+        <translation>Impossibile inserire l'adesivo.</translation>
+    </message>
+    <message>
+        <source>A matrica túl nagy vagy nem olvasható.</source>
+        <translation>L'adesivo è troppo grande o illeggibile.</translation>
+    </message>
+    <message>
+        <source>Kiválasztott elem eltávolítása</source>
+        <translation>Rimuovi l'elemento selezionato</translation>
+    </message>
 </context>
 </TS>
