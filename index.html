@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PhotoPrint — Photo printing for Linux</title>
+  <meta name="description" content="Arrange family photos on paper and print them from your own printer. Local, colour-managed, no uploads.">
+  <meta name="theme-color" content="#0b0c0e">
+
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="PhotoPrint — Photo printing for Linux">
+  <meta property="og:description" content="Arrange family photos on paper and print them from your own printer. Local, colour-managed, no uploads.">
+  <meta property="og:image" content="https://lavx.github.io/PhotoPrint/shot.jpg">
+
+  <link rel="icon" href="favicon.svg" type="image/svg+xml">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap">
+  <link rel="preload" as="image" href="shot.jpg">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="page">
+
+    <header class="nav">
+      <nav class="nav__links" aria-label="Primary">
+        <a class="nav__link" style="--d:.02s" href="https://github.com/LavX/PhotoPrint/releases">Releases</a>
+        <a class="nav__link" style="--d:.08s" href="https://github.com/LavX/PhotoPrint">Source</a>
+        <a class="nav__link" style="--d:.14s" href="https://github.com/LavX/PhotoPrint/issues">Issues</a>
+      </nav>
+
+      <a class="logo" href="./" aria-label="PhotoPrint">
+        <svg class="logo__mark" viewBox="0 0 42 34" fill="none" aria-hidden="true">
+          <rect x="12" y="1" width="29" height="19" stroke="currentColor" stroke-width="2" opacity=".35"/>
+          <rect x="7" y="7" width="29" height="19" stroke="currentColor" stroke-width="2" opacity=".6"/>
+          <path fill="currentColor" fill-rule="evenodd" d="M2 13h29v19H2V13Zm4 4h21v11H6V17Z"/>
+        </svg>
+        <span class="logo__word">PhotoPrint</span>
+      </a>
+
+      <a class="btn btn--nav btn--enter" href="https://github.com/LavX/PhotoPrint/releases/latest">
+        <span class="btn__label">Download</span>
+        <span class="btn__icon">
+          <svg viewBox="0 0 20 20" fill="none" aria-hidden="true">
+            <path d="M4 10h10.2M10.4 5.6 15.2 10l-4.8 4.4" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </span>
+      </a>
+
+      <button class="nav__burger" type="button" aria-label="Open menu" aria-expanded="false" aria-controls="mobile-menu">
+        <span></span><span></span><span></span>
+      </button>
+    </header>
+
+    <nav id="mobile-menu" class="mobile-menu" aria-label="Menu" hidden>
+      <a href="https://github.com/LavX/PhotoPrint/releases">Releases</a>
+      <a href="https://github.com/LavX/PhotoPrint">Source</a>
+      <a href="https://github.com/LavX/PhotoPrint/issues">Issues</a>
+      <a class="btn btn--nav" href="https://github.com/LavX/PhotoPrint/releases/latest">
+        <span class="btn__label">Download</span>
+        <span class="btn__icon">
+          <svg viewBox="0 0 20 20" fill="none" aria-hidden="true">
+            <path d="M4 10h10.2M10.4 5.6 15.2 10l-4.8 4.4" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </span>
+      </a>
+    </nav>
+
+    <main class="hero">
+      <span class="badge wipe" style="--d:.18s">
+        <span class="badge__square" aria-hidden="true"></span>
+        Photo printing for Linux
+      </span>
+
+      <h1 class="headline">
+        <span class="headline__mask">
+          <span class="headline__rise" style="--d:.26s">Photos, paper,</span>
+        </span>
+        <span class="headline__mask">
+          <span class="headline__rise headline__line" style="--d:.4s"><span class="headline__muted">and a</span> <span class="headline__accent" data-text="print button.">print button.</span></span>
+        </span>
+      </h1>
+
+      <div class="actions">
+        <a class="btn btn--light wipe" style="--d:.56s" href="https://github.com/LavX/PhotoPrint/releases/latest">
+          <span class="btn__label">Download</span>
+          <span class="btn__icon">
+            <svg viewBox="0 0 20 20" fill="none" aria-hidden="true">
+              <path d="M4 10h10.2M10.4 5.6 15.2 10l-4.8 4.4" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </span>
+        </a>
+        <a class="btn btn--ghost wipe" style="--d:.66s" href="https://github.com/LavX/PhotoPrint">
+          <span class="btn__label">Source on GitHub</span>
+        </a>
+      </div>
+    </main>
+
+    <p class="lede">
+      <span class="lede__rise" style="--d:.78s">Add photos, pick a paper size, arrange the sheet. PhotoPrint fits every photograph to the paper, converts colour for your printer, and prints through CUPS. Nothing is uploaded.</span>
+    </p>
+
+    <div class="shot" aria-hidden="true">
+      <img src="shot.jpg" alt="" width="1800" height="970" decoding="async">
+    </div>
+  </div>
+
+  <script src="main.js"></script>
+</body>
+</html>
