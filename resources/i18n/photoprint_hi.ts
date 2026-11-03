@@ -1614,8 +1614,36 @@
         <translation>फ़ोटो का एक हिस्सा कटा हुआ है।</translation>
     </message>
     <message>
-        <source>Levágva</source>
-        <translation>कटा हुआ</translation>
+        <source>Nincs a lapon</source>
+        <translation>पेज पर नहीं</translation>
+    </message>
+    <message>
+        <source>Fel nem használt fotó</source>
+        <translation>अप्रयुक्त फ़ोटो</translation>
+    </message>
+    <message>
+        <source>Eltávolítás a könyvtárból</source>
+        <translation>लाइब्रेरी से हटाएँ</translation>
+    </message>
+    <message>
+        <source>A lapról eltávolított fotók itt maradnak, és visszahúzhatók.</source>
+        <translation>पेज से हटाई गई फ़ोटो यहाँ रहती हैं और वापस खींची जा सकती हैं।</translation>
+    </message>
+    <message>
+        <source>Fotó visszahelyezése</source>
+        <translation>फ़ोटो वापस रखें</translation>
+    </message>
+    <message>
+        <source>Fotó eltávolítása a könyvtárból</source>
+        <translation>फ़ोटो को लाइब्रेरी से हटाएँ</translation>
+    </message>
+    <message>
+        <source>Fotó eltávolítása</source>
+        <translation>फ़ोटो हटाएँ</translation>
+    </message>
+    <message>
+        <source>Részben</source>
+        <translation>आंशिक</translation>
     </message>
     <message>
         <source>Fotó</source>

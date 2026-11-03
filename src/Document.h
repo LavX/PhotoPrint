@@ -29,6 +29,16 @@ struct PhotoTone {
     bool operator==(const PhotoTone &) const = default;
 };
 
+/// One photograph the page no longer shows but the library still keeps. The
+/// pair is exactly the identity a frame carries, so a photograph that is back
+/// on the page is the same source and the repair point drops the duplicate
+/// entry instead of showing it twice.
+struct PhotoSource {
+    QString path;
+    QByteArray sha256;
+    bool operator==(const PhotoSource &) const = default;
+};
+
 /// One photograph placed on one page. All page geometry is millimetres,
 /// origin at the top-left corner of the physical sheet, X to the right,
 /// Y downwards. The frame is the visible cut-out rectangle on the paper.
@@ -399,6 +409,10 @@ constexpr double kMinTextBlockMm = 2.0;
 constexpr int kMinTextZ = -10000;
 constexpr int kMaxTextZ = 10000;
 
+/// How many removed photographs one page's library keeps. The cap bounds a
+/// corrupt or hand-edited file; the library is a working set, not an archive.
+constexpr int kMaxUnusedPhotos = 256;
+
 /// The text the renderer and the editor may see. `\r\n` and a lone `\r` become
 /// `\n`, every finite field is clamped to its range, a non-finite one becomes the
 /// neutral value, an unknown alignment becomes the default, the colour is forced
@@ -443,10 +457,27 @@ struct Page {
     /// photographs. The empty list is the default, so a page without text
     /// serialises exactly as it did before the feature.
     QList<TextItem> texts;
+    /// Photographs that were taken off the page but stay in the library. Empty
+    /// is the default, so every page written before the library kept removed
+    /// photos is unchanged and loads exactly as it did. The repair point drops
+    /// an entry a frame uses again, so undo needs no second bookkeeping.
+    QList<PhotoSource> unusedPhotos;
 
     bool hasLayout() const { return !slotList.isEmpty(); }
     bool operator==(const Page &) const = default;
 };
+
+/// True when a frame on the page still shows this photograph. The library entry
+/// and the frame carry the same pair, so this is the one rule that decides
+/// whether a removed source is really unused.
+inline bool pageUsesSource(const Page &page, const PhotoSource &source)
+{
+    for (const Frame &frame : page.frames) {
+        if (frame.sourcePath == source.path && frame.sourceSha256 == source.sha256)
+            return true;
+    }
+    return false;
+}
 
 /// Project keys for the two optional page fields. A missing or unrecognised key
 /// loads as the field's default, and the writer omits a default value, so an

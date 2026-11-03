@@ -236,6 +236,8 @@ private slots:
     void versionOneProjectWithoutNewKeysStillLoads();
     void missingAndChangedSourcesKeepTheLayout();
     void portableCopyWorksAfterMoving();
+    void unusedSourceRoundTripAndOldFile();
+    void portableCopyCarriesUnusedSource();
     void corruptAndUnknownProjectsAreRejected();
     void changedSourceStopsPrintPreparation();
 
@@ -1312,6 +1314,110 @@ void TestProjectStore::portableCopyWorksAfterMoving()
 
     QCOMPARE(fileSha256(m_redPath), m_redSha);
     QCOMPARE(fileSha256(m_bluePath), m_blueSha);
+}
+
+void TestProjectStore::unusedSourceRoundTripAndOldFile()
+{
+    // A photograph that is only in the library, used by no frame, so repair
+    // keeps the entry instead of folding it into the visible photograph.
+    const QString sparePath = m_dir.filePath(QStringLiteral("unused-spare.png"));
+    QVERIFY(writeImage(sparePath, QColor(40, 180, 90)));
+    const QByteArray spareSha = fileSha256(sparePath);
+
+    DocumentSnapshot document = sampleDocument(m_red, m_blue);
+    document.pages[0].unusedPhotos.append(PhotoSource{sparePath, spareSha});
+
+    const QString path = m_dir.filePath(QStringLiteral("unused.ppj"));
+    ProjectStore store;
+    const auto saved = store.save(path, document, SaveMode::Normal);
+    if (!saved)
+        QFAIL(qPrintable(saved.error().message));
+    const auto loaded = store.load(path);
+    if (!loaded)
+        QFAIL(qPrintable(loaded.error().message));
+
+    const Page &restored = loaded.value().document.pages.at(0);
+    QCOMPARE(restored.unusedPhotos.size(), 1);
+    QCOMPARE(restored.unusedPhotos.first().path, QFileInfo(sparePath).absoluteFilePath());
+    QCOMPARE(restored.unusedPhotos.first().sha256, spareSha);
+
+    // A page that never removed a photograph writes no key at all, so a build
+    // that knows nothing about the library sees the file it already knows.
+    const DocumentSnapshot plain = sampleDocument(m_red, m_blue);
+    const QByteArray json = ProjectStore::serialize(plain, QString());
+    const QJsonObject pageObject = QJsonDocument::fromJson(json)
+                                       .object()
+                                       .value(QStringLiteral("pages"))
+                                       .toArray()
+                                       .at(0)
+                                       .toObject();
+    QVERIFY(!pageObject.contains(QStringLiteral("unused")));
+    const auto reparsed = ProjectStore::deserialize(json);
+    QVERIFY(reparsed.ok());
+    QVERIFY(reparsed.value().pages.at(0).unusedPhotos.isEmpty());
+
+    // A hand-written 1.0.1 file has the key missing; it loads with no entries.
+    const QString oldPath = m_dir.filePath(QStringLiteral("old-unused.ppj"));
+    {
+        QFile file(oldPath);
+        QVERIFY(file.open(QIODevice::WriteOnly | QIODevice::Truncate));
+        QCOMPARE(file.write(json), qint64(json.size()));
+    }
+    const auto old = store.load(oldPath);
+    if (!old)
+        QFAIL(qPrintable(old.error().message));
+    QVERIFY(old.value().document.pages.at(0).unusedPhotos.isEmpty());
+}
+
+void TestProjectStore::portableCopyCarriesUnusedSource()
+{
+    const QString projectDir = m_dir.filePath(QStringLiteral("unused-portable"));
+    QVERIFY(QDir().mkpath(projectDir));
+    const QString path = QDir(projectDir).filePath(QStringLiteral("library.ppj"));
+    const QString sparePath = m_dir.filePath(QStringLiteral("unused-portable-spare.png"));
+    QVERIFY(writeImage(sparePath, QColor(180, 40, 120)));
+    const QByteArray spareSha = fileSha256(sparePath);
+
+    DocumentSnapshot document = sampleDocument(m_red, m_blue);
+    document.pages[0].unusedPhotos.append(PhotoSource{sparePath, spareSha});
+
+    ProjectStore store;
+    const auto saved = store.save(path, document, SaveMode::Portable);
+    if (!saved)
+        QFAIL(qPrintable(saved.error().message));
+
+    // The bundle carries the file, and the project still stores no absolute
+    // path the author's disk would reveal.
+    const QString bundle = path + QStringLiteral(".files");
+    QVERIFY2(QFileInfo::exists(QDir(bundle).filePath(QFileInfo(sparePath).fileName())),
+             "the portable copy did not carry the library photo");
+    QFile file(path);
+    QVERIFY(file.open(QIODevice::ReadOnly));
+    const QString text = QString::fromUtf8(file.readAll());
+    file.close();
+    QVERIFY(!text.contains(m_dir.path()));
+    QVERIFY(text.contains(QStringLiteral("\"unused\"")));
+
+    const auto loaded = store.load(path);
+    if (!loaded)
+        QFAIL(qPrintable(loaded.error().message));
+    const Page &restored = loaded.value().document.pages.at(0);
+    QCOMPARE(restored.unusedPhotos.size(), 1);
+    QVERIFY(restored.unusedPhotos.first().path.startsWith(bundle));
+    QCOMPARE(restored.unusedPhotos.first().sha256, spareSha);
+
+    // A library file that is gone is skipped, never a reason to fail the save:
+    // the rest of the project is still worth writing.
+    const QString otherPath = QDir(projectDir).filePath(QStringLiteral("missing.ppj"));
+    DocumentSnapshot missing = sampleDocument(m_red, m_blue);
+    missing.pages[0].unusedPhotos.append(
+        PhotoSource{m_dir.filePath(QStringLiteral("gone.png")), QByteArrayLiteral("sha-gone")});
+    const auto savedMissing = store.save(otherPath, missing, SaveMode::Portable);
+    QVERIFY2(savedMissing.ok(), savedMissing ? "" : qPrintable(savedMissing.error().message));
+    const auto reloaded = store.load(otherPath);
+    if (!reloaded)
+        QFAIL(qPrintable(reloaded.error().message));
+    QVERIFY(reloaded.value().document.pages.at(0).unusedPhotos.isEmpty());
 }
 
 void TestProjectStore::corruptAndUnknownProjectsAreRejected()

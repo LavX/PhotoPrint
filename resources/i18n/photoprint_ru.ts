@@ -1628,8 +1628,36 @@
         <translation>Часть фотографии обрезана.</translation>
     </message>
     <message>
-        <source>Levágva</source>
-        <translation>Обрезано</translation>
+        <source>Nincs a lapon</source>
+        <translation>Нет на странице</translation>
+    </message>
+    <message>
+        <source>Fel nem használt fotó</source>
+        <translation>Неиспользуемое фото</translation>
+    </message>
+    <message>
+        <source>Eltávolítás a könyvtárból</source>
+        <translation>Удалить из библиотеки</translation>
+    </message>
+    <message>
+        <source>A lapról eltávolított fotók itt maradnak, és visszahúzhatók.</source>
+        <translation>Фотографии, убранные со страницы, остаются здесь, и их можно перетащить обратно.</translation>
+    </message>
+    <message>
+        <source>Fotó visszahelyezése</source>
+        <translation>Вернуть фото</translation>
+    </message>
+    <message>
+        <source>Fotó eltávolítása a könyvtárból</source>
+        <translation>Удалить фото из библиотеки</translation>
+    </message>
+    <message>
+        <source>Fotó eltávolítása</source>
+        <translation>Удалить фото</translation>
+    </message>
+    <message>
+        <source>Részben</source>
+        <translation>Частично</translation>
     </message>
     <message>
         <source>Fotó</source>

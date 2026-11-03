@@ -133,6 +133,8 @@ private slots:
     void everyCatalogueTranslatesTheStickerMessages();
     void everyCatalogueTranslatesTheTextMessages_data();
     void everyCatalogueTranslatesTheTextMessages();
+    void everyCatalogueDroppedTheClippedBadge_data();
+    void everyCatalogueDroppedTheClippedBadge();
     void sourceLanguageInstallsTheQtCatalogue();
     void hungarianSourceSubstitutesTheCount();
     void repeatedLanguageSwitchingLeavesTranslatorsUnparented();
@@ -630,7 +632,15 @@ void TestI18n::everyCatalogueTranslatesTheSlotUiMessages()
              QStringLiteral("Kép visszahelyezése"),
              QStringLiteral("A fotót a helyére igazítja."),
              QStringLiteral("A kép egy része le van vágva."),
-             QStringLiteral("Levágva"),
+             QStringLiteral("Részben"),
+             // The library keeps a photograph that left the page.
+             QStringLiteral("Nincs a lapon"),
+             QStringLiteral("Fel nem használt fotó"),
+             QStringLiteral("Eltávolítás a könyvtárból"),
+             QStringLiteral("A lapról eltávolított fotók itt maradnak, és visszahúzhatók."),
+             QStringLiteral("Fotó visszahelyezése"),
+             QStringLiteral("Fotó eltávolítása a könyvtárból"),
+             QStringLiteral("Fotó eltávolítása"),
              QStringLiteral("Balra 90°"),
              QStringLiteral("Jobbra 90°"),
              QStringLiteral("Alaphelyzet"),
@@ -1020,6 +1030,28 @@ void TestI18n::everyCatalogueTranslatesTheTextMessages()
         QVERIFY2(text != source,
                  qPrintable(where + QStringLiteral(" is still the Hungarian source")));
     }
+}
+
+void TestI18n::everyCatalogueDroppedTheClippedBadge_data()
+{
+    QTest::addColumn<QString>("code");
+    for (const QString &code : i18n::targetCodes())
+        QTest::newRow(qPrintable(code)) << code;
+}
+
+void TestI18n::everyCatalogueDroppedTheClippedBadge()
+{
+    QFETCH(QString, code);
+
+    InstalledCatalogue catalogue(code);
+    QVERIFY2(catalogue.loaded(), qPrintable(code));
+
+    // The canvas badge is gone, so no catalogue may still carry its text. The
+    // inspector's full sentence stays: it is the hint that replaced the badge.
+    QCOMPARE(translated("PhotoPrint", QStringLiteral("Levágva")),
+             QStringLiteral("Levágva"));
+    QVERIFY(translated("PhotoPrint", QStringLiteral("A kép egy része le van vágva."))
+            != QStringLiteral("A kép egy része le van vágva."));
 }
 
 void TestI18n::sourceLanguageInstallsTheQtCatalogue()

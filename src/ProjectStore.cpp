@@ -23,6 +23,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <optional>
 
 namespace pp {
 
@@ -252,6 +253,10 @@ QHash<QString, QString> portableFileNames(const DocumentSnapshot &document)
         // A sticker travels like a photograph: its own file, copied once.
         for (const Sticker &sticker : page.stickers)
             addSource(sticker.imagePath, sticker.imageSha256);
+        // A photograph the page no longer shows is still in the library, so a
+        // portable copy carries it exactly like one on the page.
+        for (const PhotoSource &source : page.unusedPhotos)
+            addSource(source.path, source.sha256);
     }
 
     QSet<QString> used;
@@ -539,6 +544,53 @@ Frame frameFromJson(const QJsonObject &object)
     frame.tone.shadowLift = tone.value(QStringLiteral("shadowLift")).toDouble();
     frame.tone.highlightCompress = tone.value(QStringLiteral("highlightCompress")).toDouble();
     return frame;
+}
+
+/// One library entry, written with the same path rules as a frame: a normal
+/// project stores the project-relative path plus the absolute original, a
+/// portable copy stores only a contained relative path and no original.
+QJsonObject unusedSourceToJson(const PhotoSource &source, const QString &projectDir,
+                               const QString &portableDir,
+                               const QHash<QString, QString> &portableNames)
+{
+    QJsonObject object;
+    if (!portableDir.isEmpty()) {
+        const QString path = lexicalPath(source.path);
+        const QString name = portableNames.value(path);
+        if (name.isEmpty()) {
+            object.insert(QStringLiteral("source"), QString());
+        } else {
+            const QString target = QDir(portableDir).filePath(name);
+            object.insert(QStringLiteral("source"), QDir(projectDir).relativeFilePath(target));
+        }
+    } else {
+        const QString relative = QDir(projectDir).relativeFilePath(source.path);
+        object.insert(QStringLiteral("source"), relative.isEmpty() ? source.path : relative);
+        object.insert(QStringLiteral("original"), source.path);
+    }
+    object.insert(QStringLiteral("sha256"), QString::fromLatin1(source.sha256.toHex()));
+    return object;
+}
+
+/// A library entry whose file cannot be resolved is skipped, not kept with an
+/// empty path: an unused photograph with no file is not a photograph the user
+/// could drag back. The trust rules are the frame's own.
+std::optional<PhotoSource> unusedSourceFromJson(const QJsonObject &object,
+                                                const QString &projectDir)
+{
+    PhotoSource source;
+    source.sha256 = QByteArray::fromHex(object.value(QStringLiteral("sha256")).toString().toLatin1());
+    const QString stored = object.value(QStringLiteral("source")).toString();
+    const QString original = object.value(QStringLiteral("original")).toString();
+    const ResolvedSource resolved =
+        resolveStoredSource(projectDir, stored, original, source.sha256);
+    // A library entry whose file is not there is skipped, exactly as a portable
+    // copy skips a file it cannot carry: an unused photograph with no file is
+    // not one the user could drag back.
+    if (resolved.path.isEmpty() || !QFileInfo::exists(resolved.path))
+        return std::nullopt;
+    source.path = resolved.path;
+    return source;
 }
 
 QString backgroundKindKey(BackgroundKind kind)
@@ -907,6 +959,22 @@ Result<ParsedProject> parseDocument(const QJsonObject &root, const QString &proj
                 page.texts.append(textFromJson(textValue.toObject()));
             }
         }
+        // The library entries are optional and independent of the layout. A
+        // missing entry is simply not in the library; a malformed one is
+        // skipped and the rest of the page still loads.
+        const QJsonValue unusedValue = pageObject.value(QStringLiteral("unused"));
+        if (unusedValue.isArray()) {
+            for (const QJsonValue &sourceValue : unusedValue.toArray()) {
+                if (page.unusedPhotos.size() >= kMaxUnusedPhotos)
+                    break;
+                if (!sourceValue.isObject())
+                    continue;
+                if (const std::optional<PhotoSource> source =
+                        unusedSourceFromJson(sourceValue.toObject(), projectDir)) {
+                    page.unusedPhotos.append(*source);
+                }
+            }
+        }
         for (const QJsonValue &frameValue : pageObject.value(QStringLiteral("frames")).toArray()) {
             const QJsonObject frameObject = frameValue.toObject();
             Frame frame = frameFromJson(frameObject);
@@ -1086,6 +1154,13 @@ Result<void> copyPortableSources(const DocumentSnapshot &document, const QString
             if (!copied)
                 return copied;
         }
+        // A library entry is a convenience, not a photograph on the sheet: a
+        // missing file is skipped so the rest of the bundle still saves.
+        for (const PhotoSource &source : page.unusedPhotos) {
+            const auto copied = copySource(source.path, source.sha256, false);
+            if (!copied)
+                return copied;
+        }
     }
     return Result<void>();
 }
@@ -1166,6 +1241,17 @@ QByteArray ProjectStore::serialize(const DocumentSnapshot &document, const QStri
             for (const TextItem &text : page.texts)
                 textArray.append(textToJson(text));
             pageObject.insert(QStringLiteral("texts"), textArray);
+        }
+        // The library keeps the photographs that are no longer on the page. The
+        // array is omitted when empty, so a page that never removed a photo
+        // stays byte-identical to a file written before the library existed.
+        if (!page.unusedPhotos.isEmpty()) {
+            QJsonArray unusedArray;
+            for (const PhotoSource &source : page.unusedPhotos) {
+                unusedArray.append(
+                    unusedSourceToJson(source, projectDir, portableDir, portableNames));
+            }
+            pageObject.insert(QStringLiteral("unused"), unusedArray);
         }
         QJsonArray frames;
         for (const Frame &frame : page.frames)

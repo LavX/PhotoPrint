@@ -80,6 +80,10 @@ struct PageLayout {
     std::optional<PageBackground> background;
     std::optional<QList<Sticker>> stickers;
     std::optional<QList<TextItem>> texts;
+    /// The library entries for photographs removed from the page. Published
+    /// with the frames, so one undo step restores the photograph and drops its
+    /// unused entry together.
+    std::optional<QList<PhotoSource>> unusedPhotos;
 };
 
 /// A batch or align action, applied as one snapshot. The caller supplies the

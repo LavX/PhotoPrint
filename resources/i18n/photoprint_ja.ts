@@ -1600,8 +1600,36 @@
         <translation>写真の一部が切り取られています。</translation>
     </message>
     <message>
-        <source>Levágva</source>
-        <translation>切り取り</translation>
+        <source>Nincs a lapon</source>
+        <translation>ページにありません</translation>
+    </message>
+    <message>
+        <source>Fel nem használt fotó</source>
+        <translation>未使用の写真</translation>
+    </message>
+    <message>
+        <source>Eltávolítás a könyvtárból</source>
+        <translation>ライブラリから削除</translation>
+    </message>
+    <message>
+        <source>A lapról eltávolított fotók itt maradnak, és visszahúzhatók.</source>
+        <translation>ページから外した写真はここに残り、ドラッグで戻せます。</translation>
+    </message>
+    <message>
+        <source>Fotó visszahelyezése</source>
+        <translation>写真を戻す</translation>
+    </message>
+    <message>
+        <source>Fotó eltávolítása a könyvtárból</source>
+        <translation>写真をライブラリから削除</translation>
+    </message>
+    <message>
+        <source>Fotó eltávolítása</source>
+        <translation>写真を削除</translation>
+    </message>
+    <message>
+        <source>Részben</source>
+        <translation>一部</translation>
     </message>
     <message>
         <source>Fotó</source>

@@ -12,6 +12,7 @@
 #include <QComboBox>
 #include <QDir>
 #include <QDoubleSpinBox>
+#include <QDrag>
 #include <QDragEnterEvent>
 #include <QDragLeaveEvent>
 #include <QDragMoveEvent>
@@ -25,6 +26,7 @@
 #include <QMenu>
 #include <QMessageBox>
 #include <QMimeData>
+#include <QMouseEvent>
 #include <QPushButton>
 #include <QRegularExpression>
 #include <QScrollArea>
@@ -298,6 +300,61 @@ void dropFrame(PageView &view, const QPointF &position, const QString &frameId)
     view.dropForTest(&event);
 }
 
+void dropSource(PageView &view, const QPointF &position, const PhotoSource &source)
+{
+    QMimeData mime;
+    mime.setData(QString::fromLatin1(kSourceMimeType), encodePhotoSourcePayload(source));
+    QDropEvent event(position, Qt::CopyAction, &mime, Qt::LeftButton, Qt::NoModifier);
+    view.dropForTest(&event);
+}
+
+/// A laid-out page with `used` photographs in the first cells and `unused`
+/// sources in the library. The entries are the same pair a removal writes, so
+/// the page is exactly what the window would have produced.
+DocumentSnapshot documentWithUnused(const QStringList &used, const QStringList &unused,
+                                    int slotCount)
+{
+    DocumentSnapshot document = documentWithLayout(used, slotCount);
+    if (document.pages.isEmpty())
+        return document;
+    for (const QString &path : unused) {
+        PhotoSource source;
+        source.path = path;
+        source.sha256 = fileSha256(path);
+        document.pages[0].unusedPhotos.append(source);
+    }
+    return document;
+}
+
+PhotoListWidget *photoListOf(MainWindow &window)
+{
+    return window.findChild<PhotoListWidget *>();
+}
+
+QListWidgetItem *libraryItemForPath(MainWindow &window, const QString &path)
+{
+    auto *list = photoListOf(window);
+    if (!list)
+        return nullptr;
+    for (int i = 0; i < list->count(); ++i) {
+        QListWidgetItem *item = list->item(i);
+        if (item->data(UnusedPathRole).toString() == path)
+            return item;
+    }
+    return nullptr;
+}
+
+/// The page millimetres under a widget point, the inverse of pageToWidget.
+QPointF widgetToPageMm(const PageView &view, const QPointF &point)
+{
+    const QRectF rect = view.pageRect();
+    const QSizeF page = view.pageMm();
+    if (rect.isEmpty() || page.isEmpty())
+        return {};
+    return QPointF((point.x() - rect.left()) / rect.width() * page.width(),
+                   (point.y() - rect.top()) / rect.height() * page.height());
+}
+
 void sendWheel(PageView &view, const QPointF &position, int angle,
                Qt::KeyboardModifiers modifiers = Qt::NoModifier)
 {
@@ -560,6 +617,14 @@ private slots:
     void arrowNudgeFullyOutIsClamped();
     void resetPutsTheFrameBackOnItsCell();
     void clippedFrameIsAnnouncedAndHinted();
+    void libraryDragPayloadForUsedAndUnused();
+    void unusedSourceDropsOnEmptyCell();
+    void unusedSourceDropsOnFreePage();
+    void unusedSourceReplacesOccupiedCell();
+    void removingFromCanvasKeepsTheLibraryEntry();
+    void dragBackRemovesTheLibraryEntry();
+    void removeFromLibraryIsOneUndo();
+    void libraryListAndMenuFitALargeFont();
     void sectionOutlineIsVisibleWhenFilledAndDeselected();
     void imageRotationControlWritesAndPersists();
     void clipAwareHitTest();
@@ -1890,8 +1955,10 @@ void TestSlotUi::clippedFrameIsAnnouncedAndHinted()
 {
     QTemporaryDir dir;
     QVERIFY(dir.isValid());
+    // A blue photograph: any orange pixel on the canvas would be editor
+    // furniture, so the badge and its ring are measurable.
     const QString photo = makePhoto(dir.path(), QStringLiteral("clipped.png"),
-                                    QColor(200, 120, 30));
+                                    QColor(40, 90, 200));
     MainWindow window;
     window.resize(1280, 800);
     window.show();
@@ -1921,20 +1988,443 @@ void TestSlotUi::clippedFrameIsAnnouncedAndHinted()
     QCOMPARE(view->accessibleDescription(),
              QStringLiteral("A kép egy része le van vágva."));
 
-    // The canvas carries the orange clipped badge as well.
+    // The canvas stays clean: no orange badge and no orange dashed ring. The
+    // inspector carries the hint; the page carries nothing.
     const QImage canvas = view->grab().toImage();
-    const QRectF cell = view->slotRect(slotId);
+    const QRect cell = view->slotRect(slotId).toRect().intersected(canvas.rect());
     int orange = 0;
-    for (int y = int(cell.top()); y <= int(cell.top()) + 30; ++y) {
-        for (int x = int(cell.left()); x <= int(cell.left()) + 90; ++x) {
-            if (x < 0 || y < 0 || x >= canvas.width() || y >= canvas.height())
-                continue;
+    for (int y = cell.top(); y <= cell.bottom(); ++y) {
+        for (int x = cell.left(); x <= cell.right(); ++x) {
             const QRgb pixel = canvas.pixel(x, y);
             if (qRed(pixel) > 150 && qGreen(pixel) < 130 && qBlue(pixel) < 100)
                 ++orange;
         }
     }
-    QVERIFY2(orange > 10, qPrintable(QStringLiteral("clipped badge pixels %1").arg(orange)));
+    QVERIFY2(orange == 0,
+             qPrintable(QStringLiteral("clipped badge pixels %1").arg(orange)));
+    QVERIFY(view->grab().save(evidenceDir()
+                              + QStringLiteral("/slot-clean-canvas.png")));
+
+    // The Hely tab still says the cell is partly clipped, in words.
+    auto *tabs = inspectorTabs(window);
+    QVERIFY(tabs);
+    tabs->setCurrentIndex(1);
+    QTest::qWait(30);
+    QCOMPARE(window.findChild<QLabel *>(QStringLiteral("slotClipValue"))->text(),
+             QStringLiteral("Részben"));
+}
+
+void TestSlotUi::libraryDragPayloadForUsedAndUnused()
+{
+    QTemporaryDir dir;
+    QVERIFY(dir.isValid());
+    const QString used = makePhoto(dir.path(), QStringLiteral("payload-used.png"),
+                                   QColor(120, 60, 180));
+    const QString spare = makePhoto(dir.path(), QStringLiteral("payload-spare.png"),
+                                    QColor(60, 180, 120));
+
+    MainWindow window;
+    window.resize(1280, 800);
+    window.show();
+    QTest::qWait(100);
+    QVERIFY(loadDocument(window, dir, documentWithUnused({used}, {spare}, 4),
+                         QStringLiteral("payload.ppj")));
+    QVERIFY(window.waitForPreview(15000));
+
+    auto *list = photoListOf(window);
+    QVERIFY(list);
+    QCOMPARE(list->count(), 2);
+
+    // A used item carries the frame id the canvas already knows how to move.
+    QListWidgetItem *usedItem = list->item(0);
+    QVERIFY(!usedItem->data(FrameIdRole).toString().isEmpty());
+    const std::unique_ptr<QMimeData> usedData(list->dragDataForItem(usedItem));
+    QVERIFY(usedData);
+    QVERIFY(usedData->hasFormat(QString::fromLatin1(kFrameMimeType)));
+    QCOMPARE(QString::fromUtf8(usedData->data(QString::fromLatin1(kFrameMimeType))),
+             usedItem->data(FrameIdRole).toString());
+
+    // An unused item carries the photograph's identity instead, and is marked
+    // as not being on the page in words a reader can hear.
+    QListWidgetItem *unusedItem = libraryItemForPath(window, spare);
+    QVERIFY2(unusedItem, "the removed photo is not in the library");
+    QCOMPARE(unusedItem->text(), QStringLiteral("Nincs a lapon"));
+    QCOMPARE(unusedItem->data(Qt::AccessibleTextRole).toString(),
+             QStringLiteral("Fel nem használt fotó"));
+    QVERIFY(!unusedItem->icon().isNull());
+    const std::unique_ptr<QMimeData> sourceData(list->dragDataForItem(unusedItem));
+    QVERIFY(sourceData);
+    QVERIFY(sourceData->hasFormat(QString::fromLatin1(kSourceMimeType)));
+    const std::optional<PhotoSource> decoded =
+        decodePhotoSourcePayload(sourceData->data(QString::fromLatin1(kSourceMimeType)));
+    QVERIFY(decoded);
+    QCOMPARE(decoded->path, spare);
+    QCOMPARE(decoded->sha256, fileSha256(spare));
+
+    // A press and a move really start a drag, with the thumbnail as its image.
+    // The runner replaces the blocking platform drag, which offscreen has no
+    // manager for. The payload is read inside the runner: the QDrag owns the
+    // mime data and frees it when it goes out of scope.
+    bool started = false;
+    bool startedHasSource = false;
+    bool startedHasPixmap = false;
+    QByteArray startedPayload;
+    list->dragRunner = [&](QDrag *drag) {
+        started = true;
+        startedHasPixmap = !drag->pixmap().isNull();
+        if (QMimeData *dragData = drag->mimeData()) {
+            startedHasSource = dragData->hasFormat(QString::fromLatin1(kSourceMimeType));
+            startedPayload = dragData->data(QString::fromLatin1(kSourceMimeType));
+        }
+    };
+    const QPoint press = list->visualItemRect(unusedItem).center();
+    QTest::mousePress(list->viewport(), Qt::LeftButton, Qt::NoModifier, press);
+    const QPoint moved = press + QPoint(24, 24);
+    QMouseEvent moveEvent(QEvent::MouseMove, moved,
+                          list->viewport()->mapToGlobal(moved), Qt::NoButton,
+                          Qt::LeftButton, Qt::NoModifier);
+    QApplication::sendEvent(list->viewport(), &moveEvent);
+    QVERIFY2(started, "a press and a move did not start a drag");
+    QVERIFY2(startedHasSource, "the drag does not carry the unused source");
+    QVERIFY2(startedHasPixmap, "the drag has no thumbnail");
+    const std::optional<PhotoSource> startedSource =
+        decodePhotoSourcePayload(startedPayload);
+    QVERIFY(startedSource);
+    QCOMPARE(startedSource->path, spare);
+    list->dragRunner = nullptr;
+}
+
+void TestSlotUi::unusedSourceDropsOnEmptyCell()
+{
+    QTemporaryDir dir;
+    QVERIFY(dir.isValid());
+    const QString used = makePhoto(dir.path(), QStringLiteral("cell-used.png"),
+                                    QColor(200, 80, 80));
+    const QString spare = makePhoto(dir.path(), QStringLiteral("cell-spare.png"),
+                                    QColor(80, 200, 80));
+
+    MainWindow window;
+    window.resize(1280, 800);
+    window.show();
+    QTest::qWait(100);
+    QVERIFY(loadDocument(window, dir, documentWithUnused({used}, {spare}, 4),
+                         QStringLiteral("empty-cell.ppj")));
+    auto *view = window.findChild<PageView *>();
+    QVERIFY(view);
+    QVERIFY(window.waitForPreview(15000));
+
+    const DocumentSnapshot before = window.document();
+    const QString emptySlot = before.pages.first().slotList.at(1).id;
+    PhotoSource source{spare, fileSha256(spare)};
+    dropSource(*view, view->slotRect(emptySlot).center(), source);
+    QTest::qWait(80);
+
+    const Page after = window.document().pages.first();
+    const Frame *placed = frameInSlot(after, emptySlot);
+    QVERIFY2(placed, "the unused photo did not land in the empty cell");
+    QCOMPARE(placed->sourcePath, spare);
+    QCOMPARE(placed->slotId, emptySlot);
+    QVERIFY2(after.unusedPhotos.isEmpty(), "the photo is both used and unused");
+
+    // One undo puts the entry back and takes the frame off the page.
+    QAction *undo = undoAction(window);
+    QVERIFY(undo);
+    undo->trigger();
+    QTest::qWait(50);
+    QVERIFY(window.document() == before);
+}
+
+void TestSlotUi::unusedSourceDropsOnFreePage()
+{
+    QTemporaryDir dir;
+    QVERIFY(dir.isValid());
+    const QString spare = makePhoto(dir.path(), QStringLiteral("free-spare.png"),
+                                    QColor(90, 90, 220));
+
+    DocumentSnapshot document;
+    Page page;
+    page.id = QStringLiteral("page-free-library");
+    page.paper = a4Paper();
+    document.pages.append(page);
+    document.currentPage = 0;
+    PhotoSource source{spare, fileSha256(spare)};
+    document.pages[0].unusedPhotos.append(source);
+
+    MainWindow window;
+    window.resize(1280, 800);
+    window.show();
+    QTest::qWait(100);
+    QVERIFY(loadDocument(window, dir, document, QStringLiteral("free-library.ppj")));
+    auto *view = window.findChild<PageView *>();
+    QVERIFY(view);
+    QVERIFY(window.waitForPreview(15000));
+
+    const QPointF target = view->pageRect().center() + QPointF(-40.0, 30.0);
+    const QPointF targetMm = widgetToPageMm(*view, target);
+    const DocumentSnapshot before = window.document();
+    dropSource(*view, target, source);
+    QTest::qWait(80);
+
+    const Page after = window.document().pages.first();
+    QCOMPARE(after.frames.size(), 1);
+    const Frame &placed = after.frames.first();
+    QCOMPARE(placed.sourcePath, spare);
+    QVERIFY(placed.slotId.isEmpty());
+    QVERIFY2(after.unusedPhotos.isEmpty(), "the photo is both used and unused");
+    // The frame keeps the source's aspect (600 x 400) and lands at the point.
+    QVERIFY2(std::abs(placed.width / placed.height - 1.5) < 0.01,
+             qPrintable(QStringLiteral("aspect %1").arg(placed.width / placed.height)));
+    QVERIFY(std::abs(placed.cx - targetMm.x()) < 1.0);
+    QVERIFY(std::abs(placed.cy - targetMm.y()) < 1.0);
+
+    QAction *undo = undoAction(window);
+    QVERIFY(undo);
+    undo->trigger();
+    QTest::qWait(50);
+    QVERIFY(window.document() == before);
+}
+
+void TestSlotUi::unusedSourceReplacesOccupiedCell()
+{
+    QTemporaryDir dir;
+    QVERIFY(dir.isValid());
+    const QString used = makePhoto(dir.path(), QStringLiteral("replace-used.png"),
+                                    QColor(210, 120, 40));
+    const QString spare = makePhoto(dir.path(), QStringLiteral("replace-spare.png"),
+                                    QColor(40, 120, 210));
+
+    MainWindow window;
+    window.resize(1280, 800);
+    window.show();
+    QTest::qWait(100);
+    QVERIFY(loadDocument(window, dir, documentWithUnused({used}, {spare}, 4),
+                         QStringLiteral("replace.ppj")));
+    auto *view = window.findChild<PageView *>();
+    QVERIFY(view);
+    QVERIFY(window.waitForPreview(15000));
+
+    const DocumentSnapshot before = window.document();
+    const Page page = before.pages.first();
+    const QString filledSlot = page.slotList.at(0).id;
+    const QString replacedId = frameInSlot(page, filledSlot)->id;
+    PhotoSource source{spare, fileSha256(spare)};
+    dropSource(*view, view->slotRect(filledSlot).center(), source);
+    QTest::qWait(80);
+
+    const Page after = window.document().pages.first();
+    const Frame *placed = frameInSlot(after, filledSlot);
+    QVERIFY(placed);
+    QCOMPARE(placed->sourcePath, spare);
+    QVERIFY(placed->id != replacedId);
+    // The photograph that was in the cell is not lost: it moves to the library.
+    QCOMPARE(after.unusedPhotos.size(), 1);
+    QCOMPARE(after.unusedPhotos.first().path, used);
+    QCOMPARE(after.unusedPhotos.first().sha256, fileSha256(used));
+
+    QAction *undo = undoAction(window);
+    QVERIFY(undo);
+    undo->trigger();
+    QTest::qWait(50);
+    QVERIFY(window.document() == before);
+}
+
+void TestSlotUi::removingFromCanvasKeepsTheLibraryEntry()
+{
+    QTemporaryDir dir;
+    QVERIFY(dir.isValid());
+    const QString photo = makePhoto(dir.path(), QStringLiteral("removed.png"),
+                                    QColor(70, 160, 160));
+
+    MainWindow window;
+    window.resize(1280, 800);
+    window.show();
+    QTest::qWait(100);
+    QVERIFY(loadDocument(window, dir, documentWithLayout({photo}, 4),
+                         QStringLiteral("removed.ppj")));
+    auto *view = window.findChild<PageView *>();
+    QVERIFY(view);
+    QVERIFY(window.waitForPreview(15000));
+
+    const DocumentSnapshot before = window.document();
+    const QString slotId = before.pages.first().slotList.at(0).id;
+    QTest::mouseClick(view, Qt::LeftButton, Qt::NoModifier,
+                      view->slotRect(slotId).center().toPoint());
+    QTest::keyClick(view, Qt::Key_Delete);
+    QTest::qWait(80);
+
+    Page after = window.document().pages.first();
+    QVERIFY(after.frames.isEmpty());
+    QCOMPARE(after.unusedPhotos.size(), 1);
+    QCOMPARE(after.unusedPhotos.first().path, photo);
+    QCOMPARE(after.unusedPhotos.first().sha256, fileSha256(photo));
+
+    // The left list is a library: the photo stays there, marked as unused.
+    auto *list = photoListOf(window);
+    QVERIFY(list);
+    QCOMPARE(list->count(), 1);
+    const QListWidgetItem *item = libraryItemForPath(window, photo);
+    QVERIFY(item);
+    QCOMPARE(item->text(), QStringLiteral("Nincs a lapon"));
+    QCOMPARE(item->data(Qt::AccessibleTextRole).toString(),
+             QStringLiteral("Fel nem használt fotó"));
+    QVERIFY(!item->icon().isNull());
+    QVERIFY(window.grab().save(evidenceDir()
+                               + QStringLiteral("/library-unused-item.png")));
+
+    // One undo restores the photograph on the page and drops the entry.
+    QAction *undo = undoAction(window);
+    QVERIFY(undo);
+    undo->trigger();
+    QTest::qWait(60);
+    QVERIFY(window.document() == before);
+    QVERIFY(!libraryItemForPath(window, photo));
+
+    // Redo takes it off the page again and the entry comes back.
+    window.undoStackForTest()->redo();
+    QTest::qWait(60);
+    QVERIFY(libraryItemForPath(window, photo));
+    QCOMPARE(window.document().pages.first().unusedPhotos.size(), 1);
+}
+
+void TestSlotUi::dragBackRemovesTheLibraryEntry()
+{
+    QTemporaryDir dir;
+    QVERIFY(dir.isValid());
+    const QString spare = makePhoto(dir.path(), QStringLiteral("drag-back.png"),
+                                    QColor(160, 70, 160));
+
+    MainWindow window;
+    window.resize(1280, 800);
+    window.show();
+    QTest::qWait(100);
+    QVERIFY(loadDocument(window, dir, documentWithUnused({}, {spare}, 4),
+                         QStringLiteral("drag-back.ppj")));
+    auto *view = window.findChild<PageView *>();
+    QVERIFY(view);
+    QVERIFY(window.waitForPreview(15000));
+
+    const DocumentSnapshot before = window.document();
+    QCOMPARE(before.pages.first().unusedPhotos.size(), 1);
+    QVERIFY(libraryItemForPath(window, spare));
+    const QString slotId = before.pages.first().slotList.at(2).id;
+    PhotoSource source{spare, fileSha256(spare)};
+    dropSource(*view, view->slotRect(slotId).center(), source);
+    QTest::qWait(80);
+
+    const Page after = window.document().pages.first();
+    QVERIFY(frameInSlot(after, slotId));
+    QCOMPARE(frameInSlot(after, slotId)->sourcePath, spare);
+    QVERIFY(after.unusedPhotos.isEmpty());
+    QVERIFY2(!libraryItemForPath(window, spare),
+             "the entry stayed in the library after the photo went back");
+
+    QAction *undo = undoAction(window);
+    QVERIFY(undo);
+    undo->trigger();
+    QTest::qWait(60);
+    QVERIFY(window.document() == before);
+    QVERIFY(libraryItemForPath(window, spare));
+}
+
+void TestSlotUi::removeFromLibraryIsOneUndo()
+{
+    QTemporaryDir dir;
+    QVERIFY(dir.isValid());
+    const QString used = makePhoto(dir.path(), QStringLiteral("lib-used.png"),
+                                   QColor(40, 160, 90));
+    const QString spare = makePhoto(dir.path(), QStringLiteral("lib-spare.png"),
+                                    QColor(160, 40, 90));
+
+    MainWindow window;
+    window.resize(1280, 800);
+    window.show();
+    QTest::qWait(100);
+    QVERIFY(loadDocument(window, dir, documentWithUnused({used}, {spare}, 4),
+                         QStringLiteral("library.ppj")));
+    QVERIFY(window.waitForPreview(15000));
+
+    const DocumentSnapshot before = window.document();
+    auto *list = photoListOf(window);
+    QVERIFY(list);
+    QCOMPARE(list->count(), 2);
+
+    window.removeUnusedPhotoForTest(spare);
+    QTest::qWait(60);
+    QVERIFY(window.document().pages.first().unusedPhotos.isEmpty());
+    QCOMPARE(list->count(), 1);
+    QVERIFY(!libraryItemForPath(window, spare));
+    // The file is still there: removing a library entry is not deleting a photo.
+    QVERIFY(QFileInfo::exists(spare));
+
+    QAction *undo = undoAction(window);
+    QVERIFY(undo);
+    undo->trigger();
+    QTest::qWait(60);
+    QVERIFY(window.document() == before);
+    QCOMPARE(list->count(), 2);
+
+    window.undoStackForTest()->redo();
+    QTest::qWait(60);
+    QVERIFY(window.document().pages.first().unusedPhotos.isEmpty());
+}
+
+void TestSlotUi::libraryListAndMenuFitALargeFont()
+{
+    FontScale scale(1.6);
+
+    QTemporaryDir dir;
+    QVERIFY(dir.isValid());
+    const QString used = makePhoto(dir.path(), QStringLiteral("big-used.png"),
+                                   QColor(90, 120, 200));
+    const QString spare = makePhoto(dir.path(), QStringLiteral("big-spare.png"),
+                                    QColor(200, 120, 90));
+
+    MainWindow window;
+    window.resize(1280, 720);
+    window.show();
+    QTest::qWait(150);
+    QVERIFY(loadDocument(window, dir, documentWithUnused({used}, {spare}, 4),
+                         QStringLiteral("big.ppj")));
+    QVERIFY(window.waitForPreview(15000));
+
+    auto *list = photoListOf(window);
+    QVERIFY(list);
+    QVERIFY(list->isVisible());
+    QVERIFY2(list->viewport()->width() >= list->gridSize().width(),
+             "a single library column does not fit");
+    const QListWidgetItem *item = libraryItemForPath(window, spare);
+    QVERIFY(item);
+    const QRect itemRect = list->visualItemRect(item);
+    QVERIFY(itemRect.width() <= list->viewport()->width());
+    QVERIFY2(itemRect.height()
+                 >= list->iconSize().height() + list->fontMetrics().height(),
+             "the unused label has no room under the thumbnail");
+    QVERIFY(list->viewport()->rect().contains(itemRect));
+
+    // The rule the library follows is on screen, under the list.
+    auto *hint = window.findChild<QLabel *>(QStringLiteral("libraryHint"));
+    QVERIFY(hint);
+    QVERIFY(hint->isVisible());
+    QVERIFY2(hint->height() > 0, "the library hint has no room at 1280 x 720");
+    QCOMPARE(hint->text(),
+             QStringLiteral("A lapról eltávolított fotók itt maradnak, és visszahúzhatók."));
+    const int listBottom = list->mapTo(&window, QPoint(0, list->height())).y();
+    const int hintTop = hint->mapTo(&window, QPoint(0, 0)).y();
+    QVERIFY2(hintTop >= listBottom - 2, "the library hint does not sit under the list");
+
+    // The context menu says the one thing a removed entry can do, and fits the
+    // window at this font.
+    QMenu *menu = window.photoListMenuForTest(spare);
+    QVERIFY(menu);
+    QCOMPARE(menu->actions().size(), 1);
+    QCOMPARE(menu->actions().first()->text(),
+             QStringLiteral("Eltávolítás a könyvtárból"));
+    const QSize hintSize = menu->sizeHint();
+    QVERIFY2(hintSize.width() <= window.width(),
+             qPrintable(QStringLiteral("menu width %1").arg(hintSize.width())));
+    QVERIFY2(hintSize.height() <= window.height(),
+             qPrintable(QStringLiteral("menu height %1").arg(hintSize.height())));
+    delete menu;
 }
 
 void TestSlotUi::sectionOutlineIsVisibleWhenFilledAndDeselected()

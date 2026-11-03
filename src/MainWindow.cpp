@@ -40,6 +40,7 @@
 #include <QFontComboBox>
 #include <QFontMetrics>
 #include <QPlainTextEdit>
+#include <QDrag>
 #include <QDragEnterEvent>
 #include <QDragLeaveEvent>
 #include <QDragMoveEvent>
@@ -52,6 +53,8 @@
 #include <QHBoxLayout>
 #include <QIcon>
 #include <QImageReader>
+#include <QJsonDocument>
+#include <QJsonObject>
 #include <QKeyEvent>
 #include <QLabel>
 #include <QLineEdit>
@@ -406,21 +409,27 @@ public:
 };
 
 /// Every library entry gets the same square tile, so the grid stays even even
-/// when the photos have different shapes.
-QPixmap libraryThumbnail(const QImage &image, int size)
+/// when the photos have different shapes. A dimmed tile is a photograph that is
+/// only in the library: the picture is faded and the frame is dashed, so the
+/// two kinds read differently before the label is read.
+QPixmap libraryThumbnail(const QImage &image, int size, bool dimmed = false)
 {
     QPixmap tile(size, size);
     tile.fill(Qt::transparent);
     QPainter painter(&tile);
     painter.setRenderHint(QPainter::Antialiasing);
     painter.setRenderHint(QPainter::SmoothPixmapTransform);
-    painter.setPen(QPen(QColor(128, 128, 128, 70), 1));
+    QPen border(QColor(128, 128, 128, 70), 1);
+    if (dimmed)
+        border.setStyle(Qt::DashLine);
+    painter.setPen(border);
     painter.setBrush(QColor(128, 128, 128, 22));
     painter.drawRoundedRect(QRectF(0.5, 0.5, size - 1.0, size - 1.0), 6, 6);
     const int inset = 5;
     const QImage scaled =
         image.scaled(size - inset * 2, size - inset * 2, Qt::KeepAspectRatio,
                      Qt::SmoothTransformation);
+    painter.setOpacity(dimmed ? 0.45 : 1.0);
     painter.drawImage(QPoint((size - scaled.width()) / 2, (size - scaled.height()) / 2), scaled);
     return tile;
 }
@@ -465,23 +474,102 @@ protected:
 
 PhotoListWidget::PhotoListWidget(QWidget *parent) : QListWidget(parent)
 {
-    // The list is the page's frames, so a drag out of it is a move. The canvas
-    // is the only drop target; the list itself must not reorder by dragging.
-    setDragEnabled(true);
-    setDragDropMode(QAbstractItemView::DragOnly);
-    setDefaultDropAction(Qt::CopyAction);
+    // The list is a library, so a drag out of it is a move for a photo that is
+    // on the page and a put-back for one that is not. The canvas is the only
+    // drop target; the list itself never reorders by dragging. The drag is
+    // started by hand in mouseMoveEvent: the model's own drag flags never began
+    // reliably in an icon grid, which is why a thumbnail could not be dragged.
+    setDragEnabled(false);
+    setDragDropMode(QAbstractItemView::NoDragDrop);
+    setDefaultDropAction(Qt::MoveAction);
+    setContextMenuPolicy(Qt::CustomContextMenu);
 }
 
-QMimeData *PhotoListWidget::mimeData(const QList<QListWidgetItem *> &items) const
+QByteArray encodePhotoSourcePayload(const PhotoSource &source)
 {
-    if (items.isEmpty())
+    QJsonObject object;
+    object.insert(QStringLiteral("path"), source.path);
+    object.insert(QStringLiteral("sha256"), QString::fromLatin1(source.sha256.toHex()));
+    return QJsonDocument(object).toJson(QJsonDocument::Compact);
+}
+
+std::optional<PhotoSource> decodePhotoSourcePayload(const QByteArray &payload)
+{
+    const QJsonDocument document = QJsonDocument::fromJson(payload);
+    if (!document.isObject())
+        return std::nullopt;
+    const QJsonObject object = document.object();
+    PhotoSource source;
+    source.path = object.value(QStringLiteral("path")).toString();
+    source.sha256 = QByteArray::fromHex(
+        object.value(QStringLiteral("sha256")).toString().toLatin1());
+    if (source.path.isEmpty())
+        return std::nullopt;
+    return source;
+}
+
+QMimeData *PhotoListWidget::dragDataForItem(const QListWidgetItem *item) const
+{
+    if (!item)
         return nullptr;
-    const QString frameId = items.first()->data(Qt::UserRole).toString();
-    if (frameId.isEmpty())
+    const QString frameId = item->data(FrameIdRole).toString();
+    if (!frameId.isEmpty()) {
+        auto *data = new QMimeData;
+        data->setData(QString::fromLatin1(kFrameMimeType), frameId.toUtf8());
+        return data;
+    }
+    const QString path = item->data(UnusedPathRole).toString();
+    if (path.isEmpty())
         return nullptr;
+    PhotoSource source;
+    source.path = path;
+    source.sha256 = QByteArray::fromHex(item->data(UnusedShaRole).toString().toLatin1());
     auto *data = new QMimeData;
-    data->setData(QString::fromLatin1(kFrameMimeType), frameId.toUtf8());
+    data->setData(QString::fromLatin1(kSourceMimeType), encodePhotoSourcePayload(source));
     return data;
+}
+
+void PhotoListWidget::mousePressEvent(QMouseEvent *event)
+{
+    m_dragStart = event->button() == Qt::LeftButton ? event->position().toPoint() : QPoint();
+    QListWidget::mousePressEvent(event);
+}
+
+void PhotoListWidget::mouseMoveEvent(QMouseEvent *event)
+{
+    if (m_dragStart.isNull() || !(event->buttons() & Qt::LeftButton)) {
+        QListWidget::mouseMoveEvent(event);
+        return;
+    }
+    if ((event->position().toPoint() - m_dragStart).manhattanLength()
+        < QApplication::startDragDistance()) {
+        QListWidget::mouseMoveEvent(event);
+        return;
+    }
+    QListWidgetItem *item = itemAt(m_dragStart);
+    QMimeData *data = dragDataForItem(item);
+    if (!item || !data) {
+        m_dragStart = QPoint();
+        QListWidget::mouseMoveEvent(event);
+        return;
+    }
+    m_dragStart = QPoint();
+
+    // The thumbnail is the drag image, so the pointer carries the photograph it
+    // picked up. The default action is the fallback when no runner replaces the
+    // blocking platform drag.
+    const bool unused = item->data(FrameIdRole).toString().isEmpty();
+    QDrag drag(this);
+    drag.setMimeData(data);
+    const QPixmap pixmap = item->icon().pixmap(48, 48);
+    if (!pixmap.isNull()) {
+        drag.setPixmap(pixmap);
+        drag.setHotSpot(QPoint(pixmap.width() / 2, pixmap.height() / 2));
+    }
+    if (dragRunner)
+        dragRunner(&drag);
+    else
+        drag.exec(unused ? Qt::CopyAction : Qt::MoveAction);
 }
 
 PageView::PageView(QWidget *parent) : QWidget(parent)
@@ -2187,7 +2275,6 @@ void PageView::paintSlotOverlays(QPainter &painter, const Page &page) const
         const bool selected = m_selectedSlotId == slot.id;
         const QRectF ring = cell.adjusted(1.0, 1.0, -1.0, -1.0);
         const Frame *occupant = SlotGeometry::frameInSlot(page, slot.id);
-        const bool clipped = occupant && SlotGeometry::frameIsClipped(page, *occupant);
 
         QColor border;
         QColor fill;
@@ -2240,31 +2327,6 @@ void PageView::paintSlotOverlays(QPainter &painter, const Page &page) const
                                  QColor(255, 255, 255, 210));
                 painter.setPen(state == SlotState::Missing ? border.darker(115) : border);
                 painter.drawText(ring.adjusted(4, 2, -4, -2), Qt::AlignCenter, elided);
-            }
-        }
-
-        if (clipped) {
-            // Part of the photograph is outside the window. A dashed orange
-            // ring and a short badge say so before the user wonders where the
-            // rest of the picture went; the inspector carries the full hint.
-            drawTwoToneRing(painter, ring.adjusted(2.0, 2.0, -2.0, -2.0),
-                            QColor(0xc4, 0x55, 0x00), 3.0, 1.6, Qt::DashLine,
-                            {3.0, 3.0});
-            const QString label = QCoreApplication::translate("PhotoPrint", "Levágva");
-            QFont font = baseFont;
-            font.setBold(true);
-            font.setPointSizeF(std::max(7.0, baseFont.pointSizeF() * 0.85));
-            const QFontMetrics metrics(font);
-            const int textWidth = metrics.horizontalAdvance(label) + 12;
-            const int textHeight = metrics.height() + 4;
-            if (cell.width() >= textWidth + 8 && cell.height() >= textHeight + 8) {
-                const QRectF badge(cell.left() + 5.0, cell.top() + 5.0, textWidth, textHeight);
-                painter.setPen(Qt::NoPen);
-                painter.setBrush(QColor(0xc4, 0x55, 0x00));
-                painter.drawRoundedRect(badge, 3.0, 3.0);
-                painter.setFont(font);
-                painter.setPen(Qt::white);
-                painter.drawText(badge, Qt::AlignCenter, label);
             }
         }
 
@@ -3052,7 +3114,8 @@ void PageView::dragEnterEvent(QDragEnterEvent *event)
     // commit lands first, so the drop cannot be overwritten by it.
     flushWheelZoom();
     const bool frames = event->mimeData()->hasFormat(QString::fromLatin1(kFrameMimeType));
-    if (event->mimeData()->hasUrls() || frames) {
+    const bool sources = event->mimeData()->hasFormat(QString::fromLatin1(kSourceMimeType));
+    if (event->mimeData()->hasUrls() || frames || sources) {
         m_dropSlotId = slotAtWidget(event->position());
         updateDropCue();
         update();
@@ -3092,6 +3155,16 @@ void PageView::dropEvent(QDropEvent *event)
         const QString frameId = QString::fromUtf8(event->mimeData()->data(frameFormat));
         if (!frameId.isEmpty() && onFrameDroppedAt)
             onFrameDroppedAt(frameId, slotId, pagePoint);
+        event->acceptProposedAction();
+        return;
+    }
+
+    const QString sourceFormat = QString::fromLatin1(kSourceMimeType);
+    if (event->mimeData()->hasFormat(sourceFormat)) {
+        const std::optional<PhotoSource> source =
+            decodePhotoSourcePayload(event->mimeData()->data(sourceFormat));
+        if (source && onSourceDroppedAt)
+            onSourceDroppedAt(*source, slotId, pagePoint);
         event->acceptProposedAction();
         return;
     }
@@ -3320,11 +3393,13 @@ void MainWindow::buildUi()
     m_photoList->setViewMode(QListView::IconMode);
     m_photoList->setResizeMode(QListView::Adjust);
     m_photoList->setMovement(QListView::Static);
-    m_photoList->setGridSize(QSize(72, 72));
+    // The grid leaves room for the label under an unused thumbnail, so the
+    // library can say "not on the page" in words instead of only in a colour.
+    m_photoList->setGridSize(QSize(96, 104));
     m_photoList->setIconSize(QSize(64, 64));
     m_photoList->setSpacing(4);
     m_photoList->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
-    m_photoList->setWordWrap(false);
+    m_photoList->setWordWrap(true);
     m_photoList->setUniformItemSizes(true);
     m_photoList->setAccessibleName(QCoreApplication::translate("PhotoPrint", "Fotók"));
     libraryLayout->addWidget(m_photoList, 1);
@@ -3332,8 +3407,27 @@ void MainWindow::buildUi()
             [this](QListWidgetItem *current, QListWidgetItem *) {
                 if (m_syncing || !current)
                     return;
-                selectFrame(current->data(Qt::UserRole).toString(), true);
+                // An unused entry is not on the page, so it cannot be the canvas
+                // selection; clicking it clears the selection instead.
+                selectFrame(current->data(FrameIdRole).toString(), true);
             });
+    connect(m_photoList, &QWidget::customContextMenuRequested, this,
+            &MainWindow::showPhotoListMenu);
+
+    // The rule the library follows, said once, under the list it is about.
+    m_libraryHint = new QLabel(
+        QCoreApplication::translate(
+            "PhotoPrint",
+            "A lapról eltávolított fotók itt maradnak, és visszahúzhatók."),
+        library);
+    m_libraryHint->setObjectName(QStringLiteral("libraryHint"));
+    m_libraryHint->setWordWrap(true);
+    markSecondaryText(m_libraryHint);
+    // The hint is the first thing to give way in a very short window: the list
+    // and the print button must stay on screen, and the rule is readable at any
+    // normal size.
+    m_libraryHint->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Ignored);
+    libraryLayout->addWidget(m_libraryHint);
 
     // --- A jobb oldali vizsgáló: three contextual tabs -----------------------
     // The inspector used to be one long stack of layout and photo controls, most
@@ -4821,6 +4915,10 @@ void MainWindow::buildUi()
         [this](const QString &frameId, const QString &slotId, const QPointF &pagePoint) {
             dropFrameAt(frameId, slotId, pagePoint);
         };
+    m_pageView->onSourceDroppedAt =
+        [this](const PhotoSource &source, const QString &slotId, const QPointF &pagePoint) {
+            dropSourceAt(source, slotId, pagePoint);
+        };
     m_pageView->onCancelBusy = [this] { cancelPreviewWork(); };
     m_pageView->onSelectionChanged = [this](const QString &frameId) {
         selectFrame(frameId, false);
@@ -4885,8 +4983,11 @@ void MainWindow::buildUi()
         m_controller.apply(FrameChange{frame.id, frame});
     };
     m_pageView->onDeleteRequested = [this](const QString &frameId) {
-        if (!frameId.isEmpty())
-            m_controller.apply(RemoveFrameEdit{frameId});
+        if (!frameId.isEmpty()) {
+            removeFrameFromPage(frameId,
+                                QCoreApplication::translate("PhotoPrint",
+                                                            "Fotó eltávolítása"));
+        }
     };
     m_pageView->onEmptySlotRequested = [this](const QString &slotId) {
         clearSlot(slotId);
@@ -5540,6 +5641,18 @@ void MainWindow::addFilesAt(const QStringList &paths, const QString &slotId)
     }
     Page finished = placed.value();
 
+    // A drop that replaced a filled cell takes that photograph off the page, so
+    // it moves to the library instead of vanishing. The same snapshot restores
+    // it on undo.
+    for (const QString &removedId : report.removedFrameIds) {
+        for (const Frame &frame : page.frames) {
+            if (frame.id == removedId) {
+                appendUnusedSource(finished, frame);
+                break;
+            }
+        }
+    }
+
     // More files than empty cells: the surplus goes to new pages with the same
     // layout, never onto the sheet as free frames across the sections. All of it
     // is one edit and one undo.
@@ -5583,6 +5696,7 @@ void MainWindow::addFilesAt(const QStringList &paths, const QString &slotId)
     change.layoutId = finished.layoutId;
     change.cutGuides = finished.cutGuides;
     change.borderlessOverride = finished.borderlessOverride;
+    change.unusedPhotos = finished.unusedPhotos;
     edit.pages.append(change);
     edit.newPages = extraPages;
     edit.insertIndex = document.currentPage + 1;
@@ -5754,6 +5868,103 @@ void MainWindow::dropFrameAt(const QString &frameId, const QString &slotId, cons
     selectFrame(frameId, false);
 }
 
+void MainWindow::dropSourceAt(const PhotoSource &source, const QString &slotId,
+                              const QPointF &pagePoint)
+{
+    const DocumentSnapshot document = m_controller.document();
+    if (document.pages.isEmpty())
+        return;
+    Page page = document.pages.at(document.currentPage);
+
+    // The drag carries the identity, so a stale drag (the entry was removed in
+    // the meantime) changes nothing.
+    int unusedIndex = -1;
+    for (int i = 0; i < page.unusedPhotos.size(); ++i) {
+        const PhotoSource &entry = page.unusedPhotos.at(i);
+        if (entry.path == source.path
+            && (source.sha256.isEmpty() || entry.sha256 == source.sha256)) {
+            unusedIndex = i;
+            break;
+        }
+    }
+    if (unusedIndex < 0)
+        return;
+
+    const std::optional<Frame> payload = photoPayload(page.unusedPhotos.at(unusedIndex).path, page);
+    if (!payload)
+        return;
+    Frame frame = *payload;
+    frame.autoPlaced = false;
+
+    Page result = page;
+    result.unusedPhotos.removeAt(unusedIndex);
+
+    if (result.hasLayout() && !slotId.isEmpty()) {
+        const Frame *occupant = SlotGeometry::frameInSlot(result, slotId);
+        const bool replaced = occupant != nullptr;
+        const Frame previous = replaced ? *occupant : Frame{};
+        auto placed = SlotLayoutEngine::placePhoto(result, slotId, frame);
+        if (!placed) {
+            showProblem(placed.error().message);
+            return;
+        }
+        result = placed.value();
+        // The photograph that was in the cell is not lost either: it moves to
+        // the library unless another frame still shows it.
+        if (replaced)
+            appendUnusedSource(result, previous);
+    } else {
+        // A free page, or a drop outside every cell: the photograph lands where
+        // it was dropped, at the default size and its own aspect.
+        const QSizeF sheet = pageSizeMm(result);
+        frame.cx = std::clamp(pagePoint.x(), 0.0, sheet.width());
+        frame.cy = std::clamp(pagePoint.y(), 0.0, sheet.height());
+        result.frames.append(frame);
+    }
+
+    const auto published = m_controller.publishPage(
+        result, QCoreApplication::translate("PhotoPrint", "Fotó visszahelyezése"));
+    if (!published) {
+        showProblem(published.error().message);
+        return;
+    }
+    selectFrame(frame.id, false);
+}
+
+void MainWindow::appendUnusedSource(Page &page, const Frame &frame) const
+{
+    if (frame.sourcePath.isEmpty())
+        return;
+    const PhotoSource source{frame.sourcePath, frame.sourceSha256};
+    // Another frame may still show the same photograph; it is not unused then.
+    if (pageUsesSource(page, source) || page.unusedPhotos.contains(source))
+        return;
+    if (page.unusedPhotos.size() >= kMaxUnusedPhotos)
+        return;
+    page.unusedPhotos.append(source);
+}
+
+void MainWindow::removeFrameFromPage(const QString &frameId, const QString &actionText)
+{
+    if (frameId.isEmpty())
+        return;
+    const DocumentSnapshot document = m_controller.document();
+    if (document.pages.isEmpty())
+        return;
+    Page page = document.pages.at(document.currentPage);
+    for (int i = 0; i < page.frames.size(); ++i) {
+        if (page.frames.at(i).id != frameId)
+            continue;
+        const Frame removed = page.frames.at(i);
+        page.frames.removeAt(i);
+        // The photograph leaves the page, not the library. The frame and its
+        // unused entry are one snapshot, so one undo restores both.
+        appendUnusedSource(page, removed);
+        m_controller.publishPage(page, actionText);
+        return;
+    }
+}
+
 void MainWindow::clearSlot(const QString &slotId)
 {
     if (slotId.isEmpty())
@@ -5767,12 +5978,16 @@ void MainWindow::clearSlot(const QString &slotId)
     if (!SlotGeometry::frameInSlot(page, slotId))
         return; // an empty cell has nothing to clear, and no edit to make
 
+    const Frame *removed = SlotGeometry::frameInSlot(page, slotId);
     auto emptied = SlotLayoutEngine::emptySlot(page, slotId);
     if (!emptied) {
         showProblem(emptied.error().message);
         return;
     }
-    m_controller.publishPage(emptied.value(),
+    Page result = emptied.value();
+    if (removed)
+        appendUnusedSource(result, *removed);
+    m_controller.publishPage(result,
                              QCoreApplication::translate("PhotoPrint", "Hely ürítése"));
     // The cell stays selected; its photograph is gone, not the cell.
     m_selectedId.clear();
@@ -6447,13 +6662,30 @@ void MainWindow::refreshPhotoList()
             item->setData(Qt::AccessibleTextRole,
                           QCoreApplication::translate("PhotoPrint", "%1. fotó")
                               .arg(position + 1));
-            item->setData(Qt::UserRole, frame.id);
+            item->setData(FrameIdRole, frame.id);
             if (const std::optional<SourceImage> source = m_store.cached(frame.sourcePath)) {
                 const Result<QImage> thumb =
                     m_store.srgb(*source, sanitiseRecipe(document.recipe), 96);
                 if (thumb)
                     item->setIcon(QIcon(libraryThumbnail(thumb.value(), 64)));
             }
+            m_photoList->addItem(item);
+        }
+        // The photographs the page no longer shows stay in the library, after
+        // the ones on the page. They are visibly marked and can be dragged back
+        // or removed from the library explicitly.
+        for (const PhotoSource &source : page.unusedPhotos) {
+            auto *item = new QListWidgetItem(
+                QCoreApplication::translate("PhotoPrint", "Nincs a lapon"));
+            item->setToolTip(QFileInfo(source.path).fileName());
+            item->setData(Qt::AccessibleTextRole,
+                          QCoreApplication::translate("PhotoPrint", "Fel nem használt fotó"));
+            item->setData(UnusedPathRole, source.path);
+            item->setData(UnusedShaRole, QString::fromLatin1(source.sha256.toHex()));
+            item->setForeground(palette().color(QPalette::Disabled, QPalette::Text));
+            const QPixmap thumb = unusedThumbnail(source);
+            if (!thumb.isNull())
+                item->setIcon(QIcon(thumb));
             m_photoList->addItem(item);
         }
         const QSizeF size = pageSizeMm(page);
@@ -6484,12 +6716,124 @@ void MainWindow::syncListSelection()
     m_photoList->clearSelection();
     for (int i = 0; i < m_photoList->count(); ++i) {
         QListWidgetItem *item = m_photoList->item(i);
-        if (item->data(Qt::UserRole).toString() == m_selectedId) {
+        const QString frameId = item->data(FrameIdRole).toString();
+        if (frameId.isEmpty())
+            continue; // an unused entry is never the canvas selection
+        if (frameId == m_selectedId) {
             m_photoList->setCurrentItem(item, QItemSelectionModel::ClearAndSelect);
             break;
         }
     }
     m_syncing = false;
+}
+
+QPixmap MainWindow::unusedThumbnail(const PhotoSource &source)
+{
+    const QString key = source.path + QLatin1Char('\n')
+        + QString::fromLatin1(source.sha256.toHex());
+    if (const auto cached = m_unusedThumbnails.constFind(key);
+        cached != m_unusedThumbnails.constEnd()) {
+        return cached.value();
+    }
+    QImage image;
+    if (const std::optional<SourceImage> cached = m_store.cached(source.path)) {
+        const Result<QImage> thumb =
+            m_store.srgb(*cached, sanitiseRecipe(m_controller.document().recipe), 96);
+        if (thumb)
+            image = thumb.value();
+    }
+    if (image.isNull()) {
+        // A project opened with library entries has not decoded them yet. A
+        // scaled read is cheap: it never pulls the whole photograph into memory
+        // just to draw a 64 px tile.
+        QImageReader reader(source.path);
+        reader.setDecideFormatFromContent(true);
+        const QSize size = reader.size();
+        if (size.isValid())
+            reader.setScaledSize(size.scaled(96, 96, Qt::KeepAspectRatio));
+        image = reader.read();
+    }
+    if (image.isNull())
+        return {};
+    const QPixmap tile = libraryThumbnail(image, 64, true);
+    m_unusedThumbnails.insert(key, tile);
+    return tile;
+}
+
+QMenu *MainWindow::buildPhotoListMenu(const PhotoSource &source)
+{
+    auto *menu = new QMenu(m_photoList);
+    QAction *remove = menu->addAction(
+        QCoreApplication::translate("PhotoPrint", "Eltávolítás a könyvtárból"));
+    remove->setObjectName(QStringLiteral("removeFromLibraryAction"));
+    connect(remove, &QAction::triggered, this, [this, source] {
+        removeUnusedPhotoFromLibrary(source);
+    });
+    return menu;
+}
+
+void MainWindow::showPhotoListMenu(const QPoint &pos)
+{
+    QListWidgetItem *item = m_photoList->itemAt(pos);
+    if (!item)
+        return;
+    const QString path = item->data(UnusedPathRole).toString();
+    if (path.isEmpty())
+        return; // a used photo keeps its selection behaviour, no menu
+    PhotoSource source;
+    source.path = path;
+    source.sha256 = QByteArray::fromHex(item->data(UnusedShaRole).toString().toLatin1());
+    QMenu *menu = buildPhotoListMenu(source);
+    menu->exec(m_photoList->viewport()->mapToGlobal(pos));
+    menu->deleteLater();
+}
+
+void MainWindow::removeUnusedPhotoFromLibrary(const PhotoSource &source)
+{
+    const DocumentSnapshot document = m_controller.document();
+    if (document.pages.isEmpty())
+        return;
+    Page page = document.pages.at(document.currentPage);
+    int index = -1;
+    for (int i = 0; i < page.unusedPhotos.size(); ++i) {
+        const PhotoSource &entry = page.unusedPhotos.at(i);
+        if (entry.path == source.path
+            && (source.sha256.isEmpty() || entry.sha256 == source.sha256)) {
+            index = i;
+            break;
+        }
+    }
+    if (index < 0)
+        return;
+    page.unusedPhotos.removeAt(index);
+    // The file itself is not touched: the library lists photographs, it does
+    // not own them. One undo puts the entry back.
+    m_controller.publishPage(
+        page,
+        QCoreApplication::translate("PhotoPrint", "Fotó eltávolítása a könyvtárból"));
+}
+
+void MainWindow::removeUnusedPhotoForTest(const QString &path)
+{
+    PhotoSource source;
+    source.path = path;
+    removeUnusedPhotoFromLibrary(source);
+}
+
+QMenu *MainWindow::photoListMenuForTest(const QString &path)
+{
+    const DocumentSnapshot document = m_controller.document();
+    if (document.pages.isEmpty())
+        return nullptr;
+    const Page &page = document.pages.at(document.currentPage);
+    for (const PhotoSource &source : page.unusedPhotos) {
+        if (source.path != path)
+            continue;
+        QMenu *menu = buildPhotoListMenu(source);
+        menu->setParent(this);
+        return menu;
+    }
+    return nullptr;
 }
 
 void MainWindow::selectFrame(const QString &frameId, bool fromList)
@@ -7470,7 +7814,7 @@ void MainWindow::syncSlotFacts(const Page &page, const QString &slotId)
                                   : QCoreApplication::translate("PhotoPrint", "Üres"));
     const bool clipped = occupant && SlotGeometry::frameIsClipped(page, *occupant);
     m_slotClipValue->setText(clipped
-                                 ? QCoreApplication::translate("PhotoPrint", "Levágva")
+                                 ? QCoreApplication::translate("PhotoPrint", "Részben")
                                  : QCoreApplication::translate("PhotoPrint", "Nincs"));
     // Replacing a filled cell's picture is the canvas drop or the Fotó tab, not a
     // picker here. Hiding the button keeps the tab honest for a full cell.
@@ -7960,7 +8304,11 @@ void MainWindow::deleteSelected()
         return;
     }
     if (!m_selectedId.isEmpty()) {
-        m_controller.apply(RemoveFrameEdit{m_selectedId});
+        // The photo leaves the page but stays in the library, where it can be
+        // dragged back or removed explicitly. One undo restores both.
+        removeFrameFromPage(m_selectedId,
+                            QCoreApplication::translate("PhotoPrint",
+                                                        "Fotó eltávolítása"));
         return;
     }
     // No photograph selected but a cell is: clearing an occupied cell removes

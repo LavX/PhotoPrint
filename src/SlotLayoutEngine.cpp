@@ -661,6 +661,24 @@ Result<Page> repair(Page page)
             continue;
         frame = SlotGeometry::clampFrameToCell(page, frame);
     }
+
+    // The library keeps the photographs that are no longer on the page. An
+    // entry a frame uses again is not unused (undo restores the frame and this
+    // is what drops the entry in the same step), a duplicate is the same
+    // photograph twice, and an empty path is not a photograph at all. The cap
+    // bounds a hand-edited file.
+    QList<PhotoSource> unused;
+    unused.reserve(std::min<int>(page.unusedPhotos.size(), kMaxUnusedPhotos));
+    for (const PhotoSource &source : page.unusedPhotos) {
+        if (unused.size() >= kMaxUnusedPhotos)
+            break;
+        if (source.path.isEmpty())
+            continue;
+        if (pageUsesSource(page, source) || unused.contains(source))
+            continue;
+        unused.append(source);
+    }
+    page.unusedPhotos = unused;
     return page;
 }
 

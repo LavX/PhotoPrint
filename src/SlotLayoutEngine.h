@@ -144,7 +144,9 @@ Result<Page> removeSlot(Page page, const QString &slotId);
 /// duplicate slots, then clears dangling and duplicate frame assignments. It
 /// never touches a slotted frame's geometry: the slot is a clipping window and
 /// the photograph's rectangle, size and angle belong to the user once it is
-/// placed.
+/// placed. It also keeps the library honest: an unused source a frame uses
+/// again, a duplicate entry, an empty path and anything past the cap are
+/// dropped, so undo needs no second bookkeeping.
 Result<Page> repair(Page page);
 
 /// Repairs every page of a document, in place order. Used by the loader and by

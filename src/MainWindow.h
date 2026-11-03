@@ -33,6 +33,7 @@ class QAbstractButton;
 class QCheckBox;
 class QComboBox;
 class QDoubleSpinBox;
+class QDrag;
 class QDragEnterEvent;
 class QDragLeaveEvent;
 class QDragMoveEvent;
@@ -40,6 +41,7 @@ class QDropEvent;
 class QFontComboBox;
 class QLabel;
 class QMenu;
+class QMouseEvent;
 class QPlainTextEdit;
 class QPushButton;
 class QSlider;
@@ -65,9 +67,30 @@ bool resolvedBorderless(const Page &page, bool printerBorderless);
 /// from a thumbnail. Never shown to the user.
 inline constexpr char kFrameMimeType[] = "application/x-photoprint-frame";
 
-/// The left photo list. It is the current page's frames, so dragging out of it
-/// is a move, never a copy: the canvas applies the frame id to the slot it is
-/// dropped on. Dragging is the only drag mode; the list keeps its own order.
+/// The drag payload an unused library entry publishes: the photograph's path
+/// and content hash, so the canvas can put it back on the page even after the
+/// list was rebuilt. Never shown to the user.
+inline constexpr char kSourceMimeType[] = "application/x-photoprint-source";
+
+/// The data roles one library item carries. A used item names its frame; an
+/// unused item names the source it would put back. The two are exclusive, so a
+/// reader never has to guess which kind of item it is looking at.
+enum PhotoListRole {
+    FrameIdRole = Qt::UserRole, ///< the frame id of a photograph on the page
+    UnusedPathRole,             ///< the path of a photograph only in the library
+    UnusedShaRole               ///< that photograph's content hash, as hex
+};
+
+/// The unused-source drag payload. Shared by the list, the canvas and the
+/// tests, so the bytes one side writes are the bytes the other side reads.
+QByteArray encodePhotoSourcePayload(const PhotoSource &source);
+std::optional<PhotoSource> decodePhotoSourcePayload(const QByteArray &payload);
+
+/// The left photo list. It is the current page's frames followed by the
+/// photographs the page no longer shows, so dragging out of it is a move for a
+/// used frame and a put-back for an unused source. The drag is started here
+/// explicitly, not by the model's drag flags: the list is an icon grid and the
+/// model's own drag never began reliably.
 class PhotoListWidget : public QListWidget
 {
     Q_OBJECT
@@ -75,8 +98,22 @@ class PhotoListWidget : public QListWidget
 public:
     explicit PhotoListWidget(QWidget *parent = nullptr);
 
+    /// The payload a drag of this item would publish, or null when the item is
+    /// neither a frame nor a source. Test hook and the one place the payload is
+    /// built, so a test checks the bytes the widget really sends.
+    QMimeData *dragDataForItem(const QListWidgetItem *item) const;
+
+    /// How a started drag is run. The default calls QDrag::exec; a test replaces
+    /// it to inspect the drag without a live drag manager, which the offscreen
+    /// platform does not have.
+    std::function<void(QDrag *)> dragRunner;
+
 protected:
-    QMimeData *mimeData(const QList<QListWidgetItem *> &items) const override;
+    void mousePressEvent(QMouseEvent *event) override;
+    void mouseMoveEvent(QMouseEvent *event) override;
+
+private:
+    QPoint m_dragStart;
 };
 
 /// The paper surface. It paints the same page recipe the export uses and adds
@@ -238,6 +275,10 @@ public:
     /// point in page millimetres so a layout-free page can place it there).
     std::function<void(const QStringList &, const QString &)> onFilesDroppedAt;
     std::function<void(const QString &, const QString &, const QPointF &)> onFrameDroppedAt;
+    /// An unused library entry dragged back onto the page: the source, the cell
+    /// under the cursor (empty outside every cell) and the drop point in page
+    /// millimetres for a free placement.
+    std::function<void(const PhotoSource &, const QString &, const QPointF &)> onSourceDroppedAt;
     std::function<void(double)> onViewZoomChanged;
     std::function<void(bool)> onCropModeChanged;
     std::function<void()> onCancelBusy;
@@ -513,6 +554,12 @@ public:
     /// Test hook: the item `addText` would create, so a test can check the
     /// default placement and size without opening the modal dialog.
     TextItem newTextForTest() const;
+    /// Test hook: the library's "remove from the library" action, without a
+    /// modal context menu. `path` names the unused entry.
+    void removeUnusedPhotoForTest(const QString &path);
+    /// Test hook: the context menu the library would show for an unused entry,
+    /// parented to the window. Null when the path is not in the library.
+    QMenu *photoListMenuForTest(const QString &path);
 
 protected:
     void closeEvent(QCloseEvent *event) override;
@@ -742,6 +789,27 @@ private:
     void dropFrameAt(const QString &frameId, const QString &slotId, const QPointF &pagePoint);
     /// Removes the photograph in a cell and keeps the cell empty.
     void clearSlot(const QString &slotId);
+    /// Removes a photograph from the page and keeps its source in the library,
+    /// as one undo step. Every delete path lands here, so no removal can lose
+    /// the photograph from the left list.
+    void removeFrameFromPage(const QString &frameId, const QString &actionText);
+    /// Appends a removed photograph to the page's library, unless another frame
+    /// still uses it or it is already there. The page is the one after the
+    /// removal, so the frame that left is not counted as a user.
+    void appendUnusedSource(Page &page, const Frame &frame) const;
+    /// An unused library entry dragged back onto the page: into the cell under
+    /// the cursor, or a free frame at the drop point. One undo step.
+    void dropSourceAt(const PhotoSource &source, const QString &slotId,
+                      const QPointF &pagePoint);
+    /// Removes one entry from the library, as one undo step. The file is not
+    /// touched: the library is a list of photographs, not their owner.
+    void removeUnusedPhotoFromLibrary(const PhotoSource &source);
+    /// The library's context menu for one unused entry.
+    QMenu *buildPhotoListMenu(const PhotoSource &source);
+    void showPhotoListMenu(const QPoint &pos);
+    /// A dimmed tile for a photograph that is only in the library. The used
+    /// thumbnail path is untouched, so the two kinds read differently.
+    QPixmap unusedThumbnail(const PhotoSource &source);
     /// Selects a cell; a filled cell selects its photograph instead.
     void selectSlot(const QString &slotId);
     std::optional<Frame> photoPayload(const QString &path, const Page &page);
@@ -928,6 +996,12 @@ private:
 
     PageView *m_pageView = nullptr;
     QListWidget *m_photoList = nullptr;
+    /// The line under the library that says a photo removed from the page stays
+    /// here. It is the only place the rule is explained.
+    QLabel *m_libraryHint = nullptr;
+    /// Dimmed library tiles, keyed by the photograph's path and hash, so a
+    /// document change does not re-read a file just to redraw the same tile.
+    QHash<QString, QPixmap> m_unusedThumbnails;
     QComboBox *m_printerCombo = nullptr;
     QComboBox *m_paperCombo = nullptr;
     QComboBox *m_orientationCombo = nullptr;

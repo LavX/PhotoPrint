@@ -1600,8 +1600,36 @@
         <translation>照片的一部分被裁切。</translation>
     </message>
     <message>
-        <source>Levágva</source>
-        <translation>已裁切</translation>
+        <source>Nincs a lapon</source>
+        <translation>不在页面上</translation>
+    </message>
+    <message>
+        <source>Fel nem használt fotó</source>
+        <translation>未使用的照片</translation>
+    </message>
+    <message>
+        <source>Eltávolítás a könyvtárból</source>
+        <translation>从图库中移除</translation>
+    </message>
+    <message>
+        <source>A lapról eltávolított fotók itt maradnak, és visszahúzhatók.</source>
+        <translation>从页面移除的照片会留在这里，可以拖回去。</translation>
+    </message>
+    <message>
+        <source>Fotó visszahelyezése</source>
+        <translation>放回照片</translation>
+    </message>
+    <message>
+        <source>Fotó eltávolítása a könyvtárból</source>
+        <translation>从图库中移除照片</translation>
+    </message>
+    <message>
+        <source>Fotó eltávolítása</source>
+        <translation>移除照片</translation>
+    </message>
+    <message>
+        <source>Részben</source>
+        <translation>部分</translation>
     </message>
     <message>
         <source>Fotó</source>

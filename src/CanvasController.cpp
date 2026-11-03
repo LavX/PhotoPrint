@@ -671,6 +671,8 @@ Result<void> CanvasController::apply(const DocumentEdit &edit)
                         page.stickers = *change.stickers;
                     if (change.texts)
                         page.texts = *change.texts;
+                    if (change.unusedPhotos)
+                        page.unusedPhotos = *change.unusedPhotos;
                     if (firstChanged < 0 || change.pageIndex < firstChanged)
                         firstChanged = change.pageIndex;
                 }
@@ -753,6 +755,7 @@ Result<void> CanvasController::publishPage(const Page &page, const QString &acti
     change.background = page.background;
     change.stickers = page.stickers;
     change.texts = page.texts;
+    change.unusedPhotos = page.unusedPhotos;
     edit.pages.append(change);
     edit.actionText = actionText;
     edit.selectPage = index;

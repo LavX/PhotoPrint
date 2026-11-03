@@ -349,6 +349,7 @@ private slots:
     void pickerPreviewMapsPhotosToSlots();
 
     void repairSanitisesTheStyle();
+    void repairSanitisesUnusedPhotos();
     void removeLastSlotClearsDanglingIds();
     void layoutPageWithoutFramesPrintsPaper();
     void layoutFreeSaveBytesAreStable();
@@ -2600,6 +2601,36 @@ void TestSlotLayout::repairSanitisesTheStyle()
     const auto nan = SlotLayoutEngine::repair(page);
     QVERIFY(nan.ok());
     QVERIFY(!nan.value().slotStyle.gutterMm.has_value());
+}
+
+void TestSlotLayout::repairSanitisesUnusedPhotos()
+{
+    Page page = pageWith(a4Paper(), false);
+    page.frames.append(photoFrame(0));
+    const Frame &used = page.frames.first();
+    const PhotoSource usedSource{used.sourcePath, used.sourceSha256};
+    const PhotoSource spare{QStringLiteral("/photos/spare.jpg"), QByteArrayLiteral("sha-spare")};
+    const PhotoSource empty{QString(), QByteArrayLiteral("sha-empty")};
+    page.unusedPhotos = {usedSource, spare, spare, empty};
+
+    const auto repaired = SlotLayoutEngine::repair(page);
+    QVERIFY(repaired.ok());
+    const Page &result = repaired.value();
+    // The photograph that is on the page again is not unused, the duplicate is
+    // the same photograph twice, and an empty path is not a photograph.
+    QCOMPARE(result.unusedPhotos.size(), 1);
+    QCOMPARE(result.unusedPhotos.first(), spare);
+
+    // The cap bounds a hand-edited file.
+    Page many = pageWith(a4Paper(), false);
+    for (int i = 0; i < kMaxUnusedPhotos + 20; ++i) {
+        many.unusedPhotos.append(
+            PhotoSource{QStringLiteral("/photos/unused-%1.jpg").arg(i),
+                        QByteArray::number(i)});
+    }
+    const auto capped = SlotLayoutEngine::repair(many);
+    QVERIFY(capped.ok());
+    QCOMPARE(capped.value().unusedPhotos.size(), kMaxUnusedPhotos);
 }
 
 void TestSlotLayout::removeLastSlotClearsDanglingIds()

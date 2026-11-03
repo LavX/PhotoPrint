@@ -1614,8 +1614,36 @@
         <translation>Parte de la foto está recortada.</translation>
     </message>
     <message>
-        <source>Levágva</source>
-        <translation>Recortada</translation>
+        <source>Nincs a lapon</source>
+        <translation>No está en la página</translation>
+    </message>
+    <message>
+        <source>Fel nem használt fotó</source>
+        <translation>Foto sin usar</translation>
+    </message>
+    <message>
+        <source>Eltávolítás a könyvtárból</source>
+        <translation>Quitar de la biblioteca</translation>
+    </message>
+    <message>
+        <source>A lapról eltávolított fotók itt maradnak, és visszahúzhatók.</source>
+        <translation>Las fotos quitadas de la página se quedan aquí y se pueden arrastrar de vuelta.</translation>
+    </message>
+    <message>
+        <source>Fotó visszahelyezése</source>
+        <translation>Devolver la foto</translation>
+    </message>
+    <message>
+        <source>Fotó eltávolítása a könyvtárból</source>
+        <translation>Quitar la foto de la biblioteca</translation>
+    </message>
+    <message>
+        <source>Fotó eltávolítása</source>
+        <translation>Quitar la foto</translation>
+    </message>
+    <message>
+        <source>Részben</source>
+        <translation>Parcialmente</translation>
     </message>
     <message>
         <source>Fotó</source>
