@@ -338,6 +338,13 @@ constexpr int kMaxStickerZ = 10000;
 /// same single repair point the background and the slot style use.
 Sticker sanitiseSticker(Sticker sticker, const QSizeF &sheetMm);
 
+/// A sticker box that fits the sheet without changing its aspect. The longest
+/// side is bounded by the page diagonal (and by kMaxStickerMm), the shortest by
+/// kMinStickerMm, and both bounds are applied as one uniform scale, so a tall
+/// picture is made smaller instead of being squashed on one axis. Shared by the
+/// sanitiser, the default placement and the relink picker.
+QSizeF boundedStickerSizeMm(QSizeF size, const QSizeF &sheetMm);
+
 /// The page's sticker list after the same rule: at most kMaxStickersPerPage
 /// entries, each with a non-empty unique id, each sanitised against the sheet.
 /// Document order is kept, because it is the tie-break for equal `z`.

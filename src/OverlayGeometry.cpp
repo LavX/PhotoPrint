@@ -61,7 +61,12 @@ bool stickerContains(const Sticker &sticker, const QPointF &pageMm)
 
 QList<Sticker> stickersInPaintOrder(const Page &page)
 {
-    QList<Sticker> ordered = page.stickers;
+    return stickersInPaintOrder(page.stickers);
+}
+
+QList<Sticker> stickersInPaintOrder(const QList<Sticker> &stickers)
+{
+    QList<Sticker> ordered = stickers;
     // Stable by design: two stickers with the same z keep document order, so
     // the visible order is deterministic for a hand-edited or older file.
     std::stable_sort(ordered.begin(), ordered.end(),
@@ -98,7 +103,9 @@ QSizeF defaultStickerSizeMm(const QSizeF &sheetMm, const QSize &pixels)
         aspect = double(pixels.height()) / double(pixels.width());
     if (!(aspect > 0.0) || !std::isfinite(aspect))
         aspect = 1.0;
-    return QSizeF(width, width * aspect);
+    // A tall picture is made smaller as a whole, not squashed on one axis: the
+    // default box keeps the pixel aspect and still fits the sheet.
+    return boundedStickerSizeMm(QSizeF(width, width * aspect), sheetMm);
 }
 
 Sticker movedSticker(const Sticker &sticker, const QPointF &delta, const QSizeF &sheetMm)
@@ -126,20 +133,14 @@ Sticker resizedSticker(const Sticker &sticker, const QPointF &pagePoint,
         return resized;
 
     double factor = reach / start;
-    const double diagonal = sheetMm.width() > 0.0 && sheetMm.height() > 0.0
-        ? std::hypot(sheetMm.width(), sheetMm.height())
-        : kMaxStickerMm;
-    const double maxSize = std::min(kMaxStickerMm, std::max(kMinStickerMm, diagonal));
-    // Clamp the factor rather than each axis, so the aspect cannot drift when a
+    if (!(factor > 0.0) || !std::isfinite(factor))
+        return resized;
+    // One uniform scale, bounded as a whole: the aspect cannot drift when a
     // corner is pushed past the minimum or the maximum.
-    const double smallestSide = std::min(sticker.width, sticker.height);
-    if (smallestSide > 0.0)
-        factor = std::max(factor, kMinStickerMm / smallestSide);
-    const double largestSide = std::max(sticker.width, sticker.height);
-    if (largestSide > 0.0)
-        factor = std::min(factor, maxSize / largestSide);
-    resized.width = std::clamp(sticker.width * factor, kMinStickerMm, maxSize);
-    resized.height = std::clamp(sticker.height * factor, kMinStickerMm, maxSize);
+    const QSizeF size = boundedStickerSizeMm(
+        QSizeF(sticker.width * factor, sticker.height * factor), sheetMm);
+    resized.width = size.width();
+    resized.height = size.height();
     return resized;
 }
 

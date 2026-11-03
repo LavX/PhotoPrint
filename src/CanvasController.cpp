@@ -1,6 +1,7 @@
 #include "CanvasController.h"
 
 #include "LayoutEngine.h"
+#include "OverlayGeometry.h"
 #include "SlotGeometry.h"
 #include "SlotLayoutEngine.h"
 
@@ -345,6 +346,21 @@ Page fittedPage(const Page &page)
         if (extentY > 0.0)
             factor = std::min(factor, (size.height() / 2.0) / extentY);
     }
+    // A sticker is part of the composition too: fitting the page has to bring it
+    // back inside as well, or the action would leave a layer half off the paper.
+    for (const Sticker &sticker : page.stickers) {
+        const QRectF box = OverlayGeometry::stickerQuadMm(sticker).boundingRect();
+        if (box.isEmpty())
+            continue;
+        const double extentX =
+            std::abs(box.center().x() - size.width() / 2.0) + box.width() / 2.0;
+        const double extentY =
+            std::abs(box.center().y() - size.height() / 2.0) + box.height() / 2.0;
+        if (extentX > 0.0)
+            factor = std::min(factor, (size.width() / 2.0) / extentX);
+        if (extentY > 0.0)
+            factor = std::min(factor, (size.height() / 2.0) / extentY);
+    }
     factor = std::clamp(factor, 0.02, 1.0);
     for (Frame &frame : fitted.frames) {
         if (!frame.slotId.isEmpty())
@@ -353,6 +369,12 @@ Page fittedPage(const Page &page)
         frame.cy = size.height() / 2.0 + (frame.cy - size.height() / 2.0) * factor;
         frame.width *= factor;
         frame.height *= factor;
+    }
+    for (Sticker &sticker : fitted.stickers) {
+        sticker.cx = size.width() / 2.0 + (sticker.cx - size.width() / 2.0) * factor;
+        sticker.cy = size.height() / 2.0 + (sticker.cy - size.height() / 2.0) * factor;
+        sticker.width *= factor;
+        sticker.height *= factor;
     }
     return fitted;
 }
@@ -467,8 +489,11 @@ Result<void> CanvasController::apply(const DocumentEdit &edit)
                 m_undo->push(new AddFrameCommand(this, value.frame, value.pageIndex));
                 return Result<void>();
             } else if constexpr (std::is_same_v<T, FitPageEdit>) {
+                // Fitting is about everything that can overflow the sheet, so a
+                // page whose only content is a sticker is fitted too.
                 if (value.pageIndex >= 0 && value.pageIndex < m_document.pages.size()
-                    && !m_document.pages.at(value.pageIndex).frames.isEmpty())
+                    && (!m_document.pages.at(value.pageIndex).frames.isEmpty()
+                        || !m_document.pages.at(value.pageIndex).stickers.isEmpty()))
                     m_undo->push(new FitPageCommand(this, value.pageIndex));
                 return Result<void>();
             } else if constexpr (std::is_same_v<T, RotatePageEdit>) {

@@ -1927,5 +1927,9 @@
         <source>Kiválasztott elem eltávolítása</source>
         <translation>Удалить выбранный элемент</translation>
     </message>
+    <message>
+        <source>A matrica ki van jelölve.</source>
+        <translation>Наклейка выбрана.</translation>
+    </message>
 </context>
 </TS>

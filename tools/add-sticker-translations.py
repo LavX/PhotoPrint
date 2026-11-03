@@ -14,6 +14,18 @@ I18N = os.path.join(ROOT, "resources", "i18n")
 
 # source -> {locale: translation}
 MESSAGES = {
+    "A matrica ki van jelölve.": {
+        "en": "The sticker is selected.",
+        "de": "Der Aufkleber ist ausgewählt.",
+        "es": "La pegatina está seleccionada.",
+        "fr": "L'autocollant est sélectionné.",
+        "it": "L'adesivo è selezionato.",
+        "pt": "O adesivo está selecionado.",
+        "ru": "Наклейка выбрана.",
+        "ja": "ステッカーが選択されています。",
+        "zh_CN": "已选中贴纸。",
+        "hi": "स्टिकर चुना गया है।",
+    },
     "Kiválasztott elem eltávolítása": {
         "en": "Remove selected element",
         "de": "Ausgewähltes Element entfernen",

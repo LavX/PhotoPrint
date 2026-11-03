@@ -255,19 +255,18 @@ Sticker sanitiseSticker(Sticker sticker, const QSizeF &sheetMm)
         && std::isfinite(sheetMm.width()) && std::isfinite(sheetMm.height());
     const double sheetWidth = validSheet ? sheetMm.width() : kMaxStickerMm;
     const double sheetHeight = validSheet ? sheetMm.height() : kMaxStickerMm;
-    const double diagonal = std::hypot(sheetWidth, sheetHeight);
-    const double maxSize = std::min(kMaxStickerMm, std::max(kMinStickerMm, diagonal));
 
     // A size that cannot be drawn is raised to the minimum instead of becoming
     // zero: a zero-size sticker could never be seen or clicked again, so the
     // page would carry an invisible layer only undo could remove. A finite
-    // value is clamped, because an extreme one has an obvious nearest size.
-    sticker.width = std::isfinite(sticker.width)
-        ? std::clamp(sticker.width, kMinStickerMm, maxSize)
-        : kMinStickerMm;
-    sticker.height = std::isfinite(sticker.height)
-        ? std::clamp(sticker.height, kMinStickerMm, maxSize)
-        : kMinStickerMm;
+    // value is bounded as one uniform scale, so a tall picture is made smaller
+    // rather than squashed on one axis.
+    const QSizeF size = boundedStickerSizeMm(
+        QSizeF(std::isfinite(sticker.width) ? sticker.width : kMinStickerMm,
+               std::isfinite(sticker.height) ? sticker.height : kMinStickerMm),
+        QSizeF(sheetWidth, sheetHeight));
+    sticker.width = size.width();
+    sticker.height = size.height();
 
     // Reachability invariant: a sticker may hang over the edge (a legitimate
     // bleed look), but its centre always stays on the paper, so it can be
@@ -286,6 +285,47 @@ Sticker sanitiseSticker(Sticker sticker, const QSizeF &sheetMm)
     sticker.opacity = std::clamp(sticker.opacity, 0, 100);
     sticker.z = std::clamp(sticker.z, kMinStickerZ, kMaxStickerZ);
     return sticker;
+}
+
+QSizeF boundedStickerSizeMm(QSizeF size, const QSizeF &sheetMm)
+{
+    const bool validSheet = sheetMm.width() > 0.0 && sheetMm.height() > 0.0
+        && std::isfinite(sheetMm.width()) && std::isfinite(sheetMm.height());
+    const double diagonal = validSheet ? std::hypot(sheetMm.width(), sheetMm.height())
+                                       : kMaxStickerMm;
+    const double maxSize = std::min(kMaxStickerMm, std::max(kMinStickerMm, diagonal));
+
+    // A zero, negative or non-finite axis has no aspect to keep. It becomes the
+    // minimum and the other axis is bounded from there, so a corrupt size still
+    // draws something clickable instead of a degenerate sliver.
+    double width = std::isfinite(size.width()) && size.width() > 0.0 ? size.width()
+                                                                     : kMinStickerMm;
+    double height = std::isfinite(size.height()) && size.height() > 0.0 ? size.height()
+                                                                        : kMinStickerMm;
+
+    const double longest = std::max(width, height);
+    if (longest > maxSize) {
+        const double factor = maxSize / longest;
+        width *= factor;
+        height *= factor;
+    }
+    const double shortest = std::min(width, height);
+    if (shortest < kMinStickerMm) {
+        const double factor = kMinStickerMm / shortest;
+        if (std::max(width, height) * factor <= maxSize) {
+            width *= factor;
+            height *= factor;
+        } else {
+            // The two bounds cannot both hold (a very long, very thin picture).
+            // The page bound wins, because a layer larger than the sheet is the
+            // one that cannot be handled; the thin side stays clickable along
+            // its length.
+            const double fit = maxSize / std::max(width, height);
+            width *= fit;
+            height *= fit;
+        }
+    }
+    return QSizeF(width, height);
 }
 
 QList<Sticker> sanitiseStickers(const QList<Sticker> &stickers, const QSizeF &sheetMm)

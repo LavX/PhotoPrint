@@ -50,6 +50,10 @@ bool stickerContains(const Sticker &sticker, const QPointF &pageMm);
 /// through.
 QList<Sticker> stickersInPaintOrder(const Page &page);
 
+/// The same order for a list that a caller has already sanitised or collected,
+/// so the renderer can paint a fabricated snapshot without a `Page`.
+QList<Sticker> stickersInPaintOrder(const QList<Sticker> &stickers);
+
 /// The topmost sticker under a page point, or null. Iterates the paint order
 /// backwards, so the answer matches what the user can see.
 const Sticker *stickerAt(const Page &page, const QPointF &pageMm);

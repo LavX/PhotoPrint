@@ -6,6 +6,10 @@ third-party artwork, font or licence is involved. Running the script again
 produces byte-identical files: the shapes are fixed, the sampler is fixed and
 the PNG writer stores no timestamps.
 
+The output is 1024 px square. A sticker is placed at about 5 cm, so that is
+roughly 500 dpi on paper, and the canvas can show it sharp before it is
+downscaled to a thumbnail.
+
 Only the Python standard library is used, so the script runs anywhere the
 project builds.
 
@@ -17,8 +21,8 @@ import os
 import struct
 import zlib
 
-SIZE = 256          # output pixels per side
-SUPERSAMPLE = 4     # 4x4 samples per output pixel, antialiasing by coverage
+SIZE = 1024         # output pixels per side
+SUPERSAMPLE = 2     # 2x2 samples per output pixel, antialiasing by coverage
 GRID = SIZE * SUPERSAMPLE
 OUT_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
                        "resources", "stickers")
@@ -112,12 +116,6 @@ def difference(whole, hole):
     return test
 
 
-def any_of(*layers):
-    def test(x, y):
-        return any(predicate(x, y) for predicate, _ in layers)
-    return test
-
-
 # --- the set ---------------------------------------------------------------
 
 def shape_layers():
@@ -151,9 +149,9 @@ def shape_layers():
         (ellipse(0.66, 0.410, 0.035, 0.035), (255, 255, 255)),
     ]
 
-    rays = [(polygon([(0.5, 0.06), (0.545, 0.24), (0.455, 0.24)]), (242, 153, 46))]
-    for angle in (45, 90, 135, 180, 225, 270, 315):
-        points = [(0.5, 0.06), (0.545, 0.24), (0.455, 0.24)]
+    rays = []
+    points = [(0.5, 0.06), (0.545, 0.24), (0.455, 0.24)]
+    for angle in (0, 45, 90, 135, 180, 225, 270, 315):
         rays.append((polygon([rotate(x, y, 0.5, 0.5, angle) for x, y in points]),
                      (242, 153, 46)))
     layers["sun"] = rays + [
@@ -225,53 +223,60 @@ def shape_layers():
 
 # --- rasteriser ------------------------------------------------------------
 
+def bounds(predicate):
+    """The output-pixel bounding box of one shape, by a coarse probe."""
+    step = 8
+    left = top = SIZE
+    right = bottom = -1
+    for gy in range(0, SIZE, step):
+        for gx in range(0, SIZE, step):
+            if predicate((gx + 0.5) / SIZE, (gy + 0.5) / SIZE):
+                left, right = min(left, gx), max(right, gx)
+                top, bottom = min(top, gy), max(bottom, gy)
+    if right < left or bottom < top:
+        return None
+    return (max(0, left - step), max(0, top - step),
+            min(SIZE - 1, right + step), min(SIZE - 1, bottom + step))
+
+
 def render(layers, path):
     """One PNG: every output pixel is the coverage-weighted average of the
     topmost layer under each of its sub-samples."""
-    # A coarse scan finds the extent of everything, so the empty margin costs
-    # almost nothing.
-    left = top = GRID
-    right = bottom = 0
-    coarse = 8
-    for gy in range(0, GRID, coarse):
-        for gx in range(0, GRID, coarse):
-            x = (gx + 0.5) / GRID
-            y = (gy + 0.5) / GRID
-            if any(predicate(x, y) for predicate, _ in layers):
-                left, right = min(left, gx), max(right, gx)
-                top, bottom = min(top, gy), max(bottom, gy)
-    if right <= left or bottom <= top:
-        left, top, right, bottom = 0, 0, GRID - 1, GRID - 1
-    left = max(0, left - coarse)
-    top = max(0, top - coarse)
-    right = min(GRID - 1, right + coarse)
-    bottom = min(GRID - 1, bottom + coarse)
+    boxes = [bounds(predicate) for predicate, _ in layers]
+    layer_pixels = [colour for _, colour in layers]
+    grid = len(layers)
+    first = 1.0 / GRID
 
     rows = []
-    step = 1.0 / GRID
     for py in range(SIZE):
         row = bytearray()
         for px in range(SIZE):
-            red = green = blue = hit = 0
+            # Only the layers whose box contains this pixel can contribute.
+            candidates = [index for index in range(grid)
+                          if boxes[index] is not None
+                          and boxes[index][0] <= px <= boxes[index][2]
+                          and boxes[index][1] <= py <= boxes[index][3]]
+            if not candidates:
+                row += b"\x00\x00\x00\x00"
+                continue
+            red = green = blue = hits = 0
             for sy in range(SUPERSAMPLE):
-                y = ((py * SUPERSAMPLE + sy) + 0.5) * step
+                y = (py * SUPERSAMPLE + sy + 0.5) * first
                 for sx in range(SUPERSAMPLE):
-                    x = ((px * SUPERSAMPLE + sx) + 0.5) * step
-                    if not (left * step <= x <= (right + 1) * step
-                            and top * step <= y <= (bottom + 1) * step):
-                        continue
-                    for predicate, colour in reversed(layers):
-                        if predicate(x, y):
+                    x = (px * SUPERSAMPLE + sx + 0.5) * first
+                    for index in reversed(candidates):
+                        if layers[index][0](x, y):
+                            colour = layer_pixels[index]
                             red += colour[0]
                             green += colour[1]
                             blue += colour[2]
-                            hit += 1
+                            hits += 1
                             break
-            if hit == 0:
+            if hits == 0:
                 row += b"\x00\x00\x00\x00"
             else:
-                alpha = int(round(255.0 * hit / (SUPERSAMPLE * SUPERSAMPLE)))
-                row += bytes((red // hit, green // hit, blue // hit, alpha))
+                alpha = int(round(255.0 * hits / (SUPERSAMPLE * SUPERSAMPLE)))
+                row += bytes((red // hits, green // hits, blue // hits, alpha))
         rows.append(bytes(row))
 
     write_png(path, SIZE, SIZE, b"".join(rows))

@@ -13,6 +13,7 @@
 #include "SlotLayoutEngine.h"
 #include "SheetLayout.h"
 #include "SheetToolsDialog.h"
+#include "StickerAssets.h"
 #include "TemplateBrowserDialog.h"
 #include "Translation.h"
 #include "TrialSheetBuilder.h"
@@ -497,6 +498,13 @@ PageView::PageView(QWidget *parent) : QWidget(parent)
     m_zoomTimer->setInterval(kEditPulseMs);
     connect(m_zoomTimer, &QTimer::timeout, this, [this] { flushWheelZoom(); });
 
+    // An arrow-key nudge on a sticker is one gesture too: the overlay follows
+    // every key and a single edit lands when the keys stop.
+    m_stickerNudgeTimer = new QTimer(this);
+    m_stickerNudgeTimer->setSingleShot(true);
+    m_stickerNudgeTimer->setInterval(kEditPulseMs);
+    connect(m_stickerNudgeTimer, &QTimer::timeout, this, [this] { flushStickerNudge(); });
+
     // Page rasters are built off the GUI thread. The watcher lives on this
     // object, so a result arriving after destruction is simply dropped.
     m_composeWatcher = new QFutureWatcher<ComposeResult>(this);
@@ -601,6 +609,13 @@ void PageView::setDocument(const DocumentSnapshot &document)
         if (m_zoomTimer)
             m_zoomTimer->stop();
         m_cropZoomPulse.invalidate();
+    }
+    // The same for a sticker nudge: the new document already carries whatever
+    // position it has, so a pending commit would fight it.
+    if (!m_nudgeStickerId.isEmpty()) {
+        m_nudgeStickerId.clear();
+        if (m_stickerNudgeTimer)
+            m_stickerNudgeTimer->stop();
     }
 
     pruneSelection();
@@ -1013,6 +1028,14 @@ QPolygonF PageView::stickerQuad(const QString &stickerId) const
     return {};
 }
 
+void PageView::previewSticker(const Sticker &sticker)
+{
+    const Sticker *selected = selectedStickerPtr();
+    if (!selected || selected->id != sticker.id)
+        return;
+    updateLiveSticker(sticker, false);
+}
+
 std::optional<Sticker> PageView::liveSticker(const QString &stickerId) const
 {
     const Page *page = currentPage();
@@ -1038,6 +1061,14 @@ void PageView::setUnavailableFrames(const QSet<QString> &frameIds)
     if (frameIds == m_unavailable)
         return;
     m_unavailable = frameIds;
+    update();
+}
+
+void PageView::setMissingStickers(const QSet<QString> &stickerIds)
+{
+    if (stickerIds == m_missingStickers)
+        return;
+    m_missingStickers = stickerIds;
     update();
 }
 
@@ -1436,6 +1467,23 @@ void PageView::flushWheelBurst()
     flushWheelZoom();
 }
 
+void PageView::flushStickerNudge()
+{
+    if (m_stickerNudgeTimer)
+        m_stickerNudgeTimer->stop();
+    if (m_nudgeStickerId.isEmpty())
+        return;
+    const QString stickerId = m_nudgeStickerId;
+    const Sticker start = m_nudgeStartSticker;
+    m_nudgeStickerId.clear();
+    const std::optional<Sticker> live = liveSticker(stickerId);
+    // One edit for the whole burst, and only when it moved: a key that hit the
+    // paper edge must not push a dead undo step.
+    if (live && onStickerCommitted && !(*live == start))
+        onStickerCommitted(*live, StickerAction::Move);
+    scheduleSettle();
+}
+
 void PageView::flushWheelZoom()
 {
     if (m_zoomFrameId.isEmpty())
@@ -1484,6 +1532,11 @@ void PageView::updateAccessibleDescription()
                 parts << QCoreApplication::translate(
                     "PhotoPrint", "A kép egy része le van vágva.");
             }
+        } else if (selectedStickerPtr()) {
+            // A sticker is a layer without a text, so the reader is told what
+            // is selected before the panel reads its controls.
+            parts << QCoreApplication::translate("PhotoPrint",
+                                                 "A matrica ki van jelölve.");
         }
         // The background is a page-level property with its own panel, so a
         // screen reader should hear it the same way it hears the clipped-photo
@@ -1677,8 +1730,10 @@ void PageView::paintEvent(QPaintEvent *)
 
     // Placeholders and the cell selection are editor furniture: they live here,
     // never in paintPageContent, so no raster, PDF or printer can ever see them.
-    if (const Page *current = currentPage())
+    if (const Page *current = currentPage()) {
         paintSlotOverlays(painter, *current);
+        paintStickerPlaceholders(painter, *current);
+    }
 
     // The focus ring is drawn for every state, so a keyboard user can always see
     // where the canvas has focus. A helper because the frame and the sticker
@@ -1955,6 +2010,36 @@ void PageView::paintSlotOverlays(QPainter &painter, const Page &page) const
     }
 }
 
+void PageView::paintStickerPlaceholders(QPainter &painter, const Page &page) const
+{
+    if (m_missingStickers.isEmpty())
+        return;
+    const QTransform transform = pageToWidget();
+    const QList<Sticker> stickers = sanitiseStickers(page.stickers, pageSizeMm(page));
+    for (const Sticker &sticker : stickers) {
+        if (!m_missingStickers.contains(sticker.id))
+            continue;
+        const QPolygonF quad = transform.map(OverlayGeometry::stickerQuadMm(sticker));
+        if (quad.size() != 4)
+            continue;
+        // The same two-tone mark the rest of the editor furniture uses, so the
+        // box stays visible on white paper and on a dark or busy page.
+        QPen underlay(QColor(255, 255, 255, 220));
+        underlay.setWidthF(3.2);
+        painter.setPen(underlay);
+        painter.setBrush(Qt::NoBrush);
+        painter.drawPolygon(quad);
+        painter.drawLine(quad.at(0), quad.at(2));
+        painter.drawLine(quad.at(1), quad.at(3));
+        QPen pen(QColor(0xb3, 0x26, 0x1e), 1.4, Qt::DashLine);
+        pen.setDashPattern({4.0, 3.0});
+        painter.setPen(pen);
+        painter.drawPolygon(quad);
+        painter.drawLine(quad.at(0), quad.at(2));
+        painter.drawLine(quad.at(1), quad.at(3));
+    }
+}
+
 void PageView::resizeEvent(QResizeEvent *event)
 {
     QWidget::resizeEvent(event);
@@ -1978,6 +2063,7 @@ void PageView::hideEvent(QHideEvent *event)
     QWidget::hideEvent(event);
     // No mouse-up will arrive for a gesture that was running when we went away.
     flushWheelZoom();
+    flushStickerNudge();
     cancelInteraction(false);
 }
 
@@ -1987,6 +2073,7 @@ void PageView::focusOutEvent(QFocusEvent *event)
     // A drag whose release went to another window must not keep moving frames.
     // A wheel burst that lost focus still made its change: keep it, as one edit.
     flushWheelZoom();
+    flushStickerNudge();
     cancelInteraction(true);
 }
 
@@ -2040,8 +2127,9 @@ void PageView::mousePressEvent(QMouseEvent *event)
         QWidget::mousePressEvent(event);
         return;
     }
-    // A new gesture ends a wheel burst: its pending commit lands as one edit
-    // before the drag starts, so the undo stack keeps one step per gesture.
+    // A new gesture ends a nudge and a wheel burst: their pending commits land
+    // first, so the undo stack keeps one step per gesture.
+    flushStickerNudge();
     flushWheelZoom();
     const QPointF pagePoint = widgetToPage(event->position());
 
@@ -2298,6 +2386,7 @@ void PageView::keyPressEvent(QKeyEvent *event)
     case Qt::Key_Delete:
     case Qt::Key_Backspace:
         if (sticker && onStickerDeleteRequested) {
+            flushStickerNudge();
             onStickerDeleteRequested(sticker->id);
             event->accept();
             return;
@@ -2315,6 +2404,7 @@ void PageView::keyPressEvent(QKeyEvent *event)
         QWidget::keyPressEvent(event);
         return;
     case Qt::Key_Escape:
+        flushStickerNudge();
         if (m_cropMode) {
             m_cropMode = false;
             if (onCropModeExited)
@@ -2369,11 +2459,17 @@ void PageView::keyPressEvent(QKeyEvent *event)
             return;
         }
         const Sticker moved = OverlayGeometry::movedSticker(*sticker, delta, pageMm());
+        // A burst: the overlay follows every key and one edit lands when the
+        // keys stop, so a held arrow is one undo step.
+        if (m_nudgeStickerId != sticker->id) {
+            m_nudgeStartSticker = *sticker;
+            m_nudgeStickerId = sticker->id;
+        }
         m_nudgePulse.start();
         scheduleSettle();
         updateLiveSticker(moved);
-        if (onStickerCommitted)
-            onStickerCommitted(moved, StickerAction::Move);
+        if (m_stickerNudgeTimer)
+            m_stickerNudgeTimer->start();
         event->accept();
         return;
     }
@@ -3321,42 +3417,36 @@ void MainWindow::buildUi()
     m_pageInfo->setObjectName(QStringLiteral("pageInfoLabel"));
     pageTabLayout->insertWidget(0, m_pageInfo);
 
-    // --- Elem: the selected sticker -----------------------------------------
-    // With nothing selected the tab is the way in: add a file, or pick one of
-    // the shipped shapes. The grid is icons only, and every icon carries its
-    // name as the accessible text, so a screen reader can tell them apart.
-    m_stickerEmptyPanel = new QWidget(elemTab);
-    m_stickerEmptyPanel->setObjectName(QStringLiteral("stickerEmptyPanel"));
-    auto *stickerEmptyLayout = new QVBoxLayout(m_stickerEmptyPanel);
-    stickerEmptyLayout->setContentsMargins(0, 0, 0, 0);
-    m_stickerEmptyHint = new QLabel(
-        QCoreApplication::translate("PhotoPrint", "Még nincs matrica a lapon."),
-        m_stickerEmptyPanel);
-    m_stickerEmptyHint->setObjectName(QStringLiteral("stickerEmptyHint"));
-    m_stickerEmptyHint->setWordWrap(true);
-    markSecondaryText(m_stickerEmptyHint);
-    stickerEmptyLayout->addWidget(m_stickerEmptyHint);
+    // --- Elem: the sticker palette and the selected sticker ------------------
+    // The palette is the tab's way in and stays visible while a sticker is
+    // selected: adding a second one must not need a deselect first. The grid is
+    // icons only, and every icon carries its name as the accessible text, so a
+    // screen reader can tell them apart.
+    m_stickerAddPanel = new QWidget(elemTab);
+    m_stickerAddPanel->setObjectName(QStringLiteral("stickerAddPanel"));
+    auto *stickerAddLayout = new QVBoxLayout(m_stickerAddPanel);
+    stickerAddLayout->setContentsMargins(0, 0, 0, 0);
 
     m_addStickerButton =
         new QPushButton(QCoreApplication::translate("PhotoPrint", "Matrica hozzáadása…"),
-                        m_stickerEmptyPanel);
+                        m_stickerAddPanel);
     m_addStickerButton->setObjectName(QStringLiteral("addStickerButton"));
     m_addStickerButton->setAccessibleName(
         QCoreApplication::translate("PhotoPrint", "Matrica hozzáadása…"));
     m_addStickerButton->setMinimumHeight(32);
-    stickerEmptyLayout->addWidget(m_addStickerButton);
+    stickerAddLayout->addWidget(m_addStickerButton);
     connect(m_addStickerButton, &QPushButton::clicked, this, &MainWindow::addSticker);
 
     auto *stickerSetTitle =
-        new QLabel(QCoreApplication::translate("PhotoPrint", "Készlet"), m_stickerEmptyPanel);
+        new QLabel(QCoreApplication::translate("PhotoPrint", "Készlet"), m_stickerAddPanel);
     stickerSetTitle->setObjectName(QStringLiteral("stickerSetTitle"));
     stickerSetTitle->setWordWrap(true);
     QFont stickerSetFont = stickerSetTitle->font();
     stickerSetFont.setWeight(QFont::DemiBold);
     stickerSetTitle->setFont(stickerSetFont);
-    stickerEmptyLayout->addWidget(stickerSetTitle);
+    stickerAddLayout->addWidget(stickerSetTitle);
 
-    m_stickerSetGrid = new QWidget(m_stickerEmptyPanel);
+    m_stickerSetGrid = new QWidget(m_stickerAddPanel);
     m_stickerSetGrid->setObjectName(QStringLiteral("stickerSetGrid"));
     m_stickerSetGrid->setAccessibleName(
         QCoreApplication::translate("PhotoPrint", "Matricakészlet"));
@@ -3364,10 +3454,10 @@ void MainWindow::buildUi()
     stickerSetLayout->setContentsMargins(0, 0, 0, 0);
     stickerSetLayout->setSpacing(4);
     {
-        // The shipped shapes. The name is the label a person reads and the
-        // resource alias is what the model copies into the project, so the two
-        // can never drift apart. A tool button grid rather than a list: the set
-        // is a palette, and the canvas has no room for a second scrolling list.
+        // The shipped shapes. The name is the label a person reads and the alias
+        // is what the model stores in the project, so the two can never drift
+        // apart. The icon comes from the same versioned resource the placed
+        // sticker will resolve to.
         const struct {
             const char *alias;
             const char *label;
@@ -3391,7 +3481,7 @@ void MainWindow::buildUi()
             const QString label = QCoreApplication::translate("PhotoPrint", builtIn.label);
             auto *button = new QToolButton(m_stickerSetGrid);
             button->setObjectName(QStringLiteral("stickerSet_") + alias);
-            button->setIcon(QIcon(QStringLiteral(":/stickers/%1.png").arg(alias)));
+            button->setIcon(QIcon(builtinStickerResource(builtinStickerPath(alias))));
             button->setIconSize(QSize(36, 36));
             button->setFixedSize(44, 44);
             button->setAutoRaise(true);
@@ -3406,7 +3496,22 @@ void MainWindow::buildUi()
         // One spacer column so four buttons do not stretch across the panel.
         stickerSetLayout->setColumnStretch(4, 1);
     }
-    stickerEmptyLayout->addWidget(m_stickerSetGrid);
+    stickerAddLayout->addWidget(m_stickerSetGrid);
+    elemLayout->addWidget(m_stickerAddPanel);
+
+    // The one line that explains the tab before anything is on the page. It
+    // disappears as soon as a sticker is selected, and the palette above stays.
+    m_stickerEmptyPanel = new QWidget(elemTab);
+    m_stickerEmptyPanel->setObjectName(QStringLiteral("stickerEmptyPanel"));
+    auto *stickerEmptyLayout = new QVBoxLayout(m_stickerEmptyPanel);
+    stickerEmptyLayout->setContentsMargins(0, 0, 0, 0);
+    m_stickerEmptyHint = new QLabel(
+        QCoreApplication::translate("PhotoPrint", "Még nincs matrica a lapon."),
+        m_stickerEmptyPanel);
+    m_stickerEmptyHint->setObjectName(QStringLiteral("stickerEmptyHint"));
+    m_stickerEmptyHint->setWordWrap(true);
+    markSecondaryText(m_stickerEmptyHint);
+    stickerEmptyLayout->addWidget(m_stickerEmptyHint);
     elemLayout->addWidget(m_stickerEmptyPanel);
 
     // The selected sticker's own controls. Each one writes the whole page as one
@@ -3473,7 +3578,9 @@ void MainWindow::buildUi()
     m_stickerOpacitySlider->setObjectName(QStringLiteral("stickerOpacitySlider"));
     m_stickerOpacitySlider->setAccessibleName(stickerOpacityLabel->text());
     m_stickerOpacitySlider->setRange(0, 100);
-    m_stickerOpacitySlider->setTracking(false);
+    // Tracking on, so the canvas follows the drag; the burst timer lands the
+    // whole drag as one edit.
+    m_stickerOpacitySlider->setTracking(true);
     stickerLayout->addWidget(m_stickerOpacitySlider);
     m_stickerOpacityValue = new QLabel(QStringLiteral("100 %"), m_stickerPanel);
     m_stickerOpacityValue->setObjectName(QStringLiteral("stickerOpacityValue"));
@@ -3481,6 +3588,16 @@ void MainWindow::buildUi()
     stickerLayout->addWidget(m_stickerOpacityValue);
     connect(m_stickerOpacitySlider, &QSlider::valueChanged, this,
             &MainWindow::stickerOpacityChanged);
+    connect(m_stickerOpacitySlider, &QSlider::sliderReleased, this,
+            &MainWindow::flushStickerOpacity);
+    if (!m_stickerOpacityTimer) {
+        m_stickerOpacityTimer = new QTimer(this);
+        m_stickerOpacityTimer->setSingleShot(true);
+        m_stickerOpacityTimer->setInterval(kStyleDebounceMs);
+        connect(m_stickerOpacityTimer, &QTimer::timeout, this,
+                &MainWindow::flushStickerOpacity);
+    }
+    m_pendingStickerOpacity.reset();
 
     auto *stickerOrderRow = new QHBoxLayout;
     m_stickerRaiseButton =
@@ -4241,6 +4358,7 @@ void MainWindow::rebuildUi()
     m_layoutPanel = nullptr;
     m_pageSummaryPanel = nullptr;
     m_pageInfo = nullptr;
+    m_stickerAddPanel = nullptr;
     m_stickerPanel = nullptr;
     m_stickerEmptyPanel = nullptr;
     m_stickerEmptyHint = nullptr;
@@ -4787,6 +4905,7 @@ void MainWindow::onDocumentChanged()
     // value into a document the user is no longer looking at.
     cancelPendingStyle();
     cancelPendingBackground();
+    cancelPendingStickerOpacity();
     if (!m_restoringProject) {
         m_dirty = true;
         if (m_checkpointTimer)
@@ -4845,13 +4964,16 @@ void MainWindow::onDocumentChanged()
     m_pageView->setSelectedSlot(m_selectedSlotId);
     m_pageView->setSelectedSticker(m_selectedSticker);
     m_pageView->setUnavailableFrames(m_unavailableFrames);
+    m_pageView->setMissingStickers(m_missingStickers);
 
     // A laid-out page carries its own drop hints on the cells; the page-wide
-    // line would draw a second instruction over them.
+    // line would draw a second instruction over them. A page that already has
+    // a sticker is not empty either: the plate would cover the layer and tell
+    // the user to add photographs on top of it.
     m_pageView->setEmptyHint(
         !page || hasLayout
             ? QString()
-            : (page->frames.isEmpty()
+            : (page->frames.isEmpty() && page->stickers.isEmpty()
                    ? QCoreApplication::translate(
                          "PhotoPrint",
                          "Húzd ide a fotókat, vagy válaszd a Fotók hozzáadása gombot.")
@@ -4977,39 +5099,22 @@ void MainWindow::startPreviewJob()
                 }
             }
         }
-        // The stickers are loaded by the same job, so the canvas and the print
-        // cannot disagree about what is on the page. A missing or unreadable
-        // picture is remembered, and the painter draws its placeholder.
-        for (const Sticker &sticker : page.stickers) {
+        // The stickers are loaded by the same helper the print renderer uses, so
+        // the canvas and the print cannot disagree about what is on the page. A
+        // missing or unreadable picture is remembered, and the canvas draws its
+        // own placeholder for it.
+        const QList<Sticker> stickers = sanitiseStickers(page.stickers, pageSizeMm(page));
+        for (const Sticker &sticker : stickers) {
             if (token.stop_requested())
                 break;
-            if (sticker.imagePath.isEmpty()) {
-                result.missingStickers.insert(sticker.id);
-                continue;
-            }
-            QImageReader probe(sticker.imagePath);
-            probe.setDecideFormatFromContent(true);
-            if (!probe.canRead()
-                || OverlayGeometry::stickerSourceTooLarge(probe.size())) {
-                result.missingStickers.insert(sticker.id);
-                continue;
-            }
-            Result<SourceImage> source =
-                store->load(sticker.imagePath, ImportPolicy{}, token);
-            if (!source) {
-                result.missingStickers.insert(sticker.id);
-                continue;
-            }
-            ColorRecipe recipe = sanitiseRecipe(job->document.recipe);
-            recipe.tone = PhotoTone{};
             int bound = qRound(std::max(sticker.width, sticker.height) / 25.4 * 300.0);
             bound = std::clamp(bound, 1, kStickerPreviewBound);
-            Result<QImage> converted =
-                store->linear(source.value(), recipe, bound, token);
-            if (converted)
-                result.stickers.insert(sticker.id, converted.value());
-            else
+            const StickerLayer layer = loadStickerLayer(*store, sticker,
+                                                        job->document.recipe, bound, token);
+            if (layer.missing)
                 result.missingStickers.insert(sticker.id);
+            else
+                result.stickers.insert(sticker.id, layer.image);
         }
         return result;
     }));
@@ -5049,6 +5154,7 @@ void MainWindow::handlePreviewFinished()
     m_unavailableFrames = unavailable;
     if (m_pageView) {
         m_pageView->setUnavailableFrames(unavailable);
+        m_pageView->setMissingStickers(m_missingStickers);
         m_pageView->setPageImages(displayedPageImages());
     }
     updateResolutionHint();
@@ -5140,7 +5246,6 @@ PageImages MainWindow::displayedPageImages() const
     // is simply never looked up. The missing set is what makes the painter draw
     // the placeholder instead of nothing.
     images.stickers = m_previewStickers;
-    images.missingStickers = m_missingStickers;
     const DocumentSnapshot document = m_controller.document();
     if (!document.pages.isEmpty()) {
         const Page &page = document.pages.at(document.currentPage);
@@ -6243,6 +6348,16 @@ bool MainWindow::pageOverflows() const
         if (frame.cx - width / 2.0 < -0.05 || frame.cy - height / 2.0 < -0.05
             || frame.cx + width / 2.0 > size.width() + 0.05
             || frame.cy + height / 2.0 > size.height() + 0.05)
+            return true;
+    }
+    // A sticker may legitimately hang over the edge, but then "Igazítás a
+    // laphoz" is the action that brings it back onto the paper, so the notice
+    // and the button have to count it too.
+    for (const Sticker &sticker : page.stickers) {
+        const QRectF box = OverlayGeometry::stickerQuadMm(sticker).boundingRect();
+        if (box.left() < -0.05 || box.top() < -0.05
+            || box.right() > size.width() + 0.05
+            || box.bottom() > size.height() + 0.05)
             return true;
     }
     return false;
@@ -7688,28 +7803,72 @@ void MainWindow::addStickerFromPath(const QString &path)
     const DocumentSnapshot document = m_controller.document();
     if (document.pages.isEmpty() || path.isEmpty())
         return;
+    // A picture too large to decode is refused before it reaches the store: the
+    // decode would fail anyway, and the panel can say why.
+    QImageReader probe(path);
+    probe.setDecideFormatFromContent(true);
+    if (!probe.canRead() || OverlayGeometry::stickerSourceTooLarge(probe.size())) {
+        showProblem(QCoreApplication::translate(
+            "PhotoPrint", "A matrica túl nagy vagy nem olvasható."));
+        return;
+    }
     const auto loaded = m_store.load(path, ImportPolicy{});
     if (!loaded) {
         showProblem(loaded.error().message);
         return;
     }
+    m_lastStickerDir = QFileInfo(loaded.value().path).absolutePath();
+    addStickerWithSource(loaded.value().path, loaded.value().sha256, loaded.value().size());
+}
+
+void MainWindow::addBuiltInSticker(const QString &alias)
+{
+    if (alias.isEmpty())
+        return;
+    // The shipped shapes live in the application and are stored as a pinned
+    // alias: nothing is copied to the user's disk, so moving the project,
+    // wiping the app's data folder or updating the app cannot break them.
+    const QString stored = builtinStickerPath(alias);
+    const QString resource = builtinStickerResource(stored);
+    if (resource.isEmpty()) {
+        showProblem(QCoreApplication::translate("PhotoPrint",
+                                                "Ezt a matricát nem találjuk."));
+        return;
+    }
+    QImageReader probe(resource);
+    probe.setDecideFormatFromContent(true);
+    if (!probe.canRead()) {
+        showProblem(QCoreApplication::translate(
+            "PhotoPrint", "A matrica túl nagy vagy nem olvasható."));
+        return;
+    }
+    addStickerWithSource(stored, fileSha256(resource), probe.size());
+}
+
+bool MainWindow::addStickerWithSource(const QString &storedPath, const QByteArray &sha256,
+                                      const QSize &pixels)
+{
+    const DocumentSnapshot document = m_controller.document();
+    if (document.pages.isEmpty() || storedPath.isEmpty())
+        return false;
     const Page &page = document.pages.at(document.currentPage);
     if (page.stickers.size() >= kMaxStickersPerPage) {
         showProblem(QCoreApplication::translate(
                         "PhotoPrint", "Egy lapon legfeljebb %1 matrica lehet.")
                         .arg(kMaxStickersPerPage));
-        return;
+        return false;
     }
 
     // Default placement: centred on the sheet, a quarter of the short side
-    // wide, the height from the picture's own aspect, on top of the overlays
-    // already there. One edit, one undo step, and the new sticker is selected.
+    // wide, the height from the picture's own aspect (bounded so a tall picture
+    // is smaller instead of squashed), on top of the overlays already there.
+    // One edit, one undo step, and the new sticker is selected.
     const QSizeF sheet = pageSizeMm(page);
-    const QSizeF size = OverlayGeometry::defaultStickerSizeMm(sheet, loaded.value().size());
+    const QSizeF size = OverlayGeometry::defaultStickerSizeMm(sheet, pixels);
     Sticker sticker;
     sticker.id = makeId(QStringLiteral("sticker"));
-    sticker.imagePath = loaded.value().path;
-    sticker.imageSha256 = loaded.value().sha256;
+    sticker.imagePath = storedPath;
+    sticker.imageSha256 = sha256;
     sticker.cx = sheet.width() / 2.0;
     sticker.cy = sheet.height() / 2.0;
     sticker.width = size.width();
@@ -7721,40 +7880,8 @@ void MainWindow::addStickerFromPath(const QString &path)
 
     QList<Sticker> stickers = page.stickers;
     stickers.append(sticker);
-    m_lastStickerDir = QFileInfo(loaded.value().path).absolutePath();
-    publishStickers(stickers, QCoreApplication::translate("PhotoPrint", "Matrica"),
-                    sticker.id);
-}
-
-void MainWindow::addBuiltInSticker(const QString &alias)
-{
-    if (alias.isEmpty())
-        return;
-    const QString resource = QStringLiteral(":/stickers/%1.png").arg(alias);
-    if (!QFileInfo::exists(resource))
-        return;
-    // A project stores a real file path, and a portable copy carries it like a
-    // photograph, so the shipped shape is copied into the app's own data folder
-    // once. Comparing content keeps an updated resource from being masked by a
-    // stale copy.
-    const QString directory =
-        QDir(QStandardPaths::writableLocation(QStandardPaths::AppDataLocation))
-            .filePath(QStringLiteral("stickers"));
-    if (!QDir().mkpath(directory)) {
-        showProblem(QCoreApplication::translate(
-            "PhotoPrint", "A matricát nem sikerült a helyére tenni."));
-        return;
-    }
-    const QString target = QDir(directory).filePath(alias + QStringLiteral(".png"));
-    if (!QFileInfo::exists(target) || fileSha256(target) != fileSha256(resource)) {
-        QFile::remove(target);
-        if (!QFile::copy(resource, target)) {
-            showProblem(QCoreApplication::translate(
-                "PhotoPrint", "A matricát nem sikerült a helyére tenni."));
-            return;
-        }
-    }
-    addStickerFromPath(target);
+    return publishStickers(stickers, QCoreApplication::translate("PhotoPrint", "Matrica"),
+                           sticker.id);
 }
 
 void MainWindow::chooseStickerImage()
@@ -7762,14 +7889,29 @@ void MainWindow::chooseStickerImage()
     const std::optional<Sticker> sticker = selectedSticker();
     if (!sticker)
         return;
-    const QString startDir = sticker->imagePath.isEmpty()
-        ? m_lastStickerDir
-        : QFileInfo(sticker->imagePath).absolutePath();
+    const QString source = stickerSourcePath(*sticker);
+    const QString startDir = source.isEmpty() ? m_lastStickerDir
+                                              : QFileInfo(source).absolutePath();
     const QString path = QFileDialog::getOpenFileName(
         this, QCoreApplication::translate("PhotoPrint", "Matrica kiválasztása"), startDir,
         QCoreApplication::translate("PhotoPrint", "Képek (*.png *.jpg *.jpeg *.webp *.gif)"));
     if (path.isEmpty())
         return;
+    relinkStickerFromPath(path);
+}
+
+void MainWindow::relinkStickerFromPath(const QString &path)
+{
+    const std::optional<Sticker> sticker = selectedSticker();
+    if (!sticker || path.isEmpty())
+        return;
+    QImageReader probe(path);
+    probe.setDecideFormatFromContent(true);
+    if (!probe.canRead() || OverlayGeometry::stickerSourceTooLarge(probe.size())) {
+        showProblem(QCoreApplication::translate(
+            "PhotoPrint", "A matrica túl nagy vagy nem olvasható."));
+        return;
+    }
     const auto loaded = m_store.load(path, ImportPolicy{});
     if (!loaded) {
         showProblem(loaded.error().message);
@@ -7778,11 +7920,22 @@ void MainWindow::chooseStickerImage()
     const DocumentSnapshot document = m_controller.document();
     if (document.pages.isEmpty())
         return;
+    const Page &page = document.pages.at(document.currentPage);
     Sticker updated = *sticker;
     updated.imagePath = loaded.value().path;
     updated.imageSha256 = loaded.value().sha256;
+    // A different picture usually has a different aspect: the box is reset from
+    // the new pixels at the width the layer already had, and bounded as one
+    // uniform scale. Stretching the old box would print a distorted sticker.
+    const QSize pixels = loaded.value().size();
+    const double aspect = pixels.width() > 0 && pixels.height() > 0
+        ? double(pixels.height()) / double(pixels.width())
+        : 1.0;
+    const QSizeF box = boundedStickerSizeMm(
+        QSizeF(sticker->width, sticker->width * aspect), pageSizeMm(page));
+    updated.width = box.width();
+    updated.height = box.height();
     m_lastStickerDir = QFileInfo(loaded.value().path).absolutePath();
-    const Page &page = document.pages.at(document.currentPage);
     publishStickers(withSticker(page.stickers, updated),
                     QCoreApplication::translate("PhotoPrint", "Matrica kiválasztása"),
                     updated.id);
@@ -7843,14 +7996,45 @@ void MainWindow::stickerOpacityChanged(int value)
         return;
     Sticker updated = *sticker;
     updated.opacity = std::clamp(value, 0, 100);
-    if (updated.opacity == sticker->opacity)
+    if (updated.opacity == sticker->opacity && !m_pendingStickerOpacity)
         return;
+    // The canvas follows the drag immediately; the document is not touched
+    // until the burst ends, so the whole gesture is one undo step.
+    if (m_pageView)
+        m_pageView->previewSticker(updated);
+    m_pendingStickerOpacity = updated;
+    if (m_stickerOpacityTimer)
+        m_stickerOpacityTimer->start();
+}
+
+void MainWindow::flushStickerOpacity()
+{
+    if (m_stickerOpacityTimer)
+        m_stickerOpacityTimer->stop();
+    if (!m_pendingStickerOpacity)
+        return;
+    const Sticker updated = *m_pendingStickerOpacity;
+    m_pendingStickerOpacity.reset();
     const DocumentSnapshot document = m_controller.document();
     if (document.pages.isEmpty())
         return;
     const Page &page = document.pages.at(document.currentPage);
+    bool changed = false;
+    for (const Sticker &sticker : page.stickers) {
+        if (sticker.id == updated.id)
+            changed = sticker != updated;
+    }
+    if (!changed)
+        return;
     publishStickers(withSticker(page.stickers, updated),
                     QCoreApplication::translate("PhotoPrint", "Matrica"));
+}
+
+void MainWindow::cancelPendingStickerOpacity()
+{
+    if (m_stickerOpacityTimer)
+        m_stickerOpacityTimer->stop();
+    m_pendingStickerOpacity.reset();
 }
 
 void MainWindow::reorderStickerLayer(int delta)
@@ -8043,9 +8227,10 @@ void MainWindow::syncBackgroundPanel()
 
 QPixmap MainWindow::stickerThumbnail(const Sticker &sticker, int size) const
 {
-    if (sticker.imagePath.isEmpty())
+    const QString source = stickerSourcePath(sticker);
+    if (source.isEmpty())
         return {};
-    QImageReader reader(sticker.imagePath);
+    QImageReader reader(source);
     reader.setDecideFormatFromContent(true);
     if (!reader.canRead())
         return {};
@@ -8063,15 +8248,15 @@ QPixmap MainWindow::stickerThumbnail(const Sticker &sticker, int size) const
 
 MainWindow::StickerProblem MainWindow::stickerProblem(const Sticker &sticker) const
 {
-    // An empty path with a recorded identity is a picture that was chosen and
-    // lost. With no identity either it is still a broken layer: the renderer
-    // paints its placeholder, so the panel must not pretend it is healthy.
-    if (sticker.imagePath.isEmpty())
+    // An alias that no longer resolves is missing in exactly the same way as a
+    // file that was moved away: the panel offers the picker either way.
+    const QString source = stickerSourcePath(sticker);
+    if (source.isEmpty())
         return StickerProblem::Missing;
-    const QFileInfo info(sticker.imagePath);
+    const QFileInfo info(source);
     if (!info.exists() || !info.isFile())
         return StickerProblem::Missing;
-    QImageReader reader(sticker.imagePath);
+    QImageReader reader(source);
     reader.setDecideFormatFromContent(true);
     if (!reader.canRead())
         return StickerProblem::Unreadable;
@@ -8118,8 +8303,10 @@ void MainWindow::syncStickerPanel()
         : &document.pages.at(document.currentPage);
     const std::optional<Sticker> sticker = selectedSticker();
 
-    // The empty state is the way in, the property panel is the way through: the
-    // two never show at once, so there is never a control that only clamps.
+    // The palette is always there while the page exists; the hint only
+    // explains the empty state, and the properties only show a selected layer.
+    if (m_stickerAddPanel)
+        m_stickerAddPanel->setVisible(page != nullptr);
     m_stickerEmptyPanel->setVisible(page && !sticker);
     m_stickerPanel->setVisible(sticker.has_value());
     if (!page) {
@@ -8155,8 +8342,17 @@ void MainWindow::syncStickerPanel()
 
     const bool wasSyncing = m_syncing;
     m_syncing = true;
-    if (m_stickerSizeSpin)
+    if (m_stickerSizeSpin) {
+        // The spin can never offer a size the model would clamp away: the page
+        // diagonal is the largest box a sticker can have.
+        const QSizeF sheet = pageSizeMm(*page);
+        const double diagonal = sheet.width() > 0.0 && sheet.height() > 0.0
+            ? std::hypot(sheet.width(), sheet.height())
+            : kMaxStickerMm;
+        const double limit = std::min(kMaxStickerMm, std::max(kMinStickerMm, diagonal));
+        m_stickerSizeSpin->setMaximum(limit / 10.0);
         m_stickerSizeSpin->setValue(sticker->width / 10.0);
+    }
     if (m_stickerAngleSpin)
         m_stickerAngleSpin->setValue(sticker->angleDeg);
     if (m_stickerOpacitySlider)

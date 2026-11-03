@@ -7,6 +7,7 @@
 #include "PageRenderer.h"
 #include "ProjectStore.h"
 #include "SlotGeometry.h"
+#include "StickerAssets.h"
 
 #include <QColor>
 #include <QComboBox>
@@ -15,6 +16,7 @@
 #include <QFile>
 #include <QFileInfo>
 #include <QImage>
+#include <QImageReader>
 #include <QImageWriter>
 #include <QJsonArray>
 #include <QJsonDocument>
@@ -28,10 +30,12 @@
 #include <QScrollBar>
 #include <QSettings>
 #include <QSlider>
+#include <QStatusBar>
 #include <QTabWidget>
 #include <QTemporaryDir>
 #include <QToolButton>
 #include <QtTest>
+#include <zlib.h>
 
 #include <cmath>
 #include <limits>
@@ -195,6 +199,86 @@ bool loadDocument(MainWindow &window, const QTemporaryDir &dir, const DocumentSn
     return window.waitForPreview(15000);
 }
 
+
+/// How many pixels carry the missing-picture red (#b3261e). A healthy page has
+/// none of it; the canvas furniture does. The band is narrow on purpose: a red
+/// photograph is a different red and must not count.
+int placeholderPixels(const QImage &image)
+{
+    if (image.isNull())
+        return 0;
+    int count = 0;
+    for (int y = 0; y < image.height(); ++y) {
+        const QRgb *line = reinterpret_cast<const QRgb *>(image.constScanLine(y));
+        for (int x = 0; x < image.width(); ++x) {
+            const QRgb pixel = line[x];
+            if (std::abs(qRed(pixel) - 0xb3) <= 12 && std::abs(qGreen(pixel) - 0x26) <= 12
+                && std::abs(qBlue(pixel) - 0x1e) <= 12)
+                ++count;
+        }
+    }
+    return count;
+}
+
+QByteArray bigEndian32(quint32 value)
+{
+    QByteArray out(4, Qt::Uninitialized);
+    out[0] = char((value >> 24) & 0xff);
+    out[1] = char((value >> 16) & 0xff);
+    out[2] = char((value >> 8) & 0xff);
+    out[3] = char(value & 0xff);
+    return out;
+}
+
+QByteArray pngChunk(const char *tag, const QByteArray &payload)
+{
+    QByteArray body(tag, 4);
+    body += payload;
+    const uLong crc = crc32(0L, reinterpret_cast<const Bytef *>(body.constData()),
+                            uInt(body.size()));
+    return bigEndian32(quint32(payload.size())) + body + bigEndian32(quint32(crc));
+}
+
+/// A PNG that only carries a header, so a test can claim a 12000 x 12000 source
+/// without allocating half a gigabyte. The reader reports the size from IHDR and
+/// the add path refuses it before any decode.
+QString writeHugePngHeader(const QString &directory, const QString &name, int width,
+                           int height)
+{
+    QByteArray header = bigEndian32(quint32(width)) + bigEndian32(quint32(height));
+    header.append(char(8)); // bit depth
+    header.append(char(6)); // RGBA
+    header.append(char(0));
+    header.append(char(0));
+    header.append(char(0));
+    QByteArray png("\x89PNG\r\n\x1a\n", 8);
+    png += pngChunk("IHDR", header);
+    // A valid image needs an IDAT for the reader to reach the header scan; the
+    // add path refuses the source before anything decodes it.
+    QByteArray compressed;
+    compressed.resize(16);
+    compressed.fill('\0');
+    png += pngChunk("IDAT", compressed);
+    png += pngChunk("IEND", QByteArray());
+    const QString path = QDir(directory).filePath(name);
+    QFile file(path);
+    if (!file.open(QIODevice::WriteOnly))
+        return {};
+    file.write(png);
+    file.close();
+    return path;
+}
+
+/// Recursively removes a directory, so a test can prove a project survives the
+/// app's data folder being wiped.
+void removeTree(const QString &directory)
+{
+    QDir dir(directory);
+    if (!dir.exists())
+        return;
+    dir.removeRecursively();
+}
+
 } // namespace
 
 class TestPageStickers : public QObject
@@ -219,16 +303,27 @@ private slots:
     void persistenceRoundTrips();
     void oldProjectWithoutStickersWritesNoKey();
     void portableCopyCarriesStickerImages();
-    void missingStickerPaintsPlaceholderAndReports();
+    void missingStickerIsCanvasFurniture();
     void unreadableStickerIsReported();
     void sanitiserClampsAndDropsBadIds();
+    void rendererSanitisesFabricatedGeometry();
     void addStickerFromPathPlacesAndSelects();
-    void builtInStickerCanBeAdded();
+    void builtinStickerIsStoredAsAnAlias();
+    void builtinArtworkIsVersionPinned();
+    void hugeSourceIsRejectedBeforeAdding();
     void elemTabEmptyStateAndSelection();
-    void keyboardNudgeAndDelete();
+    void paletteStaysAvailableWithSelection();
+    void emptyHintSkipsAPageWithASticker();
+    void nudgeIsOneUndoPerBurst();
+    void deleteIsOneUndoStep();
     void dragCommitsOneUndoStep();
     void handleDragResizesAndKeepsTheAspect();
-    void opacitySliderWritesOneStep();
+    void opacitySliderPreviewsLive();
+    void tallStickerKeepsItsAspect();
+    void relinkingResetsTheBoxToTheNewAspect();
+    void sizeSpinIsBoundedByThePage();
+    void fitToPaperBringsStickersBack();
+    void stickerAnnouncedToAssistiveTech();
     void orientationChangeTurnsStickersWithThePage();
     void largeFontKeepsElemReachable();
     void evidenceScreenshots();
@@ -629,45 +724,6 @@ void TestPageStickers::portableCopyCarriesStickerImages()
     QVERIFY(QFile::rename(backup, m_redPath));
 }
 
-void TestPageStickers::missingStickerPaintsPlaceholderAndReports()
-{
-    Sticker sticker = makeSticker(m_dir.filePath(QStringLiteral("gone.png")), 105.0, 148.5,
-                                  40.0, 40.0);
-    sticker.imageSha256 = QByteArrayLiteral("0123456789abcdef");
-    const DocumentSnapshot document = stickerDocument({sticker});
-
-    // The page still renders, and the placeholder's cross marks the centre.
-    const QImage rendered = render(document);
-    QVERIFY(!rendered.isNull());
-    const QRgb centre = probe(rendered, 105.0, 148.5);
-    QVERIFY2(qRed(centre) > qGreen(centre) + 40 && qRed(centre) > qBlue(centre) + 40,
-             qPrintable(QStringLiteral("no placeholder at the centre: %1").arg(describe(centre))));
-
-    MainWindow window;
-    window.resize(1280, 800);
-    window.show();
-    QVERIFY(loadDocument(window, m_dir, document));
-    QTest::qWait(150);
-    auto *notice = window.findChild<QLabel *>(QStringLiteral("stickerNotice"));
-    QVERIFY(notice);
-    QVERIFY(notice->isVisible());
-    QCOMPARE(notice->text(), QStringLiteral("Ezt a matricát nem találjuk."));
-
-    // Selecting the sticker shows the same sentence in the Elem tab, with the
-    // picker that relinks it.
-    const QString stickerId = window.document().pages.first().stickers.first().id;
-    QVERIFY(QMetaObject::invokeMethod(&window, "selectSticker", Qt::DirectConnection,
-                                      Q_ARG(QString, stickerId)));
-    QTest::qWait(120);
-    auto *hint = window.findChild<QLabel *>(QStringLiteral("stickerMissingHint"));
-    auto *relink = window.findChild<QPushButton *>(QStringLiteral("stickerRelinkButton"));
-    QVERIFY(hint);
-    QVERIFY(relink);
-    QVERIFY(hint->isVisible());
-    QVERIFY(relink->isVisible());
-    QCOMPARE(hint->text(), notice->text());
-}
-
 void TestPageStickers::unreadableStickerIsReported()
 {
     QVERIFY(OverlayGeometry::stickerSourceTooLarge(QSize(12000, 12000)));
@@ -706,11 +762,24 @@ void TestPageStickers::sanitiserClampsAndDropsBadIds()
     const Sticker sane = sanitiseSticker(broken, QSizeF(210.0, 297.0));
     QCOMPARE(sane.cx, 105.0);
     QCOMPARE(sane.cy, 297.0);
+    // Both axes are invalid, so both become the minimum: a drawable box rather
+    // than a degenerate sliver.
     QCOMPARE(sane.width, kMinStickerMm);
     QCOMPARE(sane.height, kMinStickerMm);
     QCOMPARE(sane.angleDeg, 0.0);
     QCOMPARE(sane.opacity, 100);
     QCOMPARE(sane.z, kMaxStickerZ);
+
+    // A tall but valid box keeps its aspect: the page bound scales both axes.
+    Sticker tall;
+    tall.id = QStringLiteral("sticker-tall");
+    tall.cx = 105.0;
+    tall.cy = 148.5;
+    tall.width = 20.0;
+    tall.height = 500.0;
+    const Sticker bounded = sanitiseSticker(tall, QSizeF(210.0, 297.0));
+    QVERIFY(bounded.height <= std::hypot(210.0, 297.0) + 0.001);
+    QVERIFY(std::abs(bounded.width / bounded.height - 20.0 / 500.0) < 0.001);
 
     // An empty or repeated id cannot be selected or undone through, so it is
     // dropped; the list is capped at the model's maximum.
@@ -770,27 +839,6 @@ void TestPageStickers::addStickerFromPathPlacesAndSelects()
     QCOMPARE(two.stickers.at(1).z, 2);
 }
 
-void TestPageStickers::builtInStickerCanBeAdded()
-{
-    MainWindow window;
-    window.resize(1280, 800);
-    window.show();
-    QTest::qWait(120);
-
-    QVERIFY(QMetaObject::invokeMethod(&window, "addBuiltInSticker", Qt::DirectConnection,
-                                      Q_ARG(QString, QStringLiteral("star"))));
-    QTest::qWait(150);
-    const Page page = window.document().pages.first();
-    QCOMPARE(page.stickers.size(), 1);
-    const Sticker sticker = page.stickers.first();
-    QVERIFY(!sticker.imagePath.isEmpty());
-    QVERIFY(QFileInfo::exists(sticker.imagePath));
-    QVERIFY(!sticker.imageSha256.isEmpty());
-    // The shipped shape is copied into the app's own data folder, so a portable
-    // copy can carry it like a photograph.
-    QVERIFY(!sticker.imagePath.startsWith(QStringLiteral(":/")));
-}
-
 void TestPageStickers::elemTabEmptyStateAndSelection()
 {
     MainWindow window;
@@ -802,33 +850,41 @@ void TestPageStickers::elemTabEmptyStateAndSelection()
     auto *view = window.findChild<PageView *>();
     auto *emptyPanel = window.findChild<QWidget *>(QStringLiteral("stickerEmptyPanel"));
     auto *stickerPanel = window.findChild<QWidget *>(QStringLiteral("stickerPanel"));
+    auto *addPanel = window.findChild<QWidget *>(QStringLiteral("stickerAddPanel"));
     auto *addButton = window.findChild<QPushButton *>(QStringLiteral("addStickerButton"));
     auto *setGrid = window.findChild<QWidget *>(QStringLiteral("stickerSetGrid"));
     QVERIFY(tabs);
     QVERIFY(view);
     QVERIFY(emptyPanel);
     QVERIFY(stickerPanel);
+    QVERIFY(addPanel);
     QVERIFY(addButton);
     QVERIFY(setGrid);
 
-    // Nothing selected: the tab is enabled and offers the way in.
+    // Nothing selected: the tab is enabled, the palette is the way in, and the
+    // one line explains the empty state.
     QVERIFY(tabs->isTabEnabled(3));
     tabs->setCurrentIndex(3);
     QTest::qWait(80);
     QVERIFY(emptyPanel->isVisible());
     QVERIFY(!stickerPanel->isVisible());
+    QVERIFY(addPanel->isVisible());
     QVERIFY(addButton->isVisible());
     QVERIFY(setGrid->isVisible());
     // The built-in set is a grid of twelve shapes.
     QCOMPARE(setGrid->findChildren<QToolButton *>().size(), 12);
 
-    // Adding one selects it and swaps the panel to the properties.
+    // Adding one selects it and shows the properties, but the palette stays:
+    // a second sticker must not need a deselect first.
     QVERIFY(QMetaObject::invokeMethod(&window, "addStickerFromPath", Qt::DirectConnection,
                                       Q_ARG(QString, m_redPath)));
     QTest::qWait(120);
     QCOMPARE(tabs->currentIndex(), 3);
     QVERIFY(!emptyPanel->isVisible());
     QVERIFY(stickerPanel->isVisible());
+    QVERIFY(addPanel->isVisible());
+    QVERIFY(addButton->isVisible());
+    QVERIFY(setGrid->isVisible());
 
     // Escape clears the selection: the panel falls back to Lap, and the empty
     // state is ready again the moment the tab is opened.
@@ -841,43 +897,6 @@ void TestPageStickers::elemTabEmptyStateAndSelection()
     QTest::qWait(80);
     QVERIFY(emptyPanel->isVisible());
     QVERIFY(!stickerPanel->isVisible());
-}
-
-void TestPageStickers::keyboardNudgeAndDelete()
-{
-    MainWindow window;
-    window.resize(1280, 800);
-    window.show();
-    QTest::qWait(120);
-    QVERIFY(QMetaObject::invokeMethod(&window, "addStickerFromPath", Qt::DirectConnection,
-                                      Q_ARG(QString, m_redPath)));
-    QTest::qWait(120);
-
-    auto *view = window.findChild<PageView *>();
-    QVERIFY(view);
-    const QString stickerId = window.document().pages.first().stickers.first().id;
-    const double startX = window.document().pages.first().stickers.first().cx;
-    const int before = window.undoStackForTest()->count();
-
-    view->setFocus();
-    QTest::keyClick(view, Qt::Key_Right);
-    QTest::qWait(80);
-    QCOMPARE(window.document().pages.first().stickers.first().cx, startX + 1.0);
-    QCOMPARE(window.undoStackForTest()->count(), before + 1);
-
-    // Shift is the fine step, exactly like a photograph.
-    QTest::keyClick(view, Qt::Key_Left, Qt::ShiftModifier);
-    QTest::qWait(80);
-    QCOMPARE(window.document().pages.first().stickers.first().cx, startX + 0.9);
-
-    // Delete removes it in one step, and one undo brings it back.
-    QTest::keyClick(view, Qt::Key_Delete);
-    QTest::qWait(120);
-    QVERIFY(window.document().pages.first().stickers.isEmpty());
-    window.undoStackForTest()->undo();
-    QTest::qWait(80);
-    QCOMPARE(window.document().pages.first().stickers.size(), 1);
-    QCOMPARE(window.document().pages.first().stickers.first().id, stickerId);
 }
 
 void TestPageStickers::dragCommitsOneUndoStep()
@@ -970,43 +989,6 @@ void TestPageStickers::handleDragResizesAndKeepsTheAspect()
     QCOMPARE(window.undoStackForTest()->count(), before + 2);
 }
 
-void TestPageStickers::opacitySliderWritesOneStep()
-{
-    MainWindow window;
-    window.resize(1280, 800);
-    window.show();
-    QTest::qWait(120);
-    QVERIFY(QMetaObject::invokeMethod(&window, "addStickerFromPath", Qt::DirectConnection,
-                                      Q_ARG(QString, m_redPath)));
-    QTest::qWait(150);
-
-    auto *slider = window.findChild<QSlider *>(QStringLiteral("stickerOpacitySlider"));
-    auto *readout = window.findChild<QLabel *>(QStringLiteral("stickerOpacityValue"));
-    QVERIFY(slider);
-    QVERIFY(readout);
-    QCOMPARE(slider->value(), 100);
-    const int before = window.undoStackForTest()->count();
-
-    slider->setValue(40);
-    QTest::qWait(120);
-    QCOMPARE(window.document().pages.first().stickers.first().opacity, 40);
-    QCOMPARE(readout->text(), QStringLiteral("40 %"));
-    QCOMPARE(window.undoStackForTest()->count(), before + 1);
-
-    // The size field is centimetres, the model is millimetres, and the height
-    // follows the stored aspect.
-    auto *size = window.findChild<QDoubleSpinBox *>(QStringLiteral("stickerSizeSpin"));
-    QVERIFY(size);
-    QCOMPARE(size->suffix(), QStringLiteral(" cm"));
-    size->setValue(10.0);
-    emit size->editingFinished();
-    QTest::qWait(120);
-    const Sticker sticker = window.document().pages.first().stickers.first();
-    QVERIFY(std::abs(sticker.width - 100.0) < 0.01);
-    QVERIFY(std::abs(sticker.height - 100.0) < 0.01);
-    QCOMPARE(window.undoStackForTest()->count(), before + 2);
-}
-
 void TestPageStickers::orientationChangeTurnsStickersWithThePage()
 {
     DocumentSnapshot document;
@@ -1070,13 +1052,502 @@ void TestPageStickers::largeFontKeepsElemReachable()
     QApplication::setFont(saved);
 }
 
+void TestPageStickers::missingStickerIsCanvasFurniture()
+{
+    Sticker sticker = makeSticker(m_dir.filePath(QStringLiteral("gone.png")), 105.0, 148.5,
+                                  40.0, 40.0);
+    sticker.imageSha256 = QByteArrayLiteral("0123456789abcdef");
+    const DocumentSnapshot document = stickerDocument({sticker});
+
+    // The page raster carries no editor furniture: a lost sticker prints
+    // nothing at all, never a red box.
+    ImageStore store;
+    PageRenderer renderer(store);
+    const auto rendered = renderer.renderPage(document, 0, 150.0);
+    if (!rendered)
+        QFAIL(qPrintable(rendered.error().message));
+    QCOMPARE(placeholderPixels(rendered.value()), 0);
+
+    // The same holds for the PDF the printer uses.
+    const QString pdfPath = evidenceDir() + QStringLiteral("/stickers-missing.pdf");
+    RenderOptions options;
+    options.printPpi = 150.0;
+    const auto artifact = renderer.writePdf(document, pdfPath, {}, options);
+    if (!artifact)
+        QFAIL(qPrintable(artifact.error().message));
+    QProcess process;
+    const QString base = evidenceDir() + QStringLiteral("/stickers-missing");
+    process.start(QStringLiteral("pdftoppm"),
+                  {QStringLiteral("-r"), QStringLiteral("150"), QStringLiteral("-png"),
+                   QStringLiteral("-singlefile"), pdfPath, base});
+    QVERIFY(process.waitForFinished(60000));
+    QCOMPARE(process.exitCode(), 0);
+    const QImage pdfPage(base + QStringLiteral(".png"));
+    QVERIFY(!pdfPage.isNull());
+    QCOMPARE(placeholderPixels(pdfPage), 0);
+
+    // The canvas draws the placeholder instead, and the notice says why.
+    MainWindow window;
+    window.resize(1280, 800);
+    window.show();
+    QVERIFY(loadDocument(window, m_dir, document));
+    QTest::qWait(200);
+    auto *view = window.findChild<PageView *>();
+    QVERIFY(view);
+    QVERIFY2(placeholderPixels(view->grab().toImage()) > 0,
+             "the canvas does not mark the missing sticker");
+    auto *notice = window.findChild<QLabel *>(QStringLiteral("stickerNotice"));
+    QVERIFY(notice);
+    QVERIFY(notice->isVisible());
+    QCOMPARE(notice->text(), QStringLiteral("Ezt a matricát nem találjuk."));
+
+    // Selecting it shows the same sentence in the Elem tab with the picker.
+    const QString stickerId = window.document().pages.first().stickers.first().id;
+    QVERIFY(QMetaObject::invokeMethod(&window, "selectSticker", Qt::DirectConnection,
+                                      Q_ARG(QString, stickerId)));
+    QTest::qWait(120);
+    auto *hint = window.findChild<QLabel *>(QStringLiteral("stickerMissingHint"));
+    auto *relink = window.findChild<QPushButton *>(QStringLiteral("stickerRelinkButton"));
+    QVERIFY(hint);
+    QVERIFY(relink);
+    QVERIFY(hint->isVisible());
+    QVERIFY(relink->isVisible());
+    QCOMPARE(hint->text(), notice->text());
+}
+
+void TestPageStickers::rendererSanitisesFabricatedGeometry()
+{
+    // A caller that never went through the controller can hand the renderer a
+    // NaN box. It must still draw a page, and the sanitised sticker is the one
+    // that lands.
+    Sticker broken;
+    broken.id = QStringLiteral("sticker-fabricated");
+    broken.imagePath = m_redPath;
+    broken.imageSha256 = fileSha256(m_redPath);
+    broken.cx = std::numeric_limits<double>::quiet_NaN();
+    broken.cy = std::numeric_limits<double>::quiet_NaN();
+    broken.width = -10.0;
+    broken.height = std::numeric_limits<double>::infinity();
+    broken.angleDeg = std::numeric_limits<double>::quiet_NaN();
+
+    const QImage page = render(stickerDocument({broken}));
+    QVERIFY(!page.isNull());
+    // The centre is clamped onto the sheet and the box to the minimum, so a red
+    // square sits exactly on the middle.
+    const QRgb centre = probe(page, 105.0, 148.5);
+    QVERIFY2(channelDistance(centre, qRgb(220, 30, 30)) <= 4,
+             qPrintable(QStringLiteral("fabricated sticker centre is %1")
+                            .arg(describe(centre))));
+}
+
+void TestPageStickers::builtinStickerIsStoredAsAnAlias()
+{
+    MainWindow window;
+    window.resize(1280, 800);
+    window.show();
+    QTest::qWait(120);
+
+    QVERIFY(QMetaObject::invokeMethod(&window, "addBuiltInSticker", Qt::DirectConnection,
+                                      Q_ARG(QString, QStringLiteral("star"))));
+    QTest::qWait(150);
+    const Page page = window.document().pages.first();
+    QCOMPARE(page.stickers.size(), 1);
+    const Sticker sticker = page.stickers.first();
+    // The model stores the pinned alias, never a copy on the user's disk.
+    QCOMPARE(sticker.imagePath, QStringLiteral("builtin:star@1"));
+    QVERIFY(!sticker.imageSha256.isEmpty());
+    const QString resource = stickerSourcePath(sticker);
+    QVERIFY(resource.startsWith(QStringLiteral(":/stickers/")));
+    QVERIFY(QFileInfo::exists(resource));
+    QVERIFY(!QFileInfo(sticker.imagePath).exists());
+
+    // A normal save stores the alias and no absolute original.
+    const QString firstDir = m_dir.filePath(QStringLiteral("alias-origin"));
+    QVERIFY(QDir().mkpath(firstDir));
+    const QString firstPath = QDir(firstDir).filePath(QStringLiteral("alias.ppj"));
+    ProjectStore store;
+    const auto saved = store.save(firstPath, window.document(), SaveMode::Normal);
+    if (!saved)
+        QFAIL(qPrintable(saved.error().message));
+    const QJsonObject root = readJson(firstPath);
+    const QJsonObject stickerObject = root.value(QStringLiteral("pages")).toArray().at(0)
+                                          .toObject().value(QStringLiteral("stickers"))
+                                          .toArray().at(0).toObject();
+    QCOMPARE(stickerObject.value(QStringLiteral("image")).toString(),
+             QStringLiteral("builtin:star@1"));
+    QVERIFY(!stickerObject.contains(QStringLiteral("original")));
+
+    // Move the project to another folder and wipe the app's data folder: the
+    // alias still resolves, because nothing was stored outside the project.
+    const QString movedDir = m_dir.filePath(QStringLiteral("alias-moved"));
+    QVERIFY(QDir().mkpath(movedDir));
+    const QString movedPath = QDir(movedDir).filePath(QStringLiteral("alias.ppj"));
+    QVERIFY(QFile::rename(firstPath, movedPath));
+    removeTree(QStandardPaths::writableLocation(QStandardPaths::AppDataLocation));
+    const auto loaded = store.load(movedPath);
+    if (!loaded)
+        QFAIL(qPrintable(loaded.error().message));
+    QVERIFY(loaded.value().issues.isEmpty());
+    const QList<Sticker> stickers = loaded.value().document.pages.first().stickers;
+    QCOMPARE(stickers.size(), 1);
+    QCOMPARE(stickers.first().imagePath, QStringLiteral("builtin:star@1"));
+    QVERIFY(!stickerSourcePath(stickers.first()).isEmpty());
+
+    // A portable copy carries no file for a shipped sticker and still opens.
+    const QString portablePath = m_dir.filePath(QStringLiteral("alias-portable.ppj"));
+    const auto portable = store.save(portablePath, window.document(), SaveMode::Portable);
+    if (!portable)
+        QFAIL(qPrintable(portable.error().message));
+    const QDir bundle(portablePath + QStringLiteral(".files"));
+    QVERIFY(!bundle.exists() || bundle.entryList(QDir::Files).isEmpty());
+    const auto portableLoaded = store.load(portablePath);
+    if (!portableLoaded)
+        QFAIL(qPrintable(portableLoaded.error().message));
+    QCOMPARE(portableLoaded.value().document.pages.first().stickers.first().imagePath,
+             QStringLiteral("builtin:star@1"));
+}
+
+void TestPageStickers::builtinArtworkIsVersionPinned()
+{
+    // The alias carries the artwork version, and only a known version resolves:
+    // a build that ships new art must add a new version instead of silently
+    // swapping the pixels of an existing project.
+    QVERIFY(isBuiltinStickerPath(QStringLiteral("builtin:star@1")));
+    QVERIFY(!isBuiltinStickerPath(QStringLiteral(":/stickers/star-v1.png")));
+    QCOMPARE(builtinStickerPath(QStringLiteral("star")), QStringLiteral("builtin:star@1"));
+    QVERIFY(builtinStickerPath(QString()).isEmpty());
+
+    const QString current = builtinStickerResource(QStringLiteral("builtin:star@1"));
+    QVERIFY(!current.isEmpty());
+    QVERIFY(QFileInfo::exists(current));
+    QVERIFY(builtinStickerResource(QStringLiteral("builtin:star@2")).isEmpty());
+    QVERIFY(builtinStickerResource(QStringLiteral("builtin:nope@1")).isEmpty());
+    QVERIFY(builtinStickerResource(QStringLiteral("builtin:star")).isEmpty());
+    QVERIFY(builtinStickerResource(QString()).isEmpty());
+
+    // The identity recorded at add time is the shipped file's own identity, so
+    // a future build can tell that the artwork changed.
+    QVERIFY(!fileSha256(current).isEmpty());
+
+    // An unknown alias in a project is a missing picture, never a crash, and
+    // never a placeholder in the raster.
+    Sticker stale;
+    stale.id = QStringLiteral("sticker-stale");
+    stale.imagePath = QStringLiteral("builtin:star@99");
+    stale.width = 20.0;
+    stale.height = 20.0;
+    stale.cx = 105.0;
+    stale.cy = 148.5;
+    const QImage page = render(stickerDocument({stale}));
+    QVERIFY(!page.isNull());
+    QCOMPARE(placeholderPixels(page), 0);
+}
+
+void TestPageStickers::hugeSourceIsRejectedBeforeAdding()
+{
+    const QString path =
+        writeHugePngHeader(m_dir.path(), QStringLiteral("huge.png"), 12000, 12000);
+    QVERIFY(!path.isEmpty());
+    QImageReader probe(path);
+    probe.setDecideFormatFromContent(true);
+    QVERIFY(probe.canRead());
+    QCOMPARE(probe.size(), QSize(12000, 12000));
+
+    MainWindow window;
+    window.resize(1280, 800);
+    window.show();
+    QTest::qWait(120);
+    QVERIFY(QMetaObject::invokeMethod(&window, "addStickerFromPath", Qt::DirectConnection,
+                                      Q_ARG(QString, path)));
+    QTest::qWait(120);
+    QVERIFY(window.document().pages.first().stickers.isEmpty());
+    QCOMPARE(window.statusBar()->currentMessage(),
+             QStringLiteral("A matrica túl nagy vagy nem olvasható."));
+}
+
+void TestPageStickers::paletteStaysAvailableWithSelection()
+{
+    MainWindow window;
+    window.resize(1280, 800);
+    window.show();
+    QTest::qWait(120);
+    QVERIFY(QMetaObject::invokeMethod(&window, "addStickerFromPath", Qt::DirectConnection,
+                                      Q_ARG(QString, m_redPath)));
+    QTest::qWait(150);
+
+    auto *addButton = window.findChild<QPushButton *>(QStringLiteral("addStickerButton"));
+    auto *heart = window.findChild<QToolButton *>(QStringLiteral("stickerSet_heart"));
+    QVERIFY(addButton);
+    QVERIFY(heart);
+    QVERIFY(addButton->isVisible());
+    QVERIFY(heart->isVisible());
+
+    // One click on the palette adds a second sticker without a deselect.
+    QTest::mouseClick(heart, Qt::LeftButton);
+    QTest::qWait(150);
+    const Page page = window.document().pages.first();
+    QCOMPARE(page.stickers.size(), 2);
+    QCOMPARE(page.stickers.at(1).imagePath, QStringLiteral("builtin:heart@1"));
+}
+
+void TestPageStickers::emptyHintSkipsAPageWithASticker()
+{
+    MainWindow window;
+    window.resize(1280, 800);
+    window.show();
+    QTest::qWait(120);
+    auto *view = window.findChild<PageView *>();
+    QVERIFY(view);
+    // A brand-new page has no content, so the hint invites the first photo.
+    QVERIFY(!view->emptyHint().isEmpty());
+
+    QVERIFY(QMetaObject::invokeMethod(&window, "addStickerFromPath", Qt::DirectConnection,
+                                      Q_ARG(QString, m_redPath)));
+    QTest::qWait(150);
+    // The plate would cover the sticker, so it is gone as soon as there is one.
+    QVERIFY(view->emptyHint().isEmpty());
+
+    const int before = window.undoStackForTest()->count();
+    QVERIFY(QMetaObject::invokeMethod(&window, "deleteSelectedSticker", Qt::DirectConnection));
+    QTest::qWait(150);
+    QCOMPARE(window.undoStackForTest()->count(), before + 1);
+    QVERIFY(!view->emptyHint().isEmpty());
+}
+
+void TestPageStickers::nudgeIsOneUndoPerBurst()
+{
+    MainWindow window;
+    window.resize(1280, 800);
+    window.show();
+    QTest::qWait(120);
+    QVERIFY(QMetaObject::invokeMethod(&window, "addStickerFromPath", Qt::DirectConnection,
+                                      Q_ARG(QString, m_redPath)));
+    QTest::qWait(120);
+
+    auto *view = window.findChild<PageView *>();
+    QVERIFY(view);
+    const QString stickerId = window.document().pages.first().stickers.first().id;
+    const double startX = window.document().pages.first().stickers.first().cx;
+    const int before = window.undoStackForTest()->count();
+
+    view->setFocus();
+    for (int press = 0; press < 3; ++press)
+        QTest::keyClick(view, Qt::Key_Right);
+    // The canvas follows every key, but nothing is published yet.
+    const std::optional<Sticker> live = view->liveSticker(stickerId);
+    QVERIFY(live);
+    QCOMPARE(live->cx, startX + 3.0);
+    QCOMPARE(window.undoStackForTest()->count(), before);
+
+    QTest::qWait(400);
+    QCOMPARE(window.document().pages.first().stickers.first().cx, startX + 3.0);
+    QCOMPARE(window.undoStackForTest()->count(), before + 1);
+
+    // Shift is the fine step, and it is a burst of its own.
+    QTest::keyClick(view, Qt::Key_Left, Qt::ShiftModifier);
+    QTest::qWait(400);
+    QCOMPARE(window.document().pages.first().stickers.first().cx, startX + 2.9);
+    QCOMPARE(window.undoStackForTest()->count(), before + 2);
+
+    window.undoStackForTest()->undo();
+    QTest::qWait(80);
+    QCOMPARE(window.document().pages.first().stickers.first().cx, startX + 3.0);
+    window.undoStackForTest()->undo();
+    QTest::qWait(80);
+    QCOMPARE(window.document().pages.first().stickers.first().cx, startX);
+}
+
+void TestPageStickers::deleteIsOneUndoStep()
+{
+    MainWindow window;
+    window.resize(1280, 800);
+    window.show();
+    QTest::qWait(120);
+    QVERIFY(QMetaObject::invokeMethod(&window, "addStickerFromPath", Qt::DirectConnection,
+                                      Q_ARG(QString, m_redPath)));
+    QTest::qWait(120);
+
+    auto *view = window.findChild<PageView *>();
+    QVERIFY(view);
+    const QString stickerId = window.document().pages.first().stickers.first().id;
+    const int before = window.undoStackForTest()->count();
+
+    view->setFocus();
+    QTest::keyClick(view, Qt::Key_Delete);
+    QTest::qWait(150);
+    QVERIFY(window.document().pages.first().stickers.isEmpty());
+    QCOMPARE(window.undoStackForTest()->count(), before + 1);
+    window.undoStackForTest()->undo();
+    QTest::qWait(80);
+    QCOMPARE(window.document().pages.first().stickers.size(), 1);
+    QCOMPARE(window.document().pages.first().stickers.first().id, stickerId);
+}
+
+void TestPageStickers::opacitySliderPreviewsLive()
+{
+    MainWindow window;
+    window.resize(1280, 800);
+    window.show();
+    QTest::qWait(120);
+    QVERIFY(QMetaObject::invokeMethod(&window, "addStickerFromPath", Qt::DirectConnection,
+                                      Q_ARG(QString, m_redPath)));
+    QTest::qWait(150);
+
+    auto *view = window.findChild<PageView *>();
+    auto *slider = window.findChild<QSlider *>(QStringLiteral("stickerOpacitySlider"));
+    auto *readout = window.findChild<QLabel *>(QStringLiteral("stickerOpacityValue"));
+    QVERIFY(view);
+    QVERIFY(slider);
+    QVERIFY(readout);
+    const QString stickerId = window.document().pages.first().stickers.first().id;
+    const int before = window.undoStackForTest()->count();
+
+    // While the slider moves the canvas follows, but the document does not.
+    slider->setValue(40);
+    const std::optional<Sticker> live = view->liveSticker(stickerId);
+    QVERIFY(live);
+    QCOMPARE(live->opacity, 40);
+    QCOMPARE(window.document().pages.first().stickers.first().opacity, 100);
+    QCOMPARE(readout->text(), QStringLiteral("40 %"));
+    QCOMPARE(window.undoStackForTest()->count(), before);
+
+    QTest::qWait(400);
+    QCOMPARE(window.document().pages.first().stickers.first().opacity, 40);
+    QCOMPARE(window.undoStackForTest()->count(), before + 1);
+
+    // The size field is centimetres, the model is millimetres, and the height
+    // follows the stored aspect.
+    auto *size = window.findChild<QDoubleSpinBox *>(QStringLiteral("stickerSizeSpin"));
+    QVERIFY(size);
+    QCOMPARE(size->suffix(), QStringLiteral(" cm"));
+    size->setValue(10.0);
+    emit size->editingFinished();
+    QTest::qWait(150);
+    const Sticker resized = window.document().pages.first().stickers.first();
+    QVERIFY(std::abs(resized.width - 100.0) < 0.01);
+    QVERIFY(std::abs(resized.height - 100.0) < 0.01);
+    QCOMPARE(window.undoStackForTest()->count(), before + 2);
+}
+
+void TestPageStickers::tallStickerKeepsItsAspect()
+{
+    // A 1:10 picture at the default width would be 52.5 x 525 mm, taller than
+    // the sheet. It is made smaller as a whole, not squashed on one axis.
+    const QSizeF size =
+        OverlayGeometry::defaultStickerSizeMm(QSizeF(210.0, 297.0), QSize(100, 1000));
+    QVERIFY(std::abs(size.width() / size.height() - 0.1) < 0.001);
+    QVERIFY(size.height() <= std::hypot(210.0, 297.0) + 0.001);
+    QVERIFY(size.width() <= 52.5 + 0.001);
+
+    // The same rule inside the model, for a hand-edited tall box.
+    Sticker tall = makeSticker(m_redPath, 105.0, 148.5, 10.0, 400.0);
+    const Sticker sane = sanitiseSticker(tall, QSizeF(210.0, 297.0));
+    QVERIFY(std::abs(sane.width / sane.height - 0.025) < 0.001);
+    QVERIFY(sane.height <= std::hypot(210.0, 297.0) + 0.001);
+}
+
+void TestPageStickers::relinkingResetsTheBoxToTheNewAspect()
+{
+    const QString tallPath = writeImage(m_dir.path(), QStringLiteral("tall.png"),
+                                        solidImage(QColor(40, 160, 90), QSize(100, 1000)));
+    QVERIFY(!tallPath.isEmpty());
+
+    MainWindow window;
+    window.resize(1280, 800);
+    window.show();
+    QTest::qWait(120);
+    QVERIFY(QMetaObject::invokeMethod(&window, "addStickerFromPath", Qt::DirectConnection,
+                                      Q_ARG(QString, m_redPath)));
+    QTest::qWait(150);
+    const Sticker square = window.document().pages.first().stickers.first();
+    QVERIFY(std::abs(square.width / square.height - 1.0) < 0.01);
+
+    // Relinking to a 1:10 picture resets the box to that aspect instead of
+    // stretching the old square.
+    QVERIFY(QMetaObject::invokeMethod(&window, "relinkStickerFromPath", Qt::DirectConnection,
+                                      Q_ARG(QString, tallPath)));
+    QTest::qWait(150);
+    const Sticker relinked = window.document().pages.first().stickers.first();
+    QVERIFY(std::abs(relinked.width / relinked.height - 0.1) < 0.005);
+    QVERIFY(relinked.height <= std::hypot(210.0, 297.0) + 0.001);
+    QCOMPARE(relinked.cx, square.cx);
+    QCOMPARE(relinked.cy, square.cy);
+}
+
+void TestPageStickers::sizeSpinIsBoundedByThePage()
+{
+    MainWindow window;
+    window.resize(1280, 800);
+    window.show();
+    QTest::qWait(120);
+    QVERIFY(QMetaObject::invokeMethod(&window, "addStickerFromPath", Qt::DirectConnection,
+                                      Q_ARG(QString, m_redPath)));
+    QTest::qWait(150);
+
+    auto *size = window.findChild<QDoubleSpinBox *>(QStringLiteral("stickerSizeSpin"));
+    QVERIFY(size);
+    // The spin never offers a value the model would clamp away: the page
+    // diagonal is the largest box a sticker can have.
+    const double diagonalCm = std::hypot(210.0, 297.0) / 10.0;
+    QVERIFY(std::abs(size->maximum() - diagonalCm) < 0.01);
+    QVERIFY(size->maximum() < 200.0);
+    size->setValue(200.0);
+    QCOMPARE(size->value(), size->maximum());
+}
+
+void TestPageStickers::fitToPaperBringsStickersBack()
+{
+    // A sticker half off the sheet is part of what "Igazítás a laphoz" tidies,
+    // so the overflow notice has to see it and the action has to move it.
+    DocumentSnapshot document;
+    Page page = a4Page();
+    Sticker sticker = makeSticker(m_redPath, 5.0, 280.0, 60.0, 60.0);
+    sticker.angleDeg = 25.0;
+    page.stickers = {sticker};
+    document.pages.append(page);
+    document.currentPage = 0;
+
+    MainWindow window;
+    window.resize(1280, 800);
+    window.show();
+    QVERIFY(loadDocument(window, m_dir, document));
+    QTest::qWait(200);
+    auto *fit = window.findChild<QPushButton *>(QStringLiteral("fitPageButton"));
+    QVERIFY(fit);
+    QVERIFY(fit->isVisible());
+
+    CanvasController controller;
+    controller.setDocument(document);
+    QVERIFY(controller.apply(FitPageEdit{0}).ok());
+    const Sticker fitted = controller.document().pages.first().stickers.first();
+    const QRectF box = OverlayGeometry::stickerQuadMm(fitted).boundingRect();
+    QVERIFY(box.left() >= -0.05);
+    QVERIFY(box.top() >= -0.05);
+    QVERIFY(box.right() <= 210.05);
+    QVERIFY(box.bottom() <= 297.05);
+    QVERIFY(fitted.width < sticker.width);
+}
+
+void TestPageStickers::stickerAnnouncedToAssistiveTech()
+{
+    MainWindow window;
+    window.resize(1280, 800);
+    window.show();
+    QTest::qWait(120);
+    QVERIFY(QMetaObject::invokeMethod(&window, "addStickerFromPath", Qt::DirectConnection,
+                                      Q_ARG(QString, m_redPath)));
+    QTest::qWait(150);
+    auto *view = window.findChild<PageView *>();
+    QVERIFY(view);
+    QVERIFY2(view->accessibleDescription().contains(
+                 QStringLiteral("A matrica ki van jelölve.")),
+             qPrintable(view->accessibleDescription()));
+}
+
 void TestPageStickers::evidenceScreenshots()
 {
-    // A photograph with a sticker on it: the screenshot the slice is judged by.
-    // The sticker is green so it reads against the photograph's blue half.
-    const QString greenPath = writeImage(m_dir.path(), QStringLiteral("green.png"),
-                                         solidImage(QColor(40, 160, 90)));
-    QVERIFY(!greenPath.isEmpty());
+    // A built-in star at 60 % opacity over a photograph: the slice's own
+    // promotional page, and the printed parity evidence.
     DocumentSnapshot document;
     Page page = a4Page();
     Frame frame;
@@ -1089,9 +1560,12 @@ void TestPageStickers::evidenceScreenshots()
     frame.height = 100.0;
     frame.fit = FitMode::Fill;
     page.frames.append(frame);
-    Sticker sticker = makeSticker(greenPath, 160.0, 150.0, 50.0, 50.0);
-    sticker.angleDeg = -15.0;
-    page.stickers.append(sticker);
+    Sticker star = makeSticker(builtinStickerPath(QStringLiteral("star")), 150.0, 105.0,
+                               65.0, 65.0);
+    star.imageSha256 = fileSha256(stickerSourcePath(star));
+    star.opacity = 60;
+    star.angleDeg = -12.0;
+    page.stickers.append(star);
     document.pages.append(page);
     document.currentPage = 0;
 
@@ -1099,21 +1573,45 @@ void TestPageStickers::evidenceScreenshots()
     window.resize(1280, 800);
     window.show();
     QVERIFY(loadDocument(window, m_dir, document));
-    QTest::qWait(200);
+    QTest::qWait(250);
     QVERIFY(window.grab().save(evidenceDir() + QStringLiteral("/ui-sticker-on-photo.png")));
 
-    // The built-in set, with nothing selected.
-    auto *view = window.findChild<PageView *>();
-    QVERIFY(view);
-    QTest::keyClick(view, Qt::Key_Escape);
-    QTest::qWait(120);
-    auto *tabs = window.findChild<QTabWidget *>(QStringLiteral("inspectorTabs"));
-    QVERIFY(tabs);
-    tabs->setCurrentIndex(3);
+    // The palette with a sticker selected: it stays visible, so a second layer
+    // is one click away.
+    const QString stickerId = window.document().pages.first().stickers.first().id;
+    QVERIFY(QMetaObject::invokeMethod(&window, "selectSticker", Qt::DirectConnection,
+                                      Q_ARG(QString, stickerId)));
     QTest::qWait(150);
     QVERIFY(window.grab().save(evidenceDir() + QStringLiteral("/ui-sticker-set.png")));
 
-    // The same page printed, so the sticker is on paper too.
+    // A clipped sticker: half of it off the sheet, cut at the paper edge.
+    DocumentSnapshot clipped = document;
+    Sticker edge = star;
+    edge.cx = 15.0;
+    edge.cy = 280.0;
+    edge.angleDeg = 20.0;
+    clipped.pages.first().stickers = {edge};
+    MainWindow clippedWindow;
+    clippedWindow.resize(1280, 800);
+    clippedWindow.show();
+    QVERIFY(loadDocument(clippedWindow, m_dir, clipped));
+    QTest::qWait(200);
+    QVERIFY(clippedWindow.grab().save(
+        evidenceDir() + QStringLiteral("/ui-sticker-clipped.png")));
+
+    // A missing sticker: the canvas placeholder, never in the raster or PDF.
+    Sticker lost = makeSticker(m_dir.filePath(QStringLiteral("evidence-gone.png")),
+                               105.0, 148.5, 55.0, 55.0);
+    lost.imageSha256 = QByteArrayLiteral("0123456789abcdef");
+    MainWindow missingWindow;
+    missingWindow.resize(1280, 800);
+    missingWindow.show();
+    QVERIFY(loadDocument(missingWindow, m_dir, stickerDocument({lost})));
+    QTest::qWait(200);
+    QVERIFY(missingWindow.grab().save(
+        evidenceDir() + QStringLiteral("/ui-sticker-placeholder.png")));
+
+    // The same page printed: the star is on paper, with no placeholder red.
     ImageStore store;
     PageRenderer renderer(store);
     const double ppi = 150.0;
@@ -1131,6 +1629,9 @@ void TestPageStickers::evidenceScreenshots()
     QVERIFY(process.waitForFinished(60000));
     QCOMPARE(process.exitCode(), 0);
     QVERIFY(QFileInfo::exists(base + QStringLiteral(".png")));
+    const QImage printed(base + QStringLiteral(".png"));
+    QVERIFY(!printed.isNull());
+    QCOMPARE(placeholderPixels(printed), 0);
 }
 
 QTEST_MAIN(TestPageStickers)

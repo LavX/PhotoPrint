@@ -19,17 +19,17 @@
     <file alias="effect-sample.jpg">samples/effect-sample.jpg</file>
   </qresource>
   <qresource prefix="/stickers">
-    <file alias="star.png">stickers/star.png</file>
-    <file alias="heart.png">stickers/heart.png</file>
-    <file alias="arrow.png">stickers/arrow.png</file>
-    <file alias="speech.png">stickers/speech.png</file>
-    <file alias="sun.png">stickers/sun.png</file>
-    <file alias="flower.png">stickers/flower.png</file>
-    <file alias="confetti.png">stickers/confetti.png</file>
-    <file alias="frame.png">stickers/frame.png</file>
-    <file alias="ring.png">stickers/ring.png</file>
-    <file alias="sparkle.png">stickers/sparkle.png</file>
-    <file alias="ribbon.png">stickers/ribbon.png</file>
-    <file alias="badge.png">stickers/badge.png</file>
+    <file alias="star-v1.png">stickers/star.png</file>
+    <file alias="heart-v1.png">stickers/heart.png</file>
+    <file alias="arrow-v1.png">stickers/arrow.png</file>
+    <file alias="speech-v1.png">stickers/speech.png</file>
+    <file alias="sun-v1.png">stickers/sun.png</file>
+    <file alias="flower-v1.png">stickers/flower.png</file>
+    <file alias="confetti-v1.png">stickers/confetti.png</file>
+    <file alias="frame-v1.png">stickers/frame.png</file>
+    <file alias="ring-v1.png">stickers/ring.png</file>
+    <file alias="sparkle-v1.png">stickers/sparkle.png</file>
+    <file alias="ribbon-v1.png">stickers/ribbon.png</file>
+    <file alias="badge-v1.png">stickers/badge.png</file>
   </qresource>
 </RCC>

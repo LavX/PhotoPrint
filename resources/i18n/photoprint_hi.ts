@@ -1913,5 +1913,9 @@
         <source>Kiválasztott elem eltávolítása</source>
         <translation>चुना हुआ तत्व हटाएँ</translation>
     </message>
+    <message>
+        <source>A matrica ki van jelölve.</source>
+        <translation>स्टिकर चुना गया है।</translation>
+    </message>
 </context>
 </TS>

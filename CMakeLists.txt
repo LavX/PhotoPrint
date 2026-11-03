@@ -66,6 +66,7 @@ add_library(photoprint_core STATIC
   src/SlotLayoutEngine.cpp
   src/BackgroundGeometry.cpp
   src/OverlayGeometry.cpp
+  src/StickerAssets.cpp
   src/EffectStages.cpp
   src/WandStages.cpp
   src/EffectBrowserDialog.cpp

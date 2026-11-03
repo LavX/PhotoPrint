@@ -7,6 +7,7 @@
 #include "OverlayGeometry.h"
 #include "SheetLayout.h"
 #include "SlotGeometry.h"
+#include "StickerAssets.h"
 
 #include <QCoreApplication>
 #include <QCryptographicHash>
@@ -372,47 +373,23 @@ void drawSticker(QPainter &painter, const Sticker &sticker, const QImage &layer,
     painter.restore();
 }
 
-/// A missing, unreadable or too-large sticker still occupies the page: a red
-/// dashed box with a cross, converted through the working space like every
-/// other non-photographic colour. It is painted by the page painter, so the
-/// screen, the PDF and the printer show the same thing and a lost decoration is
-/// never silent.
-void drawStickerPlaceholder(QPainter &painter, const Sticker &sticker,
-                            const QTransform &pageTransform)
-{
-    if (!(sticker.width > 0.0) || !(sticker.height > 0.0))
-        return;
-    painter.save();
-    QTransform local;
-    local.translate(sticker.cx, sticker.cy);
-    local.rotate(sticker.angleDeg);
-    painter.setTransform(local * pageTransform);
-    painter.setOpacity(std::clamp(sticker.opacity, 20, 100) / 100.0);
-    QPen pen(ColorPipeline::linearColor(0xffb3261e), 0.5, Qt::DashLine);
-    pen.setDashPattern({4.0, 3.0});
-    painter.setPen(pen);
-    painter.setBrush(Qt::NoBrush);
-    const QRectF box(-sticker.width / 2.0, -sticker.height / 2.0, sticker.width, sticker.height);
-    painter.drawRect(box);
-    painter.drawLine(box.topLeft(), box.bottomRight());
-    painter.drawLine(box.topRight(), box.bottomLeft());
-    painter.restore();
-}
-
+/// A missing, unreadable or too-large sticker is skipped by the page painter:
+/// the raster, the PDF and the printer carry no editor furniture, and a lost
+/// decoration must not print a red box. The canvas draws its own placeholder in
+/// PageView::paintEvent, where every other editor mark lives.
+///
 /// Paints the page's stickers above every photograph. Text will join this pass
 /// later, merged by the same `z`, which is why the order comes from
 /// OverlayGeometry and not from the list here.
-void paintStickers(QPainter &painter, const Page &page, const PageImages &images,
+void paintStickers(QPainter &painter, const QList<Sticker> &stickers, const PageImages &images,
                    const QTransform &pageTransform)
 {
-    if (page.stickers.isEmpty())
+    if (stickers.isEmpty())
         return;
-    for (const Sticker &sticker : OverlayGeometry::stickersInPaintOrder(page)) {
+    for (const Sticker &sticker : OverlayGeometry::stickersInPaintOrder(stickers)) {
         const auto layer = images.stickers.constFind(sticker.id);
         if (layer != images.stickers.constEnd() && !layer->isNull())
             drawSticker(painter, sticker, layer.value(), pageTransform);
-        else if (images.missingStickers.contains(sticker.id))
-            drawStickerPlaceholder(painter, sticker, pageTransform);
     }
 }
 
@@ -498,8 +475,11 @@ void paintPageContent(QPainter &painter, const DocumentSnapshot &snapshot, int p
 
     // Overlays last: a sticker is above every photograph, and the pass takes
     // its order from the model, so the canvas, the PDF and the printer cannot
-    // disagree about which sticker is on top.
-    paintStickers(painter, page, images, pageTransform);
+    // disagree about which sticker is on top. The list is sanitised here as
+    // well, because a caller can hand this painter a fabricated snapshot that
+    // never went through the controller's repair point.
+    paintStickers(painter, sanitiseStickers(page.stickers, pageSizeMm(page)), images,
+                  pageTransform);
 }
 
 void paintFrameLabels(QPainter &painter, const DocumentSnapshot &snapshot, int pageIndex,
@@ -719,28 +699,13 @@ Result<QImage> PageRenderer::renderPageUsing(const DocumentSnapshot &snapshot, i
     // The stickers are decorative too. Each layer is converted through the same
     // working space as a photograph, so the print matches the screen instead of
     // printing a raw sRGB blob too bright. A source that cannot be read is
-    // recorded as missing: the painter draws the placeholder for it and the
-    // page still renders, so one lost decoration never stops a sheet or a PDF.
-    for (const Sticker &sticker : page.stickers) {
+    // recorded as missing and skipped: the page still renders, so one lost
+    // decoration never stops a sheet or a PDF. The list is sanitised first, so
+    // a fabricated snapshot cannot reach the painter with a NaN box.
+    const QList<Sticker> stickers = sanitiseStickers(page.stickers, pageSize);
+    for (const Sticker &sticker : stickers) {
         if (token.stop_requested())
             return error(QStringLiteral("cancelled"), QCoreApplication::translate("PhotoPrint", "A művelet megszakadt."));
-        if (sticker.imagePath.isEmpty()) {
-            pageImages.missingStickers.insert(sticker.id);
-            continue;
-        }
-        QImageReader probe(sticker.imagePath);
-        probe.setDecideFormatFromContent(true);
-        if (!probe.canRead() || OverlayGeometry::stickerSourceTooLarge(probe.size())) {
-            pageImages.missingStickers.insert(sticker.id);
-            continue;
-        }
-        Result<SourceImage> source = m_store.load(sticker.imagePath, ImportPolicy{}, token);
-        if (!source) {
-            pageImages.missingStickers.insert(sticker.id);
-            continue;
-        }
-        ColorRecipe recipe = baseRecipe;
-        recipe.tone = PhotoTone{};
         // The layer follows the drawn size, so a 4000 px sticker drawn at 20 mm
         // is not converted at full resolution; the painter scales the bounded
         // layer into the box.
@@ -748,11 +713,12 @@ Result<QImage> PageRenderer::renderPageUsing(const DocumentSnapshot &snapshot, i
         bound = std::clamp(bound, 1, kStickerMaxLayer);
         if (options.sourceMaxDimension > 0)
             bound = std::min(bound, options.sourceMaxDimension);
-        Result<QImage> converted = m_store.linear(source.value(), recipe, bound, token);
-        if (converted)
-            pageImages.stickers.insert(sticker.id, converted.value());
-        else
-            pageImages.missingStickers.insert(sticker.id);
+        const StickerLayer layer =
+            loadStickerLayer(m_store, sticker, baseRecipe, bound, token);
+        // A missing layer is simply not painted: the raster, the PDF and the
+        // printer carry no editor furniture. The canvas marks it separately.
+        if (!layer.missing)
+            pageImages.stickers.insert(sticker.id, layer.image);
     }
 
     QImage canvas(pixelWidth, pixelHeight, QImage::Format_RGBA64_Premultiplied);

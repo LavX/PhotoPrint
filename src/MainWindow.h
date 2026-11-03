@@ -104,11 +104,20 @@ public:
     /// A frame, a cell and a sticker are three exclusive selections.
     void setSelectedSticker(const QString &stickerId);
     QString selectedSticker() const { return m_selectedStickerId; }
+    /// The stickers the window proved missing. The canvas marks each with its
+    /// own placeholder; the page raster never does.
+    void setMissingStickers(const QSet<QString> &stickerIds);
     /// A sticker's rotated box in widget coordinates, empty when it is not on
     /// the current page. Shared by the paint path, the hit test and the tests,
     /// so the outline a person sees is the outline that answers the pointer.
     QPolygonF stickerQuad(const QString &stickerId) const;
+    /// Shows a sticker without committing it. The opacity slider uses it while
+    /// it is being dragged; the window commits one edit when the drag ends.
+    void previewSticker(const Sticker &sticker);
     std::optional<Sticker> liveSticker(const QString &stickerId) const;
+    /// The page-wide hint line, empty when the page has content. A test hook:
+    /// the hint must not cover a sticker on an otherwise empty page.
+    QString emptyHint() const { return m_emptyHint; }
     /// The frame as the canvas currently shows it, including an uncommitted
     /// wheel burst. The inspector builds its next action on this.
     std::optional<Frame> liveFrame(const QString &frameId) const;
@@ -283,6 +292,10 @@ private:
     int hitHandle(const QPointF &widgetPoint) const;
     SlotState slotStateFor(const Slot &slot) const;
     void paintSlotOverlays(QPainter &painter, const Page &page) const;
+    /// The canvas-only placeholder for a sticker whose picture is lost: a red
+    /// dashed box with a cross, drawn in widget space. The page raster, the PDF
+    /// and the printer never carry it.
+    void paintStickerPlaceholders(QPainter &painter, const Page &page) const;
     /// A dark outline that stays visible on a light page, even when the
     /// theme's text colour is light. The handles also carry a light underlay,
     /// so they stay visible on a dark background.
@@ -322,6 +335,8 @@ private:
     Sticker draggedSticker(const QPointF &pagePoint, bool fine) const;
     void beginStickerDrag(DragKind kind, int handle, const QPointF &pagePoint,
                           const Sticker &sticker);
+    /// Lands an arrow-key nudge burst as one edit when the keys stop.
+    void flushStickerNudge();
     /// The end of a wheel burst publishes one edit, not one per notch, so one
     /// Ctrl+Z restores the photo's crop and zoom as the user saw it before.
     void flushWheelZoom();
@@ -331,6 +346,7 @@ private:
     DocumentSnapshot m_document;
     PageImages m_images;
     QSet<QString> m_unavailable;
+    QSet<QString> m_missingStickers;
     QString m_selectedId;
     QString m_selectedSlotId;
     QString m_selectedStickerId;
@@ -355,6 +371,11 @@ private:
     QString m_zoomFrameId;
     Frame m_zoomStartFrame;
     Frame m_zoomCurrentFrame;
+    /// The sticker nudge burst: the id being moved, the geometry it started
+    /// from, and the timer that lands the whole burst as one edit.
+    QTimer *m_stickerNudgeTimer = nullptr;
+    QString m_nudgeStickerId;
+    Sticker m_nudgeStartSticker;
     QColor m_canvasColor{0xd9, 0xd9, 0xde};
     QColor m_pageBorderColor{0xc7, 0xc7, 0xcc};
     QColor m_pageShadowColor{0, 0, 0, 38};
@@ -578,9 +599,15 @@ private slots:
     void addBuiltInSticker(const QString &alias);
     /// Picks a replacement file for a sticker whose picture is lost.
     void chooseStickerImage();
+    /// The file-dialog-free relink: the picker and the tests land here.
+    void relinkStickerFromPath(const QString &path);
     void stickerSizeChanged();
     void stickerAngleChanged();
     void stickerOpacityChanged(int value);
+    /// Lands the opacity burst as one edit. The slider previews live, so a drag
+    /// is one undo step instead of one per pixel.
+    void flushStickerOpacity();
+    void cancelPendingStickerOpacity();
     /// Moves the selected sticker one real step in the paint order.
     void reorderStickerLayer(int delta);
     void deleteSelectedSticker();
@@ -673,6 +700,11 @@ private:
     /// `selectId` when it is given.
     bool publishStickers(const QList<Sticker> &stickers, const QString &actionText,
                          const QString &selectId = QString());
+    /// Places a sticker whose pixels are already identified: the stored path
+    /// (a file path or a shipped alias), its identity and its pixel size. The
+    /// file dialog, the built-in set and the relink picker all land here.
+    bool addStickerWithSource(const QString &storedPath, const QByteArray &sha256,
+                              const QSize &pixels);
     /// Why a sticker's picture cannot be shown. `None` is a healthy one.
     enum class StickerProblem { None, Missing, Unreadable, TooLarge };
     StickerProblem stickerProblem(const Sticker &sticker) const;
@@ -873,8 +905,10 @@ private:
     QPushButton *m_backgroundRelinkButton = nullptr;
     /// The notice bar's own line for a background picture that cannot be shown.
     QLabel *m_backgroundNotice = nullptr;
-    /// The Elem tab: the sticker properties of the selected layer, and the empty
-    /// state that adds one.
+    /// The Elem tab: the sticker properties of the selected layer, and the
+    /// palette that adds one. The palette stays visible with a sticker selected,
+    /// so a second one never needs a deselect first.
+    QWidget *m_stickerAddPanel = nullptr;
     QWidget *m_stickerPanel = nullptr;
     QWidget *m_stickerEmptyPanel = nullptr;
     QLabel *m_stickerEmptyHint = nullptr;
@@ -902,6 +936,11 @@ private:
     /// not re-read the picture on every nudge.
     QString m_stickerPreviewPath;
     QPixmap m_stickerPreviewPixmap;
+    /// The opacity and nudge bursts: the canvas follows live and one edit lands
+    /// when the burst stops.
+    QTimer *m_stickerOpacityTimer = nullptr;
+    QTimer *m_stickerNudgeTimer = nullptr;
+    std::optional<Sticker> m_pendingStickerOpacity;
     QString m_lastStickerDir;
     QString m_selectedSticker;
     /// The live background burst: every opacity or tile change restarts the

@@ -4,6 +4,7 @@
 #include "PaperCatalog.h"
 #include "SlotGeometry.h"
 #include "SlotLayoutEngine.h"
+#include "StickerAssets.h"
 
 #include <QCoreApplication>
 #include <QDir>
@@ -225,7 +226,9 @@ QHash<QString, QString> portableFileNames(const DocumentSnapshot &document)
     QMap<QString, QString> hashBySource;
 
     const auto addSource = [&](const QString &path, const QByteArray &sha256) {
-        if (path.isEmpty())
+        // A shipped sticker is an alias, not a file: there is nothing to copy
+        // and nothing to name in the bundle.
+        if (path.isEmpty() || isBuiltinStickerPath(path))
             return;
         const QString source = lexicalPath(path);
         if (baseBySource.contains(source))
@@ -682,8 +685,12 @@ QJsonObject stickerToJson(const Sticker &sticker, const QString &projectDir,
 
     // The picture path follows the frame rule exactly: a normal project stores
     // the project-relative path plus the absolute original, a portable copy
-    // stores only a contained relative path and no original.
-    if (!portableDir.isEmpty()) {
+    // stores only a contained relative path and no original. A shipped sticker
+    // is the exception: it stores its pinned alias, so the project keeps
+    // working when it moves and when the app is updated.
+    if (isBuiltinStickerPath(sticker.imagePath)) {
+        object.insert(QStringLiteral("image"), sticker.imagePath);
+    } else if (!portableDir.isEmpty()) {
         const QString source = lexicalPath(sticker.imagePath);
         const QString name = portableNames.value(source);
         if (name.isEmpty()) {
@@ -724,9 +731,15 @@ Sticker stickerFromJson(const QJsonObject &object, const QString &projectDir)
 
     const QString stored = object.value(QStringLiteral("image")).toString();
     const QString original = object.value(QStringLiteral("original")).toString();
-    const ResolvedSource resolved =
-        resolveStoredSource(projectDir, stored, original, sticker.imageSha256);
-    sticker.imagePath = resolved.path;
+    if (isBuiltinStickerPath(stored)) {
+        // A shipped sticker keeps its alias: it is resolved against the
+        // application's own resources, never against the project folder.
+        sticker.imagePath = stored;
+    } else {
+        const ResolvedSource resolved =
+            resolveStoredSource(projectDir, stored, original, sticker.imageSha256);
+        sticker.imagePath = resolved.path;
+    }
     // A sticker whose file cannot be resolved still loads, with an empty path:
     // the Elem panel shows the hint and the picker, the page paints the
     // placeholder, and saving keeps the rest of the page instead of silently
@@ -897,6 +910,9 @@ Result<void> copyPortableSources(const DocumentSnapshot &document, const QString
     // missing picture in the panel.
     const auto copySource = [&](const QString &path, const QByteArray &sha256,
                                 bool required) -> Result<void> {
+        // A shipped sticker lives in the application, not on the author's disk.
+        if (isBuiltinStickerPath(path))
+            return Result<void>();
         if (path.isEmpty()) {
             if (!required)
                 return Result<void>();

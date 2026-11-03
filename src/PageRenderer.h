@@ -58,11 +58,6 @@ struct PageImages {
     QSize backgroundPixels;
     /// Sticker id -> linear premultiplied layer, already colour converted.
     QHash<QString, QImage> stickers;
-    /// Stickers whose source is missing, unreadable or too large. The painter
-    /// draws a placeholder for exactly these, so a page with a lost decoration
-    /// looks the same on screen and on paper instead of silently printing
-    /// nothing. A sticker that is merely still decoding is not in here.
-    QSet<QString> missingStickers;
     bool operator==(const PageImages &) const = default;
 };
 

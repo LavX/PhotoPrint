@@ -1913,5 +1913,9 @@
         <source>Kiválasztott elem eltávolítása</source>
         <translation>Ausgewähltes Element entfernen</translation>
     </message>
+    <message>
+        <source>A matrica ki van jelölve.</source>
+        <translation>Der Aufkleber ist ausgewählt.</translation>
+    </message>
 </context>
 </TS>

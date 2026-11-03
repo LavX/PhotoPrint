@@ -933,6 +933,7 @@ void TestI18n::everyCatalogueTranslatesTheStickerMessages()
              QStringLiteral("Matrica átméretezése"),
              QStringLiteral("Matrica forgatása"),
              QStringLiteral("Matrica törlése"),
+             QStringLiteral("A matrica ki van jelölve."),
              QStringLiteral("Képek (*.png *.jpg *.jpeg *.webp *.gif)"),
              QStringLiteral("Egy lapon legfeljebb %1 matrica lehet."),
              QStringLiteral("A matricát nem sikerült a helyére tenni."),

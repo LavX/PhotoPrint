@@ -1899,5 +1899,9 @@
         <source>Kiválasztott elem eltávolítása</source>
         <translation>移除所选元素</translation>
     </message>
+    <message>
+        <source>A matrica ki van jelölve.</source>
+        <translation>已选中贴纸。</translation>
+    </message>
 </context>
 </TS>
