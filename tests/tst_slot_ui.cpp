@@ -344,16 +344,6 @@ QListWidgetItem *libraryItemForPath(MainWindow &window, const QString &path)
     return nullptr;
 }
 
-/// The page millimetres under a widget point, the inverse of pageToWidget.
-QPointF widgetToPageMm(const PageView &view, const QPointF &point)
-{
-    const QRectF rect = view.pageRect();
-    const QSizeF page = view.pageMm();
-    if (rect.isEmpty() || page.isEmpty())
-        return {};
-    return QPointF((point.x() - rect.left()) / rect.width() * page.width(),
-                   (point.y() - rect.top()) / rect.height() * page.height());
-}
 
 void sendWheel(PageView &view, const QPointF &position, int angle,
                Qt::KeyboardModifiers modifiers = Qt::NoModifier)
@@ -605,6 +595,7 @@ private slots:
     void dragMovesTheFrameInsideItsSlot();
     void cropModePansTheImageInsideTheFrame();
     void cropModeHandlesResizeRotateAndPan();
+    void cropModeOnASlottedPhotoKeepsTheFrame();
     void wheelOverASlotFrameZoomsThePage();
     void widthHeightAndAngleSpinsEditASlottedFrame();
     void canvasHandlesResizeAndTurnASlottedFrame();
@@ -625,6 +616,9 @@ private slots:
     void removingFromCanvasKeepsTheLibraryEntry();
     void dragBackRemovesTheLibraryEntry();
     void removeFromLibraryIsOneUndo();
+    void deleteOnFocusedUnusedTileRemovesIt();
+    void fullLibraryRefusesRemoval();
+    void libraryShowsARealPhotoAfterLoad();
     void libraryListAndMenuFitALargeFont();
     void sectionOutlineIsVisibleWhenFilledAndDeselected();
     void imageRotationControlWritesAndPersists();
@@ -1197,6 +1191,11 @@ void TestSlotUi::cropModeHandlesResizeRotateAndPan()
     QCOMPARE(view->selectedFrame(), original.id);
     QTest::mouseDClick(view, Qt::LeftButton, Qt::NoModifier, centre.toPoint());
     QVERIFY2(view->cropMode(), "a double click did not enter crop mode");
+    QVERIFY2(view->cropHint().contains(QStringLiteral("sarkot")),
+             qPrintable(view->cropHint()));
+    QVERIFY(!view->composedImage().isNull());
+    QTest::qWait(30);
+    QVERIFY(view->grab().save(evidenceDir() + QStringLiteral("/crop-free.png")));
 
     const auto cornerWidget = [&](const Frame &frame, int corner) {
         const double sx = corner == 0 || corner == 3 ? -1.0 : 1.0;
@@ -1247,7 +1246,8 @@ void TestSlotUi::cropModeHandlesResizeRotateAndPan()
     QTest::qWait(60);
     QVERIFY(window.document() == beforeResize);
 
-    // The rotate handle turns the frame and stays in crop mode.
+    // The rotate handle turns the picture inside the frame and stays in crop
+    // mode. The frame angle is the non-crop gesture and must not move.
     const Frame beforeRotate = window.document().pages.first().frames.first();
     const QPointF rotate = rotateWidget(beforeRotate);
     QTest::mousePress(view, Qt::LeftButton, Qt::NoModifier, rotate.toPoint());
@@ -1258,9 +1258,11 @@ void TestSlotUi::cropModeHandlesResizeRotateAndPan()
 
     const Frame rotated = window.document().pages.first().frames.first();
     QVERIFY2(view->cropMode(), "rotating left crop mode");
-    QVERIFY2(std::abs(rotated.angleDeg - beforeRotate.angleDeg) > 1.0,
-             qPrintable(QStringLiteral("angle %1 -> %2")
-                            .arg(beforeRotate.angleDeg).arg(rotated.angleDeg)));
+    QVERIFY2(std::abs(rotated.imageRotationDeg - beforeRotate.imageRotationDeg) > 1.0,
+             qPrintable(QStringLiteral("image rotation %1 -> %2")
+                            .arg(beforeRotate.imageRotationDeg)
+                            .arg(rotated.imageRotationDeg)));
+    QCOMPARE(rotated.angleDeg, beforeRotate.angleDeg);
     QCOMPARE(rotated.width, beforeRotate.width);
     QCOMPARE(rotated.height, beforeRotate.height);
 
@@ -1289,6 +1291,101 @@ void TestSlotUi::cropModeHandlesResizeRotateAndPan()
     QTest::mouseRelease(view, Qt::LeftButton, Qt::NoModifier, outside.toPoint());
     QTest::qWait(40);
     QVERIFY2(!view->cropMode(), "a press outside the frame did not leave crop mode");
+}
+
+void TestSlotUi::cropModeOnASlottedPhotoKeepsTheFrame()
+{
+    QTemporaryDir dir;
+    QVERIFY(dir.isValid());
+    const QString photo = makePhoto(dir.path(), QStringLiteral("crop-slot.png"),
+                                    QColor(40, 120, 200));
+    MainWindow window;
+    window.resize(1280, 800);
+    window.show();
+    QTest::qWait(100);
+    QVERIFY(loadDocument(window, dir, documentWithLayout({photo}, 4),
+                         QStringLiteral("crop-slot.ppj")));
+    auto *view = window.findChild<PageView *>();
+    QVERIFY(view);
+    QVERIFY(window.waitForPreview(15000));
+
+    const Page page = window.document().pages.first();
+    const Slot &slot = page.slotList.at(0);
+    const QString slotId = slot.id;
+    QTest::mouseClick(view, Qt::LeftButton, Qt::NoModifier,
+                      view->slotRect(slotId).center().toPoint());
+    QTest::mouseDClick(view, Qt::LeftButton, Qt::NoModifier,
+                       view->slotRect(slotId).center().toPoint());
+    QVERIFY2(view->cropMode(), "a double click did not enter crop mode");
+    QVERIFY2(view->cropHint().contains(QStringLiteral("hely ablakában")),
+             qPrintable(view->cropHint()));
+    QVERIFY(!view->composedImage().isNull());
+    QTest::qWait(30);
+    QVERIFY(view->grab().save(evidenceDir() + QStringLiteral("/crop-slotted.png")));
+
+    const DocumentSnapshot beforeCrop = window.document();
+    const Frame before = *frameInSlot(page, slotId);
+    const QRectF cellMm = SlotGeometry::slotCellMm(page, slot);
+    // The cell is the crop window: the frame must still cover it.
+    QVERIFY2(before.width >= cellMm.width() - 0.5,
+             qPrintable(QStringLiteral("frame %1 < cell %2")
+                            .arg(before.width).arg(cellMm.width())));
+    QVERIFY2(before.height >= cellMm.height() - 0.5,
+             qPrintable(QStringLiteral("frame %1 < cell %2")
+                            .arg(before.height).arg(cellMm.height())));
+
+    // A slotted photo keeps no frame handles in crop mode: a point on the frame
+    // corner (where a handle would be) is the pan surface, not a resize handle.
+    const QPointF topLeft = pageToWidget(
+        *view, QPointF(before.cx - before.width / 2.0, before.cy - before.height / 2.0));
+    const QPointF insideCorner = topLeft + QPointF(4.0, 4.0);
+    QTest::mouseMove(view, insideCorner.toPoint());
+    QCOMPARE(view->cursor().shape(), Qt::OpenHandCursor);
+
+    QTest::mousePress(view, Qt::LeftButton, Qt::NoModifier, insideCorner.toPoint());
+    QTest::mouseMove(view, (insideCorner + QPointF(45.0, 28.0)).toPoint());
+    QTest::mouseRelease(view, Qt::LeftButton, Qt::NoModifier,
+                        (insideCorner + QPointF(45.0, 28.0)).toPoint());
+    QTest::qWait(80);
+
+    const Page after = window.document().pages.first();
+    const Frame resized = *frameInSlot(after, slotId);
+    QVERIFY2(view->cropMode(), "a corner drag left crop mode");
+    QCOMPARE(resized.width, before.width);
+    QCOMPARE(resized.height, before.height);
+    QCOMPARE(resized.cx, before.cx);
+    QCOMPARE(resized.cy, before.cy);
+    QCOMPARE(resized.angleDeg, before.angleDeg);
+    QVERIFY2(resized.width >= cellMm.width() - 0.5, "the frame shrank inside the cell");
+    QVERIFY2(resized.height >= cellMm.height() - 0.5, "the frame shrank inside the cell");
+
+    // The visible window is still the photograph, not a white band: the cell
+    // edges and the cell centre read the same colour.
+    const QImage raster = view->composedImage();
+    QVERIFY(!raster.isNull());
+    const QSizeF pageMm = view->pageMm();
+    const QColor centre =
+        QColor(rasterPixelAtMm(raster, pageMm, cellMm.center()));
+    QVERIFY2(centre.red() < 240 || centre.green() < 240 || centre.blue() < 240,
+             qPrintable(QStringLiteral("the cell is blank: %1").arg(centre.name())));
+    for (const QPointF &point : {QPointF(cellMm.left() + 2.0, cellMm.top() + 2.0),
+                                 QPointF(cellMm.right() - 2.0, cellMm.top() + 2.0),
+                                 QPointF(cellMm.left() + 2.0, cellMm.bottom() - 2.0),
+                                 QPointF(cellMm.right() - 2.0, cellMm.bottom() - 2.0)}) {
+        const QColor edge(rasterPixelAtMm(raster, pageMm, point));
+        QVERIFY2(std::abs(edge.red() - centre.red()) <= 50
+                     && std::abs(edge.green() - centre.green()) <= 50
+                     && std::abs(edge.blue() - centre.blue()) <= 50,
+                 qPrintable(QStringLiteral("white band at %1,%2: %3 vs %4")
+                                .arg(point.x()).arg(point.y())
+                                .arg(edge.name(), centre.name())));
+    }
+
+    QAction *undo = undoAction(window);
+    QVERIFY(undo);
+    undo->trigger();
+    QTest::qWait(60);
+    QVERIFY(window.document() == beforeCrop);
 }
 
 void TestSlotUi::wheelOverASlotFrameZoomsThePage()
@@ -2128,7 +2225,7 @@ void TestSlotUi::clippedFrameIsAnnouncedAndHinted()
     tabs->setCurrentIndex(1);
     QTest::qWait(30);
     QCOMPARE(window.findChild<QLabel *>(QStringLiteral("slotClipValue"))->text(),
-             QStringLiteral("Részben"));
+             QStringLiteral("A fotó egy része kilóg a helyből."));
 }
 
 void TestSlotUi::libraryDragPayloadForUsedAndUnused()
@@ -2166,8 +2263,11 @@ void TestSlotUi::libraryDragPayloadForUsedAndUnused()
     QListWidgetItem *unusedItem = libraryItemForPath(window, spare);
     QVERIFY2(unusedItem, "the removed photo is not in the library");
     QCOMPARE(unusedItem->text(), QStringLiteral("Nincs a lapon"));
-    QCOMPARE(unusedItem->data(Qt::AccessibleTextRole).toString(),
-             QStringLiteral("Fel nem használt fotó"));
+    const QString accessible = unusedItem->data(Qt::AccessibleTextRole).toString();
+    QVERIFY2(accessible.startsWith(QStringLiteral("Fel nem használt fotó 1: ")),
+             qPrintable(accessible));
+    QVERIFY2(accessible.endsWith(QStringLiteral("payload-spare.png")),
+             qPrintable(accessible));
     QVERIFY(!unusedItem->icon().isNull());
     const std::unique_ptr<QMimeData> sourceData(list->dragDataForItem(unusedItem));
     QVERIFY(sourceData);
@@ -2276,8 +2376,9 @@ void TestSlotUi::unusedSourceDropsOnFreePage()
     QVERIFY(view);
     QVERIFY(window.waitForPreview(15000));
 
-    const QPointF target = view->pageRect().center() + QPointF(-40.0, 30.0);
-    const QPointF targetMm = widgetToPageMm(*view, target);
+    // Drop on the grey canvas outside the sheet: the new frame must land wholly
+    // on the paper, not half off the corner.
+    const QPointF target = view->pageRect().topLeft() + QPointF(-16.0, -16.0);
     const DocumentSnapshot before = window.document();
     dropSource(*view, target, source);
     QTest::qWait(80);
@@ -2288,11 +2389,20 @@ void TestSlotUi::unusedSourceDropsOnFreePage()
     QCOMPARE(placed.sourcePath, spare);
     QVERIFY(placed.slotId.isEmpty());
     QVERIFY2(after.unusedPhotos.isEmpty(), "the photo is both used and unused");
-    // The frame keeps the source's aspect (600 x 400) and lands at the point.
+    // The frame keeps the source's aspect (600 x 400).
     QVERIFY2(std::abs(placed.width / placed.height - 1.5) < 0.01,
              qPrintable(QStringLiteral("aspect %1").arg(placed.width / placed.height)));
-    QVERIFY(std::abs(placed.cx - targetMm.x()) < 1.0);
-    QVERIFY(std::abs(placed.cy - targetMm.y()) < 1.0);
+    const QSizeF sheet = pageSizeMm(after);
+    QVERIFY2(placed.cx - placed.width / 2.0 >= -1e-6
+                 && placed.cy - placed.height / 2.0 >= -1e-6
+                 && placed.cx + placed.width / 2.0 <= sheet.width() + 1e-6
+                 && placed.cy + placed.height / 2.0 <= sheet.height() + 1e-6,
+             qPrintable(QStringLiteral("frame %1,%2 %3x%4 is not on %5x%6")
+                            .arg(placed.cx).arg(placed.cy)
+                            .arg(placed.width).arg(placed.height)
+                            .arg(sheet.width()).arg(sheet.height())));
+    QVERIFY(std::abs(placed.cx - placed.width / 2.0) < 1e-6);
+    QVERIFY(std::abs(placed.cy - placed.height / 2.0) < 1e-6);
 
     QAction *undo = undoAction(window);
     QVERIFY(undo);
@@ -2382,8 +2492,11 @@ void TestSlotUi::removingFromCanvasKeepsTheLibraryEntry()
     const QListWidgetItem *item = libraryItemForPath(window, photo);
     QVERIFY(item);
     QCOMPARE(item->text(), QStringLiteral("Nincs a lapon"));
-    QCOMPARE(item->data(Qt::AccessibleTextRole).toString(),
-             QStringLiteral("Fel nem használt fotó"));
+    const QString accessible = item->data(Qt::AccessibleTextRole).toString();
+    QVERIFY2(accessible.startsWith(QStringLiteral("Fel nem használt fotó 1: ")),
+             qPrintable(accessible));
+    QVERIFY2(accessible.endsWith(QStringLiteral("removed.png")),
+             qPrintable(accessible));
     QVERIFY(!item->icon().isNull());
     QVERIFY(window.grab().save(evidenceDir()
                                + QStringLiteral("/library-unused-item.png")));
@@ -2485,63 +2598,229 @@ void TestSlotUi::removeFromLibraryIsOneUndo()
     QVERIFY(window.document().pages.first().unusedPhotos.isEmpty());
 }
 
-void TestSlotUi::libraryListAndMenuFitALargeFont()
+void TestSlotUi::deleteOnFocusedUnusedTileRemovesIt()
 {
-    FontScale scale(1.6);
-
     QTemporaryDir dir;
     QVERIFY(dir.isValid());
-    const QString used = makePhoto(dir.path(), QStringLiteral("big-used.png"),
-                                   QColor(90, 120, 200));
-    const QString spare = makePhoto(dir.path(), QStringLiteral("big-spare.png"),
-                                    QColor(200, 120, 90));
+    const QString used = makePhoto(dir.path(), QStringLiteral("focus-used.png"),
+                                   QColor(60, 140, 90));
+    const QString spare = makePhoto(dir.path(), QStringLiteral("focus-spare.png"),
+                                    QColor(140, 60, 90));
 
     MainWindow window;
-    window.resize(1280, 720);
+    window.resize(1280, 800);
     window.show();
-    QTest::qWait(150);
+    QTest::qWait(100);
     QVERIFY(loadDocument(window, dir, documentWithUnused({used}, {spare}, 4),
-                         QStringLiteral("big.ppj")));
+                         QStringLiteral("focus.ppj")));
     QVERIFY(window.waitForPreview(15000));
 
     auto *list = photoListOf(window);
     QVERIFY(list);
-    QVERIFY(list->isVisible());
-    QVERIFY2(list->viewport()->width() >= list->gridSize().width(),
-             "a single library column does not fit");
-    const QListWidgetItem *item = libraryItemForPath(window, spare);
-    QVERIFY(item);
-    const QRect itemRect = list->visualItemRect(item);
-    QVERIFY(itemRect.width() <= list->viewport()->width());
-    QVERIFY2(itemRect.height()
-                 >= list->iconSize().height() + list->fontMetrics().height(),
-             "the unused label has no room under the thumbnail");
-    QVERIFY(list->viewport()->rect().contains(itemRect));
+    QListWidgetItem *unusedItem = libraryItemForPath(window, spare);
+    QVERIFY(unusedItem);
+    const int beforeCount = list->count();
+    list->setCurrentItem(unusedItem);
+    list->setFocus();
+    QVERIFY2(list->currentItem(), "the unused tile is not current");
+    QCOMPARE(list->currentItem(), unusedItem);
+    QVERIFY(!list->currentItem()->data(UnusedPathRole).toString().isEmpty());
+    QSignalSpy spy(list, &PhotoListWidget::removeUnusedRequested);
+    QTest::keyClick(list, Qt::Key_Delete);
+    QTest::qWait(60);
+    QCOMPARE(spy.count(), 1);
 
-    // The rule the library follows is on screen, under the list.
-    auto *hint = window.findChild<QLabel *>(QStringLiteral("libraryHint"));
-    QVERIFY(hint);
-    QVERIFY(hint->isVisible());
-    QVERIFY2(hint->height() > 0, "the library hint has no room at 1280 x 720");
-    QCOMPARE(hint->text(),
-             QStringLiteral("A lapról eltávolított fotók itt maradnak, és visszahúzhatók."));
-    const int listBottom = list->mapTo(&window, QPoint(0, list->height())).y();
-    const int hintTop = hint->mapTo(&window, QPoint(0, 0)).y();
-    QVERIFY2(hintTop >= listBottom - 2, "the library hint does not sit under the list");
+    QVERIFY(window.document().pages.first().unusedPhotos.isEmpty());
+    QCOMPARE(list->count(), beforeCount - 1);
+    QVERIFY(!libraryItemForPath(window, spare));
 
-    // The context menu says the one thing a removed entry can do, and fits the
-    // window at this font.
-    QMenu *menu = window.photoListMenuForTest(spare);
-    QVERIFY(menu);
-    QCOMPARE(menu->actions().size(), 1);
-    QCOMPARE(menu->actions().first()->text(),
-             QStringLiteral("Eltávolítás a könyvtárból"));
-    const QSize hintSize = menu->sizeHint();
-    QVERIFY2(hintSize.width() <= window.width(),
-             qPrintable(QStringLiteral("menu width %1").arg(hintSize.width())));
-    QVERIFY2(hintSize.height() <= window.height(),
-             qPrintable(QStringLiteral("menu height %1").arg(hintSize.height())));
-    delete menu;
+    QAction *undo = undoAction(window);
+    QVERIFY(undo);
+    undo->trigger();
+    QTest::qWait(60);
+    QCOMPARE(list->count(), beforeCount);
+    QVERIFY(libraryItemForPath(window, spare));
+
+    // A used tile is not a library entry: Delete on it does nothing, so a
+    // focused list cannot take the photograph off the page by accident.
+    QListWidgetItem *usedItem = nullptr;
+    for (int i = 0; i < list->count(); ++i) {
+        if (!list->item(i)->data(FrameIdRole).toString().isEmpty()) {
+            usedItem = list->item(i);
+            break;
+        }
+    }
+    QVERIFY(usedItem);
+    list->setCurrentItem(usedItem);
+    list->setFocus();
+    const DocumentSnapshot beforeUsedDelete = window.document();
+    QTest::keyClick(list, Qt::Key_Delete);
+    QTest::qWait(60);
+    QVERIFY(window.document() == beforeUsedDelete);
+    QCOMPARE(list->count(), beforeCount);
+}
+
+void TestSlotUi::fullLibraryRefusesRemoval()
+{
+    QTemporaryDir dir;
+    QVERIFY(dir.isValid());
+    const QString photo = makePhoto(dir.path(), QStringLiteral("full-used.png"),
+                                    QColor(120, 80, 40));
+    DocumentSnapshot document = documentWithLayout({photo}, 4);
+    QVERIFY(!document.pages.isEmpty());
+    // Fill the library to its cap with paths inside the project folder whose
+    // files are absent. Those entries are kept (the missing-file rule), and the
+    // cap is what this test is about.
+    for (int i = 0; i < kMaxUnusedPhotos; ++i) {
+        PhotoSource source;
+        source.path = dir.filePath(QStringLiteral("unused-%1.png").arg(i));
+        source.sha256 = QByteArray::number(i);
+        document.pages[0].unusedPhotos.append(source);
+    }
+
+    MainWindow window;
+    window.resize(1280, 800);
+    window.show();
+    QTest::qWait(100);
+    QVERIFY(loadDocument(window, dir, document, QStringLiteral("full.ppj")));
+    auto *view = window.findChild<PageView *>();
+    QVERIFY(view);
+    QVERIFY(window.waitForPreview(15000));
+
+    const Page page = window.document().pages.first();
+    QCOMPARE(page.unusedPhotos.size(), kMaxUnusedPhotos);
+    // A library file that is gone keeps its row and is visibly marked missing.
+    const QListWidgetItem *missingItem =
+        libraryItemForPath(window, dir.filePath(QStringLiteral("unused-0.png")));
+    QVERIFY(missingItem);
+    QVERIFY2(!missingItem->icon().isNull(), "the missing library row has no tile");
+    QVERIFY2(missingItem->data(Qt::AccessibleTextRole).toString().contains(
+                 QStringLiteral("nem találjuk")),
+             qPrintable(missingItem->data(Qt::AccessibleTextRole).toString()));
+    const QString slotId = page.slotList.at(0).id;
+    QTest::mouseClick(view, Qt::LeftButton, Qt::NoModifier,
+                      view->slotRect(slotId).center().toPoint());
+    QTest::keyClick(view, Qt::Key_Delete);
+    QTest::qWait(60);
+
+    // The removal is refused: the photo stays on the page and the status bar
+    // says why, instead of the library dropping it silently.
+    QVERIFY2(frameInSlot(window.document().pages.first(), slotId),
+             "a full library took the photo off the page");
+    QCOMPARE(window.document().pages.first().unusedPhotos.size(), kMaxUnusedPhotos);
+    QVERIFY2(window.statusBar()->currentMessage().contains(QStringLiteral("megtelt")),
+             qPrintable(window.statusBar()->currentMessage()));
+}
+
+void TestSlotUi::libraryShowsARealPhotoAfterLoad()
+{
+    const QString sample =
+        QStringLiteral(PHOTOPRINT_SOURCE_DIR "/resources/samples/effect-sample.jpg");
+    QVERIFY(QFileInfo::exists(sample));
+    QTemporaryDir dir;
+    QVERIFY(dir.isValid());
+    const QString copy = dir.filePath(QStringLiteral("effect-sample-copy.jpg"));
+    QVERIFY(QFile::copy(sample, copy));
+
+    DocumentSnapshot document = documentWithFreeFrames({sample});
+    QVERIFY(!document.pages.isEmpty());
+    document.pages[0].unusedPhotos.append(PhotoSource{copy, fileSha256(copy)});
+
+    MainWindow window;
+    window.resize(1280, 720);
+    window.show();
+    QTest::qWait(100);
+    QVERIFY(loadDocument(window, dir, document, QStringLiteral("real.ppj")));
+    QVERIFY(window.waitForPreview(15000));
+
+    auto *list = photoListOf(window);
+    QVERIFY(list);
+    QCOMPARE(list->count(), 2);
+    // The used tile is decoded by the preview pass, so it must not be blank
+    // after opening a project; that is also what the drag pixmap needs.
+    const QListWidgetItem *usedItem = list->item(0);
+    QVERIFY(!usedItem->data(FrameIdRole).toString().isEmpty());
+    QVERIFY2(!usedItem->icon().isNull(),
+             "the used thumbnail is blank after opening a project");
+    QVERIFY(libraryItemForPath(window, copy));
+    auto *view = window.findChild<PageView *>();
+    QVERIFY(view);
+    QVERIFY(!view->composedImage().isNull());
+    QTest::qWait(30);
+    QVERIFY(window.grab().save(evidenceDir()
+                               + QStringLiteral("/library-real-photo.png")));
+}
+
+void TestSlotUi::libraryListAndMenuFitALargeFont()
+{
+    // The user runs a 1.35x font, and the review used 1.6x: the unused label is
+    // the only words for that state, so it must fit at both, not just have room
+    // for one clipped line.
+    for (const double factor : {1.35, 1.6}) {
+        FontScale scale(factor);
+
+        QTemporaryDir dir;
+        QVERIFY(dir.isValid());
+        const QString used = makePhoto(dir.path(), QStringLiteral("big-used.png"),
+                                       QColor(90, 120, 200));
+        const QString spare = makePhoto(dir.path(), QStringLiteral("big-spare.png"),
+                                        QColor(200, 120, 90));
+
+        MainWindow window;
+        window.resize(1280, 720);
+        window.show();
+        QTest::qWait(150);
+        QVERIFY(loadDocument(window, dir, documentWithUnused({used}, {spare}, 4),
+                             QStringLiteral("big.ppj")));
+        QVERIFY(window.waitForPreview(15000));
+
+        auto *list = photoListOf(window);
+        QVERIFY(list);
+        QVERIFY(list->isVisible());
+        QVERIFY2(list->viewport()->width() >= list->gridSize().width(),
+                 "a single library column does not fit");
+        const QListWidgetItem *item = libraryItemForPath(window, spare);
+        QVERIFY(item);
+        const QRect itemRect = list->visualItemRect(item);
+        const QFontMetrics metrics = list->fontMetrics();
+        const QString label = QStringLiteral("Nincs a lapon");
+        QVERIFY2(itemRect.width() >= metrics.horizontalAdvance(label) + 8,
+                 qPrintable(QStringLiteral("at %1x the grid is %2 px for a %3 px label")
+                                .arg(factor)
+                                .arg(itemRect.width())
+                                .arg(metrics.horizontalAdvance(label))));
+        QVERIFY2(itemRect.height()
+                     >= list->iconSize().height() + metrics.height(),
+                 "the unused label has no room under the thumbnail");
+        QVERIFY(itemRect.width() <= list->viewport()->width());
+        QVERIFY(list->viewport()->rect().contains(itemRect));
+
+        // The rule the library follows is on screen, under the list, and it
+        // names the keyboard route.
+        auto *hint = window.findChild<QLabel *>(QStringLiteral("libraryHint"));
+        QVERIFY(hint);
+        QVERIFY(hint->isVisible());
+        QVERIFY2(hint->height() > 0, "the library hint has no room at 1280 x 720");
+        QVERIFY(hint->text().contains(QStringLiteral("Delete")));
+        const int listBottom = list->mapTo(&window, QPoint(0, list->height())).y();
+        const int hintTop = hint->mapTo(&window, QPoint(0, 0)).y();
+        QVERIFY2(hintTop >= listBottom - 2,
+                 "the library hint does not sit under the list");
+
+        // The context menu says the one thing a removed entry can do, and fits
+        // the window at this font.
+        QMenu *menu = window.photoListMenuForTest(spare);
+        QVERIFY(menu);
+        QCOMPARE(menu->actions().size(), 1);
+        QCOMPARE(menu->actions().first()->text(),
+                 QStringLiteral("Eltávolítás a könyvtárból"));
+        const QSize hintSize = menu->sizeHint();
+        QVERIFY2(hintSize.width() <= window.width(),
+                 qPrintable(QStringLiteral("menu width %1").arg(hintSize.width())));
+        QVERIFY2(hintSize.height() <= window.height(),
+                 qPrintable(QStringLiteral("menu height %1").arg(hintSize.height())));
+        delete menu;
+    }
 }
 
 void TestSlotUi::sectionOutlineIsVisibleWhenFilledAndDeselected()
@@ -4670,7 +4949,7 @@ void TestSlotUi::emptyCellSelectionShowsThePagePanel()
     QCOMPARE(window.findChild<QLabel *>(QStringLiteral("slotStateValue"))->text(),
              QStringLiteral("Üres"));
     QCOMPARE(window.findChild<QLabel *>(QStringLiteral("slotClipValue"))->text(),
-             QStringLiteral("Nincs"));
+             QStringLiteral("Nincs fotó a helyen."));
     QVERIFY(!window.findChild<QLabel *>(QStringLiteral("slotSizeValue"))->text().isEmpty());
     QCOMPARE(window.findChild<QLabel *>(QStringLiteral("layoutCountLabel"))->text(),
              QStringLiteral("4 hely"));

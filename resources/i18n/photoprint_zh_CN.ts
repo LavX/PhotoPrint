@@ -1600,20 +1600,48 @@
         <translation>照片的一部分被裁切。</translation>
     </message>
     <message>
+        <source>Nincs fotó a helyen.</source>
+        <translation>区域内没有照片。</translation>
+    </message>
+    <message>
+        <source>Fel nem használt fotó %1: %2</source>
+        <translation>未使用的照片 %1：%2</translation>
+    </message>
+    <message>
+        <source>A lapról eltávolított fotók itt maradnak, és visszahúzhatók. A listáról a Delete gombbal vagy a jobb klikk menüvel távolíthatók el.</source>
+        <translation>从页面移除的照片会留在这里，可以拖回去。按 Delete 或右键菜单可从列表中移除。</translation>
+    </message>
+    <message>
+        <source>A könyvtár megtelt. Előbb törölj egy fotót a listáról.</source>
+        <translation>图库已满。请先从列表中移除一张照片。</translation>
+    </message>
+    <message>
+        <source>A fotó egy része kilóg a helyből.</source>
+        <translation>照片的一部分超出了区域。</translation>
+    </message>
+    <message>
+        <source>A fotó teljes egészében a helyen van.</source>
+        <translation>整张照片都在区域内。</translation>
+    </message>
+    <message>
+        <source>Fotó levétele a lapról</source>
+        <translation>从页面取下照片</translation>
+    </message>
+    <message>
+        <source>A kivágás a hely ablakában mozgatja a képet. Görgő: nagyítás. Kész: kilépés.</source>
+        <translation>裁剪会在区域内移动照片。滚轮：缩放。完成：退出。</translation>
+    </message>
+    <message>
+        <source>Húzd a sarkot a kivágáshoz, a fogantyú forgatja a képet. Görgő: nagyítás. Kész: kilépés.</source>
+        <translation>拖动角进行裁剪，手柄可旋转照片。滚轮：缩放。完成：退出。</translation>
+    </message>
+    <message>
         <source>Nincs a lapon</source>
         <translation>不在页面上</translation>
     </message>
     <message>
-        <source>Fel nem használt fotó</source>
-        <translation>未使用的照片</translation>
-    </message>
-    <message>
         <source>Eltávolítás a könyvtárból</source>
         <translation>从图库中移除</translation>
-    </message>
-    <message>
-        <source>A lapról eltávolított fotók itt maradnak, és visszahúzhatók.</source>
-        <translation>从页面移除的照片会留在这里，可以拖回去。</translation>
     </message>
     <message>
         <source>Fotó visszahelyezése</source>
@@ -1622,14 +1650,6 @@
     <message>
         <source>Fotó eltávolítása a könyvtárból</source>
         <translation>从图库中移除照片</translation>
-    </message>
-    <message>
-        <source>Fotó eltávolítása</source>
-        <translation>移除照片</translation>
-    </message>
-    <message>
-        <source>Részben</source>
-        <translation>部分</translation>
     </message>
     <message>
         <source>Fotó</source>

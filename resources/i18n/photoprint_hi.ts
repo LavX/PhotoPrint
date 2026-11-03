@@ -1614,20 +1614,48 @@
         <translation>फ़ोटो का एक हिस्सा कटा हुआ है।</translation>
     </message>
     <message>
+        <source>Nincs fotó a helyen.</source>
+        <translation>सेक्शन में कोई फ़ोटो नहीं है।</translation>
+    </message>
+    <message>
+        <source>Fel nem használt fotó %1: %2</source>
+        <translation>अप्रयुक्त फ़ोटो %1: %2</translation>
+    </message>
+    <message>
+        <source>A lapról eltávolított fotók itt maradnak, és visszahúzhatók. A listáról a Delete gombbal vagy a jobb klikk menüvel távolíthatók el.</source>
+        <translation>पेज से हटाई गई फ़ोटो यहाँ रहती हैं और वापस खींची जा सकती हैं। Delete या राइट-क्लिक मेनू से इन्हें सूची से हटाया जा सकता है।</translation>
+    </message>
+    <message>
+        <source>A könyvtár megtelt. Előbb törölj egy fotót a listáról.</source>
+        <translation>लाइब्रेरी भर गई है। पहले सूची से एक फ़ोटो हटाएँ।</translation>
+    </message>
+    <message>
+        <source>A fotó egy része kilóg a helyből.</source>
+        <translation>फ़ोटो का एक हिस्सा सेक्शन से बाहर है।</translation>
+    </message>
+    <message>
+        <source>A fotó teljes egészében a helyen van.</source>
+        <translation>पूरी फ़ोटो सेक्शन के अंदर है।</translation>
+    </message>
+    <message>
+        <source>Fotó levétele a lapról</source>
+        <translation>फ़ोटो को पेज से हटाएँ</translation>
+    </message>
+    <message>
+        <source>A kivágás a hely ablakában mozgatja a képet. Görgő: nagyítás. Kész: kilépés.</source>
+        <translation>क्रॉप सेक्शन के अंदर फ़ोटो को खिसकाता है। व्हील: ज़ूम। हो गया: बाहर।</translation>
+    </message>
+    <message>
+        <source>Húzd a sarkot a kivágáshoz, a fogantyú forgatja a képet. Görgő: nagyítás. Kész: kilépés.</source>
+        <translation>क्रॉप करने के लिए कोना खींचें; हैंडल फ़ोटो घुमाता है। व्हील: ज़ूम। हो गया: बाहर।</translation>
+    </message>
+    <message>
         <source>Nincs a lapon</source>
         <translation>पेज पर नहीं</translation>
     </message>
     <message>
-        <source>Fel nem használt fotó</source>
-        <translation>अप्रयुक्त फ़ोटो</translation>
-    </message>
-    <message>
         <source>Eltávolítás a könyvtárból</source>
         <translation>लाइब्रेरी से हटाएँ</translation>
-    </message>
-    <message>
-        <source>A lapról eltávolított fotók itt maradnak, és visszahúzhatók.</source>
-        <translation>पेज से हटाई गई फ़ोटो यहाँ रहती हैं और वापस खींची जा सकती हैं।</translation>
     </message>
     <message>
         <source>Fotó visszahelyezése</source>
@@ -1636,14 +1664,6 @@
     <message>
         <source>Fotó eltávolítása a könyvtárból</source>
         <translation>फ़ोटो को लाइब्रेरी से हटाएँ</translation>
-    </message>
-    <message>
-        <source>Fotó eltávolítása</source>
-        <translation>फ़ोटो हटाएँ</translation>
-    </message>
-    <message>
-        <source>Részben</source>
-        <translation>आंशिक</translation>
     </message>
     <message>
         <source>Fotó</source>

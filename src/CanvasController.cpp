@@ -435,26 +435,6 @@ private:
     QString m_coalesceKey;
 };
 
-class RemoveFrameCommand : public QUndoCommand
-{
-public:
-    RemoveFrameCommand(CanvasController *controller, QString frameId,
-                       QUndoCommand *parent = nullptr)
-        : QUndoCommand(parent), m_controller(controller), m_frameId(std::move(frameId))
-    {
-        const LocatedFrame located = locate(m_controller->document(), m_frameId);
-        m_before = located.frame;
-    }
-
-    void undo() override { m_controller->insertFrame(m_before); }
-    void redo() override { m_controller->removeFrame(m_frameId); }
-
-private:
-    CanvasController *m_controller;
-    QString m_frameId;
-    Frame m_before;
-};
-
 CanvasController::CanvasController(QObject *parent) : QObject(parent), m_undo(new QUndoStack(this))
 {
     m_undo->setUndoLimit(200);
@@ -494,10 +474,6 @@ Result<void> CanvasController::apply(const DocumentEdit &edit)
                 if (!after || located.frame == *after)
                     return Result<void>();
                 m_undo->push(new FrameChangeCommand(this, value.frameId, *after));
-                return Result<void>();
-            } else if constexpr (std::is_same_v<T, RemoveFrameEdit>) {
-                if (locate(m_document, value.frameId).frameIndex >= 0)
-                    m_undo->push(new RemoveFrameCommand(this, value.frameId));
                 return Result<void>();
             } else if constexpr (std::is_same_v<T, AddFrameEdit>) {
                 m_undo->push(new AddFrameCommand(this, value.frame, value.pageIndex));

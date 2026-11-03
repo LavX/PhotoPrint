@@ -39,6 +39,7 @@ class QDragLeaveEvent;
 class QDragMoveEvent;
 class QDropEvent;
 class QFontComboBox;
+class QKeyEvent;
 class QLabel;
 class QMenu;
 class QMouseEvent;
@@ -103,10 +104,20 @@ public:
     /// built, so a test checks the bytes the widget really sends.
     QMimeData *dragDataForItem(const QListWidgetItem *item) const;
 
+    /// Delete on the current row, called by the window's Delete action when the
+    /// list has focus. Only an unused entry acts; a used tile does nothing, so
+    /// a focused library cannot take the photograph off the page.
+    void deleteCurrentEntry();
+
     /// How a started drag is run. The default calls QDrag::exec; a test replaces
     /// it to inspect the drag without a live drag manager, which the offscreen
     /// platform does not have.
     std::function<void(QDrag *)> dragRunner;
+
+signals:
+    /// Delete on a focused unused tile. The window owns the document, so the
+    /// list only names the entry it wants removed.
+    void removeUnusedRequested(const QString &path, const QString &sha256);
 
 protected:
     void mousePressEvent(QMouseEvent *event) override;
@@ -172,6 +183,10 @@ public:
     /// The page-wide hint line, empty when the page has content. A test hook:
     /// the hint must not cover a sticker on an otherwise empty page.
     QString emptyHint() const { return m_emptyHint; }
+    /// The short instruction the canvas shows while crop mode is on. It names
+    /// the gestures that actually crop: pan and wheel for a slotted photo, the
+    /// corner and the rotate handle for a free one. Empty outside crop mode.
+    QString cropHint() const;
     /// The frame as the canvas currently shows it, including an uncommitted
     /// wheel burst. The inspector builds its next action on this.
     std::optional<Frame> liveFrame(const QString &frameId) const;
@@ -794,9 +809,16 @@ private:
     /// the photograph from the left list.
     void removeFrameFromPage(const QString &frameId, const QString &actionText);
     /// Appends a removed photograph to the page's library, unless another frame
-    /// still uses it or it is already there. The page is the one after the
-    /// removal, so the frame that left is not counted as a user.
-    void appendUnusedSource(Page &page, const Frame &frame) const;
+    /// still uses it or it is already there. Returns false when the library is
+    /// full and the entry could not be kept, so the caller can refuse the
+    /// removal instead of dropping the photograph silently.
+    bool appendUnusedSource(Page &page, const Frame &frame) const;
+    /// True when removing `frame` from the page can keep its source: it is
+    /// already in the library, another frame shows it, or there is room.
+    /// `exceptFrameId` is the frame that is about to leave, so it does not
+    /// count as a user of its own source.
+    bool canRetainSource(const Page &page, const Frame &frame,
+                         const QString &exceptFrameId = QString()) const;
     /// An unused library entry dragged back onto the page: into the cell under
     /// the cursor, or a free frame at the drop point. One undo step.
     void dropSourceAt(const PhotoSource &source, const QString &slotId,
@@ -810,6 +832,12 @@ private:
     /// A dimmed tile for a photograph that is only in the library. The used
     /// thumbnail path is untouched, so the two kinds read differently.
     QPixmap unusedThumbnail(const PhotoSource &source);
+    /// The cache key of an unused tile: the colour recipe is part of the
+    /// identity, exactly as it is for a used thumbnail.
+    QString unusedThumbnailKey(const PhotoSource &source) const;
+    /// A tile for a library entry whose file is gone: a dashed box with a
+    /// cross, so the row says "missing" before the tooltip is read.
+    QPixmap missingThumbnail() const;
     /// Selects a cell; a filled cell selects its photograph instead.
     void selectSlot(const QString &slotId);
     std::optional<Frame> photoPayload(const QString &path, const Page &page);
@@ -995,13 +1023,17 @@ private:
     PageRenderer m_renderer;
 
     PageView *m_pageView = nullptr;
-    QListWidget *m_photoList = nullptr;
+    PhotoListWidget *m_photoList = nullptr;
     /// The line under the library that says a photo removed from the page stays
     /// here. It is the only place the rule is explained.
     QLabel *m_libraryHint = nullptr;
     /// Dimmed library tiles, keyed by the photograph's path and hash, so a
     /// document change does not re-read a file just to redraw the same tile.
     QHash<QString, QPixmap> m_unusedThumbnails;
+    /// How many uncached library files one list refresh may decode on the GUI
+    /// thread. A project opened with a full library fills the rest in over the
+    /// next refreshes instead of stalling the window.
+    int m_unusedDecodeBudget = 0;
     QComboBox *m_printerCombo = nullptr;
     QComboBox *m_paperCombo = nullptr;
     QComboBox *m_orientationCombo = nullptr;

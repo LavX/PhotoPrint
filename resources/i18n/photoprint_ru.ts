@@ -1628,20 +1628,48 @@
         <translation>Часть фотографии обрезана.</translation>
     </message>
     <message>
+        <source>Nincs fotó a helyen.</source>
+        <translation>В ячейке нет фотографии.</translation>
+    </message>
+    <message>
+        <source>Fel nem használt fotó %1: %2</source>
+        <translation>Неиспользуемое фото %1: %2</translation>
+    </message>
+    <message>
+        <source>A lapról eltávolított fotók itt maradnak, és visszahúzhatók. A listáról a Delete gombbal vagy a jobb klikk menüvel távolíthatók el.</source>
+        <translation>Фотографии, убранные со страницы, остаются здесь, и их можно перетащить обратно. Delete или контекстное меню удаляет снимок из списка.</translation>
+    </message>
+    <message>
+        <source>A könyvtár megtelt. Előbb törölj egy fotót a listáról.</source>
+        <translation>Библиотека заполнена. Сначала удалите фото из списка.</translation>
+    </message>
+    <message>
+        <source>A fotó egy része kilóg a helyből.</source>
+        <translation>Часть фотографии выходит за пределы ячейки.</translation>
+    </message>
+    <message>
+        <source>A fotó teljes egészében a helyen van.</source>
+        <translation>Фотография целиком находится в ячейке.</translation>
+    </message>
+    <message>
+        <source>Fotó levétele a lapról</source>
+        <translation>Убрать фото со страницы</translation>
+    </message>
+    <message>
+        <source>A kivágás a hely ablakában mozgatja a képet. Görgő: nagyítás. Kész: kilépés.</source>
+        <translation>Кадрирование двигает фото внутри ячейки. Колесо: масштаб. Готово: выход.</translation>
+    </message>
+    <message>
+        <source>Húzd a sarkot a kivágáshoz, a fogantyú forgatja a képet. Görgő: nagyítás. Kész: kilépés.</source>
+        <translation>Потяните угол для кадрирования; маркер поворачивает фото. Колесо: масштаб. Готово: выход.</translation>
+    </message>
+    <message>
         <source>Nincs a lapon</source>
         <translation>Нет на странице</translation>
     </message>
     <message>
-        <source>Fel nem használt fotó</source>
-        <translation>Неиспользуемое фото</translation>
-    </message>
-    <message>
         <source>Eltávolítás a könyvtárból</source>
         <translation>Удалить из библиотеки</translation>
-    </message>
-    <message>
-        <source>A lapról eltávolított fotók itt maradnak, és visszahúzhatók.</source>
-        <translation>Фотографии, убранные со страницы, остаются здесь, и их можно перетащить обратно.</translation>
     </message>
     <message>
         <source>Fotó visszahelyezése</source>
@@ -1650,14 +1678,6 @@
     <message>
         <source>Fotó eltávolítása a könyvtárból</source>
         <translation>Удалить фото из библиотеки</translation>
-    </message>
-    <message>
-        <source>Fotó eltávolítása</source>
-        <translation>Удалить фото</translation>
-    </message>
-    <message>
-        <source>Részben</source>
-        <translation>Частично</translation>
     </message>
     <message>
         <source>Fotó</source>

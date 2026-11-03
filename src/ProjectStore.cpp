@@ -584,10 +584,12 @@ std::optional<PhotoSource> unusedSourceFromJson(const QJsonObject &object,
     const QString original = object.value(QStringLiteral("original")).toString();
     const ResolvedSource resolved =
         resolveStoredSource(projectDir, stored, original, source.sha256);
-    // A library entry whose file is not there is skipped, exactly as a portable
-    // copy skips a file it cannot carry: an unused photograph with no file is
-    // not one the user could drag back.
-    if (resolved.path.isEmpty() || !QFileInfo::exists(resolved.path))
+    // A library entry is kept whenever its path is lexically resolvable, even
+    // when the file is away right now. The row is marked missing and the drop
+    // refuses with a notice, exactly as a frame keeps a missing photograph and
+    // waits for a relink. Only an untrusted or empty path is dropped, because
+    // there is nothing left to point at.
+    if (resolved.path.isEmpty())
         return std::nullopt;
     source.path = resolved.path;
     return source;

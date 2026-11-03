@@ -1600,20 +1600,48 @@
         <translation>写真の一部が切り取られています。</translation>
     </message>
     <message>
+        <source>Nincs fotó a helyen.</source>
+        <translation>セクションに写真がありません。</translation>
+    </message>
+    <message>
+        <source>Fel nem használt fotó %1: %2</source>
+        <translation>未使用の写真 %1: %2</translation>
+    </message>
+    <message>
+        <source>A lapról eltávolított fotók itt maradnak, és visszahúzhatók. A listáról a Delete gombbal vagy a jobb klikk menüvel távolíthatók el.</source>
+        <translation>ページから外した写真はここに残り、ドラッグで戻せます。Delete キーまたは右クリックメニューで一覧から削除できます。</translation>
+    </message>
+    <message>
+        <source>A könyvtár megtelt. Előbb törölj egy fotót a listáról.</source>
+        <translation>ライブラリがいっぱいです。先に一覧から写真を削除してください。</translation>
+    </message>
+    <message>
+        <source>A fotó egy része kilóg a helyből.</source>
+        <translation>写真の一部がセクションからはみ出しています。</translation>
+    </message>
+    <message>
+        <source>A fotó teljes egészében a helyen van.</source>
+        <translation>写真全体がセクション内にあります。</translation>
+    </message>
+    <message>
+        <source>Fotó levétele a lapról</source>
+        <translation>写真をページから外す</translation>
+    </message>
+    <message>
+        <source>A kivágás a hely ablakában mozgatja a képet. Görgő: nagyítás. Kész: kilépés.</source>
+        <translation>切り抜きはセクション内で写真を動かします。ホイール：ズーム。完了：終了。</translation>
+    </message>
+    <message>
+        <source>Húzd a sarkot a kivágáshoz, a fogantyú forgatja a képet. Görgő: nagyítás. Kész: kilépés.</source>
+        <translation>角をドラッグして切り抜き、ハンドルで写真を回転します。ホイール：ズーム。完了：終了。</translation>
+    </message>
+    <message>
         <source>Nincs a lapon</source>
         <translation>ページにありません</translation>
     </message>
     <message>
-        <source>Fel nem használt fotó</source>
-        <translation>未使用の写真</translation>
-    </message>
-    <message>
         <source>Eltávolítás a könyvtárból</source>
         <translation>ライブラリから削除</translation>
-    </message>
-    <message>
-        <source>A lapról eltávolított fotók itt maradnak, és visszahúzhatók.</source>
-        <translation>ページから外した写真はここに残り、ドラッグで戻せます。</translation>
     </message>
     <message>
         <source>Fotó visszahelyezése</source>
@@ -1622,14 +1650,6 @@
     <message>
         <source>Fotó eltávolítása a könyvtárból</source>
         <translation>写真をライブラリから削除</translation>
-    </message>
-    <message>
-        <source>Fotó eltávolítása</source>
-        <translation>写真を削除</translation>
-    </message>
-    <message>
-        <source>Részben</source>
-        <translation>一部</translation>
     </message>
     <message>
         <source>Fotó</source>

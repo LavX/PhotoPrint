@@ -674,7 +674,16 @@ Result<Page> repair(Page page)
             break;
         if (source.path.isEmpty())
             continue;
-        if (pageUsesSource(page, source) || unused.contains(source))
+        // An empty hash is a wildcard, so one path cannot enter the library
+        // twice under a hand-edited entry and a real one.
+        bool duplicate = false;
+        for (const PhotoSource &kept : unused) {
+            if (samePhotoSource(kept, source)) {
+                duplicate = true;
+                break;
+            }
+        }
+        if (pageUsesSource(page, source) || duplicate)
             continue;
         unused.append(source);
     }

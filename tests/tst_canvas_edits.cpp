@@ -244,7 +244,12 @@ void TestCanvasEdits::removeIsUndoable()
     CanvasController controller;
     controller.setDocument(documentWith(frame));
 
-    controller.apply(RemoveFrameEdit{frame.id});
+    // The frame list is one edit, so removing a photograph is one undo step.
+    // The library bookkeeping lives in the window, not in the controller.
+    SetFramesEdit edit;
+    edit.pageIndex = 0;
+    edit.frames = {};
+    controller.apply(edit);
     QCOMPARE(controller.document().pages.at(0).frames.size(), 0);
     controller.undoStack()->undo();
     QCOMPARE(controller.document().pages.at(0).frames.size(), 1);

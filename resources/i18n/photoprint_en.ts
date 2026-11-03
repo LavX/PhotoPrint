@@ -1614,20 +1614,48 @@
         <translation>Part of the photo is clipped.</translation>
     </message>
     <message>
+        <source>Nincs fotó a helyen.</source>
+        <translation>There is no photo in the section.</translation>
+    </message>
+    <message>
+        <source>Fel nem használt fotó %1: %2</source>
+        <translation>Unused photo %1: %2</translation>
+    </message>
+    <message>
+        <source>A lapról eltávolított fotók itt maradnak, és visszahúzhatók. A listáról a Delete gombbal vagy a jobb klikk menüvel távolíthatók el.</source>
+        <translation>Photos removed from the page stay here and can be dragged back. Delete or the right-click menu removes one from the list.</translation>
+    </message>
+    <message>
+        <source>A könyvtár megtelt. Előbb törölj egy fotót a listáról.</source>
+        <translation>The library is full. Remove a photo from the list first.</translation>
+    </message>
+    <message>
+        <source>A fotó egy része kilóg a helyből.</source>
+        <translation>Part of the photo is outside the section.</translation>
+    </message>
+    <message>
+        <source>A fotó teljes egészében a helyen van.</source>
+        <translation>The whole photo is inside the section.</translation>
+    </message>
+    <message>
+        <source>Fotó levétele a lapról</source>
+        <translation>Take the photo off the page</translation>
+    </message>
+    <message>
+        <source>A kivágás a hely ablakában mozgatja a képet. Görgő: nagyítás. Kész: kilépés.</source>
+        <translation>Cropping moves the photo inside the section. Wheel: zoom. Done: exit.</translation>
+    </message>
+    <message>
+        <source>Húzd a sarkot a kivágáshoz, a fogantyú forgatja a képet. Görgő: nagyítás. Kész: kilépés.</source>
+        <translation>Drag a corner to crop; the handle turns the photo. Wheel: zoom. Done: exit.</translation>
+    </message>
+    <message>
         <source>Nincs a lapon</source>
         <translation>Not on the page</translation>
     </message>
     <message>
-        <source>Fel nem használt fotó</source>
-        <translation>Unused photo</translation>
-    </message>
-    <message>
         <source>Eltávolítás a könyvtárból</source>
         <translation>Remove from library</translation>
-    </message>
-    <message>
-        <source>A lapról eltávolított fotók itt maradnak, és visszahúzhatók.</source>
-        <translation>Photos removed from the page stay here and can be dragged back.</translation>
     </message>
     <message>
         <source>Fotó visszahelyezése</source>
@@ -1636,14 +1664,6 @@
     <message>
         <source>Fotó eltávolítása a könyvtárból</source>
         <translation>Remove photo from library</translation>
-    </message>
-    <message>
-        <source>Fotó eltávolítása</source>
-        <translation>Remove photo</translation>
-    </message>
-    <message>
-        <source>Részben</source>
-        <translation>Partly</translation>
     </message>
     <message>
         <source>Fotó</source>

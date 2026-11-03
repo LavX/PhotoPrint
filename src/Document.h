@@ -467,13 +467,24 @@ struct Page {
     bool operator==(const Page &) const = default;
 };
 
+/// True when two sources are the same photograph for library purposes. The
+/// path is the identity; the hash only distinguishes two different contents
+/// stored under the same path. An empty hash is a wildcard, so a hand-edited
+/// file or a frame with no recorded identity cannot make one path appear twice.
+inline bool samePhotoSource(const PhotoSource &a, const PhotoSource &b)
+{
+    if (a.path != b.path)
+        return false;
+    return a.sha256.isEmpty() || b.sha256.isEmpty() || a.sha256 == b.sha256;
+}
+
 /// True when a frame on the page still shows this photograph. The library entry
 /// and the frame carry the same pair, so this is the one rule that decides
 /// whether a removed source is really unused.
 inline bool pageUsesSource(const Page &page, const PhotoSource &source)
 {
     for (const Frame &frame : page.frames) {
-        if (frame.sourcePath == source.path && frame.sourceSha256 == source.sha256)
+        if (samePhotoSource(PhotoSource{frame.sourcePath, frame.sourceSha256}, source))
             return true;
     }
     return false;

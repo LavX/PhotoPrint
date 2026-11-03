@@ -237,6 +237,7 @@ private slots:
     void missingAndChangedSourcesKeepTheLayout();
     void portableCopyWorksAfterMoving();
     void unusedSourceRoundTripAndOldFile();
+    void missingUnusedSourceSurvivesSave();
     void portableCopyCarriesUnusedSource();
     void corruptAndUnknownProjectsAreRejected();
     void changedSourceStopsPrintPreparation();
@@ -1369,6 +1370,45 @@ void TestProjectStore::unusedSourceRoundTripAndOldFile()
     QVERIFY(old.value().document.pages.at(0).unusedPhotos.isEmpty());
 }
 
+void TestProjectStore::missingUnusedSourceSurvivesSave()
+{
+    const QString sparePath = m_dir.filePath(QStringLiteral("unused-missing.png"));
+    QVERIFY(writeImage(sparePath, QColor(20, 160, 60)));
+    const QByteArray spareSha = fileSha256(sparePath);
+
+    DocumentSnapshot document = sampleDocument(m_red, m_blue);
+    document.pages[0].unusedPhotos.append(PhotoSource{sparePath, spareSha});
+
+    const QString path = m_dir.filePath(QStringLiteral("unused-missing.ppj"));
+    ProjectStore store;
+    QVERIFY(store.save(path, document, SaveMode::Normal).ok());
+
+    // The media is away: the library entry must survive the load, exactly as a
+    // frame keeps a missing photograph, instead of being deleted from the
+    // project because the disk is unplugged.
+    const QString away = m_dir.filePath(QStringLiteral("unused-missing-away.png"));
+    QVERIFY(QFile::rename(sparePath, away));
+    const auto loaded = store.load(path);
+    if (!loaded)
+        QFAIL(qPrintable(loaded.error().message));
+    const Page &restored = loaded.value().document.pages.at(0);
+    QCOMPARE(restored.unusedPhotos.size(), 1);
+    QCOMPARE(restored.unusedPhotos.first().sha256, spareSha);
+    QVERIFY(!restored.unusedPhotos.first().path.isEmpty());
+
+    // Saving the opened project again keeps the entry, and a second open still
+    // finds it.
+    QVERIFY(store.save(path, loaded.value().document, SaveMode::Normal).ok());
+    const auto reopened = store.load(path);
+    if (!reopened)
+        QFAIL(qPrintable(reopened.error().message));
+    QCOMPARE(reopened.value().document.pages.at(0).unusedPhotos.size(), 1);
+    QCOMPARE(reopened.value().document.pages.at(0).unusedPhotos.first().sha256, spareSha);
+
+    // Put the file back so the shared temp folder is left as it was found.
+    QVERIFY(QFile::rename(away, sparePath));
+}
+
 void TestProjectStore::portableCopyCarriesUnusedSource()
 {
     const QString projectDir = m_dir.filePath(QStringLiteral("unused-portable"));
@@ -1406,8 +1446,9 @@ void TestProjectStore::portableCopyCarriesUnusedSource()
     QVERIFY(restored.unusedPhotos.first().path.startsWith(bundle));
     QCOMPARE(restored.unusedPhotos.first().sha256, spareSha);
 
-    // A library file that is gone is skipped, never a reason to fail the save:
-    // the rest of the project is still worth writing.
+    // A library file that is gone is skipped by the copy, never a reason to
+    // fail the save: the rest of the project is still worth writing. The entry
+    // itself is kept, so plugging the disk back in restores the row.
     const QString otherPath = QDir(projectDir).filePath(QStringLiteral("missing.ppj"));
     DocumentSnapshot missing = sampleDocument(m_red, m_blue);
     missing.pages[0].unusedPhotos.append(
@@ -1417,7 +1458,11 @@ void TestProjectStore::portableCopyCarriesUnusedSource()
     const auto reloaded = store.load(otherPath);
     if (!reloaded)
         QFAIL(qPrintable(reloaded.error().message));
-    QVERIFY(reloaded.value().document.pages.at(0).unusedPhotos.isEmpty());
+    const QList<PhotoSource> kept = reloaded.value().document.pages.at(0).unusedPhotos;
+    QCOMPARE(kept.size(), 1);
+    QCOMPARE(kept.first().sha256, QByteArrayLiteral("sha-gone"));
+    QVERIFY2(!QFileInfo::exists(kept.first().path),
+             "the missing library file was copied into the bundle");
 }
 
 void TestProjectStore::corruptAndUnknownProjectsAreRejected()

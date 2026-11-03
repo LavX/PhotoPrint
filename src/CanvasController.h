@@ -17,10 +17,6 @@ struct FrameChange {
     Frame frame;
 };
 
-struct RemoveFrameEdit {
-    QString frameId;
-};
-
 struct AddFrameEdit {
     Frame frame;
     int pageIndex = -1; ///< -1 means the current page
@@ -127,7 +123,7 @@ struct SetPrintQualityEdit {
     bool fineQuality = true;
 };
 
-using DocumentEdit = std::variant<FrameChange, RemoveFrameEdit, AddFrameEdit, SetPaperEdit,
+using DocumentEdit = std::variant<FrameChange, AddFrameEdit, SetPaperEdit,
                                   RotatePageEdit, FitPageEdit, AddPageEdit, DuplicatePageEdit,
                                   RemovePageEdit, MovePageEdit, ReorderFrameEdit, SetFramesEdit,
                                   ApplyLayoutEdit, SetRecipeEdit, SetProjectPaperEdit,
@@ -169,7 +165,6 @@ signals:
 
 private:
     friend class FrameChangeCommand;
-    friend class RemoveFrameCommand;
     friend class AddFrameCommand;
     friend class SetPaperCommand;
     friend class RotatePageCommand;

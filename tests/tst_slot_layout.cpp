@@ -2621,6 +2621,29 @@ void TestSlotLayout::repairSanitisesUnusedPhotos()
     QCOMPARE(result.unusedPhotos.size(), 1);
     QCOMPARE(result.unusedPhotos.first(), spare);
 
+    // An empty hash is a wildcard, so one path cannot enter the library twice
+    // under a hand-edited entry and a real one.
+    Page wildcard = pageWith(a4Paper(), false);
+    wildcard.unusedPhotos = {
+        PhotoSource{QStringLiteral("/photos/same.jpg"), QByteArrayLiteral("sha-real")},
+        PhotoSource{QStringLiteral("/photos/same.jpg"), QByteArray()}};
+    const auto wildcardRepaired = SlotLayoutEngine::repair(wildcard);
+    QVERIFY(wildcardRepaired.ok());
+    QCOMPARE(wildcardRepaired.value().unusedPhotos.size(), 1);
+
+    // A frame with no recorded identity also matches the path, so its library
+    // entry is dropped instead of shown beside the photo.
+    Page frameWildcard = pageWith(a4Paper(), false);
+    Frame frame;
+    frame.id = QStringLiteral("frame-wildcard");
+    frame.sourcePath = QStringLiteral("/photos/same.jpg");
+    frameWildcard.frames.append(frame);
+    frameWildcard.unusedPhotos = {
+        PhotoSource{QStringLiteral("/photos/same.jpg"), QByteArrayLiteral("sha-real")}};
+    const auto frameRepaired = SlotLayoutEngine::repair(frameWildcard);
+    QVERIFY(frameRepaired.ok());
+    QVERIFY(frameRepaired.value().unusedPhotos.isEmpty());
+
     // The cap bounds a hand-edited file.
     Page many = pageWith(a4Paper(), false);
     for (int i = 0; i < kMaxUnusedPhotos + 20; ++i) {

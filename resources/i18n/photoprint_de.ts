@@ -1614,20 +1614,48 @@
         <translation>Ein Teil des Fotos ist abgeschnitten.</translation>
     </message>
     <message>
+        <source>Nincs fotó a helyen.</source>
+        <translation>Im Bereich ist kein Foto.</translation>
+    </message>
+    <message>
+        <source>Fel nem használt fotó %1: %2</source>
+        <translation>Nicht verwendetes Foto %1: %2</translation>
+    </message>
+    <message>
+        <source>A lapról eltávolított fotók itt maradnak, és visszahúzhatók. A listáról a Delete gombbal vagy a jobb klikk menüvel távolíthatók el.</source>
+        <translation>Von der Seite entfernte Fotos bleiben hier und können zurückgezogen werden. Entf oder das Kontextmenü entfernt eines aus der Liste.</translation>
+    </message>
+    <message>
+        <source>A könyvtár megtelt. Előbb törölj egy fotót a listáról.</source>
+        <translation>Die Bibliothek ist voll. Entferne zuerst ein Foto aus der Liste.</translation>
+    </message>
+    <message>
+        <source>A fotó egy része kilóg a helyből.</source>
+        <translation>Ein Teil des Fotos ragt aus dem Bereich heraus.</translation>
+    </message>
+    <message>
+        <source>A fotó teljes egészében a helyen van.</source>
+        <translation>Das ganze Foto liegt im Bereich.</translation>
+    </message>
+    <message>
+        <source>Fotó levétele a lapról</source>
+        <translation>Foto von der Seite nehmen</translation>
+    </message>
+    <message>
+        <source>A kivágás a hely ablakában mozgatja a képet. Görgő: nagyítás. Kész: kilépés.</source>
+        <translation>Der Zuschnitt verschiebt das Foto im Bereich. Rad: Zoom. Fertig: beenden.</translation>
+    </message>
+    <message>
+        <source>Húzd a sarkot a kivágáshoz, a fogantyú forgatja a képet. Görgő: nagyítás. Kész: kilépés.</source>
+        <translation>Ziehe eine Ecke zum Zuschneiden; der Griff dreht das Foto. Rad: Zoom. Fertig: beenden.</translation>
+    </message>
+    <message>
         <source>Nincs a lapon</source>
         <translation>Nicht auf der Seite</translation>
     </message>
     <message>
-        <source>Fel nem használt fotó</source>
-        <translation>Nicht verwendetes Foto</translation>
-    </message>
-    <message>
         <source>Eltávolítás a könyvtárból</source>
         <translation>Aus der Bibliothek entfernen</translation>
-    </message>
-    <message>
-        <source>A lapról eltávolított fotók itt maradnak, és visszahúzhatók.</source>
-        <translation>Von der Seite entfernte Fotos bleiben hier und können zurückgezogen werden.</translation>
     </message>
     <message>
         <source>Fotó visszahelyezése</source>
@@ -1636,14 +1664,6 @@
     <message>
         <source>Fotó eltávolítása a könyvtárból</source>
         <translation>Foto aus der Bibliothek entfernen</translation>
-    </message>
-    <message>
-        <source>Fotó eltávolítása</source>
-        <translation>Foto entfernen</translation>
-    </message>
-    <message>
-        <source>Részben</source>
-        <translation>Teilweise</translation>
     </message>
     <message>
         <source>Fotó</source>
