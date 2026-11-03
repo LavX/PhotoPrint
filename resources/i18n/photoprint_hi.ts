@@ -1917,5 +1917,25 @@
         <source>A matrica ki van jelölve.</source>
         <translation>स्टिकर चुना गया है।</translation>
     </message>
+    <message>
+        <source>Matrica: %1 / %2</source>
+        <translation>स्टिकर: %1 / %2</translation>
+    </message>
+    <message>
+        <source>Matrica hozzáadása</source>
+        <translation>स्टिकर जोड़ें</translation>
+    </message>
+    <message>
+        <source>Matrica fedettsége</source>
+        <translation>स्टिकर की अपारदर्शिता</translation>
+    </message>
+    <message>
+        <source>Egy lépéssel előrébb.</source>
+        <translation>एक कदम आगे।</translation>
+    </message>
+    <message>
+        <source>Egy lépéssel hátrébb.</source>
+        <translation>एक कदम पीछे।</translation>
+    </message>
 </context>
 </TS>

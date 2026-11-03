@@ -1903,5 +1903,25 @@
         <source>A matrica ki van jelölve.</source>
         <translation>ステッカーが選択されています。</translation>
     </message>
+    <message>
+        <source>Matrica: %1 / %2</source>
+        <translation>ステッカー: %1 / %2</translation>
+    </message>
+    <message>
+        <source>Matrica hozzáadása</source>
+        <translation>ステッカーを追加</translation>
+    </message>
+    <message>
+        <source>Matrica fedettsége</source>
+        <translation>ステッカーの不透明度</translation>
+    </message>
+    <message>
+        <source>Egy lépéssel előrébb.</source>
+        <translation>1 段階前へ。</translation>
+    </message>
+    <message>
+        <source>Egy lépéssel hátrébb.</source>
+        <translation>1 段階後ろへ。</translation>
+    </message>
 </context>
 </TS>

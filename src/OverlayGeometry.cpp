@@ -108,6 +108,45 @@ QSizeF defaultStickerSizeMm(const QSizeF &sheetMm, const QSize &pixels)
     return boundedStickerSizeMm(QSizeF(width, width * aspect), sheetMm);
 }
 
+QPointF cascadedStickerCentreMm(const Page &page, const QSizeF &sheetMm,
+                                const QSizeF &boxMm)
+{
+    const QPointF centre(sheetMm.width() / 2.0, sheetMm.height() / 2.0);
+    if (!(sheetMm.width() > 0.0) || !(sheetMm.height() > 0.0))
+        return centre;
+    // 7 mm is about one comfortable nudge: big enough to be obvious on screen
+    // and on paper, small enough that a few stickers still fit around the
+    // middle of the sheet.
+    constexpr double step = 7.0;
+    const double halfWidth = std::max(0.0, boxMm.width() / 2.0);
+    const double halfHeight = std::max(0.0, boxMm.height() / 2.0);
+    const double margin = 1.0;
+    const int columns = std::max(
+        1, int(std::floor((sheetMm.width() / 2.0 - halfWidth - margin) / step)));
+    const int rows = std::max(
+        1, int(std::floor((sheetMm.height() / 2.0 - halfHeight - margin) / step)));
+    // The first free slot on a cascade that runs right and then down, so the
+    // second click on the same shape is visibly a second object instead of an
+    // identical one directly above the first.
+    for (int slot = 0; slot < columns * rows; ++slot) {
+        const QPointF candidate(centre.x() + (slot % columns) * step,
+                                centre.y() + ((slot / columns) % rows) * step);
+        bool taken = false;
+        for (const Sticker &existing : page.stickers) {
+            if (std::abs(existing.cx - candidate.x()) < step / 2.0
+                && std::abs(existing.cy - candidate.y()) < step / 2.0) {
+                taken = true;
+                break;
+            }
+        }
+        if (!taken)
+            return candidate;
+    }
+    // Every slot is taken: place it on the centre anyway. The sanitiser keeps
+    // it on the sheet, and the panel still selects it.
+    return centre;
+}
+
 Sticker movedSticker(const Sticker &sticker, const QPointF &delta, const QSizeF &sheetMm)
 {
     Sticker moved = sticker;

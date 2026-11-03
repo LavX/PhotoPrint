@@ -1917,5 +1917,25 @@
         <source>A matrica ki van jelölve.</source>
         <translation>The sticker is selected.</translation>
     </message>
+    <message>
+        <source>Matrica: %1 / %2</source>
+        <translation>Sticker: %1 of %2</translation>
+    </message>
+    <message>
+        <source>Matrica hozzáadása</source>
+        <translation>Add sticker</translation>
+    </message>
+    <message>
+        <source>Matrica fedettsége</source>
+        <translation>Sticker opacity</translation>
+    </message>
+    <message>
+        <source>Egy lépéssel előrébb.</source>
+        <translation>One step forward.</translation>
+    </message>
+    <message>
+        <source>Egy lépéssel hátrébb.</source>
+        <translation>One step backward.</translation>
+    </message>
 </context>
 </TS>

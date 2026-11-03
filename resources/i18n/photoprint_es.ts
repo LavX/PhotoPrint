@@ -1917,5 +1917,25 @@
         <source>A matrica ki van jelölve.</source>
         <translation>La pegatina está seleccionada.</translation>
     </message>
+    <message>
+        <source>Matrica: %1 / %2</source>
+        <translation>Pegatina: %1 de %2</translation>
+    </message>
+    <message>
+        <source>Matrica hozzáadása</source>
+        <translation>Añadir pegatina</translation>
+    </message>
+    <message>
+        <source>Matrica fedettsége</source>
+        <translation>Opacidad de la pegatina</translation>
+    </message>
+    <message>
+        <source>Egy lépéssel előrébb.</source>
+        <translation>Un paso adelante.</translation>
+    </message>
+    <message>
+        <source>Egy lépéssel hátrébb.</source>
+        <translation>Un paso atrás.</translation>
+    </message>
 </context>
 </TS>

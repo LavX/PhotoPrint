@@ -20,10 +20,12 @@ import math
 import os
 import struct
 import zlib
+from array import array
 
-SIZE = 1024         # output pixels per side
+SIZE = 1024         # output pixels per side, before the trim
 SUPERSAMPLE = 2     # 2x2 samples per output pixel, antialiasing by coverage
 GRID = SIZE * SUPERSAMPLE
+KEYLINE = 3         # white die-cut edge, in output pixels
 OUT_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
                        "resources", "stickers")
 
@@ -239,25 +241,50 @@ def bounds(predicate):
             min(SIZE - 1, right + step), min(SIZE - 1, bottom + step))
 
 
+def dilate(row_masks, radius):
+    """Grows a bit mask by `radius` pixels on both axes. Rows are ints, so the
+    whole pass is a few thousand wide-integer operations instead of a nested
+    pixel loop."""
+    full = (1 << SIZE) - 1
+    horizontal = []
+    for mask in row_masks:
+        grown = mask
+        for shift in range(1, radius + 1):
+            grown |= (mask << shift) | (mask >> shift)
+        horizontal.append(grown & full)
+    out = []
+    count = len(horizontal)
+    for index in range(count):
+        grown = 0
+        for shift in range(-radius, radius + 1):
+            neighbour = index + shift
+            if 0 <= neighbour < count:
+                grown |= horizontal[neighbour]
+        out.append(grown)
+    return out
+
+
 def render(layers, path):
-    """One PNG: every output pixel is the coverage-weighted average of the
-    topmost layer under each of its sub-samples."""
+    """One PNG. Every output pixel is the coverage-weighted average of the
+    topmost layer under each of its sub-samples; a white keyline is drawn under
+    the whole silhouette, and the finished image is trimmed to its content so
+    the sticker's box is the artwork a person sees."""
     boxes = [bounds(predicate) for predicate, _ in layers]
     layer_pixels = [colour for _, colour in layers]
-    grid = len(layers)
+    total = SIZE * SIZE
+    coverage = bytearray(total)
+    colours = array('I', bytes(4 * total))
     first = 1.0 / GRID
 
-    rows = []
     for py in range(SIZE):
-        row = bytearray()
+        base = py * SIZE
         for px in range(SIZE):
             # Only the layers whose box contains this pixel can contribute.
-            candidates = [index for index in range(grid)
+            candidates = [index for index in range(len(layers))
                           if boxes[index] is not None
                           and boxes[index][0] <= px <= boxes[index][2]
                           and boxes[index][1] <= py <= boxes[index][3]]
             if not candidates:
-                row += b"\x00\x00\x00\x00"
                 continue
             red = green = blue = hits = 0
             for sy in range(SUPERSAMPLE):
@@ -272,14 +299,65 @@ def render(layers, path):
                             blue += colour[2]
                             hits += 1
                             break
-            if hits == 0:
-                row += b"\x00\x00\x00\x00"
-            else:
-                alpha = int(round(255.0 * hits / (SUPERSAMPLE * SUPERSAMPLE)))
-                row += bytes((red // hits, green // hits, blue // hits, alpha))
-        rows.append(bytes(row))
+            if hits:
+                coverage[base + px] = hits
+                colours[base + px] = (((red // hits) << 16)
+                                      | ((green // hits) << 8) | (blue // hits))
 
-    write_png(path, SIZE, SIZE, b"".join(rows))
+    # The keyline follows the union silhouette, so a die-cut edge appears only
+    # around the outside of the sticker, never between its own colours.
+    masks = []
+    for py in range(SIZE):
+        base = py * SIZE
+        mask = 0
+        for px in range(SIZE):
+            if coverage[base + px]:
+                mask |= 1 << px
+        masks.append(mask)
+    grown = dilate(masks, KEYLINE)
+
+    rows = []
+    left = SIZE
+    right = -1
+    top = SIZE
+    bottom = -1
+    for py in range(SIZE):
+        base = py * SIZE
+        row = bytearray()
+        line = grown[py]
+        for px in range(SIZE):
+            hits = coverage[base + px]
+            if hits:
+                colour = colours[base + px]
+                alpha = int(round(255.0 * hits / (SUPERSAMPLE * SUPERSAMPLE)))
+                row += bytes(((colour >> 16) & 0xff, (colour >> 8) & 0xff,
+                              colour & 0xff, alpha))
+            elif (line >> px) & 1:
+                row += b"\xff\xff\xff\xff"
+            else:
+                row += b"\x00\x00\x00\x00"
+                continue
+            if px < left:
+                left = px
+            if px > right:
+                right = px
+            if py < top:
+                top = py
+            if py > bottom:
+                bottom = py
+        rows.append(row)
+
+    if right < left or bottom < top:
+        write_png(path, 1, 1, b"\x00\x00\x00\x00")
+        return
+
+    # Trim to the content, so a 6.5 cm sticker is 6.5 cm of artwork, not a
+    # square with transparent padding around it.
+    width = right - left + 1
+    height = bottom - top + 1
+    trimmed = b"".join(bytes(row[left * 4:(right + 1) * 4])
+                       for row in rows[top:bottom + 1])
+    write_png(path, width, height, trimmed)
 
 
 def write_png(path, width, height, rgba):

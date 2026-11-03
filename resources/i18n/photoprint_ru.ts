@@ -1931,5 +1931,25 @@
         <source>A matrica ki van jelölve.</source>
         <translation>Наклейка выбрана.</translation>
     </message>
+    <message>
+        <source>Matrica: %1 / %2</source>
+        <translation>Наклейка: %1 из %2</translation>
+    </message>
+    <message>
+        <source>Matrica hozzáadása</source>
+        <translation>Добавить наклейку</translation>
+    </message>
+    <message>
+        <source>Matrica fedettsége</source>
+        <translation>Прозрачность наклейки</translation>
+    </message>
+    <message>
+        <source>Egy lépéssel előrébb.</source>
+        <translation>На один шаг вперёд.</translation>
+    </message>
+    <message>
+        <source>Egy lépéssel hátrébb.</source>
+        <translation>На один шаг назад.</translation>
+    </message>
 </context>
 </TS>

@@ -1917,5 +1917,25 @@
         <source>A matrica ki van jelölve.</source>
         <translation>L'adesivo è selezionato.</translation>
     </message>
+    <message>
+        <source>Matrica: %1 / %2</source>
+        <translation>Adesivo: %1 di %2</translation>
+    </message>
+    <message>
+        <source>Matrica hozzáadása</source>
+        <translation>Aggiungi adesivo</translation>
+    </message>
+    <message>
+        <source>Matrica fedettsége</source>
+        <translation>Opacità dell'adesivo</translation>
+    </message>
+    <message>
+        <source>Egy lépéssel előrébb.</source>
+        <translation>Un passo avanti.</translation>
+    </message>
+    <message>
+        <source>Egy lépéssel hátrébb.</source>
+        <translation>Un passo indietro.</translation>
+    </message>
 </context>
 </TS>

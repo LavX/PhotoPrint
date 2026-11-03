@@ -922,12 +922,16 @@ private:
     QPushButton *m_stickerDeleteButton = nullptr;
     QPushButton *m_addStickerButton = nullptr;
     QWidget *m_stickerSetGrid = nullptr;
+    QLabel *m_stickerPositionLabel = nullptr;
     QPushButton *m_previousStickerButton = nullptr;
     QPushButton *m_nextStickerButton = nullptr;
     QLabel *m_stickerMissingHint = nullptr;
     QPushButton *m_stickerRelinkButton = nullptr;
     /// The notice bar's own line for a sticker that cannot be shown.
     QLabel *m_stickerNotice = nullptr;
+    /// The way in from that line: selects the first missing sticker, so the
+    /// relink picker is one click away instead of three.
+    QPushButton *m_stickerNoticeButton = nullptr;
     /// The canvas layers of the current page's stickers, loaded by the preview
     /// job so the canvas and the print cannot disagree about what is on the page.
     QHash<QString, QImage> m_previewStickers;

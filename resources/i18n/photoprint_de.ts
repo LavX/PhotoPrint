@@ -1917,5 +1917,25 @@
         <source>A matrica ki van jelölve.</source>
         <translation>Der Aufkleber ist ausgewählt.</translation>
     </message>
+    <message>
+        <source>Matrica: %1 / %2</source>
+        <translation>Aufkleber: %1 von %2</translation>
+    </message>
+    <message>
+        <source>Matrica hozzáadása</source>
+        <translation>Aufkleber hinzufügen</translation>
+    </message>
+    <message>
+        <source>Matrica fedettsége</source>
+        <translation>Aufkleber-Deckkraft</translation>
+    </message>
+    <message>
+        <source>Egy lépéssel előrébb.</source>
+        <translation>Einen Schritt nach vorne.</translation>
+    </message>
+    <message>
+        <source>Egy lépéssel hátrébb.</source>
+        <translation>Einen Schritt nach hinten.</translation>
+    </message>
 </context>
 </TS>

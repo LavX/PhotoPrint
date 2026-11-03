@@ -64,6 +64,14 @@ const Sticker *stickerAt(const Page &page, const QPointF &pageMm);
 /// something sensible.
 QSizeF defaultStickerSizeMm(const QSizeF &sheetMm, const QSize &pixels);
 
+/// Where a newly added sticker lands. The first one sits on the sheet's centre;
+/// each later one steps about 7 mm right and then down, skipping a slot an
+/// existing sticker already occupies. Without the cascade a second click on the
+/// same shape would put an identical box directly above the first, which reads
+/// as a failed click. The returned centre is always inside the sheet.
+QPointF cascadedStickerCentreMm(const Page &page, const QSizeF &sheetMm,
+                                const QSizeF &boxMm);
+
 /// Moves a sticker by a page-space delta and pulls its centre back onto the
 /// paper. The box may still hang over the edge.
 Sticker movedSticker(const Sticker &sticker, const QPointF &delta, const QSizeF &sheetMm);

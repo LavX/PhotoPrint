@@ -1917,5 +1917,25 @@
         <source>A matrica ki van jelölve.</source>
         <translation>L'autocollant est sélectionné.</translation>
     </message>
+    <message>
+        <source>Matrica: %1 / %2</source>
+        <translation>Autocollant : %1 sur %2</translation>
+    </message>
+    <message>
+        <source>Matrica hozzáadása</source>
+        <translation>Ajouter un autocollant</translation>
+    </message>
+    <message>
+        <source>Matrica fedettsége</source>
+        <translation>Opacité de l'autocollant</translation>
+    </message>
+    <message>
+        <source>Egy lépéssel előrébb.</source>
+        <translation>Un pas en avant.</translation>
+    </message>
+    <message>
+        <source>Egy lépéssel hátrébb.</source>
+        <translation>Un pas en arrière.</translation>
+    </message>
 </context>
 </TS>
