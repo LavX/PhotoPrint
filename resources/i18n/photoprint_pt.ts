@@ -1917,5 +1917,117 @@
         <source>A matrica ki van jelölve.</source>
         <translation>O adesivo está selecionado.</translation>
     </message>
+    <message>
+        <source>Szöveg</source>
+        <translation>Texto</translation>
+    </message>
+    <message>
+        <source>Szöveg…</source>
+        <translation>Texto…</translation>
+    </message>
+    <message>
+        <source>Szöveg hozzáadása…</source>
+        <translation>Adicionar texto…</translation>
+    </message>
+    <message>
+        <source>Szöveg a lapra</source>
+        <translation>Texto na página</translation>
+    </message>
+    <message>
+        <source>A szöveg</source>
+        <translation>O texto</translation>
+    </message>
+    <message>
+        <source>Írd be a szöveget. A sortörést az Enter adja.</source>
+        <translation>Escreva o texto. Pressione Enter para uma nova linha.</translation>
+    </message>
+    <message>
+        <source>Betűtípus</source>
+        <translation>Fonte</translation>
+    </message>
+    <message>
+        <source>Betűméret</source>
+        <translation>Tamanho da fonte</translation>
+    </message>
+    <message>
+        <source>Félkövér</source>
+        <translation>Negrito</translation>
+    </message>
+    <message>
+        <source>Dőlt</source>
+        <translation>Itálico</translation>
+    </message>
+    <message>
+        <source>Aláhúzott</source>
+        <translation>Sublinhado</translation>
+    </message>
+    <message>
+        <source>Balra igazítás</source>
+        <translation>Alinhar à esquerda</translation>
+    </message>
+    <message>
+        <source>Középre igazítás</source>
+        <translation>Centralizar</translation>
+    </message>
+    <message>
+        <source>Jobbra igazítás</source>
+        <translation>Alinhar à direita</translation>
+    </message>
+    <message>
+        <source>Sormagasság</source>
+        <translation>Espaçamento entre linhas</translation>
+    </message>
+    <message>
+        <source>Írj be legalább egy látható karaktert.</source>
+        <translation>Escreva pelo menos um caractere visível.</translation>
+    </message>
+    <message>
+        <source>Ez a betűtípus ezen a gépen nincs meg, helyette a rendszer betűtípusa látszik.</source>
+        <translation>Esta fonte não está instalada neste computador. Em vez dela, aparece a fonte do sistema.</translation>
+    </message>
+    <message>
+        <source>A szöveg egy része lemarad a lapról.</source>
+        <translation>Parte do texto fica fora da página.</translation>
+    </message>
+    <message>
+        <source>A szöveg ki van jelölve: %1</source>
+        <translation>O texto está selecionado: %1</translation>
+    </message>
+    <message>
+        <source>Szöveg mozgatása</source>
+        <translation>Mover texto</translation>
+    </message>
+    <message>
+        <source>Szöveg átméretezése</source>
+        <translation>Redimensionar texto</translation>
+    </message>
+    <message>
+        <source>Szöveg forgatása</source>
+        <translation>Girar texto</translation>
+    </message>
+    <message>
+        <source>Szöveg törlése</source>
+        <translation>Excluir texto</translation>
+    </message>
+    <message>
+        <source>Egy lapon legfeljebb %1 szöveg lehet.</source>
+        <translation>Uma página aceita no máximo %1 textos.</translation>
+    </message>
+    <message>
+        <source>Még nincs matrica vagy szöveg a lapon.</source>
+        <translation>Esta página ainda não tem adesivo nem texto.</translation>
+    </message>
+    <message>
+        <source>Válassz egy matricát vagy szöveget a lapon.</source>
+        <translation>Escolha um adesivo ou um texto na página.</translation>
+    </message>
+    <message>
+        <source>A matricák és a szövegek a fotók fölött látszanak.</source>
+        <translation>Adesivos e textos aparecem sobre as fotos.</translation>
+    </message>
+    <message>
+        <source>Válassz színt a szövegnek.</source>
+        <translation>Escolha uma cor para o texto.</translation>
+    </message>
 </context>
 </TS>

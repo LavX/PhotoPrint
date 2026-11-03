@@ -350,6 +350,69 @@ QSizeF boundedStickerSizeMm(QSizeF size, const QSizeF &sheetMm);
 /// Document order is kept, because it is the tie-break for equal `z`.
 QList<Sticker> sanitiseStickers(const QList<Sticker> &stickers, const QSizeF &sheetMm);
 
+/// How the lines of a text block line up inside the block's own width. With a
+/// single line the three values look identical, which is fine and needs no
+/// explanation.
+enum class TextAlign { Left, Center, Right };
+
+/// One text block placed on a page, above every photograph. The block is not
+/// stored: its size is a pure function of the text, the font and the size, so a
+/// stored height could only go stale and clip glyphs. `cx`/`cy` is the centre of
+/// the laid-out block, which is why adding a line grows the caption
+/// symmetrically instead of pushing it down.
+///
+/// The colour is a normalised `QRgb` rather than a `QColor` for the same reason
+/// the background is: `QColor::operator==` compares the colour spec as well as
+/// the value, and the whole document's value comparison (and its undo no-op
+/// guard) depends on an exact one. Alpha is not stored per colour; transparency
+/// is the item's `opacity`.
+struct TextItem {
+    QString id; ///< makeId("text"), unique on its page
+    QString text; ///< plain text, '\n' is a hard line break, never wrapped
+    QString fontFamily; ///< empty = the application font
+    double fontPt = 12.0; ///< 4..400
+    QRgb color = 0xff000000u; ///< sRGB, alpha forced opaque
+    bool bold = false;
+    bool italic = false;
+    bool underline = false;
+    TextAlign align = TextAlign::Center;
+    double lineSpacing = 1.0; ///< 0.8..2.5, a multiple of the font's line height
+    double cx = 0.0; ///< centre of the block in mm
+    double cy = 0.0;
+    double angleDeg = 0.0; ///< clockwise about the centre, (-180, 180]
+    int opacity = 100; ///< 0..100 over the page beneath it
+    int z = 0; ///< paint order among the page's overlays, ascending
+    bool operator==(const TextItem &) const = default;
+};
+
+/// Bounds shared by the model, the renderer and the panel. The page cap bounds a
+/// corrupt file; the font range is what the size spin offers; the line spacing
+/// range keeps a hand-edited file from collapsing the block or scattering it.
+constexpr int kMaxTextsPerPage = 64;
+constexpr double kMinFontPt = 4.0;
+constexpr double kMaxFontPt = 400.0;
+constexpr double kMinLineSpacing = 0.8;
+constexpr double kMaxLineSpacing = 2.5;
+/// The smallest block a text may have on either axis. A smaller one could not be
+/// clicked again, so the sanitiser raises the font until the block reaches it.
+constexpr double kMinTextBlockMm = 2.0;
+constexpr int kMinTextZ = -10000;
+constexpr int kMaxTextZ = 10000;
+
+/// The text the renderer and the editor may see. `\r\n` and a lone `\r` become
+/// `\n`, every finite field is clamped to its range, a non-finite one becomes the
+/// neutral value, an unknown alignment becomes the default, the colour is forced
+/// opaque, and the centre is clamped onto the paper so the block can always be
+/// clicked. Called from SlotLayoutEngine::repair, the single repair point every
+/// mutation and the loader pass through.
+TextItem sanitiseText(TextItem text, const QSizeF &sheetMm);
+
+/// The page's text list after the same rule: at most kMaxTextsPerPage entries,
+/// each with a non-empty unique id, each sanitised against the sheet. A text
+/// that is empty or only whitespace is dropped: the page never carries an
+/// invisible layer, and committing an emptied editor deletes the item.
+QList<TextItem> sanitiseTexts(const QList<TextItem> &texts, const QSizeF &sheetMm);
+
 struct Page {
     QString id;
     PaperSpec paper;
@@ -375,6 +438,11 @@ struct Page {
     /// empty list is the default, so a page without stickers is unchanged and
     /// serialises exactly as it did before the feature.
     QList<Sticker> stickers;
+    /// The page's text blocks. They share one `z` space with the stickers, so a
+    /// caption can sit above or below a decoration; both are always above the
+    /// photographs. The empty list is the default, so a page without text
+    /// serialises exactly as it did before the feature.
+    QList<TextItem> texts;
 
     bool hasLayout() const { return !slotList.isEmpty(); }
     bool operator==(const Page &) const = default;

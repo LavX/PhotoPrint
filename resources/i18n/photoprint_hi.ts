@@ -1917,5 +1917,117 @@
         <source>A matrica ki van jelölve.</source>
         <translation>स्टिकर चुना गया है।</translation>
     </message>
+    <message>
+        <source>Szöveg</source>
+        <translation>टेक्स्ट</translation>
+    </message>
+    <message>
+        <source>Szöveg…</source>
+        <translation>टेक्स्ट…</translation>
+    </message>
+    <message>
+        <source>Szöveg hozzáadása…</source>
+        <translation>टेक्स्ट जोड़ें…</translation>
+    </message>
+    <message>
+        <source>Szöveg a lapra</source>
+        <translation>पेज पर टेक्स्ट</translation>
+    </message>
+    <message>
+        <source>A szöveg</source>
+        <translation>टेक्स्ट</translation>
+    </message>
+    <message>
+        <source>Írd be a szöveget. A sortörést az Enter adja.</source>
+        <translation>टेक्स्ट लिखें। नई पंक्ति के लिए Enter दबाएँ।</translation>
+    </message>
+    <message>
+        <source>Betűtípus</source>
+        <translation>फ़ॉन्ट</translation>
+    </message>
+    <message>
+        <source>Betűméret</source>
+        <translation>फ़ॉन्ट आकार</translation>
+    </message>
+    <message>
+        <source>Félkövér</source>
+        <translation>बोल्ड</translation>
+    </message>
+    <message>
+        <source>Dőlt</source>
+        <translation>इटैलिक</translation>
+    </message>
+    <message>
+        <source>Aláhúzott</source>
+        <translation>रेखांकित</translation>
+    </message>
+    <message>
+        <source>Balra igazítás</source>
+        <translation>बाएँ संरेखित करें</translation>
+    </message>
+    <message>
+        <source>Középre igazítás</source>
+        <translation>मध्य में संरेखित करें</translation>
+    </message>
+    <message>
+        <source>Jobbra igazítás</source>
+        <translation>दाएँ संरेखित करें</translation>
+    </message>
+    <message>
+        <source>Sormagasság</source>
+        <translation>पंक्ति अंतराल</translation>
+    </message>
+    <message>
+        <source>Írj be legalább egy látható karaktert.</source>
+        <translation>कम से कम एक दिखने वाला अक्षर लिखें।</translation>
+    </message>
+    <message>
+        <source>Ez a betűtípus ezen a gépen nincs meg, helyette a rendszer betűtípusa látszik.</source>
+        <translation>यह फ़ॉन्ट इस कंप्यूटर पर नहीं है, इसकी जगह सिस्टम फ़ॉन्ट दिखता है।</translation>
+    </message>
+    <message>
+        <source>A szöveg egy része lemarad a lapról.</source>
+        <translation>टेक्स्ट का कुछ हिस्सा पेज से बाहर चला जाता है।</translation>
+    </message>
+    <message>
+        <source>A szöveg ki van jelölve: %1</source>
+        <translation>टेक्स्ट चुना गया है: %1</translation>
+    </message>
+    <message>
+        <source>Szöveg mozgatása</source>
+        <translation>टेक्स्ट हिलाएँ</translation>
+    </message>
+    <message>
+        <source>Szöveg átméretezése</source>
+        <translation>टेक्स्ट का आकार बदलें</translation>
+    </message>
+    <message>
+        <source>Szöveg forgatása</source>
+        <translation>टेक्स्ट घुमाएँ</translation>
+    </message>
+    <message>
+        <source>Szöveg törlése</source>
+        <translation>टेक्स्ट हटाएँ</translation>
+    </message>
+    <message>
+        <source>Egy lapon legfeljebb %1 szöveg lehet.</source>
+        <translation>एक पेज पर अधिकतम %1 टेक्स्ट रखे जा सकते हैं।</translation>
+    </message>
+    <message>
+        <source>Még nincs matrica vagy szöveg a lapon.</source>
+        <translation>इस पेज पर अभी कोई स्टिकर या टेक्स्ट नहीं है।</translation>
+    </message>
+    <message>
+        <source>Válassz egy matricát vagy szöveget a lapon.</source>
+        <translation>पेज पर स्टिकर या टेक्स्ट चुनें।</translation>
+    </message>
+    <message>
+        <source>A matricák és a szövegek a fotók fölött látszanak.</source>
+        <translation>स्टिकर और टेक्स्ट फ़ोटो के ऊपर दिखते हैं।</translation>
+    </message>
+    <message>
+        <source>Válassz színt a szövegnek.</source>
+        <translation>टेक्स्ट के लिए रंग चुनें।</translation>
+    </message>
 </context>
 </TS>

@@ -1,5 +1,7 @@
 #include "Document.h"
 
+#include "OverlayGeometry.h"
+
 #include <QCryptographicHash>
 #include <QDataStream>
 #include <QIODevice>
@@ -344,6 +346,90 @@ QList<Sticker> sanitiseStickers(const QList<Sticker> &stickers, const QSizeF &sh
             continue;
         ids.insert(stored.id);
         kept.append(sanitiseSticker(stored, sheetMm));
+    }
+    return kept;
+}
+
+TextItem sanitiseText(TextItem text, const QSizeF &sheetMm)
+{
+    // A project file can carry any line ending. The model has exactly one, so
+    // the block measurement, the editor and the renderer all split the same way.
+    text.text.replace(QLatin1String("\r\n"), QLatin1String("\n"));
+    text.text.replace(QLatin1Char('\r'), QLatin1Char('\n'));
+
+    // A non-finite size is corruption, not a direction to saturate towards, so
+    // it becomes the default rather than the largest font the model allows.
+    text.fontPt = std::isfinite(text.fontPt)
+        ? std::clamp(text.fontPt, kMinFontPt, kMaxFontPt)
+        : 12.0;
+    text.lineSpacing = std::isfinite(text.lineSpacing)
+        ? std::clamp(text.lineSpacing, kMinLineSpacing, kMaxLineSpacing)
+        : 1.0;
+
+    // The model has no per-colour alpha: transparency is the item's opacity.
+    text.color = 0xff000000u | (text.color & 0x00ffffffu);
+
+    switch (text.align) {
+    case TextAlign::Left:
+    case TextAlign::Center:
+    case TextAlign::Right:
+        break;
+    default:
+        text.align = TextAlign::Center;
+        break;
+    }
+
+    const bool validSheet = sheetMm.width() > 0.0 && sheetMm.height() > 0.0
+        && std::isfinite(sheetMm.width()) && std::isfinite(sheetMm.height());
+    const double sheetWidth = validSheet ? sheetMm.width() : kMaxStickerMm;
+    const double sheetHeight = validSheet ? sheetMm.height() : kMaxStickerMm;
+
+    // Reachability invariant, the same one the stickers follow: the block may
+    // hang over the edge, but its centre stays on the paper, so it can always be
+    // clicked, nudged and deleted.
+    text.cx = std::isfinite(text.cx) ? std::clamp(text.cx, 0.0, sheetWidth)
+                                     : sheetWidth / 2.0;
+    text.cy = std::isfinite(text.cy) ? std::clamp(text.cy, 0.0, sheetHeight)
+                                     : sheetHeight / 2.0;
+
+    text.angleDeg = normalizedImageRotationDeg(text.angleDeg);
+    text.opacity = std::clamp(text.opacity, 0, 100);
+    text.z = std::clamp(text.z, kMinTextZ, kMaxTextZ);
+
+    // A block smaller than kMinTextBlockMm could not be clicked again. The font
+    // is raised until it reaches the minimum, which is the only lever the model
+    // has: the block size is derived, never stored. The check is cheap in the
+    // common case, and the helper is idempotent, so a second repair pass changes
+    // nothing.
+    if (!text.text.trimmed().isEmpty()) {
+        const QRectF block = OverlayGeometry::textBlockMm(text);
+        if (block.isEmpty() || block.width() < kMinTextBlockMm
+            || block.height() < kMinTextBlockMm) {
+            text.fontPt = std::max(text.fontPt, OverlayGeometry::minimumFontPt(text));
+        }
+    }
+    return text;
+}
+
+QList<TextItem> sanitiseTexts(const QList<TextItem> &texts, const QSizeF &sheetMm)
+{
+    QList<TextItem> kept;
+    QSet<QString> ids;
+    kept.reserve(std::min<int>(texts.size(), kMaxTextsPerPage));
+    for (const TextItem &stored : texts) {
+        if (kept.size() >= kMaxTextsPerPage)
+            break;
+        // An empty or repeated id cannot be referenced, selected or undone
+        // through, so it is dropped rather than given a fresh one.
+        if (stored.id.isEmpty() || ids.contains(stored.id))
+            continue;
+        // Empty and whitespace-only text is not a layer: it would be invisible
+        // and unclickable, and only undo could remove it. Committing an emptied
+        // editor therefore deletes the item in the same undo step.
+        if (stored.text.trimmed().isEmpty())
+            continue;
+        ids.insert(stored.id);
+        kept.append(sanitiseText(stored, sheetMm));
     }
     return kept;
 }

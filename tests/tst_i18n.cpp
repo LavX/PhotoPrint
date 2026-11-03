@@ -131,6 +131,8 @@ private slots:
     void everyCatalogueTranslatesTheBackgroundMessages();
     void everyCatalogueTranslatesTheStickerMessages_data();
     void everyCatalogueTranslatesTheStickerMessages();
+    void everyCatalogueTranslatesTheTextMessages_data();
+    void everyCatalogueTranslatesTheTextMessages();
     void sourceLanguageInstallsTheQtCatalogue();
     void hungarianSourceSubstitutesTheCount();
     void repeatedLanguageSwitchingLeavesTranslatorsUnparented();
@@ -937,6 +939,62 @@ void TestI18n::everyCatalogueTranslatesTheStickerMessages()
              QStringLiteral("Képek (*.png *.jpg *.jpeg *.webp *.gif)"),
              QStringLiteral("Egy lapon legfeljebb %1 matrica lehet."),
              QStringLiteral("A matricát nem sikerült a helyére tenni."),
+         }) {
+        const QString text = translated("PhotoPrint", source);
+        const QString where = QStringLiteral("%1: %2").arg(code, source);
+        QVERIFY2(!text.isEmpty(), qPrintable(where + QStringLiteral(" is empty")));
+        QVERIFY2(text != source,
+                 qPrintable(where + QStringLiteral(" is still the Hungarian source")));
+    }
+}
+
+void TestI18n::everyCatalogueTranslatesTheTextMessages_data()
+{
+    QTest::addColumn<QString>("code");
+    for (const QString &code : i18n::targetCodes())
+        QTest::newRow(qPrintable(code)) << code;
+}
+
+void TestI18n::everyCatalogueTranslatesTheTextMessages()
+{
+    QFETCH(QString, code);
+
+    InstalledCatalogue catalogue(code);
+    QVERIFY2(catalogue.loaded(), qPrintable(code));
+
+    // The Elem tab's text half, the insert menu, the text dialog and every
+    // sentence the text layer can show: the properties, the two hints, the
+    // accessible announcement and the four undo labels.
+    for (const QString &source : {
+             QStringLiteral("Szöveg"),
+             QStringLiteral("Szöveg…"),
+             QStringLiteral("Szöveg hozzáadása…"),
+             QStringLiteral("Szöveg a lapra"),
+             QStringLiteral("A szöveg"),
+             QStringLiteral("Írd be a szöveget. A sortörést az Enter adja."),
+             QStringLiteral("Betűtípus"),
+             QStringLiteral("Betűméret"),
+             QStringLiteral("Félkövér"),
+             QStringLiteral("Dőlt"),
+             QStringLiteral("Aláhúzott"),
+             QStringLiteral("Balra igazítás"),
+             QStringLiteral("Középre igazítás"),
+             QStringLiteral("Jobbra igazítás"),
+             QStringLiteral("Sormagasság"),
+             QStringLiteral("Írj be legalább egy látható karaktert."),
+             QStringLiteral("Ez a betűtípus ezen a gépen nincs meg, helyette a rendszer "
+                            "betűtípusa látszik."),
+             QStringLiteral("A szöveg egy része lemarad a lapról."),
+             QStringLiteral("A szöveg ki van jelölve: %1"),
+             QStringLiteral("Szöveg mozgatása"),
+             QStringLiteral("Szöveg átméretezése"),
+             QStringLiteral("Szöveg forgatása"),
+             QStringLiteral("Szöveg törlése"),
+             QStringLiteral("Egy lapon legfeljebb %1 szöveg lehet."),
+             QStringLiteral("Még nincs matrica vagy szöveg a lapon."),
+             QStringLiteral("Válassz egy matricát vagy szöveget a lapon."),
+             QStringLiteral("A matricák és a szövegek a fotók fölött látszanak."),
+             QStringLiteral("Válassz színt a szövegnek."),
          }) {
         const QString text = translated("PhotoPrint", source);
         const QString where = QStringLiteral("%1: %2").arg(code, source);

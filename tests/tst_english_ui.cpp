@@ -5,6 +5,7 @@
 #include "ProjectStore.h"
 #include "SheetToolsDialog.h"
 #include "TemplateBrowserDialog.h"
+#include "TextDialog.h"
 #include "Translation.h"
 
 #include <QAbstractButton>
@@ -565,6 +566,7 @@ private slots:
     void sheetToolsBatch();
     void sheetToolsAlign();
     void aboutDialog();
+    void textDialog();
 
     void everyTranslatedMessageHasAnEnglishText();
     void sourceHasNoUntranslatedHungarianText();
@@ -747,6 +749,23 @@ void TestEnglishUi::aboutDialog()
     QTest::qWait(100);
 
     verifyNoHungarian(&dialog, QStringLiteral("the about dialog"), 15);
+    dialog.close();
+}
+
+void TestEnglishUi::textDialog()
+{
+    TextItem item;
+    item.id = QStringLiteral("text-labels");
+    item.text = QStringLiteral("Hello");
+    item.cx = 105.0;
+    item.cy = 148.5;
+    item.fontPt = 19.0;
+
+    TextDialog dialog(item);
+    dialog.show();
+    QTest::qWait(200);
+
+    verifyNoHungarian(&dialog, QStringLiteral("the text dialog"), 20);
     dialog.close();
 }
 

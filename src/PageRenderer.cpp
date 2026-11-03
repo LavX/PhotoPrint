@@ -353,6 +353,11 @@ void paintBackground(QPainter &painter, const Page &page, const PageImages &imag
 /// prints. Clipping to the sheet is implicit: the raster is exactly page-sized
 /// and the PDF embeds that raster, so an overflowing sticker is cut at the edge
 /// with no second code path.
+///
+/// A missing, unreadable or too-large sticker is skipped by the page painter:
+/// the raster, the PDF and the printer carry no editor furniture, and a lost
+/// decoration must not print a red box. The canvas draws its own placeholder in
+/// PageView::paintEvent, where every other editor mark lives.
 void drawSticker(QPainter &painter, const Sticker &sticker, const QImage &layer,
                  const QTransform &pageTransform)
 {
@@ -373,27 +378,95 @@ void drawSticker(QPainter &painter, const Sticker &sticker, const QImage &layer,
     painter.restore();
 }
 
-/// A missing, unreadable or too-large sticker is skipped by the page painter:
-/// the raster, the PDF and the printer carry no editor furniture, and a lost
-/// decoration must not print a red box. The canvas draws its own placeholder in
-/// PageView::paintEvent, where every other editor mark lives.
-///
-/// Paints the page's stickers above every photograph. Text will join this pass
-/// later, merged by the same `z`, which is why the order comes from
-/// OverlayGeometry and not from the list here.
-void paintStickers(QPainter &painter, const QList<Sticker> &stickers, const PageImages &images,
+/// Draws one text block. The glyphs are rasterised into the page image, never
+/// embedded as PDF text: the writer streams one image XObject per sheet, so
+/// there is no font object to subset and Hungarian `ő`/`ű` cannot break. The
+/// block is measured at kTextLayoutPpi and drawn at the output ppi, in device
+/// space, because a point size inside the millimetre painter would be converted
+/// with the paint device's logical DPI instead of the page ppi.
+void drawText(QPainter &painter, const TextItem &item, const QTransform &pageTransform,
+              double ppi)
+{
+    const double opacity = std::clamp(item.opacity, 0, 100) / 100.0;
+    if (!(opacity > 0.0))
+        return;
+    if (!(ppi > 0.0) || !std::isfinite(ppi))
+        return;
+    if (OverlayGeometry::lines(item.text).isEmpty())
+        return;
+
+    painter.save();
+    painter.setTransform(QTransform());
+    painter.translate(pageTransform.map(QPointF(item.cx, item.cy)));
+    painter.rotate(item.angleDeg);
+    painter.setOpacity(opacity);
+    // The canvas is linear Rec.2020, so the picked sRGB colour goes through the
+    // same conversion as a photograph. Painting the raw QColor would print a
+    // #cc0000 caption at about #f08a8a.
+    painter.setPen(ColorPipeline::linearColor(item.color));
+    paintTextBlock(painter, item, ppi);
+    painter.restore();
+}
+
+/// Paints the page's overlays above every photograph: stickers and texts merged
+/// by the shared `z` stack, so a caption can sit above or below a decoration and
+/// the canvas, the PDF and the printer cannot disagree about which is on top.
+void paintOverlays(QPainter &painter, const QList<Sticker> &stickers,
+                   const QList<TextItem> &texts, const PageImages &images,
                    const QTransform &pageTransform)
 {
-    if (stickers.isEmpty())
+    const QList<OverlayGeometry::OverlayRef> order =
+        OverlayGeometry::paintOrder(stickers, texts);
+    if (order.isEmpty())
         return;
-    for (const Sticker &sticker : OverlayGeometry::stickersInPaintOrder(stickers)) {
-        const auto layer = images.stickers.constFind(sticker.id);
-        if (layer != images.stickers.constEnd() && !layer->isNull())
-            drawSticker(painter, sticker, layer.value(), pageTransform);
+    // The output resolution the glyphs are rasterised at. The page transform is
+    // millimetres to device pixels, so its scale times 25.4 is the ppi.
+    const double ppi = std::hypot(pageTransform.m11(), pageTransform.m12()) * 25.4;
+    for (const OverlayGeometry::OverlayRef &ref : order) {
+        if (ref.kind == OverlayGeometry::OverlayKind::Sticker) {
+            const Sticker &sticker = stickers.at(ref.index);
+            const auto layer = images.stickers.constFind(sticker.id);
+            if (layer != images.stickers.constEnd() && !layer->isNull())
+                drawSticker(painter, sticker, layer.value(), pageTransform);
+        } else {
+            drawText(painter, texts.at(ref.index), pageTransform, ppi);
+        }
     }
 }
 
 } // namespace
+
+void paintTextBlock(QPainter &painter, const TextItem &item, double ppi)
+{
+    const QStringList rows = OverlayGeometry::lines(item.text);
+    if (rows.isEmpty() || !(ppi > 0.0) || !std::isfinite(ppi))
+        return;
+    const QRectF blockMm = OverlayGeometry::textBlockMm(item);
+    if (blockMm.isEmpty())
+        return;
+
+    const double pxPerMm = ppi / 25.4;
+    const double blockWidthPx = blockMm.width() * pxPerMm;
+    const double blockHeightPx = blockMm.height() * pxPerMm;
+    const QFont font = OverlayGeometry::fontFor(item, ppi);
+    const QFontMetricsF metrics(font);
+    const double advance = metrics.height() * item.lineSpacing;
+
+    painter.setFont(font);
+    // The first baseline sits one ascent below the top of the block, so the
+    // block is centred on cx/cy and adding a line grows it symmetrically.
+    double baseline = -blockHeightPx / 2.0 + metrics.ascent();
+    for (const QString &row : rows) {
+        const double width = metrics.horizontalAdvance(row);
+        double x = -blockWidthPx / 2.0;
+        if (item.align == TextAlign::Center)
+            x = -width / 2.0;
+        else if (item.align == TextAlign::Right)
+            x = blockWidthPx / 2.0 - width;
+        painter.drawText(QPointF(x, baseline), row);
+        baseline += advance;
+    }
+}
 
 PageRenderer::PageRenderer(ImageStore &store) : m_store(store) {}
 
@@ -473,13 +546,14 @@ void paintPageContent(QPainter &painter, const DocumentSnapshot &snapshot, int p
         drawFramePhoto(painter, frame, *it, pageTransform, 0.0);
     }
 
-    // Overlays last: a sticker is above every photograph, and the pass takes
-    // its order from the model, so the canvas, the PDF and the printer cannot
-    // disagree about which sticker is on top. The list is sanitised here as
-    // well, because a caller can hand this painter a fabricated snapshot that
-    // never went through the controller's repair point.
-    paintStickers(painter, sanitiseStickers(page.stickers, pageSizeMm(page)), images,
-                  pageTransform);
+    // Overlays last: stickers and texts share one `z` stack above every
+    // photograph, and the pass takes its order from the model, so the canvas,
+    // the PDF and the printer cannot disagree about which layer is on top. The
+    // lists are sanitised here as well, because a caller can hand this painter a
+    // fabricated snapshot that never went through the controller's repair point.
+    const QSizeF sheet = pageSizeMm(page);
+    paintOverlays(painter, sanitiseStickers(page.stickers, sheet),
+                  sanitiseTexts(page.texts, sheet), images, pageTransform);
 }
 
 void paintFrameLabels(QPainter &painter, const DocumentSnapshot &snapshot, int pageIndex,

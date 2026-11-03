@@ -10,14 +10,36 @@ namespace OverlayGeometry {
 
 namespace {
 
-/// Rotates a page-space point back into the sticker's own frame.
-QPointF toLocal(const Sticker &sticker, const QPointF &pagePoint)
+/// Rotates a page-space point back into an overlay's own frame.
+QPointF toLocal(double cx, double cy, double angleDeg, const QPointF &pagePoint)
 {
-    const double radians = qDegreesToRadians(-sticker.angleDeg);
-    const double dx = pagePoint.x() - sticker.cx;
-    const double dy = pagePoint.y() - sticker.cy;
+    const double radians = qDegreesToRadians(-angleDeg);
+    const double dx = pagePoint.x() - cx;
+    const double dy = pagePoint.y() - cy;
     return QPointF(dx * std::cos(radians) - dy * std::sin(radians),
                    dx * std::sin(radians) + dy * std::cos(radians));
+}
+
+/// Rotates a local half-extent box into the page quad.
+QPolygonF rotatedQuad(double cx, double cy, double halfWidth, double halfHeight,
+                      double angleDeg)
+{
+    const double radians = qDegreesToRadians(angleDeg);
+    const double cosine = std::cos(radians);
+    const double sine = std::sin(radians);
+    const auto corner = [&](double x, double y) {
+        return QPointF(cx + x * cosine - y * sine, cy + x * sine + y * cosine);
+    };
+    return QPolygonF{corner(-halfWidth, -halfHeight), corner(halfWidth, -halfHeight),
+                     corner(halfWidth, halfHeight), corner(-halfWidth, halfHeight)};
+}
+
+int overlayZ(const QList<Sticker> &stickers, const QList<TextItem> &texts,
+             const OverlayRef &ref)
+{
+    if (ref.kind == OverlayKind::Sticker)
+        return stickers.at(ref.index).z;
+    return texts.at(ref.index).z;
 }
 
 } // namespace
@@ -37,24 +59,15 @@ QRectF stickerBoxMm(const Sticker &sticker)
 
 QPolygonF stickerQuadMm(const Sticker &sticker)
 {
-    const double halfWidth = sticker.width / 2.0;
-    const double halfHeight = sticker.height / 2.0;
-    const double radians = qDegreesToRadians(sticker.angleDeg);
-    const double cosine = std::cos(radians);
-    const double sine = std::sin(radians);
-    const auto corner = [&](double x, double y) {
-        return QPointF(sticker.cx + x * cosine - y * sine,
-                       sticker.cy + x * sine + y * cosine);
-    };
-    return QPolygonF{corner(-halfWidth, -halfHeight), corner(halfWidth, -halfHeight),
-                     corner(halfWidth, halfHeight), corner(-halfWidth, halfHeight)};
+    return rotatedQuad(sticker.cx, sticker.cy, sticker.width / 2.0, sticker.height / 2.0,
+                       sticker.angleDeg);
 }
 
 bool stickerContains(const Sticker &sticker, const QPointF &pageMm)
 {
     if (!(sticker.width > 0.0) || !(sticker.height > 0.0))
         return false;
-    const QPointF local = toLocal(sticker, pageMm);
+    const QPointF local = toLocal(sticker.cx, sticker.cy, sticker.angleDeg, pageMm);
     return std::abs(local.x()) <= sticker.width / 2.0
         && std::abs(local.y()) <= sticker.height / 2.0;
 }
@@ -126,7 +139,7 @@ Sticker resizedSticker(const Sticker &sticker, const QPointF &pagePoint,
                        const QSizeF &sheetMm)
 {
     Sticker resized = sticker;
-    const QPointF local = toLocal(sticker, pagePoint);
+    const QPointF local = toLocal(sticker.cx, sticker.cy, sticker.angleDeg, pagePoint);
     const double start = std::hypot(sticker.width / 2.0, sticker.height / 2.0);
     const double reach = std::hypot(local.x(), local.y());
     if (!(start > 0.0) || !(reach > 0.0) || !std::isfinite(reach))
@@ -180,6 +193,240 @@ bool reorderSticker(QList<Sticker> &paintOrder, const QString &stickerId, int de
     paintOrder.move(index, target);
     for (int i = 0; i < paintOrder.size(); ++i)
         paintOrder[i].z = i;
+    return true;
+}
+
+// --- Text -----------------------------------------------------------------
+
+QFont fontFor(const TextItem &item, double ppi)
+{
+    QFont font;
+    // An empty family is the application font: Qt resolves it at paint time, so
+    // a project written on one machine does not pin a family the next may lack.
+    if (!item.fontFamily.isEmpty())
+        font.setFamily(item.fontFamily);
+    const double pixels = item.fontPt * ppi / 72.0;
+    font.setPixelSize(std::max(1, int(std::lround(std::isfinite(pixels) ? pixels : 1.0))));
+    font.setBold(item.bold);
+    font.setItalic(item.italic);
+    font.setUnderline(item.underline);
+    return font;
+}
+
+QFontMetricsF metricsFor(const TextItem &item, double ppi)
+{
+    return QFontMetricsF(fontFor(item, ppi));
+}
+
+QStringList lines(const QString &text)
+{
+    if (text.isEmpty())
+        return {};
+    return text.split(QLatin1Char('\n'));
+}
+
+QRectF textBlockMm(const TextItem &item)
+{
+    const QStringList rows = lines(item.text);
+    if (rows.isEmpty())
+        return {};
+    const QFontMetricsF metrics = metricsFor(item, kTextLayoutPpi);
+    double width = 0.0;
+    for (const QString &row : rows)
+        width = std::max(width, metrics.horizontalAdvance(row));
+    const double advance = metrics.height() * item.lineSpacing;
+    const double blockHeight = (rows.size() - 1) * advance + metrics.height();
+    const double pxToMm = 25.4 / kTextLayoutPpi;
+    width *= pxToMm;
+    const double height = blockHeight * pxToMm;
+    if (!std::isfinite(width) || !std::isfinite(height))
+        return {};
+    return QRectF(item.cx - width / 2.0, item.cy - height / 2.0, width, height);
+}
+
+QPolygonF textQuadMm(const TextItem &item)
+{
+    const QRectF block = textBlockMm(item);
+    if (block.isEmpty())
+        return {};
+    return rotatedQuad(item.cx, item.cy, block.width() / 2.0, block.height() / 2.0,
+                       item.angleDeg);
+}
+
+bool textContains(const TextItem &item, const QPointF &pageMm)
+{
+    const QRectF block = textBlockMm(item);
+    if (block.isEmpty())
+        return false;
+    const QPointF local = toLocal(item.cx, item.cy, item.angleDeg, pageMm);
+    return std::abs(local.x()) <= block.width() / 2.0
+        && std::abs(local.y()) <= block.height() / 2.0;
+}
+
+double minimumFontPt(const TextItem &item)
+{
+    // The block is not exactly linear in the font size: Qt rounds the pixel size
+    // and hints the glyphs, so one scale pass can land a fraction under the
+    // minimum. The loop measures the real block and grows until it fits, which
+    // converges in two or three passes and is idempotent afterwards.
+    TextItem probe = item;
+    double fontPt = kMinFontPt;
+    for (int pass = 0; pass < 8; ++pass) {
+        probe.fontPt = fontPt;
+        const QRectF block = textBlockMm(probe);
+        if (block.isEmpty() || !(block.width() > 0.0) || !(block.height() > 0.0))
+            return kMinFontPt;
+        const double scale =
+            std::max(kMinTextBlockMm / block.width(), kMinTextBlockMm / block.height());
+        if (!(scale > 1.0) || !std::isfinite(scale))
+            return fontPt;
+        const double next = std::min(kMaxFontPt, fontPt * scale * 1.01);
+        if (!(next > fontPt))
+            return fontPt;
+        fontPt = next;
+        if (fontPt >= kMaxFontPt)
+            return kMaxFontPt;
+    }
+    return fontPt;
+}
+
+TextItem movedText(const TextItem &item, const QPointF &delta, const QSizeF &sheetMm)
+{
+    TextItem moved = item;
+    if (std::isfinite(delta.x()))
+        moved.cx = item.cx + delta.x();
+    if (std::isfinite(delta.y()))
+        moved.cy = item.cy + delta.y();
+    if (sheetMm.width() > 0.0 && sheetMm.height() > 0.0) {
+        moved.cx = std::clamp(moved.cx, 0.0, sheetMm.width());
+        moved.cy = std::clamp(moved.cy, 0.0, sheetMm.height());
+    }
+    return moved;
+}
+
+TextItem resizedText(const TextItem &item, const QPointF &pagePoint, const QSizeF &sheetMm)
+{
+    Q_UNUSED(sheetMm)
+    TextItem resized = item;
+    const QRectF block = textBlockMm(item);
+    if (block.isEmpty())
+        return resized;
+    const QPointF local = toLocal(item.cx, item.cy, item.angleDeg, pagePoint);
+    const double start = std::hypot(block.width() / 2.0, block.height() / 2.0);
+    const double reach = std::hypot(local.x(), local.y());
+    if (!(start > 0.0) || !(reach > 0.0) || !std::isfinite(reach))
+        return resized;
+    const double factor = reach / start;
+    if (!(factor > 0.0) || !std::isfinite(factor))
+        return resized;
+    // The block is derived from the font, so scaling the font is the whole
+    // resize. The lower bound is the minimum block, not the bare 4 pt: a drag
+    // must not preview a size the commit would raise again.
+    resized.fontPt = std::clamp(item.fontPt * factor, minimumFontPt(item), kMaxFontPt);
+    return resized;
+}
+
+TextItem rotatedText(const TextItem &item, const QPointF &pagePoint, bool snap)
+{
+    TextItem rotated = item;
+    const double dx = pagePoint.x() - item.cx;
+    const double dy = pagePoint.y() - item.cy;
+    if (!std::isfinite(dx) || !std::isfinite(dy) || (dx == 0.0 && dy == 0.0))
+        return rotated;
+    double angle = qRadiansToDegrees(std::atan2(dy, dx)) + 90.0;
+    if (snap)
+        angle = std::round(angle / 15.0) * 15.0;
+    rotated.angleDeg = normalizedImageRotationDeg(angle);
+    return rotated;
+}
+
+// --- The shared overlay stack ---------------------------------------------
+
+QList<OverlayRef> paintOrder(const QList<Sticker> &stickers, const QList<TextItem> &texts)
+{
+    QList<OverlayRef> order;
+    order.reserve(stickers.size() + texts.size());
+    for (int i = 0; i < stickers.size(); ++i)
+        order.append({OverlayKind::Sticker, i});
+    for (int i = 0; i < texts.size(); ++i)
+        order.append({OverlayKind::Text, i});
+    // Stable by design: equal z keeps stickers before texts and document order
+    // within each kind, so the visible order is deterministic for a hand-edited
+    // or older file.
+    std::stable_sort(order.begin(), order.end(),
+                     [&stickers, &texts](const OverlayRef &a, const OverlayRef &b) {
+                         const int za = overlayZ(stickers, texts, a);
+                         const int zb = overlayZ(stickers, texts, b);
+                         if (za != zb)
+                             return za < zb;
+                         if (a.kind != b.kind)
+                             return a.kind == OverlayKind::Sticker;
+                         return a.index < b.index;
+                     });
+    return order;
+}
+
+QList<OverlayRef> paintOrder(const Page &page)
+{
+    return paintOrder(page.stickers, page.texts);
+}
+
+std::optional<OverlayRef> overlayAt(const Page &page, const QPointF &pageMm)
+{
+    const QList<OverlayRef> order = paintOrder(page);
+    for (int i = int(order.size()) - 1; i >= 0; --i) {
+        const OverlayRef &ref = order.at(i);
+        if (ref.kind == OverlayKind::Sticker) {
+            if (stickerContains(page.stickers.at(ref.index), pageMm))
+                return ref;
+        } else if (textContains(page.texts.at(ref.index), pageMm)) {
+            return ref;
+        }
+    }
+    return std::nullopt;
+}
+
+QString overlayIdAt(const Page &page, const QPointF &pageMm)
+{
+    const std::optional<OverlayRef> ref = overlayAt(page, pageMm);
+    if (!ref)
+        return {};
+    return ref->kind == OverlayKind::Sticker ? page.stickers.at(ref->index).id
+                                             : page.texts.at(ref->index).id;
+}
+
+bool reorderOverlay(Page &page, const QString &overlayId, int delta)
+{
+    if (delta == 0 || overlayId.isEmpty())
+        return false;
+    QList<OverlayRef> order = paintOrder(page);
+    int index = -1;
+    for (int i = 0; i < order.size(); ++i) {
+        const OverlayRef &ref = order.at(i);
+        const QString id = ref.kind == OverlayKind::Sticker
+            ? page.stickers.at(ref.index).id
+            : page.texts.at(ref.index).id;
+        if (id == overlayId) {
+            index = i;
+            break;
+        }
+    }
+    if (index < 0)
+        return false;
+    const int target = std::clamp(index + (delta > 0 ? 1 : -1), 0, int(order.size()) - 1);
+    if (target == index)
+        return false;
+    order.move(index, target);
+    // Renumbering across both kinds is what makes one press a real reorder: the
+    // moved layer can never tie with its neighbour, and the merged order is
+    // exactly the list order afterwards.
+    for (int i = 0; i < order.size(); ++i) {
+        const OverlayRef &ref = order.at(i);
+        if (ref.kind == OverlayKind::Sticker)
+            page.stickers[ref.index].z = i;
+        else
+            page.texts[ref.index].z = i;
+    }
     return true;
 }
 

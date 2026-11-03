@@ -604,6 +604,11 @@ Result<Page> repair(Page page)
     // loader pass through, and an unreachable sticker could only be undone.
     page.stickers = sanitiseStickers(page.stickers, pageSizeMm(page));
 
+    // Text blocks are the same invariant, and they share the sticker's `z`
+    // space: an empty text is dropped here, so committing an emptied editor
+    // deletes the item in the same undo step.
+    page.texts = sanitiseTexts(page.texts, pageSizeMm(page));
+
     // Style first: ranges and finiteness are model rules, and a caller that
     // filled the struct directly must not be able to print a negative margin
     // or a NaN gap.

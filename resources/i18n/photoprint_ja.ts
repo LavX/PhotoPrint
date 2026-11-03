@@ -1903,5 +1903,117 @@
         <source>A matrica ki van jelölve.</source>
         <translation>ステッカーが選択されています。</translation>
     </message>
+    <message>
+        <source>Szöveg</source>
+        <translation>テキスト</translation>
+    </message>
+    <message>
+        <source>Szöveg…</source>
+        <translation>テキスト…</translation>
+    </message>
+    <message>
+        <source>Szöveg hozzáadása…</source>
+        <translation>テキストを追加…</translation>
+    </message>
+    <message>
+        <source>Szöveg a lapra</source>
+        <translation>ページにテキスト</translation>
+    </message>
+    <message>
+        <source>A szöveg</source>
+        <translation>テキスト</translation>
+    </message>
+    <message>
+        <source>Írd be a szöveget. A sortörést az Enter adja.</source>
+        <translation>テキストを入力します。改行は Enter です。</translation>
+    </message>
+    <message>
+        <source>Betűtípus</source>
+        <translation>フォント</translation>
+    </message>
+    <message>
+        <source>Betűméret</source>
+        <translation>文字サイズ</translation>
+    </message>
+    <message>
+        <source>Félkövér</source>
+        <translation>太字</translation>
+    </message>
+    <message>
+        <source>Dőlt</source>
+        <translation>斜体</translation>
+    </message>
+    <message>
+        <source>Aláhúzott</source>
+        <translation>下線</translation>
+    </message>
+    <message>
+        <source>Balra igazítás</source>
+        <translation>左揃え</translation>
+    </message>
+    <message>
+        <source>Középre igazítás</source>
+        <translation>中央揃え</translation>
+    </message>
+    <message>
+        <source>Jobbra igazítás</source>
+        <translation>右揃え</translation>
+    </message>
+    <message>
+        <source>Sormagasság</source>
+        <translation>行間</translation>
+    </message>
+    <message>
+        <source>Írj be legalább egy látható karaktert.</source>
+        <translation>見える文字を1文字以上入力してください。</translation>
+    </message>
+    <message>
+        <source>Ez a betűtípus ezen a gépen nincs meg, helyette a rendszer betűtípusa látszik.</source>
+        <translation>このフォントはこのコンピューターにありません。代わりにシステムのフォントで表示します。</translation>
+    </message>
+    <message>
+        <source>A szöveg egy része lemarad a lapról.</source>
+        <translation>テキストの一部がページからはみ出します。</translation>
+    </message>
+    <message>
+        <source>A szöveg ki van jelölve: %1</source>
+        <translation>テキストが選択されています: %1</translation>
+    </message>
+    <message>
+        <source>Szöveg mozgatása</source>
+        <translation>テキストを移動</translation>
+    </message>
+    <message>
+        <source>Szöveg átméretezése</source>
+        <translation>テキストのサイズ変更</translation>
+    </message>
+    <message>
+        <source>Szöveg forgatása</source>
+        <translation>テキストを回転</translation>
+    </message>
+    <message>
+        <source>Szöveg törlése</source>
+        <translation>テキストを削除</translation>
+    </message>
+    <message>
+        <source>Egy lapon legfeljebb %1 szöveg lehet.</source>
+        <translation>1ページに置けるテキストは %1 個までです。</translation>
+    </message>
+    <message>
+        <source>Még nincs matrica vagy szöveg a lapon.</source>
+        <translation>このページにはまだステッカーもテキストもありません。</translation>
+    </message>
+    <message>
+        <source>Válassz egy matricát vagy szöveget a lapon.</source>
+        <translation>ページ上のステッカーまたはテキストを選んでください。</translation>
+    </message>
+    <message>
+        <source>A matricák és a szövegek a fotók fölött látszanak.</source>
+        <translation>ステッカーとテキストは写真の上に表示されます。</translation>
+    </message>
+    <message>
+        <source>Válassz színt a szövegnek.</source>
+        <translation>テキストの色を選んでください。</translation>
+    </message>
 </context>
 </TS>

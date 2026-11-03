@@ -37,13 +37,16 @@ class QDragEnterEvent;
 class QDragLeaveEvent;
 class QDragMoveEvent;
 class QDropEvent;
+class QFontComboBox;
 class QLabel;
 class QMenu;
+class QPlainTextEdit;
 class QPushButton;
 class QSlider;
 class QSpinBox;
 class QTabWidget;
 class QTimer;
+class QToolButton;
 
 namespace pp {
 
@@ -99,11 +102,14 @@ public:
     /// the layout panel exists. An empty id means no cell is selected.
     void setSelectedSlot(const QString &slotId);
     QString selectedSlot() const { return m_selectedSlotId; }
-    /// The page's overlays. Stickers sit above the photographs, so a click on a
-    /// sticker selects it; the Fotók list is the way back to the photograph.
-    /// A frame, a cell and a sticker are three exclusive selections.
+    /// The page's overlays. Stickers and texts sit above the photographs and
+    /// share one `z` stack, so a click on the topmost one selects it; the Fotók
+    /// list is the way back to the photograph. A frame, a cell, a sticker and a
+    /// text are four exclusive selections.
     void setSelectedSticker(const QString &stickerId);
     QString selectedSticker() const { return m_selectedStickerId; }
+    void setSelectedText(const QString &textId);
+    QString selectedText() const { return m_selectedTextId; }
     /// The stickers the window proved missing. The canvas marks each with its
     /// own placeholder; the page raster never does.
     void setMissingStickers(const QSet<QString> &stickerIds);
@@ -111,10 +117,17 @@ public:
     /// the current page. Shared by the paint path, the hit test and the tests,
     /// so the outline a person sees is the outline that answers the pointer.
     QPolygonF stickerQuad(const QString &stickerId) const;
+    /// A text's rotated block in widget coordinates, empty when it is not on the
+    /// current page. The block is measured at the fixed reference ppi, so the
+    /// outline does not move when the view zooms.
+    QPolygonF textQuad(const QString &textId) const;
     /// Shows a sticker without committing it. The opacity slider uses it while
     /// it is being dragged; the window commits one edit when the drag ends.
     void previewSticker(const Sticker &sticker);
     std::optional<Sticker> liveSticker(const QString &stickerId) const;
+    /// The same live-preview seam for a text block.
+    void previewText(const TextItem &text);
+    std::optional<TextItem> liveText(const QString &textId) const;
     /// The page-wide hint line, empty when the page has content. A test hook:
     /// the hint must not cover a sticker on an otherwise empty page.
     QString emptyHint() const { return m_emptyHint; }
@@ -197,6 +210,14 @@ public:
     std::function<void(const QString &)> onStickerSelectionChanged;
     std::function<void(const Sticker &, StickerAction)> onStickerCommitted;
     std::function<void(const QString &)> onStickerDeleteRequested;
+    /// The text gesture that produced a commit, so the window can name the undo
+    /// step without the view carrying interface text.
+    enum class TextAction { Move, Resize, Rotate };
+    std::function<void(const QString &)> onTextSelectionChanged;
+    std::function<void(const TextItem &, TextAction)> onTextCommitted;
+    std::function<void(const QString &)> onTextDeleteRequested;
+    /// A double click on a text asks the window to open its editor.
+    std::function<void(const QString &)> onTextEditRequested;
     std::function<void(const Frame &)> onFrameCommitted;
     std::function<void(const QString &)> onDeleteRequested;
     std::function<void(const QString &)> onEmptySlotRequested;
@@ -239,7 +260,10 @@ private:
         CropPan,
         MoveSticker,
         ResizeSticker,
-        RotateSticker
+        RotateSticker,
+        MoveText,
+        ResizeText,
+        RotateText
     };
 
     struct DragState {
@@ -248,6 +272,7 @@ private:
         QPointF startPage;
         Frame startFrame;
         Sticker startSticker;
+        TextItem startText;
         QSize pixels;
         bool changed = false;
     };
@@ -276,19 +301,23 @@ private:
 
     const Frame *selectedFramePtr() const;
     const Sticker *selectedStickerPtr() const;
+    const TextItem *selectedTextPtr() const;
     const Page *currentPage() const;
     QTransform pageToWidget() const;
     QPointF widgetToPage(const QPointF &point) const;
     QPolygonF frameQuadWidget(const Frame &frame) const;
     QPolygonF stickerQuadWidgetFor(const Sticker &sticker) const;
+    QPolygonF textQuadWidgetFor(const TextItem &text) const;
     int hitFrame(const QPointF &widgetPoint) const;
     int hitSlot(const QPointF &widgetPoint) const;
-    /// The topmost sticker under a widget point, as an index into the page's
-    /// list, or -1. The order is the reverse of painting.
-    int hitSticker(const QPointF &widgetPoint) const;
+    /// The topmost text under a widget point, as an index into the page's list,
+    /// or -1. The order is the reverse of painting.
+    int hitText(const QPointF &widgetPoint) const;
     /// The corner handle under the pointer (0..3) or the rotate handle (4), for
     /// the selected sticker.
     int hitStickerHandle(const QPointF &widgetPoint) const;
+    /// The same for the selected text block.
+    int hitTextHandle(const QPointF &widgetPoint) const;
     int hitHandle(const QPointF &widgetPoint) const;
     SlotState slotStateFor(const Slot &slot) const;
     void paintSlotOverlays(QPainter &painter, const Page &page) const;
@@ -335,8 +364,14 @@ private:
     Sticker draggedSticker(const QPointF &pagePoint, bool fine) const;
     void beginStickerDrag(DragKind kind, int handle, const QPointF &pagePoint,
                           const Sticker &sticker);
+    /// The live text under a drag, the same seam as a sticker.
+    void updateLiveText(const TextItem &text, bool markDragChanged = true);
+    TextItem draggedText(const QPointF &pagePoint, bool fine) const;
+    void beginTextDrag(DragKind kind, int handle, const QPointF &pagePoint,
+                       const TextItem &text);
     /// Lands an arrow-key nudge burst as one edit when the keys stop.
     void flushStickerNudge();
+    void flushTextNudge();
     /// The end of a wheel burst publishes one edit, not one per notch, so one
     /// Ctrl+Z restores the photo's crop and zoom as the user saw it before.
     void flushWheelZoom();
@@ -350,6 +385,7 @@ private:
     QString m_selectedId;
     QString m_selectedSlotId;
     QString m_selectedStickerId;
+    QString m_selectedTextId;
     QString m_dropSlotId;
     QString m_dropCue;
     QString m_accessibleBase;
@@ -376,6 +412,10 @@ private:
     QTimer *m_stickerNudgeTimer = nullptr;
     QString m_nudgeStickerId;
     Sticker m_nudgeStartSticker;
+    /// The text nudge burst, the same shape as the sticker one.
+    QTimer *m_textNudgeTimer = nullptr;
+    QString m_nudgeTextId;
+    TextItem m_nudgeStartText;
     QColor m_canvasColor{0xd9, 0xd9, 0xde};
     QColor m_pageBorderColor{0xc7, 0xc7, 0xcc};
     QColor m_pageShadowColor{0, 0, 0, 38};
@@ -454,9 +494,15 @@ public:
     {
         return projectBorderlessConsistent(m_controller.document());
     }
+    /// Test hook: the file-dialog-free entry point for adding a text, so a test
+    /// can drive the same path the dialog lands on.
+    bool addTextForTest(const TextItem &item);
 
 protected:
     void closeEvent(QCloseEvent *event) override;
+    /// The text editor commits on focus out and on Ctrl+Enter, not per
+    /// keystroke: a paragraph is one undo step.
+    bool eventFilter(QObject *watched, QEvent *event) override;
 
 private:
     /// Which field of the page's layout style a control edits. A commit writes
@@ -611,9 +657,33 @@ private slots:
     /// Moves the selected sticker one real step in the paint order.
     void reorderStickerLayer(int delta);
     void deleteSelectedSticker();
-    /// Selects the previous (-1) or next (+1) sticker in paint order. The
-    /// keyboard-only route to an existing overlay.
-    void cycleSticker(int delta);
+    /// The text layer. `Beszúrás -> Szöveg…` and the Elem tab's add button both
+    /// land here; the dialog is the only place a text is created or edited.
+    void addText();
+    /// Opens the same dialog for the selected text, so editing reuses it.
+    void editSelectedText();
+    /// Selects a text, or clears the overlay selection with an empty id.
+    void selectText(const QString &textId);
+    /// The Elem tab's text controls. Each one writes the whole page as one edit,
+    /// so one action is one undo step.
+    void textContentChanged();
+    void textFontChanged(int index);
+    void textSizeChanged();
+    void textStyleChanged();
+    void chooseTextColor();
+    /// Applies one of the three alignments. The buttons are one choice, so the
+    /// clicked value is passed in rather than read back from the toggle states.
+    void applyTextAlign(TextAlign align);
+    void textSpacingChanged();
+    void textOpacityChanged(int value);
+    void flushTextOpacity();
+    void cancelPendingTextOpacity();
+    void deleteSelectedText();
+    /// Moves the selected overlay (sticker or text) one real step in the shared
+    /// stack, so raising a sticker above a text swaps them.
+    void reorderOverlayLayer(int delta);
+    /// Selects the previous (-1) or next (+1) overlay in the shared paint order.
+    void cycleOverlay(int delta);
     /// Applies one catalogue template to the current page as one page edit, so
     /// one undo restores the layout. The slot engine creates the cells (and the
     /// layout label) and assigns the photographs in display order; the page's
@@ -676,7 +746,8 @@ private:
     /// flips the panel under the pointer. Tabs without content are disabled, Lap
     /// never is.
     void updateInspectorTabs(const QString &frameId, const QString &slotId,
-                             bool emptySection, const QString &stickerId);
+                             bool emptySection, const QString &overlayId,
+                             bool overlayIsText);
     /// Switches the inspector tab programmatically. A user switch goes through
     /// QTabWidget itself, which is what records the manual choice.
     void setInspectorTab(int index);
@@ -696,6 +767,32 @@ private:
     /// tab shows its empty state, which is also where a new sticker starts.
     void syncStickerPanel();
     std::optional<Sticker> selectedSticker() const;
+    /// Writes the selected text into the Elem tab: the editor, the font, the
+    /// size, the style toggles, the colour, the alignment, the spacing, the
+    /// opacity and the two order buttons. With nothing selected the tab shows
+    /// its empty state.
+    void syncTextPanel();
+    std::optional<TextItem> selectedText() const;
+    /// Applies a text list to the current page as one undo step and selects
+    /// `selectId` when it is given.
+    bool publishTexts(const QList<TextItem> &texts, const QString &actionText,
+                      const QString &selectId = QString());
+    /// Places a text whose geometry is already decided: the dialog, the tests
+    /// and the default placement all land here.
+    bool addTextWithItem(const TextItem &item);
+    /// Replaces the selected text with `item` as one undo step. An emptied text
+    /// deletes the item in the same step, so the page never holds an invisible
+    /// layer.
+    void applyTextEdit(const TextItem &item);
+    /// Lands the editor's content as one edit. Called on focus out, on
+    /// Ctrl+Enter and when the selection changes.
+    void commitTextEditor();
+    /// True when the stored family is not installed on this machine, so the
+    /// panel can say that Qt substitutes it.
+    bool textFontMissing() const;
+    /// True when the block does not fit the sheet, so the panel can say that
+    /// part of it falls off the page.
+    bool textOverflows() const;
     /// Applies a sticker list to the current page as one undo step and selects
     /// `selectId` when it is given.
     bool publishStickers(const QList<Sticker> &stickers, const QString &actionText,
@@ -928,6 +1025,42 @@ private:
     QPushButton *m_stickerRelinkButton = nullptr;
     /// The notice bar's own line for a sticker that cannot be shown.
     QLabel *m_stickerNotice = nullptr;
+    /// The Elem tab's text half: the add button, the selected text's controls
+    /// and the two hints. The panel switches between the sticker and the text
+    /// properties, so only the selected kind's controls are visible.
+    QWidget *m_textAddPanel = nullptr;
+    QWidget *m_textPanel = nullptr;
+    QPlainTextEdit *m_textEditor = nullptr;
+    QFontComboBox *m_textFontCombo = nullptr;
+    QDoubleSpinBox *m_textSizeSpin = nullptr;
+    QToolButton *m_textBoldButton = nullptr;
+    QToolButton *m_textItalicButton = nullptr;
+    QToolButton *m_textUnderlineButton = nullptr;
+    QToolButton *m_textAlignLeftButton = nullptr;
+    QToolButton *m_textAlignCenterButton = nullptr;
+    QToolButton *m_textAlignRightButton = nullptr;
+    QPushButton *m_textColorButton = nullptr;
+    QDoubleSpinBox *m_textSpacingSpin = nullptr;
+    QSlider *m_textOpacitySlider = nullptr;
+    QLabel *m_textOpacityValue = nullptr;
+    QPushButton *m_textRaiseButton = nullptr;
+    QPushButton *m_textLowerButton = nullptr;
+    QPushButton *m_textDeleteButton = nullptr;
+    QPushButton *m_addTextButton = nullptr;
+    QLabel *m_textFontHint = nullptr;
+    QLabel *m_textOverflowHint = nullptr;
+    /// The text opacity burst: the canvas follows live and one edit lands when
+    /// the burst stops.
+    QTimer *m_textOpacityTimer = nullptr;
+    std::optional<TextItem> m_pendingTextOpacity;
+    QString m_selectedText;
+    /// The last family, size and colour a text was created with, so a second
+    /// caption does not restart from the defaults.
+    QString m_lastTextFamily;
+    double m_lastTextPt = 0.0;
+    QRgb m_lastTextColor = 0xff000000u;
+    /// True while the editor holds a change the document has not seen yet.
+    bool m_textEditorDirty = false;
     /// The canvas layers of the current page's stickers, loaded by the preview
     /// job so the canvas and the print cannot disagree about what is on the page.
     QHash<QString, QImage> m_previewStickers;

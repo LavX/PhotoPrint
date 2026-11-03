@@ -315,6 +315,22 @@ void rotatePageTo(Page &page, bool targetLandscape)
         }
         sticker.angleDeg = normalizedImageRotationDeg(sticker.angleDeg);
     }
+    // A text block is placed the same way: its centre turns with the sheet and
+    // its angle carries the turn, so a caption stays where the user put it.
+    for (TextItem &text : page.texts) {
+        const double oldX = text.cx;
+        const double oldY = text.cy;
+        if (forward) {
+            text.cx = oldSize.height() - oldY;
+            text.cy = oldX;
+            text.angleDeg += 90.0;
+        } else {
+            text.cx = oldY;
+            text.cy = oldSize.width() - oldX;
+            text.angleDeg -= 90.0;
+        }
+        text.angleDeg = normalizedImageRotationDeg(text.angleDeg);
+    }
     if (page.hasLayout())
         page = SlotGeometry::remapToPaper(before, std::move(page));
 }
@@ -361,6 +377,20 @@ Page fittedPage(const Page &page)
         if (extentY > 0.0)
             factor = std::min(factor, (size.height() / 2.0) / extentY);
     }
+    // A text block is part of the composition for the same reason.
+    for (const TextItem &text : page.texts) {
+        const QRectF box = OverlayGeometry::textQuadMm(text).boundingRect();
+        if (box.isEmpty())
+            continue;
+        const double extentX =
+            std::abs(box.center().x() - size.width() / 2.0) + box.width() / 2.0;
+        const double extentY =
+            std::abs(box.center().y() - size.height() / 2.0) + box.height() / 2.0;
+        if (extentX > 0.0)
+            factor = std::min(factor, (size.width() / 2.0) / extentX);
+        if (extentY > 0.0)
+            factor = std::min(factor, (size.height() / 2.0) / extentY);
+    }
     factor = std::clamp(factor, 0.02, 1.0);
     for (Frame &frame : fitted.frames) {
         if (!frame.slotId.isEmpty())
@@ -375,6 +405,12 @@ Page fittedPage(const Page &page)
         sticker.cy = size.height() / 2.0 + (sticker.cy - size.height() / 2.0) * factor;
         sticker.width *= factor;
         sticker.height *= factor;
+    }
+    for (TextItem &text : fitted.texts) {
+        text.cx = size.width() / 2.0 + (text.cx - size.width() / 2.0) * factor;
+        text.cy = size.height() / 2.0 + (text.cy - size.height() / 2.0) * factor;
+        // The block is derived from the font, so the font is what scales.
+        text.fontPt = std::clamp(text.fontPt * factor, kMinFontPt, kMaxFontPt);
     }
     return fitted;
 }
@@ -490,10 +526,11 @@ Result<void> CanvasController::apply(const DocumentEdit &edit)
                 return Result<void>();
             } else if constexpr (std::is_same_v<T, FitPageEdit>) {
                 // Fitting is about everything that can overflow the sheet, so a
-                // page whose only content is a sticker is fitted too.
+                // page whose only content is a sticker or a caption is fitted too.
                 if (value.pageIndex >= 0 && value.pageIndex < m_document.pages.size()
                     && (!m_document.pages.at(value.pageIndex).frames.isEmpty()
-                        || !m_document.pages.at(value.pageIndex).stickers.isEmpty()))
+                        || !m_document.pages.at(value.pageIndex).stickers.isEmpty()
+                        || !m_document.pages.at(value.pageIndex).texts.isEmpty()))
                     m_undo->push(new FitPageCommand(this, value.pageIndex));
                 return Result<void>();
             } else if constexpr (std::is_same_v<T, RotatePageEdit>) {
@@ -528,6 +565,8 @@ Result<void> CanvasController::apply(const DocumentEdit &edit)
                 // duplicated page is a new page, so its layers get new ids too.
                 for (Sticker &sticker : copy.stickers)
                     sticker.id = makeId(QStringLiteral("sticker"));
+                for (TextItem &text : copy.texts)
+                    text.id = makeId(QStringLiteral("text"));
                 after.pages.insert(value.pageIndex + 1, copy);
                 after.currentPage = value.pageIndex + 1;
                 m_undo->push(new SnapshotCommand(this, m_document, after,
@@ -656,6 +695,8 @@ Result<void> CanvasController::apply(const DocumentEdit &edit)
                         page.background = *change.background;
                     if (change.stickers)
                         page.stickers = *change.stickers;
+                    if (change.texts)
+                        page.texts = *change.texts;
                     if (firstChanged < 0 || change.pageIndex < firstChanged)
                         firstChanged = change.pageIndex;
                 }
@@ -735,6 +776,7 @@ Result<void> CanvasController::publishPage(const Page &page, const QString &acti
     change.layoutId = page.layoutId;
     change.background = page.background;
     change.stickers = page.stickers;
+    change.texts = page.texts;
     edit.pages.append(change);
     edit.actionText = actionText;
     edit.selectPage = index;

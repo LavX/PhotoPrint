@@ -82,6 +82,12 @@ void paintPageContent(QPainter &painter, const DocumentSnapshot &snapshot, int p
 void paintFrameLabels(QPainter &painter, const DocumentSnapshot &snapshot, int pageIndex,
                       const QTransform &pageTransform, double ppi);
 
+/// Draws the glyphs of one text block in the painter's current coordinate
+/// system, centred on the origin, at @p ppi. The caller sets the transform, the
+/// opacity and the pen colour. Shared by the page raster and the editor's live
+/// preview, so the preview cannot drift from the print.
+void paintTextBlock(QPainter &painter, const TextItem &item, double ppi);
+
 /// Whether any page carries cut guides that reach the print. A page set to
 /// `Screen` shows the overlay only, so it never asks for a confirmation; both
 /// the print path and the PDF export call this before they start.

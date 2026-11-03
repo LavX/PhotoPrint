@@ -71,6 +71,7 @@ add_library(photoprint_core STATIC
   src/WandStages.cpp
   src/EffectBrowserDialog.cpp
   src/TemplateBrowserDialog.cpp
+  src/TextDialog.cpp
   src/MainWindow.cpp
   src/Translation.cpp
   src/AboutDialog.cpp
@@ -169,6 +170,7 @@ photoprint_test(tst_slot_layout)
 photoprint_test(tst_slot_ui)
 photoprint_test(tst_page_background)
 photoprint_test(tst_page_stickers)
+photoprint_test(tst_page_text)
 photoprint_test(tst_template_browser)
 photoprint_test(tst_ui_screens)
 photoprint_test(tst_i18n)

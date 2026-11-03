@@ -15,12 +15,14 @@
 #include "SheetToolsDialog.h"
 #include "StickerAssets.h"
 #include "TemplateBrowserDialog.h"
+#include "TextDialog.h"
 #include "Translation.h"
 #include "TrialSheetBuilder.h"
 #include "ToneEngine.h"
 
 #include <QAction>
 #include <QActionGroup>
+#include <QApplication>
 #include <QCloseEvent>
 #include <QCheckBox>
 #include <QColorDialog>
@@ -34,6 +36,7 @@
 #include <QStyleHints>
 #include <QDoubleSpinBox>
 #include <QFontDatabase>
+#include <QFontComboBox>
 #include <QFontMetrics>
 #include <QPlainTextEdit>
 #include <QDragEnterEvent>
@@ -505,6 +508,12 @@ PageView::PageView(QWidget *parent) : QWidget(parent)
     m_stickerNudgeTimer->setInterval(kEditPulseMs);
     connect(m_stickerNudgeTimer, &QTimer::timeout, this, [this] { flushStickerNudge(); });
 
+    // The same burst for a text block.
+    m_textNudgeTimer = new QTimer(this);
+    m_textNudgeTimer->setSingleShot(true);
+    m_textNudgeTimer->setInterval(kEditPulseMs);
+    connect(m_textNudgeTimer, &QTimer::timeout, this, [this] { flushTextNudge(); });
+
     // Page rasters are built off the GUI thread. The watcher lives on this
     // object, so a result arriving after destruction is simply dropped.
     m_composeWatcher = new QFutureWatcher<ComposeResult>(this);
@@ -574,6 +583,21 @@ void PageView::setDocument(const DocumentSnapshot &document)
             if (!found)
                 m_selectedStickerId.clear();
         }
+        // The same for a text: an undo, a page switch or another page's edit can
+        // take it away, and the Elem tab must fall back to its empty state.
+        if (!m_selectedTextId.isEmpty()) {
+            bool found = false;
+            if (page) {
+                for (const TextItem &text : page->texts) {
+                    if (text.id == m_selectedTextId) {
+                        found = true;
+                        break;
+                    }
+                }
+            }
+            if (!found)
+                m_selectedTextId.clear();
+        }
         if (const Frame *frame = selectedFramePtr()) {
             m_selectedSlotId = frame->slotId;
         } else if (!m_selectedSlotId.isEmpty() && page) {
@@ -592,10 +616,11 @@ void PageView::setDocument(const DocumentSnapshot &document)
         const QString frameBefore = m_selectedId;
         const QString slotBefore = m_selectedSlotId;
         const QString stickerBefore = m_selectedStickerId;
+        const QString textBefore = m_selectedTextId;
         pruneSelection();
         updateAccessibleDescription();
         if (frameBefore != m_selectedId || slotBefore != m_selectedSlotId
-            || stickerBefore != m_selectedStickerId)
+            || stickerBefore != m_selectedStickerId || textBefore != m_selectedTextId)
             update();
         return;
     }
@@ -616,6 +641,11 @@ void PageView::setDocument(const DocumentSnapshot &document)
         m_nudgeStickerId.clear();
         if (m_stickerNudgeTimer)
             m_stickerNudgeTimer->stop();
+    }
+    if (!m_nudgeTextId.isEmpty()) {
+        m_nudgeTextId.clear();
+        if (m_textNudgeTimer)
+            m_textNudgeTimer->stop();
     }
 
     pruneSelection();
@@ -956,6 +986,16 @@ void PageView::cancelInteraction(bool commitEdit)
                                                                 : StickerAction::Move);
                     onStickerCommitted(*sticker, action);
                 }
+            } else if (drag.kind == DragKind::MoveText || drag.kind == DragKind::ResizeText
+                       || drag.kind == DragKind::RotateText) {
+                const std::optional<TextItem> text = liveText(drag.startText.id);
+                if (text && onTextCommitted) {
+                    const TextAction action = drag.kind == DragKind::ResizeText
+                        ? TextAction::Resize
+                        : (drag.kind == DragKind::RotateText ? TextAction::Rotate
+                                                            : TextAction::Move);
+                    onTextCommitted(*text, action);
+                }
             } else if (const Frame *frame = selectedFramePtr(); frame && onFrameCommitted) {
                 onFrameCommitted(*frame);
             }
@@ -963,6 +1003,9 @@ void PageView::cancelInteraction(bool commitEdit)
                    || drag.kind == DragKind::RotateSticker) {
             // The widget is going away: leave the document as the user had it.
             updateLiveSticker(drag.startSticker, false);
+        } else if (drag.kind == DragKind::MoveText || drag.kind == DragKind::ResizeText
+                   || drag.kind == DragKind::RotateText) {
+            updateLiveText(drag.startText, false);
         } else if (Frame *frame = findFrame(m_document, drag.startFrame.id)) {
             *frame = drag.startFrame;
             ++m_contentRevision;
@@ -1012,6 +1055,49 @@ void PageView::setSelectedSticker(const QString &stickerId)
     m_selectedStickerId = stickerId;
     updateAccessibleDescription();
     update();
+}
+
+void PageView::setSelectedText(const QString &textId)
+{
+    if (m_selectedTextId == textId)
+        return;
+    m_selectedTextId = textId;
+    updateAccessibleDescription();
+    update();
+}
+
+QPolygonF PageView::textQuad(const QString &textId) const
+{
+    if (textId.isEmpty())
+        return {};
+    const Page *page = currentPage();
+    if (!page)
+        return {};
+    for (const TextItem &text : page->texts) {
+        if (text.id == textId)
+            return textQuadWidgetFor(text);
+    }
+    return {};
+}
+
+void PageView::previewText(const TextItem &text)
+{
+    const TextItem *selected = selectedTextPtr();
+    if (!selected || selected->id != text.id)
+        return;
+    updateLiveText(text, false);
+}
+
+std::optional<TextItem> PageView::liveText(const QString &textId) const
+{
+    const Page *page = currentPage();
+    if (!page || textId.isEmpty())
+        return std::nullopt;
+    for (const TextItem &text : page->texts) {
+        if (text.id == textId)
+            return text;
+    }
+    return std::nullopt;
 }
 
 QPolygonF PageView::stickerQuad(const QString &stickerId) const
@@ -1252,26 +1338,26 @@ const Sticker *PageView::selectedStickerPtr() const
     return nullptr;
 }
 
+const TextItem *PageView::selectedTextPtr() const
+{
+    const Page *page = currentPage();
+    if (!page || m_selectedTextId.isEmpty())
+        return nullptr;
+    for (const TextItem &text : page->texts) {
+        if (text.id == m_selectedTextId)
+            return &text;
+    }
+    return nullptr;
+}
+
 QPolygonF PageView::stickerQuadWidgetFor(const Sticker &sticker) const
 {
     return pageToWidget().map(OverlayGeometry::stickerQuadMm(sticker));
 }
 
-int PageView::hitSticker(const QPointF &widgetPoint) const
+QPolygonF PageView::textQuadWidgetFor(const TextItem &text) const
 {
-    const Page *page = currentPage();
-    if (!page || page->stickers.isEmpty())
-        return -1;
-    // The model owns the rule (the topmost rotated box wins); the view only
-    // converts the pointer to page millimetres.
-    const Sticker *hit = OverlayGeometry::stickerAt(*page, widgetToPage(widgetPoint));
-    if (!hit)
-        return -1;
-    for (int i = 0; i < page->stickers.size(); ++i) {
-        if (page->stickers.at(i).id == hit->id)
-            return i;
-    }
-    return -1;
+    return pageToWidget().map(OverlayGeometry::textQuadMm(text));
 }
 
 int PageView::hitStickerHandle(const QPointF &widgetPoint) const
@@ -1285,6 +1371,50 @@ int PageView::hitStickerHandle(const QPointF &widgetPoint) const
             return i;
     }
     const QPointF center = pageToWidget().map(QPointF(sticker->cx, sticker->cy));
+    const QPointF topMid = (quad.at(0) + quad.at(1)) / 2.0;
+    QPointF direction = topMid - center;
+    const double length = std::hypot(direction.x(), direction.y());
+    if (length > 0.0)
+        direction /= length;
+    const QPointF rotate = topMid + direction * kRotateOffsetPx;
+    if (QLineF(rotate, widgetPoint).length() <= 8.0)
+        return 4;
+    return -1;
+}
+
+int PageView::hitText(const QPointF &widgetPoint) const
+{
+    const Page *page = currentPage();
+    if (!page || page->texts.isEmpty())
+        return -1;
+    // The model owns the rule (the topmost rotated block wins); the view only
+    // converts the pointer to page millimetres.
+    const QPointF pagePoint = widgetToPage(widgetPoint);
+    const QList<OverlayGeometry::OverlayRef> order =
+        OverlayGeometry::paintOrder(page->stickers, page->texts);
+    for (int i = int(order.size()) - 1; i >= 0; --i) {
+        const OverlayGeometry::OverlayRef &ref = order.at(i);
+        if (ref.kind != OverlayGeometry::OverlayKind::Text)
+            continue;
+        if (OverlayGeometry::textContains(page->texts.at(ref.index), pagePoint))
+            return ref.index;
+    }
+    return -1;
+}
+
+int PageView::hitTextHandle(const QPointF &widgetPoint) const
+{
+    const TextItem *text = selectedTextPtr();
+    if (!text)
+        return -1;
+    const QPolygonF quad = textQuadWidgetFor(*text);
+    if (quad.size() != 4)
+        return -1;
+    for (int i = 0; i < 4; ++i) {
+        if (QLineF(quad.at(i), widgetPoint).length() <= kHandleHalfPx + 4.0)
+            return i;
+    }
+    const QPointF center = pageToWidget().map(QPointF(text->cx, text->cy));
     const QPointF topMid = (quad.at(0) + quad.at(1)) / 2.0;
     QPointF direction = topMid - center;
     const double length = std::hypot(direction.x(), direction.y());
@@ -1390,6 +1520,59 @@ void PageView::beginStickerDrag(DragKind kind, int handle, const QPointF &pagePo
     setCursor(Qt::ArrowCursor);
 }
 
+void PageView::beginTextDrag(DragKind kind, int handle, const QPointF &pagePoint,
+                             const TextItem &text)
+{
+    m_drag = DragState{};
+    m_drag.kind = kind;
+    m_drag.handle = handle;
+    m_drag.startPage = pagePoint;
+    m_drag.startText = text;
+    m_drag.changed = false;
+    m_cropZoomPulse.invalidate();
+    m_nudgePulse.invalidate();
+    setCursor(Qt::ArrowCursor);
+}
+
+void PageView::updateLiveText(const TextItem &text, bool markDragChanged)
+{
+    if (m_document.pages.isEmpty())
+        return;
+    const int index = std::clamp(m_document.currentPage, 0, int(m_document.pages.size()) - 1);
+    Page *page = &m_document.pages[index];
+    bool found = false;
+    for (TextItem &target : page->texts) {
+        if (target.id == text.id) {
+            target = text;
+            found = true;
+            break;
+        }
+    }
+    if (!found)
+        return;
+    if (markDragChanged)
+        m_drag.changed = true;
+    contentChanged(false);
+}
+
+TextItem PageView::draggedText(const QPointF &pagePoint, bool fine) const
+{
+    const TextItem start = m_drag.startText;
+    const QSizeF sheet = pageMm();
+    switch (m_drag.kind) {
+    case DragKind::MoveText:
+        return OverlayGeometry::movedText(start, pagePoint - m_drag.startPage, sheet);
+    case DragKind::ResizeText:
+        return OverlayGeometry::resizedText(start, pagePoint, sheet);
+    case DragKind::RotateText:
+        // Shift snaps to 15 degrees, exactly like a frame's rotate handle.
+        return OverlayGeometry::rotatedText(start, pagePoint, fine);
+    default:
+        break;
+    }
+    return start;
+}
+
 void PageView::updateLiveSticker(const Sticker &sticker, bool markDragChanged)
 {
     if (m_document.pages.isEmpty())
@@ -1484,6 +1667,21 @@ void PageView::flushStickerNudge()
     scheduleSettle();
 }
 
+void PageView::flushTextNudge()
+{
+    if (m_textNudgeTimer)
+        m_textNudgeTimer->stop();
+    if (m_nudgeTextId.isEmpty())
+        return;
+    const QString textId = m_nudgeTextId;
+    const TextItem start = m_nudgeStartText;
+    m_nudgeTextId.clear();
+    const std::optional<TextItem> live = liveText(textId);
+    if (live && onTextCommitted && !(*live == start))
+        onTextCommitted(*live, TextAction::Move);
+    scheduleSettle();
+}
+
 void PageView::flushWheelZoom()
 {
     if (m_zoomFrameId.isEmpty())
@@ -1506,10 +1704,11 @@ void PageView::flushWheelZoom()
 void PageView::clearSelection()
 {
     const bool hadSelection = !m_selectedId.isEmpty() || !m_selectedSlotId.isEmpty()
-        || !m_selectedStickerId.isEmpty();
+        || !m_selectedStickerId.isEmpty() || !m_selectedTextId.isEmpty();
     m_selectedId.clear();
     m_selectedSlotId.clear();
     m_selectedStickerId.clear();
+    m_selectedTextId.clear();
     if (!hadSelection)
         return;
     updateAccessibleDescription();
@@ -1520,6 +1719,8 @@ void PageView::clearSelection()
         onSlotSelectionChanged(QString());
     if (onStickerSelectionChanged)
         onStickerSelectionChanged(QString());
+    if (onTextSelectionChanged)
+        onTextSelectionChanged(QString());
 }
 
 void PageView::updateAccessibleDescription()
@@ -1537,6 +1738,20 @@ void PageView::updateAccessibleDescription()
             // is selected before the panel reads its controls.
             parts << QCoreApplication::translate("PhotoPrint",
                                                  "A matrica ki van jelölve.");
+        } else if (const TextItem *text = selectedTextPtr()) {
+            // A text is announced with its own first line, so a screen reader
+            // says which caption is selected instead of only that one is.
+            QString firstLine;
+            for (const QString &line : text->text.split(QLatin1Char('\n'))) {
+                if (!line.trimmed().isEmpty()) {
+                    firstLine = line.trimmed();
+                    break;
+                }
+            }
+            if (firstLine.size() > 40)
+                firstLine = firstLine.left(40) + QStringLiteral("…");
+            parts << QCoreApplication::translate("PhotoPrint", "A szöveg ki van jelölve: %1")
+                         .arg(firstLine);
         }
         // The background is a page-level property with its own panel, so a
         // screen reader should hear it the same way it hears the clipped-photo
@@ -1645,6 +1860,9 @@ Frame PageView::draggedFrame(const QPointF &pagePoint, bool fine) const
     case DragKind::MoveSticker:
     case DragKind::ResizeSticker:
     case DragKind::RotateSticker:
+    case DragKind::MoveText:
+    case DragKind::ResizeText:
+    case DragKind::RotateText:
         break;
     }
     // A move, resize or turn can never take a slotted photograph out of its
@@ -1751,7 +1969,8 @@ void PageView::paintEvent(QPaintEvent *)
 
     const Frame *frame = selectedFramePtr();
     const Sticker *layer = selectedStickerPtr();
-    if (!frame && !layer) {
+    const TextItem *textLayer = selectedTextPtr();
+    if (!frame && !layer && !textLayer) {
         drawFocusRing();
         return;
     }
@@ -1782,6 +2001,49 @@ void PageView::paintEvent(QPaintEvent *)
         const QPointF stickerCenter = pageToWidget().map(QPointF(layer->cx, layer->cy));
         const QPointF topMid = (stickerOutline.at(0) + stickerOutline.at(1)) / 2.0;
         QPointF direction = topMid - stickerCenter;
+        const double directionLength = std::hypot(direction.x(), direction.y());
+        if (directionLength > 0.0)
+            direction /= directionLength;
+        const QPointF rotate = topMid + direction * kRotateOffsetPx;
+        painter.setPen(QPen(handleOutline, 1.2));
+        painter.drawLine(topMid, rotate);
+        painter.setBrush(handleFill);
+        painter.drawEllipse(rotate, 5.0, 5.0);
+        drawFocusRing();
+        return;
+    }
+
+    // A text block's furniture: the same two-tone mark, on the rotated block
+    // rather than on a box, so the outline a person sees is the block that
+    // answers the pointer.
+    if (textLayer) {
+        const QPolygonF textOutline = textQuadWidgetFor(*textLayer);
+        if (textOutline.size() != 4) {
+            drawFocusRing();
+            return;
+        }
+        QPen underlay(QColor(255, 255, 255, 220));
+        underlay.setWidthF(3.6);
+        painter.setPen(underlay);
+        painter.setBrush(Qt::NoBrush);
+        painter.drawPolygon(textOutline);
+        QPen accent(palette().color(QPalette::Highlight));
+        accent.setWidthF(1.6);
+        painter.setPen(accent);
+        painter.drawPolygon(textOutline);
+
+        const QColor handleFill = palette().color(QPalette::Base);
+        const QColor handleOutline = handleOutlineColor();
+        painter.setPen(QPen(handleOutline, 1.2));
+        painter.setBrush(handleFill);
+        for (int i = 0; i < 4; ++i) {
+            const QPointF point = textOutline.at(i);
+            painter.drawRect(QRectF(point.x() - kHandleHalfPx, point.y() - kHandleHalfPx,
+                                    kHandleHalfPx * 2.0, kHandleHalfPx * 2.0));
+        }
+        const QPointF textCenter = pageToWidget().map(QPointF(textLayer->cx, textLayer->cy));
+        const QPointF topMid = (textOutline.at(0) + textOutline.at(1)) / 2.0;
+        QPointF direction = topMid - textCenter;
         const double directionLength = std::hypot(direction.x(), direction.y());
         if (directionLength > 0.0)
             direction /= directionLength;
@@ -2064,6 +2326,7 @@ void PageView::hideEvent(QHideEvent *event)
     // No mouse-up will arrive for a gesture that was running when we went away.
     flushWheelZoom();
     flushStickerNudge();
+    flushTextNudge();
     cancelInteraction(false);
 }
 
@@ -2074,6 +2337,7 @@ void PageView::focusOutEvent(QFocusEvent *event)
     // A wheel burst that lost focus still made its change: keep it, as one edit.
     flushWheelZoom();
     flushStickerNudge();
+    flushTextNudge();
     cancelInteraction(true);
 }
 
@@ -2130,6 +2394,7 @@ void PageView::mousePressEvent(QMouseEvent *event)
     // A new gesture ends a nudge and a wheel burst: their pending commits land
     // first, so the undo stack keeps one step per gesture.
     flushStickerNudge();
+    flushTextNudge();
     flushWheelZoom();
     const QPointF pagePoint = widgetToPage(event->position());
 
@@ -2170,31 +2435,80 @@ void PageView::mousePressEvent(QMouseEvent *event)
         }
     }
 
+    // The same for the selected text block.
+    const int textHandle = hitTextHandle(event->position());
+    if (textHandle >= 0) {
+        const TextItem *text = selectedTextPtr();
+        if (text) {
+            beginTextDrag(textHandle == 4 ? DragKind::RotateText : DragKind::ResizeText,
+                          textHandle, pagePoint, *text);
+            event->accept();
+            return;
+        }
+    }
+
     const Page *page = currentPage();
-    // Stickers are painted above the photographs, so they are hit first: a
-    // click on a sticker over a photo must select the sticker. The Fotók list
-    // is the way back to the photograph underneath.
-    const int stickerIndex = hitSticker(event->position());
-    if (stickerIndex >= 0 && page) {
-        const Sticker sticker = page->stickers.at(stickerIndex);
-        m_selectedId.clear();
-        m_selectedSlotId.clear();
-        setSelectedFrame(QString());
-        setSelectedSlot(QString());
-        setSelectedSticker(sticker.id);
-        if (onStickerSelectionChanged)
-            onStickerSelectionChanged(sticker.id);
-        beginStickerDrag(DragKind::MoveSticker, -1, pagePoint, sticker);
-        event->accept();
-        return;
+    // Overlays are painted above the photographs and share one stack, so the
+    // topmost one is hit first: a click on a caption over a sticker selects the
+    // caption, and a click on a sticker over a photo selects the sticker. The
+    // Fotók list is the way back to the photograph underneath.
+    if (page) {
+        const std::optional<OverlayGeometry::OverlayRef> hit =
+            OverlayGeometry::overlayAt(*page, pagePoint);
+        if (hit) {
+            if (hit->kind == OverlayGeometry::OverlayKind::Sticker) {
+                const Sticker sticker = page->stickers.at(hit->index);
+                m_selectedId.clear();
+                m_selectedSlotId.clear();
+                m_selectedTextId.clear();
+                setSelectedFrame(QString());
+                setSelectedSlot(QString());
+                setSelectedText(QString());
+                setSelectedSticker(sticker.id);
+                if (onStickerSelectionChanged)
+                    onStickerSelectionChanged(sticker.id);
+                if (onTextSelectionChanged)
+                    onTextSelectionChanged(QString());
+                beginStickerDrag(DragKind::MoveSticker, -1, pagePoint, sticker);
+            } else {
+                const QString textId = page->texts.at(hit->index).id;
+                m_selectedId.clear();
+                m_selectedSlotId.clear();
+                m_selectedStickerId.clear();
+                setSelectedFrame(QString());
+                setSelectedSlot(QString());
+                setSelectedSticker(QString());
+                setSelectedText(textId);
+                if (onStickerSelectionChanged)
+                    onStickerSelectionChanged(QString());
+                if (onTextSelectionChanged)
+                    onTextSelectionChanged(textId);
+                // The selection callback may have committed a pending editor
+                // change, which replaces the document: re-read the item before
+                // the drag starts, so the drag cannot revert the typed text.
+                if (const Page *fresh = currentPage()) {
+                    for (const TextItem &current : fresh->texts) {
+                        if (current.id == textId) {
+                            beginTextDrag(DragKind::MoveText, -1, pagePoint, current);
+                            break;
+                        }
+                    }
+                }
+            }
+            event->accept();
+            return;
+        }
     }
 
     const int index = hitFrame(event->position());
     if (index >= 0 && page) {
         const Frame frame = page->frames.at(index);
         setSelectedSticker(QString());
+        setSelectedText(QString());
         if (onStickerSelectionChanged)
             onStickerSelectionChanged(QString());
+        if (onTextSelectionChanged)
+            onTextSelectionChanged(QString());
         setSelectedFrame(frame.id);
         setSelectedSlot(frame.slotId);
         if (onSelectionChanged)
@@ -2215,8 +2529,11 @@ void PageView::mousePressEvent(QMouseEvent *event)
         if (const Frame *occupant = SlotGeometry::frameInSlot(*page, slot.id)) {
             const Frame frame = *occupant;
             setSelectedSticker(QString());
+            setSelectedText(QString());
             if (onStickerSelectionChanged)
                 onStickerSelectionChanged(QString());
+            if (onTextSelectionChanged)
+                onTextSelectionChanged(QString());
             setSelectedFrame(frame.id);
             setSelectedSlot(slot.id);
             if (onSelectionChanged)
@@ -2226,14 +2543,18 @@ void PageView::mousePressEvent(QMouseEvent *event)
             m_selectedId.clear();
             m_selectedSlotId = slot.id;
             m_selectedStickerId.clear();
+            m_selectedTextId.clear();
             setSelectedFrame(QString());
             setSelectedSlot(slot.id);
             setSelectedSticker(QString());
+            setSelectedText(QString());
             update();
             if (onSelectionChanged)
                 onSelectionChanged(QString());
             if (onStickerSelectionChanged)
                 onStickerSelectionChanged(QString());
+            if (onTextSelectionChanged)
+                onTextSelectionChanged(QString());
             if (onSlotSelectionChanged)
                 onSlotSelectionChanged(slot.id);
         }
@@ -2271,6 +2592,11 @@ void PageView::mouseMoveEvent(QMouseEvent *event)
         updateLiveSticker(draggedSticker(pagePoint, fine));
         return;
     }
+    if (m_drag.kind == DragKind::MoveText || m_drag.kind == DragKind::ResizeText
+        || m_drag.kind == DragKind::RotateText) {
+        updateLiveText(draggedText(pagePoint, fine));
+        return;
+    }
     const Frame frame = draggedFrame(pagePoint, fine);
     if (LayoutEngine::validFrame(frame))
         updateLiveFrame(frame);
@@ -2294,6 +2620,7 @@ void PageView::mouseReleaseEvent(QMouseEvent *event)
     const bool changed = m_drag.changed;
     const DragKind kind = m_drag.kind;
     const Sticker stickerBefore = m_drag.startSticker;
+    const TextItem textBefore = m_drag.startText;
     m_drag = DragState{};
     setCursor(Qt::ArrowCursor);
     if (changed) {
@@ -2308,6 +2635,17 @@ void PageView::mouseReleaseEvent(QMouseEvent *event)
                         : (kind == DragKind::RotateSticker ? StickerAction::Rotate
                                                            : StickerAction::Move);
                     onStickerCommitted(*sticker, action);
+                }
+            }
+        } else if (kind == DragKind::MoveText || kind == DragKind::ResizeText
+                   || kind == DragKind::RotateText) {
+            if (const std::optional<TextItem> text = liveText(textBefore.id)) {
+                if (onTextCommitted) {
+                    const TextAction action = kind == DragKind::ResizeText
+                        ? TextAction::Resize
+                        : (kind == DragKind::RotateText ? TextAction::Rotate
+                                                        : TextAction::Move);
+                    onTextCommitted(*text, action);
                 }
             }
         } else {
@@ -2379,6 +2717,7 @@ void PageView::keyPressEvent(QKeyEvent *event)
 {
     const Frame *frame = selectedFramePtr();
     const Sticker *sticker = selectedStickerPtr();
+    const TextItem *text = selectedTextPtr();
 
     // Delete and Escape act on a selected cell even when the cell is empty, so
     // a layout can be inspected without a photograph being selected.
@@ -2388,6 +2727,12 @@ void PageView::keyPressEvent(QKeyEvent *event)
         if (sticker && onStickerDeleteRequested) {
             flushStickerNudge();
             onStickerDeleteRequested(sticker->id);
+            event->accept();
+            return;
+        }
+        if (text && onTextDeleteRequested) {
+            flushTextNudge();
+            onTextDeleteRequested(text->id);
             event->accept();
             return;
         }
@@ -2405,6 +2750,7 @@ void PageView::keyPressEvent(QKeyEvent *event)
         return;
     case Qt::Key_Escape:
         flushStickerNudge();
+        flushTextNudge();
         if (m_cropMode) {
             m_cropMode = false;
             if (onCropModeExited)
@@ -2422,6 +2768,11 @@ void PageView::keyPressEvent(QKeyEvent *event)
             if (onCropModeExited)
                 onCropModeExited();
             update();
+        } else if (text && onTextEditRequested) {
+            // Enter on a selected caption is the keyboard route to its editor,
+            // the same dialog a double click opens.
+            flushTextNudge();
+            onTextEditRequested(text->id);
         }
         event->accept();
         return;
@@ -2429,7 +2780,7 @@ void PageView::keyPressEvent(QKeyEvent *event)
         break;
     }
 
-    if (!frame && !sticker) {
+    if (!frame && !sticker && !text) {
         QWidget::keyPressEvent(event);
         return;
     }
@@ -2470,6 +2821,41 @@ void PageView::keyPressEvent(QKeyEvent *event)
         updateLiveSticker(moved);
         if (m_stickerNudgeTimer)
             m_stickerNudgeTimer->start();
+        event->accept();
+        return;
+    }
+
+    if (text) {
+        // A text nudge is the same burst: the block follows every key and one
+        // edit lands when the keys stop.
+        QPointF delta;
+        switch (event->key()) {
+        case Qt::Key_Left:
+            delta.setX(-step);
+            break;
+        case Qt::Key_Right:
+            delta.setX(step);
+            break;
+        case Qt::Key_Up:
+            delta.setY(-step);
+            break;
+        case Qt::Key_Down:
+            delta.setY(step);
+            break;
+        default:
+            QWidget::keyPressEvent(event);
+            return;
+        }
+        const TextItem moved = OverlayGeometry::movedText(*text, delta, pageMm());
+        if (m_nudgeTextId != text->id) {
+            m_nudgeStartText = *text;
+            m_nudgeTextId = text->id;
+        }
+        m_nudgePulse.start();
+        scheduleSettle();
+        updateLiveText(moved);
+        if (m_textNudgeTimer)
+            m_textNudgeTimer->start();
         event->accept();
         return;
     }
@@ -2524,11 +2910,32 @@ void PageView::mouseDoubleClickEvent(QMouseEvent *event)
         update();
         return;
     }
-    // A double click on a sticker is a second click on the same overlay, not a
-    // request to crop the photograph underneath it.
-    if (hitSticker(event->position()) >= 0) {
-        event->accept();
-        return;
+    // A double click on an overlay is a second click on the same layer, not a
+    // request to crop the photograph underneath it. On a text it is also the
+    // way into the editor.
+    if (const Page *page = currentPage()) {
+        const std::optional<OverlayGeometry::OverlayRef> hit =
+            OverlayGeometry::overlayAt(*page, widgetToPage(event->position()));
+        if (hit) {
+            if (hit->kind == OverlayGeometry::OverlayKind::Text) {
+                const TextItem text = page->texts.at(hit->index);
+                m_selectedId.clear();
+                m_selectedSlotId.clear();
+                m_selectedStickerId.clear();
+                setSelectedFrame(QString());
+                setSelectedSlot(QString());
+                setSelectedSticker(QString());
+                setSelectedText(text.id);
+                if (onStickerSelectionChanged)
+                    onStickerSelectionChanged(QString());
+                if (onTextSelectionChanged)
+                    onTextSelectionChanged(text.id);
+                if (onTextEditRequested)
+                    onTextEditRequested(text.id);
+            }
+            event->accept();
+            return;
+        }
     }
     const Page *page = currentPage();
     if (!page) {
@@ -3506,7 +3913,7 @@ void MainWindow::buildUi()
     auto *stickerEmptyLayout = new QVBoxLayout(m_stickerEmptyPanel);
     stickerEmptyLayout->setContentsMargins(0, 0, 0, 0);
     m_stickerEmptyHint = new QLabel(
-        QCoreApplication::translate("PhotoPrint", "Még nincs matrica a lapon."),
+        QCoreApplication::translate("PhotoPrint", "Még nincs matrica vagy szöveg a lapon."),
         m_stickerEmptyPanel);
     m_stickerEmptyHint->setObjectName(QStringLiteral("stickerEmptyHint"));
     m_stickerEmptyHint->setWordWrap(true);
@@ -3637,8 +4044,233 @@ void MainWindow::buildUi()
 
     elemLayout->addWidget(m_stickerPanel);
 
-    // The keyboard-only route to an existing overlay: cycling the paint order.
-    // Always visible, so a sticker can be stepped through without deselecting.
+    // --- Elem: the text half --------------------------------------------------
+    // The add button is the tab's way into a caption, and it stays visible while
+    // a text is selected, exactly like the sticker palette.
+    m_textAddPanel = new QWidget(elemTab);
+    m_textAddPanel->setObjectName(QStringLiteral("textAddPanel"));
+    auto *textAddLayout = new QVBoxLayout(m_textAddPanel);
+    textAddLayout->setContentsMargins(0, 0, 0, 0);
+    auto *textAddTitle =
+        new QLabel(QCoreApplication::translate("PhotoPrint", "Szöveg"), m_textAddPanel);
+    textAddTitle->setObjectName(QStringLiteral("textAddTitle"));
+    textAddTitle->setWordWrap(true);
+    QFont textAddFont = textAddTitle->font();
+    textAddFont.setWeight(QFont::DemiBold);
+    textAddTitle->setFont(textAddFont);
+    textAddLayout->addWidget(textAddTitle);
+    m_addTextButton =
+        new QPushButton(QCoreApplication::translate("PhotoPrint", "Szöveg hozzáadása…"),
+                        m_textAddPanel);
+    m_addTextButton->setObjectName(QStringLiteral("addTextButton"));
+    m_addTextButton->setAccessibleName(
+        QCoreApplication::translate("PhotoPrint", "Szöveg hozzáadása…"));
+    m_addTextButton->setMinimumHeight(32);
+    textAddLayout->addWidget(m_addTextButton);
+    connect(m_addTextButton, &QPushButton::clicked, this, &MainWindow::addText);
+    elemLayout->addWidget(m_textAddPanel);
+
+    // The selected text's own controls. Each one writes the whole page as one
+    // edit, so one action is one undo step, exactly like the sticker panel.
+    m_textPanel = new QWidget(elemTab);
+    m_textPanel->setObjectName(QStringLiteral("textPanel"));
+    auto *textLayout = new QVBoxLayout(m_textPanel);
+    textLayout->setContentsMargins(0, 0, 0, 0);
+
+    auto *textTitle =
+        new QLabel(QCoreApplication::translate("PhotoPrint", "Szöveg"), m_textPanel);
+    textTitle->setObjectName(QStringLiteral("textTitle"));
+    textTitle->setWordWrap(true);
+    QFont textTitleFont = textTitle->font();
+    textTitleFont.setWeight(QFont::DemiBold);
+    textTitle->setFont(textTitleFont);
+    textLayout->addWidget(textTitle);
+
+    m_textEditor = new QPlainTextEdit(m_textPanel);
+    m_textEditor->setObjectName(QStringLiteral("textEditor"));
+    m_textEditor->setAccessibleName(QCoreApplication::translate("PhotoPrint", "A szöveg"));
+    m_textEditor->setMinimumHeight(64);
+    m_textEditor->setMaximumHeight(96);
+    m_textEditor->setTabChangesFocus(true);
+    m_textEditor->installEventFilter(this);
+    textLayout->addWidget(m_textEditor);
+    connect(m_textEditor, &QPlainTextEdit::textChanged, this,
+            &MainWindow::textContentChanged);
+
+    auto *textFontLabel =
+        new QLabel(QCoreApplication::translate("PhotoPrint", "Betűtípus"), m_textPanel);
+    textFontLabel->setWordWrap(true);
+    textLayout->addWidget(textFontLabel);
+    m_textFontCombo = new QFontComboBox(m_textPanel);
+    m_textFontCombo->setObjectName(QStringLiteral("textFontCombo"));
+    m_textFontCombo->setAccessibleName(textFontLabel->text());
+    textLayout->addWidget(m_textFontCombo);
+    connect(m_textFontCombo, &QFontComboBox::currentFontChanged, this,
+            [this] { textFontChanged(0); });
+
+    auto *textSizeLabel =
+        new QLabel(QCoreApplication::translate("PhotoPrint", "Betűméret"), m_textPanel);
+    textSizeLabel->setWordWrap(true);
+    textLayout->addWidget(textSizeLabel);
+    m_textSizeSpin = new QDoubleSpinBox(m_textPanel);
+    m_textSizeSpin->setObjectName(QStringLiteral("textSizeSpin"));
+    m_textSizeSpin->setAccessibleName(textSizeLabel->text());
+    m_textSizeSpin->setDecimals(1);
+    m_textSizeSpin->setRange(kMinFontPt, kMaxFontPt);
+    m_textSizeSpin->setSingleStep(1.0);
+    m_textSizeSpin->setSuffix(QStringLiteral(" pt"));
+    textLayout->addWidget(m_textSizeSpin);
+    connect(m_textSizeSpin, &QDoubleSpinBox::editingFinished, this,
+            &MainWindow::textSizeChanged);
+
+    // The style toggles and the three alignments share one row: they are the
+    // same kind of choice and the panel must stay short at a large font.
+    auto *textStyleRow = new QHBoxLayout;
+    const auto makeTextToggle = [this](const QString &text, const QString &name,
+                                       const QString &accessible) {
+        auto *button = new QToolButton(m_textPanel);
+        button->setObjectName(name);
+        button->setText(text);
+        button->setCheckable(true);
+        button->setAccessibleName(accessible);
+        button->setToolTip(accessible);
+        button->setMinimumSize(30, 26);
+        return button;
+    };
+    m_textBoldButton = makeTextToggle(QStringLiteral("B"), QStringLiteral("textBoldButton"),
+                                      QCoreApplication::translate("PhotoPrint", "Félkövér"));
+    m_textItalicButton = makeTextToggle(QStringLiteral("I"), QStringLiteral("textItalicButton"),
+                                        QCoreApplication::translate("PhotoPrint", "Dőlt"));
+    m_textUnderlineButton =
+        makeTextToggle(QStringLiteral("U"), QStringLiteral("textUnderlineButton"),
+                       QCoreApplication::translate("PhotoPrint", "Aláhúzott"));
+    m_textAlignLeftButton =
+        makeTextToggle(QStringLiteral("‹"), QStringLiteral("textAlignLeftButton"),
+                       QCoreApplication::translate("PhotoPrint", "Balra igazítás"));
+    m_textAlignCenterButton =
+        makeTextToggle(QStringLiteral("≡"), QStringLiteral("textAlignCenterButton"),
+                       QCoreApplication::translate("PhotoPrint", "Középre igazítás"));
+    m_textAlignRightButton =
+        makeTextToggle(QStringLiteral("›"), QStringLiteral("textAlignRightButton"),
+                       QCoreApplication::translate("PhotoPrint", "Jobbra igazítás"));
+    textStyleRow->addWidget(m_textBoldButton);
+    textStyleRow->addWidget(m_textItalicButton);
+    textStyleRow->addWidget(m_textUnderlineButton);
+    textStyleRow->addSpacing(8);
+    textStyleRow->addWidget(m_textAlignLeftButton);
+    textStyleRow->addWidget(m_textAlignCenterButton);
+    textStyleRow->addWidget(m_textAlignRightButton);
+    textStyleRow->addStretch(1);
+    textLayout->addLayout(textStyleRow);
+    connect(m_textBoldButton, &QToolButton::toggled, this, &MainWindow::textStyleChanged);
+    connect(m_textItalicButton, &QToolButton::toggled, this, &MainWindow::textStyleChanged);
+    connect(m_textUnderlineButton, &QToolButton::toggled, this, &MainWindow::textStyleChanged);
+    connect(m_textAlignLeftButton, &QToolButton::clicked, this,
+            [this] { applyTextAlign(TextAlign::Left); });
+    connect(m_textAlignCenterButton, &QToolButton::clicked, this,
+            [this] { applyTextAlign(TextAlign::Center); });
+    connect(m_textAlignRightButton, &QToolButton::clicked, this,
+            [this] { applyTextAlign(TextAlign::Right); });
+
+    auto *textColorLabel =
+        new QLabel(QCoreApplication::translate("PhotoPrint", "Szín"), m_textPanel);
+    textColorLabel->setWordWrap(true);
+    textLayout->addWidget(textColorLabel);
+    m_textColorButton = new QPushButton(m_textPanel);
+    m_textColorButton->setObjectName(QStringLiteral("textColorButton"));
+    m_textColorButton->setAccessibleName(textColorLabel->text());
+    m_textColorButton->setToolTip(
+        QCoreApplication::translate("PhotoPrint", "Válassz színt a szövegnek."));
+    m_textColorButton->setFixedHeight(30);
+    textLayout->addWidget(m_textColorButton);
+    connect(m_textColorButton, &QPushButton::clicked, this, &MainWindow::chooseTextColor);
+
+    auto *textSpacingLabel =
+        new QLabel(QCoreApplication::translate("PhotoPrint", "Sormagasság"), m_textPanel);
+    textSpacingLabel->setWordWrap(true);
+    textLayout->addWidget(textSpacingLabel);
+    m_textSpacingSpin = new QDoubleSpinBox(m_textPanel);
+    m_textSpacingSpin->setObjectName(QStringLiteral("textSpacingSpin"));
+    m_textSpacingSpin->setAccessibleName(textSpacingLabel->text());
+    m_textSpacingSpin->setDecimals(0);
+    m_textSpacingSpin->setRange(kMinLineSpacing * 100.0, kMaxLineSpacing * 100.0);
+    m_textSpacingSpin->setSingleStep(5.0);
+    m_textSpacingSpin->setSuffix(QStringLiteral(" %"));
+    textLayout->addWidget(m_textSpacingSpin);
+    connect(m_textSpacingSpin, &QDoubleSpinBox::editingFinished, this,
+            &MainWindow::textSpacingChanged);
+
+    auto *textOpacityLabel =
+        new QLabel(QCoreApplication::translate("PhotoPrint", "Fedettség"), m_textPanel);
+    textOpacityLabel->setWordWrap(true);
+    textLayout->addWidget(textOpacityLabel);
+    m_textOpacitySlider = new QSlider(Qt::Horizontal, m_textPanel);
+    m_textOpacitySlider->setObjectName(QStringLiteral("textOpacitySlider"));
+    m_textOpacitySlider->setAccessibleName(textOpacityLabel->text());
+    m_textOpacitySlider->setRange(0, 100);
+    m_textOpacitySlider->setTracking(true);
+    textLayout->addWidget(m_textOpacitySlider);
+    m_textOpacityValue = new QLabel(QStringLiteral("100 %"), m_textPanel);
+    m_textOpacityValue->setObjectName(QStringLiteral("textOpacityValue"));
+    markSecondaryText(m_textOpacityValue);
+    textLayout->addWidget(m_textOpacityValue);
+    connect(m_textOpacitySlider, &QSlider::valueChanged, this,
+            &MainWindow::textOpacityChanged);
+    connect(m_textOpacitySlider, &QSlider::sliderReleased, this,
+            &MainWindow::flushTextOpacity);
+    if (!m_textOpacityTimer) {
+        m_textOpacityTimer = new QTimer(this);
+        m_textOpacityTimer->setSingleShot(true);
+        m_textOpacityTimer->setInterval(kStyleDebounceMs);
+        connect(m_textOpacityTimer, &QTimer::timeout, this, &MainWindow::flushTextOpacity);
+    }
+    m_pendingTextOpacity.reset();
+
+    auto *textOrderRow = new QHBoxLayout;
+    m_textRaiseButton =
+        new QPushButton(QCoreApplication::translate("PhotoPrint", "Előrébb"), m_textPanel);
+    m_textRaiseButton->setObjectName(QStringLiteral("textRaiseButton"));
+    m_textLowerButton =
+        new QPushButton(QCoreApplication::translate("PhotoPrint", "Hátrébb"), m_textPanel);
+    m_textLowerButton->setObjectName(QStringLiteral("textLowerButton"));
+    textOrderRow->addWidget(m_textRaiseButton);
+    textOrderRow->addWidget(m_textLowerButton);
+    textLayout->addLayout(textOrderRow);
+    connect(m_textRaiseButton, &QPushButton::clicked, this,
+            [this] { reorderOverlayLayer(1); });
+    connect(m_textLowerButton, &QPushButton::clicked, this,
+            [this] { reorderOverlayLayer(-1); });
+
+    m_textDeleteButton =
+        new QPushButton(QCoreApplication::translate("PhotoPrint", "Törlés"), m_textPanel);
+    m_textDeleteButton->setObjectName(QStringLiteral("textDeleteButton"));
+    textLayout->addWidget(m_textDeleteButton);
+    connect(m_textDeleteButton, &QPushButton::clicked, this,
+            &MainWindow::deleteSelectedText);
+
+    m_textFontHint = new QLabel(
+        QCoreApplication::translate(
+            "PhotoPrint",
+            "Ez a betűtípus ezen a gépen nincs meg, helyette a rendszer betűtípusa látszik."),
+        m_textPanel);
+    m_textFontHint->setObjectName(QStringLiteral("textFontHint"));
+    m_textFontHint->setWordWrap(true);
+    markSecondaryText(m_textFontHint);
+    textLayout->addWidget(m_textFontHint);
+
+    m_textOverflowHint = new QLabel(
+        QCoreApplication::translate("PhotoPrint", "A szöveg egy része lemarad a lapról."),
+        m_textPanel);
+    m_textOverflowHint->setObjectName(QStringLiteral("textOverflowHint"));
+    m_textOverflowHint->setWordWrap(true);
+    markSecondaryText(m_textOverflowHint);
+    textLayout->addWidget(m_textOverflowHint);
+
+    elemLayout->addWidget(m_textPanel);
+
+    // The keyboard-only route to an existing overlay: cycling the shared paint
+    // order. Always visible and always enabled, so a sticker or a caption can be
+    // stepped through without deselecting.
     auto *stickerNavRow = new QHBoxLayout;
     m_previousStickerButton =
         new QPushButton(QCoreApplication::translate("PhotoPrint", "Előző elem"), elemTab);
@@ -3650,11 +4282,12 @@ void MainWindow::buildUi()
     stickerNavRow->addWidget(m_nextStickerButton);
     elemLayout->addLayout(stickerNavRow);
     connect(m_previousStickerButton, &QPushButton::clicked, this,
-            [this] { cycleSticker(-1); });
-    connect(m_nextStickerButton, &QPushButton::clicked, this, [this] { cycleSticker(1); });
+            [this] { cycleOverlay(-1); });
+    connect(m_nextStickerButton, &QPushButton::clicked, this, [this] { cycleOverlay(1); });
 
     auto *stickerHint = new QLabel(
-        QCoreApplication::translate("PhotoPrint", "A matrica a fotók fölött látszik."),
+        QCoreApplication::translate("PhotoPrint",
+                                    "A matricák és a szövegek a fotók fölött látszanak."),
         elemTab);
     stickerHint->setObjectName(QStringLiteral("stickerHint"));
     stickerHint->setWordWrap(true);
@@ -4038,6 +4671,36 @@ void MainWindow::buildUi()
         Q_UNUSED(stickerId)
         deleteSelectedSticker();
     };
+    m_pageView->onTextSelectionChanged = [this](const QString &textId) {
+        selectText(textId);
+    };
+    m_pageView->onTextCommitted = [this](const TextItem &text, PageView::TextAction action) {
+        // The gesture names the undo step; the page is still the source of what
+        // is on it, so the list is taken from the document and one entry is
+        // replaced.
+        const QString label = action == PageView::TextAction::Resize
+            ? QCoreApplication::translate("PhotoPrint", "Szöveg átméretezése")
+            : (action == PageView::TextAction::Rotate
+                   ? QCoreApplication::translate("PhotoPrint", "Szöveg forgatása")
+                   : QCoreApplication::translate("PhotoPrint", "Szöveg mozgatása"));
+        const DocumentSnapshot document = m_controller.document();
+        if (document.pages.isEmpty())
+            return;
+        QList<TextItem> texts = document.pages.at(document.currentPage).texts;
+        for (int i = 0; i < texts.size(); ++i) {
+            if (texts.at(i).id == text.id)
+                texts[i] = text;
+        }
+        publishTexts(texts, label);
+    };
+    m_pageView->onTextDeleteRequested = [this](const QString &textId) {
+        Q_UNUSED(textId)
+        deleteSelectedText();
+    };
+    m_pageView->onTextEditRequested = [this](const QString &textId) {
+        Q_UNUSED(textId)
+        editSelectedText();
+    };
     m_pageView->onFrameCommitted = [this](const Frame &frame) {
         m_controller.apply(FrameChange{frame.id, frame});
     };
@@ -4249,6 +4912,10 @@ void MainWindow::buildMenus()
         insertMenu->addAction(QCoreApplication::translate("PhotoPrint", "Matrica…"));
     stickerAction->setObjectName(QStringLiteral("insertStickerAction"));
     connect(stickerAction, &QAction::triggered, this, &MainWindow::addSticker);
+    QAction *textAction =
+        insertMenu->addAction(QCoreApplication::translate("PhotoPrint", "Szöveg…"));
+    textAction->setObjectName(QStringLiteral("insertTextAction"));
+    connect(textAction, &QAction::triggered, this, &MainWindow::addText);
 
     buildLanguageMenu();
 
@@ -4312,6 +4979,7 @@ void MainWindow::rebuildUi()
     // which inspector tab was open and whether it was a manual choice.
     const QString selected = m_selectedId;
     const QString selectedSticker = m_selectedSticker;
+    const QString selectedText = m_selectedText;
     const bool dirty = m_dirty;
     const int copies = m_copiesSpin ? m_copiesSpin->value() : 1;
     const double zoom = m_pageView ? m_pageView->viewZoom() : 1.0;
@@ -4378,6 +5046,28 @@ void MainWindow::rebuildUi()
     m_stickerRelinkButton = nullptr;
     m_stickerNotice = nullptr;
     m_stickerPreviewPath.clear();
+    m_textAddPanel = nullptr;
+    m_textPanel = nullptr;
+    m_textEditor = nullptr;
+    m_textFontCombo = nullptr;
+    m_textSizeSpin = nullptr;
+    m_textBoldButton = nullptr;
+    m_textItalicButton = nullptr;
+    m_textUnderlineButton = nullptr;
+    m_textAlignLeftButton = nullptr;
+    m_textAlignCenterButton = nullptr;
+    m_textAlignRightButton = nullptr;
+    m_textColorButton = nullptr;
+    m_textSpacingSpin = nullptr;
+    m_textOpacitySlider = nullptr;
+    m_textOpacityValue = nullptr;
+    m_textRaiseButton = nullptr;
+    m_textLowerButton = nullptr;
+    m_textDeleteButton = nullptr;
+    m_addTextButton = nullptr;
+    m_textFontHint = nullptr;
+    m_textOverflowHint = nullptr;
+    m_textEditorDirty = false;
     m_slotSizeValue = nullptr;
     m_slotPositionValue = nullptr;
     m_slotStateValue = nullptr;
@@ -4391,6 +5081,7 @@ void MainWindow::rebuildUi()
 
     m_selectedId = selected;
     m_selectedSticker = selectedSticker;
+    m_selectedText = selectedText;
     buildUi();
     buildMenus();
 
@@ -4952,6 +5643,21 @@ void MainWindow::onDocumentChanged()
         if (!found)
             m_selectedSticker.clear();
     }
+    // A text that left the document (an undo, a page switch, an emptied editor)
+    // cannot stay selected either.
+    if (!m_selectedText.isEmpty()) {
+        bool found = false;
+        if (page) {
+            for (const TextItem &text : page->texts) {
+                if (text.id == m_selectedText) {
+                    found = true;
+                    break;
+                }
+            }
+        }
+        if (!found)
+            m_selectedText.clear();
+    }
 
     // A frame that left the document cannot be "not found" any more.
     for (auto it = m_unavailableFrames.begin(); it != m_unavailableFrames.end();) {
@@ -4963,17 +5669,18 @@ void MainWindow::onDocumentChanged()
     m_pageView->setSelectedFrame(m_selectedId);
     m_pageView->setSelectedSlot(m_selectedSlotId);
     m_pageView->setSelectedSticker(m_selectedSticker);
+    m_pageView->setSelectedText(m_selectedText);
     m_pageView->setUnavailableFrames(m_unavailableFrames);
     m_pageView->setMissingStickers(m_missingStickers);
 
     // A laid-out page carries its own drop hints on the cells; the page-wide
     // line would draw a second instruction over them. A page that already has
-    // a sticker is not empty either: the plate would cover the layer and tell
-    // the user to add photographs on top of it.
+    // a sticker or a caption is not empty either: the plate would cover the
+    // layer and tell the user to add photographs on top of it.
     m_pageView->setEmptyHint(
         !page || hasLayout
             ? QString()
-            : (page->frames.isEmpty() && page->stickers.isEmpty()
+            : (page->frames.isEmpty() && page->stickers.isEmpty() && page->texts.isEmpty()
                    ? QCoreApplication::translate(
                          "PhotoPrint",
                          "Húzd ide a fotókat, vagy válaszd a Fotók hozzáadása gombot.")
@@ -5591,14 +6298,18 @@ void MainWindow::selectFrame(const QString &frameId, bool fromList)
     const DocumentSnapshot document = m_controller.document();
     const Frame *frame = frameId.isEmpty() ? nullptr : findFrame(document, frameId);
     const QString slotId = frame ? frame->slotId : QString();
-    const bool stickerChanged = !m_selectedSticker.isEmpty();
+    const bool overlayChanged = !m_selectedSticker.isEmpty() || !m_selectedText.isEmpty();
+    if (overlayChanged)
+        commitTextEditor();
     m_selectedSticker.clear();
-    if (m_selectedId == frameId && m_selectedSlotId == slotId && !stickerChanged)
+    m_selectedText.clear();
+    if (m_selectedId == frameId && m_selectedSlotId == slotId && !overlayChanged)
         return;
     m_selectedId = frameId;
     m_selectedSlotId = slotId;
     if (m_pageView) {
         m_pageView->setSelectedSticker(QString());
+        m_pageView->setSelectedText(QString());
         m_pageView->setSelectedFrame(frameId);
         m_pageView->setSelectedSlot(slotId);
     }
@@ -5612,16 +6323,20 @@ void MainWindow::selectFrame(const QString &frameId, bool fromList)
 
 void MainWindow::selectSlot(const QString &slotId)
 {
-    // A cell and a sticker are exclusive selections: the cell panel only talks
+    // A cell and an overlay are exclusive selections: the cell panel only talks
     // about a section that is really the current one.
-    const bool stickerChanged = !m_selectedSticker.isEmpty();
+    const bool overlayChanged = !m_selectedSticker.isEmpty() || !m_selectedText.isEmpty();
+    if (overlayChanged)
+        commitTextEditor();
     m_selectedSticker.clear();
+    m_selectedText.clear();
     if (slotId.isEmpty()) {
-        if (m_selectedSlotId.isEmpty() && !stickerChanged)
+        if (m_selectedSlotId.isEmpty() && !overlayChanged)
             return;
         m_selectedSlotId.clear();
         if (m_pageView) {
             m_pageView->setSelectedSticker(QString());
+            m_pageView->setSelectedText(QString());
             m_pageView->setSelectedSlot(QString());
         }
         syncFrameControls();
@@ -5638,12 +6353,13 @@ void MainWindow::selectSlot(const QString &slotId)
         selectFrame(occupant->id, false);
         return;
     }
-    if (m_selectedSlotId == slotId && m_selectedId.isEmpty() && !stickerChanged)
+    if (m_selectedSlotId == slotId && m_selectedId.isEmpty() && !overlayChanged)
         return;
     m_selectedSlotId = slotId;
     m_selectedId.clear();
     if (m_pageView) {
         m_pageView->setSelectedSticker(QString());
+        m_pageView->setSelectedText(QString());
         m_pageView->setSelectedFrame(QString());
         m_pageView->setSelectedSlot(slotId);
     }
@@ -5689,18 +6405,23 @@ std::optional<Sticker> MainWindow::selectedSticker() const
 void MainWindow::selectSticker(const QString &stickerId)
 {
     const bool sameSticker = m_selectedSticker == stickerId;
-    const bool otherSelection = !m_selectedId.isEmpty() || !m_selectedSlotId.isEmpty();
+    const bool otherSelection = !m_selectedId.isEmpty() || !m_selectedSlotId.isEmpty()
+        || !m_selectedText.isEmpty();
+    if (!sameSticker)
+        commitTextEditor();
     m_selectedSticker = stickerId;
     if (!stickerId.isEmpty()) {
         // An overlay and a photograph are exclusive selections: the picture's
         // crop controls must never act on the photo under the sticker.
         m_selectedId.clear();
         m_selectedSlotId.clear();
+        m_selectedText.clear();
     }
     if (m_pageView) {
         if (!stickerId.isEmpty()) {
             m_pageView->setSelectedFrame(QString());
             m_pageView->setSelectedSlot(QString());
+            m_pageView->setSelectedText(QString());
         }
         m_pageView->setSelectedSticker(stickerId);
         if (!stickerId.isEmpty() && m_cropButton->isChecked()) {
@@ -5715,6 +6436,499 @@ void MainWindow::selectSticker(const QString &stickerId)
         return;
     syncListSelection();
     syncFrameControls();
+}
+
+std::optional<TextItem> MainWindow::selectedText() const
+{
+    if (m_selectedText.isEmpty())
+        return std::nullopt;
+    const DocumentSnapshot document = m_controller.document();
+    if (document.pages.isEmpty())
+        return std::nullopt;
+    const Page &page = document.pages.at(document.currentPage);
+    for (const TextItem &text : page.texts) {
+        if (text.id == m_selectedText)
+            return text;
+    }
+    return std::nullopt;
+}
+
+void MainWindow::selectText(const QString &textId)
+{
+    const bool sameText = m_selectedText == textId;
+    const bool otherSelection = !m_selectedId.isEmpty() || !m_selectedSlotId.isEmpty()
+        || !m_selectedSticker.isEmpty();
+    // A pending editor change belongs to the item it was typed into, so it lands
+    // before the selection moves.
+    if (!sameText)
+        commitTextEditor();
+    m_selectedText = textId;
+    if (!textId.isEmpty()) {
+        m_selectedId.clear();
+        m_selectedSlotId.clear();
+        m_selectedSticker.clear();
+    }
+    if (m_pageView) {
+        if (!textId.isEmpty()) {
+            m_pageView->setSelectedFrame(QString());
+            m_pageView->setSelectedSlot(QString());
+            m_pageView->setSelectedSticker(QString());
+        }
+        m_pageView->setSelectedText(textId);
+        if (!textId.isEmpty() && m_cropButton->isChecked()) {
+            m_cropButton->blockSignals(true);
+            m_cropButton->setChecked(false);
+            m_cropButton->blockSignals(false);
+            m_pageView->setCropMode(false);
+            m_cropButton->setText(QCoreApplication::translate("PhotoPrint", "Kivágás"));
+        }
+    }
+    if (sameText && !otherSelection)
+        return;
+    syncListSelection();
+    syncFrameControls();
+}
+
+bool MainWindow::publishTexts(const QList<TextItem> &texts, const QString &actionText,
+                              const QString &selectId)
+{
+    const DocumentSnapshot document = m_controller.document();
+    if (document.pages.isEmpty())
+        return false;
+    Page page = document.pages.at(document.currentPage);
+    if (page.texts == texts && selectId.isEmpty())
+        return true;
+    page.texts = texts;
+    const auto published = m_controller.publishPage(page, actionText);
+    if (!published) {
+        showProblem(published.error().message);
+        syncTextPanel();
+        return false;
+    }
+    if (!selectId.isEmpty())
+        selectText(selectId);
+    return true;
+}
+
+bool MainWindow::addTextForTest(const TextItem &item)
+{
+    return addTextWithItem(item);
+}
+
+bool MainWindow::addTextWithItem(const TextItem &item)
+{
+    const DocumentSnapshot document = m_controller.document();
+    if (document.pages.isEmpty())
+        return false;
+    const Page &page = document.pages.at(document.currentPage);
+    if (page.texts.size() >= kMaxTextsPerPage) {
+        showProblem(QCoreApplication::translate(
+                        "PhotoPrint", "Egy lapon legfeljebb %1 szöveg lehet.")
+                        .arg(kMaxTextsPerPage));
+        return false;
+    }
+    if (item.text.trimmed().isEmpty())
+        return false;
+    QList<TextItem> texts = page.texts;
+    texts.append(item);
+    return publishTexts(texts, QCoreApplication::translate("PhotoPrint", "Szöveg"),
+                        item.id);
+}
+
+void MainWindow::addText()
+{
+    const DocumentSnapshot document = m_controller.document();
+    if (document.pages.isEmpty())
+        return;
+    const Page &page = document.pages.at(document.currentPage);
+    if (page.texts.size() >= kMaxTextsPerPage) {
+        showProblem(QCoreApplication::translate(
+                        "PhotoPrint", "Egy lapon legfeljebb %1 szöveg lehet.")
+                        .arg(kMaxTextsPerPage));
+        return;
+    }
+
+    // Default placement: centred on the sheet, 12 pt, the last family and colour
+    // the user chose, on top of the overlays already there. One edit, one undo
+    // step, and the new text is selected.
+    const QSizeF sheet = pageSizeMm(page);
+    TextItem item;
+    item.id = makeId(QStringLiteral("text"));
+    item.cx = sheet.width() / 2.0;
+    item.cy = sheet.height() / 2.0;
+    item.fontFamily = m_lastTextFamily;
+    item.fontPt = m_lastTextPt > 0.0 ? m_lastTextPt : 12.0;
+    item.color = m_lastTextColor;
+    item.align = TextAlign::Center;
+    item.lineSpacing = 1.0;
+    int top = 0;
+    for (const Sticker &existing : page.stickers)
+        top = std::max(top, existing.z);
+    for (const TextItem &existing : page.texts)
+        top = std::max(top, existing.z);
+    item.z = top + 1;
+
+    TextDialog dialog(item, this);
+    if (dialog.exec() != QDialog::Accepted)
+        return;
+    TextItem edited = dialog.item();
+    edited.id = item.id;
+    edited.cx = item.cx;
+    edited.cy = item.cy;
+    edited.z = item.z;
+    if (!addTextWithItem(edited))
+        return;
+    m_lastTextFamily = edited.fontFamily;
+    m_lastTextPt = edited.fontPt;
+    m_lastTextColor = edited.color;
+}
+
+void MainWindow::editSelectedText()
+{
+    const std::optional<TextItem> text = selectedText();
+    if (!text)
+        return;
+    const DocumentSnapshot document = m_controller.document();
+    if (document.pages.isEmpty())
+        return;
+    TextDialog dialog(*text, this);
+    if (dialog.exec() != QDialog::Accepted)
+        return;
+    TextItem edited = dialog.item();
+    edited.id = text->id;
+    edited.cx = text->cx;
+    edited.cy = text->cy;
+    edited.z = text->z;
+    applyTextEdit(edited);
+}
+
+void MainWindow::applyTextEdit(const TextItem &item)
+{
+    const DocumentSnapshot document = m_controller.document();
+    if (document.pages.isEmpty())
+        return;
+    const Page &page = document.pages.at(document.currentPage);
+    QList<TextItem> texts = page.texts;
+    bool found = false;
+    for (int i = 0; i < texts.size(); ++i) {
+        if (texts.at(i).id == item.id) {
+            texts[i] = item;
+            found = true;
+            break;
+        }
+    }
+    if (!found)
+        return;
+    // An emptied text is not a layer: the sanitiser drops it, so the commit
+    // deletes the item in the same undo step.
+    const bool emptied = item.text.trimmed().isEmpty();
+    if (emptied) {
+        for (int i = texts.size() - 1; i >= 0; --i) {
+            if (texts.at(i).id == item.id)
+                texts.removeAt(i);
+        }
+        m_selectedText.clear();
+    }
+    publishTexts(texts, QCoreApplication::translate("PhotoPrint", "Szöveg"),
+                 emptied ? QString() : item.id);
+    if (emptied)
+        syncTextPanel();
+}
+
+void MainWindow::commitTextEditor()
+{
+    if (!m_textEditor || !m_textEditorDirty)
+        return;
+    const std::optional<TextItem> text = selectedText();
+    m_textEditorDirty = false;
+    if (!text)
+        return;
+    TextItem edited = *text;
+    edited.text = m_textEditor->toPlainText();
+    if (edited.text == text->text)
+        return;
+    applyTextEdit(edited);
+}
+
+void MainWindow::textContentChanged()
+{
+    if (m_syncing)
+        return;
+    m_textEditorDirty = true;
+}
+
+void MainWindow::textFontChanged(int index)
+{
+    Q_UNUSED(index)
+    if (m_syncing)
+        return;
+    const std::optional<TextItem> text = selectedText();
+    if (!text || !m_textFontCombo)
+        return;
+    TextItem updated = *text;
+    const QString family = m_textFontCombo->currentFont().family();
+    updated.fontFamily = family == QApplication::font().family() ? QString() : family;
+    if (updated.fontFamily == text->fontFamily)
+        return;
+    applyTextEdit(updated);
+}
+
+void MainWindow::textSizeChanged()
+{
+    if (m_syncing)
+        return;
+    const std::optional<TextItem> text = selectedText();
+    if (!text || !m_textSizeSpin)
+        return;
+    TextItem updated = *text;
+    updated.fontPt = std::clamp(m_textSizeSpin->value(), kMinFontPt, kMaxFontPt);
+    if (updated.fontPt == text->fontPt)
+        return;
+    applyTextEdit(updated);
+}
+
+void MainWindow::textStyleChanged()
+{
+    if (m_syncing)
+        return;
+    const std::optional<TextItem> text = selectedText();
+    if (!text)
+        return;
+    TextItem updated = *text;
+    updated.bold = m_textBoldButton && m_textBoldButton->isChecked();
+    updated.italic = m_textItalicButton && m_textItalicButton->isChecked();
+    updated.underline = m_textUnderlineButton && m_textUnderlineButton->isChecked();
+    if (updated.bold == text->bold && updated.italic == text->italic
+        && updated.underline == text->underline)
+        return;
+    applyTextEdit(updated);
+}
+
+void MainWindow::chooseTextColor()
+{
+    const std::optional<TextItem> text = selectedText();
+    if (!text)
+        return;
+    const QColor picked = QColorDialog::getColor(
+        QColor::fromRgba(text->color), this,
+        QCoreApplication::translate("PhotoPrint", "Szín"));
+    if (!picked.isValid())
+        return;
+    TextItem updated = *text;
+    updated.color = 0xff000000u | (picked.rgb() & 0x00ffffffu);
+    if (updated.color == text->color)
+        return;
+    applyTextEdit(updated);
+}
+
+void MainWindow::applyTextAlign(TextAlign align)
+{
+    if (m_syncing)
+        return;
+    const std::optional<TextItem> text = selectedText();
+    if (!text)
+        return;
+    TextItem updated = *text;
+    updated.align = align;
+    // The three buttons are one choice, so the panel re-checks the winner even
+    // when the click was a no-op.
+    const bool wasSyncing = m_syncing;
+    m_syncing = true;
+    if (m_textAlignLeftButton)
+        m_textAlignLeftButton->setChecked(align == TextAlign::Left);
+    if (m_textAlignCenterButton)
+        m_textAlignCenterButton->setChecked(align == TextAlign::Center);
+    if (m_textAlignRightButton)
+        m_textAlignRightButton->setChecked(align == TextAlign::Right);
+    m_syncing = wasSyncing;
+    if (updated.align == text->align)
+        return;
+    applyTextEdit(updated);
+}
+
+void MainWindow::textSpacingChanged()
+{
+    if (m_syncing)
+        return;
+    const std::optional<TextItem> text = selectedText();
+    if (!text || !m_textSpacingSpin)
+        return;
+    TextItem updated = *text;
+    updated.lineSpacing = std::clamp(m_textSpacingSpin->value() / 100.0, kMinLineSpacing,
+                                     kMaxLineSpacing);
+    if (updated.lineSpacing == text->lineSpacing)
+        return;
+    applyTextEdit(updated);
+}
+
+void MainWindow::textOpacityChanged(int value)
+{
+    if (m_syncing)
+        return;
+    if (m_textOpacityValue)
+        m_textOpacityValue->setText(QStringLiteral("%1 %").arg(value));
+    const std::optional<TextItem> text = selectedText();
+    if (!text)
+        return;
+    TextItem updated = *text;
+    updated.opacity = std::clamp(value, 0, 100);
+    if (updated.opacity == text->opacity && !m_pendingTextOpacity)
+        return;
+    // The canvas follows the drag immediately; the document is not touched
+    // until the burst ends, so the whole gesture is one undo step.
+    if (m_pageView)
+        m_pageView->previewText(updated);
+    m_pendingTextOpacity = updated;
+    if (m_textOpacityTimer)
+        m_textOpacityTimer->start();
+}
+
+void MainWindow::flushTextOpacity()
+{
+    if (m_textOpacityTimer)
+        m_textOpacityTimer->stop();
+    if (!m_pendingTextOpacity)
+        return;
+    const TextItem updated = *m_pendingTextOpacity;
+    m_pendingTextOpacity.reset();
+    const DocumentSnapshot document = m_controller.document();
+    if (document.pages.isEmpty())
+        return;
+    const Page &page = document.pages.at(document.currentPage);
+    bool changed = false;
+    for (const TextItem &text : page.texts) {
+        if (text.id == updated.id)
+            changed = text != updated;
+    }
+    if (!changed)
+        return;
+    QList<TextItem> texts = page.texts;
+    for (int i = 0; i < texts.size(); ++i) {
+        if (texts.at(i).id == updated.id)
+            texts[i] = updated;
+    }
+    publishTexts(texts, QCoreApplication::translate("PhotoPrint", "Szöveg"));
+}
+
+void MainWindow::cancelPendingTextOpacity()
+{
+    if (m_textOpacityTimer)
+        m_textOpacityTimer->stop();
+    m_pendingTextOpacity.reset();
+}
+
+void MainWindow::deleteSelectedText()
+{
+    const std::optional<TextItem> text = selectedText();
+    if (!text)
+        return;
+    const DocumentSnapshot document = m_controller.document();
+    if (document.pages.isEmpty())
+        return;
+    QList<TextItem> texts = document.pages.at(document.currentPage).texts;
+    for (int i = texts.size() - 1; i >= 0; --i) {
+        if (texts.at(i).id == text->id)
+            texts.removeAt(i);
+    }
+    m_selectedText.clear();
+    publishTexts(texts, QCoreApplication::translate("PhotoPrint", "Szöveg törlése"));
+    syncTextPanel();
+}
+
+void MainWindow::reorderOverlayLayer(int delta)
+{
+    const DocumentSnapshot document = m_controller.document();
+    if (document.pages.isEmpty())
+        return;
+    Page page = document.pages.at(document.currentPage);
+    const QString id = !m_selectedSticker.isEmpty() ? m_selectedSticker : m_selectedText;
+    if (id.isEmpty())
+        return;
+    // The helper renumbers every z across both kinds, so one press always
+    // changes the visible order even when several layers share a z.
+    if (!OverlayGeometry::reorderOverlay(page, id, delta))
+        return;
+    const auto published =
+        m_controller.publishPage(page, QCoreApplication::translate("PhotoPrint", "Rétegsorrend"));
+    if (!published)
+        showProblem(published.error().message);
+}
+
+void MainWindow::cycleOverlay(int delta)
+{
+    const DocumentSnapshot document = m_controller.document();
+    if (document.pages.isEmpty())
+        return;
+    const Page &page = document.pages.at(document.currentPage);
+    const QList<OverlayGeometry::OverlayRef> order = OverlayGeometry::paintOrder(page);
+    if (order.isEmpty())
+        return;
+    const QString current = !m_selectedSticker.isEmpty() ? m_selectedSticker : m_selectedText;
+    int index = -1;
+    for (int i = 0; i < order.size(); ++i) {
+        const OverlayGeometry::OverlayRef &ref = order.at(i);
+        const QString id = ref.kind == OverlayGeometry::OverlayKind::Sticker
+            ? page.stickers.at(ref.index).id
+            : page.texts.at(ref.index).id;
+        if (id == current) {
+            index = i;
+            break;
+        }
+    }
+    if (index < 0) {
+        index = delta >= 0 ? 0 : int(order.size()) - 1;
+    } else {
+        const int count = int(order.size());
+        index = ((index + delta) % count + count) % count;
+    }
+    const OverlayGeometry::OverlayRef &ref = order.at(index);
+    if (ref.kind == OverlayGeometry::OverlayKind::Sticker)
+        selectSticker(page.stickers.at(ref.index).id);
+    else
+        selectText(page.texts.at(ref.index).id);
+}
+
+bool MainWindow::textFontMissing() const
+{
+    const std::optional<TextItem> text = selectedText();
+    if (!text || text->fontFamily.isEmpty())
+        return false;
+    return !QFontDatabase::families().contains(text->fontFamily, Qt::CaseInsensitive);
+}
+
+bool MainWindow::textOverflows() const
+{
+    const std::optional<TextItem> text = selectedText();
+    if (!text)
+        return false;
+    const DocumentSnapshot document = m_controller.document();
+    if (document.pages.isEmpty())
+        return false;
+    const QSizeF sheet = pageSizeMm(document.pages.at(document.currentPage));
+    const QRectF box = OverlayGeometry::textQuadMm(*text).boundingRect();
+    if (box.isEmpty())
+        return false;
+    return box.left() < -0.05 || box.top() < -0.05 || box.right() > sheet.width() + 0.05
+        || box.bottom() > sheet.height() + 0.05;
+}
+
+bool MainWindow::eventFilter(QObject *watched, QEvent *event)
+{
+    if (watched == m_textEditor) {
+        if (event->type() == QEvent::FocusOut) {
+            // A paragraph is one undo step: the commit waits until the editor
+            // loses focus, not for every keystroke.
+            commitTextEditor();
+        } else if (event->type() == QEvent::KeyPress) {
+            auto *key = static_cast<QKeyEvent *>(event);
+            if ((key->key() == Qt::Key_Return || key->key() == Qt::Key_Enter)
+                && key->modifiers().testFlag(Qt::ControlModifier)) {
+                commitTextEditor();
+                return true;
+            }
+        }
+    }
+    return QMainWindow::eventFilter(watched, event);
 }
 
 bool MainWindow::publishStickers(const QList<Sticker> &stickers, const QString &actionText,
@@ -5760,7 +6974,8 @@ void MainWindow::syncFrameControls()
     if (m_inspectorPanel)
         m_inspectorPanel->setVisible(!document.pages.isEmpty());
     updateInspectorTabs(hasSelection ? frame->id : QString(), selectedSlotId, emptySection,
-                        m_selectedSticker);
+                        !m_selectedSticker.isEmpty() ? m_selectedSticker : m_selectedText,
+                        m_selectedSticker.isEmpty() && !m_selectedText.isEmpty());
     if (currentPage)
         syncSlotFacts(*currentPage, selectedSlotId);
     if (m_slotRemoveButton)
@@ -5849,6 +7064,7 @@ void MainWindow::syncFrameControls()
     syncLayoutPanel();
     syncBackgroundPanel();
     syncStickerPanel();
+    syncTextPanel();
 }
 
 void MainWindow::syncSlotFacts(const Page &page, const QString &slotId)
@@ -5917,20 +7133,22 @@ void MainWindow::setInspectorTab(int index)
 }
 
 void MainWindow::updateInspectorTabs(const QString &frameId, const QString &slotId,
-                                     bool emptySection, const QString &stickerId)
+                                     bool emptySection, const QString &overlayId,
+                                     bool overlayIsText)
 {
     if (!m_inspectorTabs)
         return;
 
     const bool hasPhoto = !frameId.isEmpty();
     const bool hasSection = !slotId.isEmpty();
-    const bool hasOverlay = !stickerId.isEmpty();
+    const bool hasOverlay = !overlayId.isEmpty();
     // The context is the thing that changes the meaning of the panel: the same
     // photograph after a slider edit is not a new context, another photograph or
     // another section is. Without this a value change would drag the panel back
-    // from Lap while the user is reading it.
+    // from Lap while the user is reading it. A sticker and a text are different
+    // contexts, so switching between them re-opens Elem.
     const QString context = hasOverlay
-        ? QStringLiteral("sticker:") + stickerId
+        ? (overlayIsText ? QStringLiteral("text:") : QStringLiteral("sticker:")) + overlayId
         : (hasPhoto ? QStringLiteral("photo:") + frameId
                     : (hasSection ? QStringLiteral("section:") + slotId
                                   : QStringLiteral("page")));
@@ -6360,6 +7578,14 @@ bool MainWindow::pageOverflows() const
             || box.bottom() > size.height() + 0.05)
             return true;
     }
+    // A text block is part of the composition for the same reason.
+    for (const TextItem &text : page.texts) {
+        const QRectF box = OverlayGeometry::textQuadMm(text).boundingRect();
+        if (box.left() < -0.05 || box.top() < -0.05
+            || box.right() > size.width() + 0.05
+            || box.bottom() > size.height() + 0.05)
+            return true;
+    }
     return false;
 }
 
@@ -6369,6 +7595,10 @@ void MainWindow::deleteSelected()
     // A sticker is an overlay above the photographs, so it wins the selection.
     if (!m_selectedSticker.isEmpty()) {
         deleteSelectedSticker();
+        return;
+    }
+    if (!m_selectedText.isEmpty()) {
+        deleteSelectedText();
         return;
     }
     if (!m_selectedId.isEmpty()) {
@@ -8039,20 +9269,9 @@ void MainWindow::cancelPendingStickerOpacity()
 
 void MainWindow::reorderStickerLayer(int delta)
 {
-    const std::optional<Sticker> sticker = selectedSticker();
-    if (!sticker)
-        return;
-    const DocumentSnapshot document = m_controller.document();
-    if (document.pages.isEmpty())
-        return;
-    const Page &page = document.pages.at(document.currentPage);
-    QList<Sticker> order = OverlayGeometry::stickersInPaintOrder(page);
-    // The helper renumbers every z to its position, so one press always changes
-    // the visible order even when several layers share a z.
-    if (!OverlayGeometry::reorderSticker(order, sticker->id, delta))
-        return;
-    publishStickers(order, QCoreApplication::translate("PhotoPrint", "Rétegsorrend"),
-                    sticker->id);
+    // The sticker's raise/lower is the shared stack's raise/lower: raising a
+    // sticker above a text is a real step, and the helper renumbers both kinds.
+    reorderOverlayLayer(delta);
 }
 
 void MainWindow::deleteSelectedSticker()
@@ -8071,31 +9290,6 @@ void MainWindow::deleteSelectedSticker()
     m_selectedSticker.clear();
     publishStickers(stickers, QCoreApplication::translate("PhotoPrint", "Matrica törlése"));
     syncStickerPanel();
-}
-
-void MainWindow::cycleSticker(int delta)
-{
-    const DocumentSnapshot document = m_controller.document();
-    if (document.pages.isEmpty())
-        return;
-    const QList<Sticker> order =
-        OverlayGeometry::stickersInPaintOrder(document.pages.at(document.currentPage));
-    if (order.isEmpty())
-        return;
-    int index = -1;
-    for (int i = 0; i < order.size(); ++i) {
-        if (order.at(i).id == m_selectedSticker) {
-            index = i;
-            break;
-        }
-    }
-    if (index < 0) {
-        index = delta >= 0 ? 0 : int(order.size()) - 1;
-    } else {
-        const int count = int(order.size());
-        index = ((index + delta) % count + count) % count;
-    }
-    selectSticker(order.at(index).id);
 }
 
 MainWindow::BackgroundProblem MainWindow::backgroundProblem() const
@@ -8302,12 +9496,13 @@ void MainWindow::syncStickerPanel()
         ? nullptr
         : &document.pages.at(document.currentPage);
     const std::optional<Sticker> sticker = selectedSticker();
+    const std::optional<TextItem> text = selectedText();
 
     // The palette is always there while the page exists; the hint only
     // explains the empty state, and the properties only show a selected layer.
     if (m_stickerAddPanel)
         m_stickerAddPanel->setVisible(page != nullptr);
-    m_stickerEmptyPanel->setVisible(page && !sticker);
+    m_stickerEmptyPanel->setVisible(page && !sticker && !text);
     m_stickerPanel->setVisible(sticker.has_value());
     if (!page) {
         if (m_previousStickerButton)
@@ -8322,20 +9517,24 @@ void MainWindow::syncStickerPanel()
         m_addStickerButton->setEnabled(canAdd);
     if (m_stickerSetGrid)
         m_stickerSetGrid->setEnabled(canAdd);
-    // The hint names the state the page is really in: a page that already has a
-    // sticker but none selected is not told "there is none".
+    // The hint names the state the page is really in: a page that already has
+    // an overlay but none selected is not told "there is none".
     if (m_stickerEmptyHint) {
+        const bool anyOverlay = !page->stickers.isEmpty() || !page->texts.isEmpty();
         m_stickerEmptyHint->setText(
-            page->stickers.isEmpty()
-                ? QCoreApplication::translate("PhotoPrint", "Még nincs matrica a lapon.")
-                : QCoreApplication::translate(
-                      "PhotoPrint", "Válassz egy matricát a lapon vagy a készletből."));
+            anyOverlay
+                ? QCoreApplication::translate(
+                      "PhotoPrint", "Válassz egy matricát vagy szöveget a lapon.")
+                : QCoreApplication::translate("PhotoPrint",
+                                              "Még nincs matrica vagy szöveg a lapon."));
     }
-    const bool hasStickers = !page->stickers.isEmpty();
+    // The keyboard route to an existing overlay is always enabled: with nothing
+    // selected it starts at the bottom of the stack, and with an empty page it
+    // simply does nothing.
     if (m_previousStickerButton)
-        m_previousStickerButton->setEnabled(hasStickers);
+        m_previousStickerButton->setEnabled(true);
     if (m_nextStickerButton)
-        m_nextStickerButton->setEnabled(hasStickers);
+        m_nextStickerButton->setEnabled(true);
 
     if (!sticker)
         return;
@@ -8362,11 +9561,17 @@ void MainWindow::syncStickerPanel()
             QStringLiteral("%1 %").arg(std::clamp(sticker->opacity, 0, 100)));
     m_syncing = wasSyncing;
 
-    // A move at either end would change nothing, so the button says so.
-    const QList<Sticker> order = OverlayGeometry::stickersInPaintOrder(*page);
+    // A move at either end would change nothing, so the button says so. The
+    // index is in the shared stack, because raising a sticker above a text is a
+    // real step too.
+    const QList<OverlayGeometry::OverlayRef> order =
+        OverlayGeometry::paintOrder(*page);
     int index = -1;
     for (int i = 0; i < order.size(); ++i) {
-        if (order.at(i).id == sticker->id) {
+        const OverlayGeometry::OverlayRef &ref = order.at(i);
+        if (ref.kind != OverlayGeometry::OverlayKind::Sticker)
+            continue;
+        if (page->stickers.at(ref.index).id == sticker->id) {
             index = i;
             break;
         }
@@ -8391,6 +9596,90 @@ void MainWindow::syncStickerPanel()
         }
         m_stickerPreview->setPixmap(m_stickerPreviewPixmap);
     }
+}
+
+void MainWindow::syncTextPanel()
+{
+    if (!m_textPanel || !m_textAddPanel)
+        return;
+    const DocumentSnapshot document = m_controller.document();
+    const Page *page = document.pages.isEmpty()
+        ? nullptr
+        : &document.pages.at(document.currentPage);
+    const std::optional<TextItem> text = selectedText();
+
+    m_textAddPanel->setVisible(page != nullptr);
+    m_textPanel->setVisible(text.has_value());
+    if (m_addTextButton)
+        m_addTextButton->setEnabled(page && page->texts.size() < kMaxTextsPerPage);
+    if (!page || !text)
+        return;
+
+    const bool wasSyncing = m_syncing;
+    m_syncing = true;
+    // The editor is only rewritten when the document's text differs from what
+    // the editor holds and the editor has no uncommitted change, so a sync
+    // during typing never moves the caret or loses a paragraph.
+    if (m_textEditor && !m_textEditorDirty
+        && m_textEditor->toPlainText() != text->text) {
+        m_textEditor->setPlainText(text->text);
+    }
+    if (m_textFontCombo) {
+        const QString family = text->fontFamily.isEmpty() ? QApplication::font().family()
+                                                          : text->fontFamily;
+        m_textFontCombo->setCurrentFont(QFont(family));
+    }
+    if (m_textSizeSpin)
+        m_textSizeSpin->setValue(std::clamp(text->fontPt, kMinFontPt, kMaxFontPt));
+    if (m_textBoldButton)
+        m_textBoldButton->setChecked(text->bold);
+    if (m_textItalicButton)
+        m_textItalicButton->setChecked(text->italic);
+    if (m_textUnderlineButton)
+        m_textUnderlineButton->setChecked(text->underline);
+    if (m_textAlignLeftButton)
+        m_textAlignLeftButton->setChecked(text->align == TextAlign::Left);
+    if (m_textAlignCenterButton)
+        m_textAlignCenterButton->setChecked(text->align == TextAlign::Center);
+    if (m_textAlignRightButton)
+        m_textAlignRightButton->setChecked(text->align == TextAlign::Right);
+    if (m_textSpacingSpin)
+        m_textSpacingSpin->setValue(std::clamp(text->lineSpacing, kMinLineSpacing,
+                                               kMaxLineSpacing)
+                                    * 100.0);
+    if (m_textOpacitySlider)
+        m_textOpacitySlider->setValue(std::clamp(text->opacity, 0, 100));
+    if (m_textOpacityValue)
+        m_textOpacityValue->setText(
+            QStringLiteral("%1 %").arg(std::clamp(text->opacity, 0, 100)));
+    m_syncing = wasSyncing;
+
+    if (m_textColorButton)
+        m_textColorButton->setIcon(swatchIcon(text->color));
+
+    // A move at either end would change nothing, so the button says so. The
+    // index is in the shared stack, because raising a text above a sticker is a
+    // real step too.
+    const QList<OverlayGeometry::OverlayRef> order = OverlayGeometry::paintOrder(*page);
+    int index = -1;
+    for (int i = 0; i < order.size(); ++i) {
+        const OverlayGeometry::OverlayRef &ref = order.at(i);
+        if (ref.kind != OverlayGeometry::OverlayKind::Text)
+            continue;
+        if (page->texts.at(ref.index).id == text->id) {
+            index = i;
+            break;
+        }
+    }
+    if (m_textRaiseButton)
+        m_textRaiseButton->setEnabled(index >= 0 && index < order.size() - 1);
+    if (m_textLowerButton)
+        m_textLowerButton->setEnabled(index > 0);
+
+    if (m_textFontHint)
+        m_textFontHint->setVisible(textFontMissing());
+    if (m_textOverflowHint)
+        m_textOverflowHint->setVisible(textOverflows());
 }
 
 bool MainWindow::confirmCutGuides()
@@ -8705,6 +9994,9 @@ void MainWindow::checkpointNow()
 
 void MainWindow::closeEvent(QCloseEvent *event)
 {
+    // A paragraph typed into the Elem editor is a real edit: land it before the
+    // window goes away, so closing never silently drops it.
+    commitTextEditor();
     if (!m_dirty) {
         event->accept();
         return;

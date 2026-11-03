@@ -1917,5 +1917,117 @@
         <source>A matrica ki van jelölve.</source>
         <translation>Der Aufkleber ist ausgewählt.</translation>
     </message>
+    <message>
+        <source>Szöveg</source>
+        <translation>Text</translation>
+    </message>
+    <message>
+        <source>Szöveg…</source>
+        <translation>Text…</translation>
+    </message>
+    <message>
+        <source>Szöveg hozzáadása…</source>
+        <translation>Text hinzufügen…</translation>
+    </message>
+    <message>
+        <source>Szöveg a lapra</source>
+        <translation>Text auf die Seite</translation>
+    </message>
+    <message>
+        <source>A szöveg</source>
+        <translation>Der Text</translation>
+    </message>
+    <message>
+        <source>Írd be a szöveget. A sortörést az Enter adja.</source>
+        <translation>Gib den Text ein. Enter beginnt eine neue Zeile.</translation>
+    </message>
+    <message>
+        <source>Betűtípus</source>
+        <translation>Schriftart</translation>
+    </message>
+    <message>
+        <source>Betűméret</source>
+        <translation>Schriftgröße</translation>
+    </message>
+    <message>
+        <source>Félkövér</source>
+        <translation>Fett</translation>
+    </message>
+    <message>
+        <source>Dőlt</source>
+        <translation>Kursiv</translation>
+    </message>
+    <message>
+        <source>Aláhúzott</source>
+        <translation>Unterstrichen</translation>
+    </message>
+    <message>
+        <source>Balra igazítás</source>
+        <translation>Linksbündig</translation>
+    </message>
+    <message>
+        <source>Középre igazítás</source>
+        <translation>Zentriert</translation>
+    </message>
+    <message>
+        <source>Jobbra igazítás</source>
+        <translation>Rechtsbündig</translation>
+    </message>
+    <message>
+        <source>Sormagasság</source>
+        <translation>Zeilenabstand</translation>
+    </message>
+    <message>
+        <source>Írj be legalább egy látható karaktert.</source>
+        <translation>Gib mindestens ein sichtbares Zeichen ein.</translation>
+    </message>
+    <message>
+        <source>Ez a betűtípus ezen a gépen nincs meg, helyette a rendszer betűtípusa látszik.</source>
+        <translation>Diese Schriftart ist auf diesem Computer nicht vorhanden. Stattdessen wird die Systemschrift angezeigt.</translation>
+    </message>
+    <message>
+        <source>A szöveg egy része lemarad a lapról.</source>
+        <translation>Ein Teil des Textes fällt von der Seite.</translation>
+    </message>
+    <message>
+        <source>A szöveg ki van jelölve: %1</source>
+        <translation>Der Text ist ausgewählt: %1</translation>
+    </message>
+    <message>
+        <source>Szöveg mozgatása</source>
+        <translation>Text verschieben</translation>
+    </message>
+    <message>
+        <source>Szöveg átméretezése</source>
+        <translation>Text skalieren</translation>
+    </message>
+    <message>
+        <source>Szöveg forgatása</source>
+        <translation>Text drehen</translation>
+    </message>
+    <message>
+        <source>Szöveg törlése</source>
+        <translation>Text löschen</translation>
+    </message>
+    <message>
+        <source>Egy lapon legfeljebb %1 szöveg lehet.</source>
+        <translation>Eine Seite fasst höchstens %1 Texte.</translation>
+    </message>
+    <message>
+        <source>Még nincs matrica vagy szöveg a lapon.</source>
+        <translation>Auf dieser Seite ist noch kein Aufkleber und kein Text.</translation>
+    </message>
+    <message>
+        <source>Válassz egy matricát vagy szöveget a lapon.</source>
+        <translation>Wähle einen Aufkleber oder Text auf der Seite.</translation>
+    </message>
+    <message>
+        <source>A matricák és a szövegek a fotók fölött látszanak.</source>
+        <translation>Aufkleber und Texte liegen über den Fotos.</translation>
+    </message>
+    <message>
+        <source>Válassz színt a szövegnek.</source>
+        <translation>Wähle eine Farbe für den Text.</translation>
+    </message>
 </context>
 </TS>

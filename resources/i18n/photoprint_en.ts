@@ -1917,5 +1917,117 @@
         <source>A matrica ki van jelölve.</source>
         <translation>The sticker is selected.</translation>
     </message>
+    <message>
+        <source>Szöveg</source>
+        <translation>Text</translation>
+    </message>
+    <message>
+        <source>Szöveg…</source>
+        <translation>Text…</translation>
+    </message>
+    <message>
+        <source>Szöveg hozzáadása…</source>
+        <translation>Add text…</translation>
+    </message>
+    <message>
+        <source>Szöveg a lapra</source>
+        <translation>Text on the page</translation>
+    </message>
+    <message>
+        <source>A szöveg</source>
+        <translation>The text</translation>
+    </message>
+    <message>
+        <source>Írd be a szöveget. A sortörést az Enter adja.</source>
+        <translation>Type the text. Press Enter for a new line.</translation>
+    </message>
+    <message>
+        <source>Betűtípus</source>
+        <translation>Font</translation>
+    </message>
+    <message>
+        <source>Betűméret</source>
+        <translation>Font size</translation>
+    </message>
+    <message>
+        <source>Félkövér</source>
+        <translation>Bold</translation>
+    </message>
+    <message>
+        <source>Dőlt</source>
+        <translation>Italic</translation>
+    </message>
+    <message>
+        <source>Aláhúzott</source>
+        <translation>Underlined</translation>
+    </message>
+    <message>
+        <source>Balra igazítás</source>
+        <translation>Align left</translation>
+    </message>
+    <message>
+        <source>Középre igazítás</source>
+        <translation>Align centre</translation>
+    </message>
+    <message>
+        <source>Jobbra igazítás</source>
+        <translation>Align right</translation>
+    </message>
+    <message>
+        <source>Sormagasság</source>
+        <translation>Line spacing</translation>
+    </message>
+    <message>
+        <source>Írj be legalább egy látható karaktert.</source>
+        <translation>Type at least one visible character.</translation>
+    </message>
+    <message>
+        <source>Ez a betűtípus ezen a gépen nincs meg, helyette a rendszer betűtípusa látszik.</source>
+        <translation>This font is not installed on this computer. The system font is shown instead.</translation>
+    </message>
+    <message>
+        <source>A szöveg egy része lemarad a lapról.</source>
+        <translation>Part of the text falls off the page.</translation>
+    </message>
+    <message>
+        <source>A szöveg ki van jelölve: %1</source>
+        <translation>The text is selected: %1</translation>
+    </message>
+    <message>
+        <source>Szöveg mozgatása</source>
+        <translation>Move text</translation>
+    </message>
+    <message>
+        <source>Szöveg átméretezése</source>
+        <translation>Resize text</translation>
+    </message>
+    <message>
+        <source>Szöveg forgatása</source>
+        <translation>Rotate text</translation>
+    </message>
+    <message>
+        <source>Szöveg törlése</source>
+        <translation>Delete text</translation>
+    </message>
+    <message>
+        <source>Egy lapon legfeljebb %1 szöveg lehet.</source>
+        <translation>A page can hold at most %1 texts.</translation>
+    </message>
+    <message>
+        <source>Még nincs matrica vagy szöveg a lapon.</source>
+        <translation>There is no sticker or text on the page yet.</translation>
+    </message>
+    <message>
+        <source>Válassz egy matricát vagy szöveget a lapon.</source>
+        <translation>Pick a sticker or a text on the page.</translation>
+    </message>
+    <message>
+        <source>A matricák és a szövegek a fotók fölött látszanak.</source>
+        <translation>Stickers and texts show above the photos.</translation>
+    </message>
+    <message>
+        <source>Válassz színt a szövegnek.</source>
+        <translation>Choose a colour for the text.</translation>
+    </message>
 </context>
 </TS>

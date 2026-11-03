@@ -747,6 +747,81 @@ Sticker stickerFromJson(const QJsonObject &object, const QString &projectDir)
     return sticker;
 }
 
+QString textAlignKey(TextAlign align)
+{
+    switch (align) {
+    case TextAlign::Left:
+        return QStringLiteral("left");
+    case TextAlign::Right:
+        return QStringLiteral("right");
+    case TextAlign::Center:
+        break;
+    }
+    return QStringLiteral("center");
+}
+
+TextAlign textAlignFromKey(const QString &key)
+{
+    // A strict whitelist: any other spelling, including a missing key, is the
+    // default rather than a guess at what the author meant.
+    if (key == QLatin1String("left"))
+        return TextAlign::Left;
+    if (key == QLatin1String("right"))
+        return TextAlign::Right;
+    return TextAlign::Center;
+}
+
+QJsonObject textToJson(const TextItem &text)
+{
+    QJsonObject object;
+    object.insert(QStringLiteral("id"), text.id);
+    object.insert(QStringLiteral("text"), text.text);
+    // An empty family is the application font, which is what a project written
+    // on one machine should fall back to on the next.
+    object.insert(QStringLiteral("font"), text.fontFamily);
+    object.insert(QStringLiteral("fontPt"), text.fontPt);
+    object.insert(QStringLiteral("color"), colourKey(text.color));
+    object.insert(QStringLiteral("bold"), text.bold);
+    object.insert(QStringLiteral("italic"), text.italic);
+    object.insert(QStringLiteral("underline"), text.underline);
+    object.insert(QStringLiteral("align"), textAlignKey(text.align));
+    object.insert(QStringLiteral("lineSpacing"), text.lineSpacing);
+    object.insert(QStringLiteral("cx"), text.cx);
+    object.insert(QStringLiteral("cy"), text.cy);
+    object.insert(QStringLiteral("angleDeg"), text.angleDeg);
+    object.insert(QStringLiteral("opacity"), text.opacity);
+    object.insert(QStringLiteral("z"), text.z);
+    return object;
+}
+
+TextItem textFromJson(const QJsonObject &object)
+{
+    TextItem text;
+    text.id = object.value(QStringLiteral("id")).toString();
+    text.text = object.value(QStringLiteral("text")).toString();
+    text.fontFamily = object.value(QStringLiteral("font")).toString();
+    text.fontPt = object.value(QStringLiteral("fontPt")).toDouble(12.0);
+    // A missing or unreadable colour is black, not the background's white: a
+    // white caption on white paper would be an invisible layer.
+    const QColor parsedColour(object.value(QStringLiteral("color")).toString());
+    text.color = parsedColour.isValid()
+        ? (0xff000000u | (parsedColour.rgb() & 0x00ffffffu))
+        : 0xff000000u;
+    text.bold = object.value(QStringLiteral("bold")).toBool();
+    text.italic = object.value(QStringLiteral("italic")).toBool();
+    text.underline = object.value(QStringLiteral("underline")).toBool();
+    text.align = textAlignFromKey(object.value(QStringLiteral("align")).toString());
+    text.lineSpacing = object.value(QStringLiteral("lineSpacing")).toDouble(1.0);
+    text.cx = object.value(QStringLiteral("cx")).toDouble();
+    text.cy = object.value(QStringLiteral("cy")).toDouble();
+    text.angleDeg = object.value(QStringLiteral("angleDeg")).toDouble();
+    text.opacity = object.value(QStringLiteral("opacity")).toInt(100);
+    text.z = object.value(QStringLiteral("z")).toInt(0);
+    // A missing font family is not an error: Qt substitutes at paint time and
+    // the panel says so. Sanitising happens in the repair point.
+    return text;
+}
+
 QJsonObject recipeToJson(const ColorRecipe &recipe)
 {
     QJsonObject tone;
@@ -817,6 +892,18 @@ Result<ParsedProject> parseDocument(const QJsonObject &root, const QString &proj
                     continue;
                 page.stickers.append(
                     stickerFromJson(stickerValue.toObject(), projectDir));
+            }
+        }
+        // Text is optional and independent of the layout too. A malformed entry
+        // is dropped by the sanitiser, not the page.
+        const QJsonValue textsValue = pageObject.value(QStringLiteral("texts"));
+        if (textsValue.isArray()) {
+            for (const QJsonValue &textValue : textsValue.toArray()) {
+                if (page.texts.size() >= kMaxTextsPerPage)
+                    break;
+                if (!textValue.isObject())
+                    continue;
+                page.texts.append(textFromJson(textValue.toObject()));
             }
         }
         for (const QJsonValue &frameValue : pageObject.value(QStringLiteral("frames")).toArray()) {
@@ -1070,6 +1157,14 @@ QByteArray ProjectStore::serialize(const DocumentSnapshot &document, const QStri
                     stickerToJson(sticker, projectDir, portableDir, portableNames));
             }
             pageObject.insert(QStringLiteral("stickers"), stickerArray);
+        }
+        // Text carries no file, so a portable copy needs nothing extra for it.
+        // The array is omitted when empty for the same reason as the stickers.
+        if (!page.texts.isEmpty()) {
+            QJsonArray textArray;
+            for (const TextItem &text : page.texts)
+                textArray.append(textToJson(text));
+            pageObject.insert(QStringLiteral("texts"), textArray);
         }
         QJsonArray frames;
         for (const Frame &frame : page.frames)

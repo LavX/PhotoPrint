@@ -1917,5 +1917,117 @@
         <source>A matrica ki van jelölve.</source>
         <translation>L'autocollant est sélectionné.</translation>
     </message>
+    <message>
+        <source>Szöveg</source>
+        <translation>Texte</translation>
+    </message>
+    <message>
+        <source>Szöveg…</source>
+        <translation>Texte…</translation>
+    </message>
+    <message>
+        <source>Szöveg hozzáadása…</source>
+        <translation>Ajouter un texte…</translation>
+    </message>
+    <message>
+        <source>Szöveg a lapra</source>
+        <translation>Un texte sur la page</translation>
+    </message>
+    <message>
+        <source>A szöveg</source>
+        <translation>Le texte</translation>
+    </message>
+    <message>
+        <source>Írd be a szöveget. A sortörést az Enter adja.</source>
+        <translation>Saisis le texte. Appuie sur Entrée pour une nouvelle ligne.</translation>
+    </message>
+    <message>
+        <source>Betűtípus</source>
+        <translation>Police</translation>
+    </message>
+    <message>
+        <source>Betűméret</source>
+        <translation>Taille de police</translation>
+    </message>
+    <message>
+        <source>Félkövér</source>
+        <translation>Gras</translation>
+    </message>
+    <message>
+        <source>Dőlt</source>
+        <translation>Italique</translation>
+    </message>
+    <message>
+        <source>Aláhúzott</source>
+        <translation>Souligné</translation>
+    </message>
+    <message>
+        <source>Balra igazítás</source>
+        <translation>Aligner à gauche</translation>
+    </message>
+    <message>
+        <source>Középre igazítás</source>
+        <translation>Centrer</translation>
+    </message>
+    <message>
+        <source>Jobbra igazítás</source>
+        <translation>Aligner à droite</translation>
+    </message>
+    <message>
+        <source>Sormagasság</source>
+        <translation>Interligne</translation>
+    </message>
+    <message>
+        <source>Írj be legalább egy látható karaktert.</source>
+        <translation>Saisis au moins un caractère visible.</translation>
+    </message>
+    <message>
+        <source>Ez a betűtípus ezen a gépen nincs meg, helyette a rendszer betűtípusa látszik.</source>
+        <translation>Cette police n'est pas installée sur cet ordinateur. La police du système est affichée à la place.</translation>
+    </message>
+    <message>
+        <source>A szöveg egy része lemarad a lapról.</source>
+        <translation>Une partie du texte dépasse de la page.</translation>
+    </message>
+    <message>
+        <source>A szöveg ki van jelölve: %1</source>
+        <translation>Le texte est sélectionné : %1</translation>
+    </message>
+    <message>
+        <source>Szöveg mozgatása</source>
+        <translation>Déplacer le texte</translation>
+    </message>
+    <message>
+        <source>Szöveg átméretezése</source>
+        <translation>Redimensionner le texte</translation>
+    </message>
+    <message>
+        <source>Szöveg forgatása</source>
+        <translation>Faire pivoter le texte</translation>
+    </message>
+    <message>
+        <source>Szöveg törlése</source>
+        <translation>Supprimer le texte</translation>
+    </message>
+    <message>
+        <source>Egy lapon legfeljebb %1 szöveg lehet.</source>
+        <translation>Une page peut contenir au maximum %1 textes.</translation>
+    </message>
+    <message>
+        <source>Még nincs matrica vagy szöveg a lapon.</source>
+        <translation>Cette page n'a pas encore d'autocollant ni de texte.</translation>
+    </message>
+    <message>
+        <source>Válassz egy matricát vagy szöveget a lapon.</source>
+        <translation>Choisis un autocollant ou un texte sur la page.</translation>
+    </message>
+    <message>
+        <source>A matricák és a szövegek a fotók fölött látszanak.</source>
+        <translation>Les autocollants et les textes apparaissent au-dessus des photos.</translation>
+    </message>
+    <message>
+        <source>Válassz színt a szövegnek.</source>
+        <translation>Choisis une couleur pour le texte.</translation>
+    </message>
 </context>
 </TS>

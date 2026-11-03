@@ -1931,5 +1931,117 @@
         <source>A matrica ki van jelölve.</source>
         <translation>Наклейка выбрана.</translation>
     </message>
+    <message>
+        <source>Szöveg</source>
+        <translation>Текст</translation>
+    </message>
+    <message>
+        <source>Szöveg…</source>
+        <translation>Текст…</translation>
+    </message>
+    <message>
+        <source>Szöveg hozzáadása…</source>
+        <translation>Добавить текст…</translation>
+    </message>
+    <message>
+        <source>Szöveg a lapra</source>
+        <translation>Текст на страницу</translation>
+    </message>
+    <message>
+        <source>A szöveg</source>
+        <translation>Текст</translation>
+    </message>
+    <message>
+        <source>Írd be a szöveget. A sortörést az Enter adja.</source>
+        <translation>Введите текст. Enter начинает новую строку.</translation>
+    </message>
+    <message>
+        <source>Betűtípus</source>
+        <translation>Шрифт</translation>
+    </message>
+    <message>
+        <source>Betűméret</source>
+        <translation>Размер шрифта</translation>
+    </message>
+    <message>
+        <source>Félkövér</source>
+        <translation>Полужирный</translation>
+    </message>
+    <message>
+        <source>Dőlt</source>
+        <translation>Курсив</translation>
+    </message>
+    <message>
+        <source>Aláhúzott</source>
+        <translation>Подчёркнутый</translation>
+    </message>
+    <message>
+        <source>Balra igazítás</source>
+        <translation>По левому краю</translation>
+    </message>
+    <message>
+        <source>Középre igazítás</source>
+        <translation>По центру</translation>
+    </message>
+    <message>
+        <source>Jobbra igazítás</source>
+        <translation>По правому краю</translation>
+    </message>
+    <message>
+        <source>Sormagasság</source>
+        <translation>Межстрочный интервал</translation>
+    </message>
+    <message>
+        <source>Írj be legalább egy látható karaktert.</source>
+        <translation>Введите хотя бы один видимый символ.</translation>
+    </message>
+    <message>
+        <source>Ez a betűtípus ezen a gépen nincs meg, helyette a rendszer betűtípusa látszik.</source>
+        <translation>Этот шрифт не установлен на этом компьютере. Вместо него показан системный шрифт.</translation>
+    </message>
+    <message>
+        <source>A szöveg egy része lemarad a lapról.</source>
+        <translation>Часть текста выходит за край страницы.</translation>
+    </message>
+    <message>
+        <source>A szöveg ki van jelölve: %1</source>
+        <translation>Текст выбран: %1</translation>
+    </message>
+    <message>
+        <source>Szöveg mozgatása</source>
+        <translation>Переместить текст</translation>
+    </message>
+    <message>
+        <source>Szöveg átméretezése</source>
+        <translation>Изменить размер текста</translation>
+    </message>
+    <message>
+        <source>Szöveg forgatása</source>
+        <translation>Повернуть текст</translation>
+    </message>
+    <message>
+        <source>Szöveg törlése</source>
+        <translation>Удалить текст</translation>
+    </message>
+    <message>
+        <source>Egy lapon legfeljebb %1 szöveg lehet.</source>
+        <translation>На странице может быть не больше %1 текстов.</translation>
+    </message>
+    <message>
+        <source>Még nincs matrica vagy szöveg a lapon.</source>
+        <translation>На этой странице пока нет наклеек и текста.</translation>
+    </message>
+    <message>
+        <source>Válassz egy matricát vagy szöveget a lapon.</source>
+        <translation>Выберите наклейку или текст на странице.</translation>
+    </message>
+    <message>
+        <source>A matricák és a szövegek a fotók fölött látszanak.</source>
+        <translation>Наклейки и текст видны поверх фотографий.</translation>
+    </message>
+    <message>
+        <source>Válassz színt a szövegnek.</source>
+        <translation>Выберите цвет текста.</translation>
+    </message>
 </context>
 </TS>

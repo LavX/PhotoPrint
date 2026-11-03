@@ -1903,5 +1903,117 @@
         <source>A matrica ki van jelölve.</source>
         <translation>已选中贴纸。</translation>
     </message>
+    <message>
+        <source>Szöveg</source>
+        <translation>文字</translation>
+    </message>
+    <message>
+        <source>Szöveg…</source>
+        <translation>文字…</translation>
+    </message>
+    <message>
+        <source>Szöveg hozzáadása…</source>
+        <translation>添加文字…</translation>
+    </message>
+    <message>
+        <source>Szöveg a lapra</source>
+        <translation>页面上的文字</translation>
+    </message>
+    <message>
+        <source>A szöveg</source>
+        <translation>文字</translation>
+    </message>
+    <message>
+        <source>Írd be a szöveget. A sortörést az Enter adja.</source>
+        <translation>输入文字。按 Enter 换行。</translation>
+    </message>
+    <message>
+        <source>Betűtípus</source>
+        <translation>字体</translation>
+    </message>
+    <message>
+        <source>Betűméret</source>
+        <translation>字号</translation>
+    </message>
+    <message>
+        <source>Félkövér</source>
+        <translation>粗体</translation>
+    </message>
+    <message>
+        <source>Dőlt</source>
+        <translation>斜体</translation>
+    </message>
+    <message>
+        <source>Aláhúzott</source>
+        <translation>下划线</translation>
+    </message>
+    <message>
+        <source>Balra igazítás</source>
+        <translation>左对齐</translation>
+    </message>
+    <message>
+        <source>Középre igazítás</source>
+        <translation>居中对齐</translation>
+    </message>
+    <message>
+        <source>Jobbra igazítás</source>
+        <translation>右对齐</translation>
+    </message>
+    <message>
+        <source>Sormagasság</source>
+        <translation>行距</translation>
+    </message>
+    <message>
+        <source>Írj be legalább egy látható karaktert.</source>
+        <translation>请至少输入一个可见字符。</translation>
+    </message>
+    <message>
+        <source>Ez a betűtípus ezen a gépen nincs meg, helyette a rendszer betűtípusa látszik.</source>
+        <translation>这台电脑上没有这个字体，改用系统字体显示。</translation>
+    </message>
+    <message>
+        <source>A szöveg egy része lemarad a lapról.</source>
+        <translation>部分文字超出页面。</translation>
+    </message>
+    <message>
+        <source>A szöveg ki van jelölve: %1</source>
+        <translation>已选中文字：%1</translation>
+    </message>
+    <message>
+        <source>Szöveg mozgatása</source>
+        <translation>移动文字</translation>
+    </message>
+    <message>
+        <source>Szöveg átméretezése</source>
+        <translation>调整文字大小</translation>
+    </message>
+    <message>
+        <source>Szöveg forgatása</source>
+        <translation>旋转文字</translation>
+    </message>
+    <message>
+        <source>Szöveg törlése</source>
+        <translation>删除文字</translation>
+    </message>
+    <message>
+        <source>Egy lapon legfeljebb %1 szöveg lehet.</source>
+        <translation>一页最多可以有 %1 个文字。</translation>
+    </message>
+    <message>
+        <source>Még nincs matrica vagy szöveg a lapon.</source>
+        <translation>这一页还没有贴纸或文字。</translation>
+    </message>
+    <message>
+        <source>Válassz egy matricát vagy szöveget a lapon.</source>
+        <translation>请选择页面上的贴纸或文字。</translation>
+    </message>
+    <message>
+        <source>A matricák és a szövegek a fotók fölött látszanak.</source>
+        <translation>贴纸和文字显示在照片上方。</translation>
+    </message>
+    <message>
+        <source>Válassz színt a szövegnek.</source>
+        <translation>为文字选择颜色。</translation>
+    </message>
 </context>
 </TS>
