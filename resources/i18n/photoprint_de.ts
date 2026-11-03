@@ -2061,5 +2061,13 @@
         <source>Szöveg: %1 / %2</source>
         <translation>Text: %1 von %2</translation>
     </message>
+    <message>
+        <source>Sorköz</source>
+        <translation>Zeilenabstand</translation>
+    </message>
+    <message>
+        <source>Szöveg szerkesztése…</source>
+        <translation>Text bearbeiten…</translation>
+    </message>
 </context>
 </TS>

@@ -108,14 +108,14 @@ TextDialog::TextDialog(const TextItem &item, QWidget *parent)
 
     m_spacingSpin = new QDoubleSpinBox(this);
     m_spacingSpin->setObjectName(QStringLiteral("textDialogSpacingSpin"));
-    m_spacingSpin->setAccessibleName(QCoreApplication::translate("PhotoPrint", "Sormagasság"));
+    m_spacingSpin->setAccessibleName(QCoreApplication::translate("PhotoPrint", "Sorköz"));
     m_spacingSpin->setDecimals(0);
     m_spacingSpin->setRange(kMinLineSpacing * 100.0, kMaxLineSpacing * 100.0);
     m_spacingSpin->setSingleStep(5.0);
     m_spacingSpin->setSuffix(QStringLiteral(" %"));
     m_spacingSpin->setValue(std::clamp(item.lineSpacing, kMinLineSpacing, kMaxLineSpacing)
                             * 100.0);
-    form->addRow(QCoreApplication::translate("PhotoPrint", "Sormagasság"), m_spacingSpin);
+    form->addRow(QCoreApplication::translate("PhotoPrint", "Sorköz"), m_spacingSpin);
 
     layout->addLayout(form);
 
@@ -308,7 +308,23 @@ void TextDialog::updatePreview()
     if (size.isEmpty())
         return;
     QPixmap pixmap(size);
-    pixmap.fill(Qt::white);
+    // A checkerboard, not white: a white caption is the most common choice for
+    // text over a photograph, and on a white plate it would look empty. The
+    // pattern shows light and dark ink alike, and the border frames the plate.
+    pixmap.fill(QColor(0xf2, 0xf2, 0xf4));
+    {
+        QPainter plate(&pixmap);
+        constexpr int square = 10;
+        for (int y = 0; y < size.height(); y += square) {
+            for (int x = 0; x < size.width(); x += square) {
+                if (((x / square) + (y / square)) % 2 == 0)
+                    plate.fillRect(QRect(x, y, square, square), QColor(0xd6, 0xd6, 0xda));
+            }
+        }
+        plate.setPen(QColor(0x9a, 0x9a, 0xa0));
+        plate.setBrush(Qt::NoBrush);
+        plate.drawRect(QRect(0, 0, size.width() - 1, size.height() - 1));
+    }
     QPainter painter(&pixmap);
     painter.setRenderHints(QPainter::Antialiasing | QPainter::TextAntialiasing
                            | QPainter::SmoothPixmapTransform);
@@ -319,11 +335,14 @@ void TextDialog::updatePreview()
         const double pxPerMm = kPreviewPpi / 25.4;
         const double blockWidth = block.width() * pxPerMm;
         const double blockHeight = block.height() * pxPerMm;
-        // A long caption is scaled down to fit the plate instead of being cut
-        // off: the preview is about the look, not the exact millimetres.
-        const double fit = std::min(
-            {1.0, (size.width() - 12.0) / std::max(1.0, blockWidth),
-             (size.height() - 12.0) / std::max(1.0, blockHeight)});
+        // Scale to the plate in both directions: a long caption is made smaller
+        // instead of being cut off, and a small one is made readable instead of
+        // staying a few pixels tall. The cap keeps a single letter from filling
+        // the whole plate.
+        const double fit = std::clamp(
+            std::min((size.width() - 16.0) / std::max(1.0, blockWidth),
+                     (size.height() - 16.0) / std::max(1.0, blockHeight)),
+            0.1, 3.0);
         painter.translate(size.width() / 2.0, size.height() / 2.0);
         painter.scale(fit, fit);
         painter.setPen(QColor::fromRgba(current.color));

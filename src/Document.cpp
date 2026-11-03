@@ -419,17 +419,21 @@ QList<TextItem> sanitiseTexts(const QList<TextItem> &texts, const QSizeF &sheetM
     for (const TextItem &stored : texts) {
         if (kept.size() >= kMaxTextsPerPage)
             break;
-        // An empty or repeated id cannot be referenced, selected or undone
-        // through, so it is dropped rather than given a fresh one.
-        if (stored.id.isEmpty() || ids.contains(stored.id))
+        // An empty id gets a fresh one, as the model rule says: a hand-edited or
+        // partially written file must not silently lose a caption. A repeated id
+        // is still dropped, because two layers cannot share an identity.
+        TextItem text = stored;
+        if (text.id.isEmpty())
+            text.id = makeId(QStringLiteral("text"));
+        if (ids.contains(text.id))
             continue;
         // Empty and whitespace-only text is not a layer: it would be invisible
         // and unclickable, and only undo could remove it. Committing an emptied
         // editor therefore deletes the item in the same undo step.
-        if (stored.text.trimmed().isEmpty())
+        if (text.text.trimmed().isEmpty())
             continue;
-        ids.insert(stored.id);
-        kept.append(sanitiseText(stored, sheetMm));
+        ids.insert(text.id);
+        kept.append(sanitiseText(text, sheetMm));
     }
     return kept;
 }

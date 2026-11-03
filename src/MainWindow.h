@@ -121,6 +121,10 @@ public:
     /// current page. The block is measured at the fixed reference ppi, so the
     /// outline does not move when the view zooms.
     QPolygonF textQuad(const QString &textId) const;
+    /// The expanded ring the text handles sit on, in widget coordinates. It is
+    /// outside the block, so a short caption is never covered by its own
+    /// furniture. Shared by the paint path, the hit test and the tests.
+    QPolygonF textHandleQuad(const QString &textId) const;
     /// Shows a sticker without committing it. The opacity slider uses it while
     /// it is being dragged; the window commits one edit when the drag ends.
     void previewSticker(const Sticker &sticker);
@@ -249,6 +253,7 @@ protected:
     void mousePressEvent(QMouseEvent *event) override;
     void mouseMoveEvent(QMouseEvent *event) override;
     void mouseReleaseEvent(QMouseEvent *event) override;
+    void contextMenuEvent(QContextMenuEvent *event) override;
     void wheelEvent(QWheelEvent *event) override;
     void keyPressEvent(QKeyEvent *event) override;
     void mouseDoubleClickEvent(QMouseEvent *event) override;
@@ -314,15 +319,14 @@ private:
     QPolygonF frameQuadWidget(const Frame &frame) const;
     QPolygonF stickerQuadWidgetFor(const Sticker &sticker) const;
     QPolygonF textQuadWidgetFor(const TextItem &text) const;
+    QPolygonF textHandleQuadWidgetFor(const TextItem &text) const;
     int hitFrame(const QPointF &widgetPoint) const;
     int hitSlot(const QPointF &widgetPoint) const;
-    /// The topmost text under a widget point, as an index into the page's list,
-    /// or -1. The order is the reverse of painting.
-    int hitText(const QPointF &widgetPoint) const;
     /// The corner handle under the pointer (0..3) or the rotate handle (4), for
     /// the selected sticker.
     int hitStickerHandle(const QPointF &widgetPoint) const;
-    /// The same for the selected text block.
+    /// The same for the selected text block, but only in the outer ring: the
+    /// interior is always a move, so a short caption can be dragged.
     int hitTextHandle(const QPointF &widgetPoint) const;
     int hitHandle(const QPointF &widgetPoint) const;
     SlotState slotStateFor(const Slot &slot) const;
@@ -503,6 +507,9 @@ public:
     /// Test hook: the file-dialog-free entry point for adding a text, so a test
     /// can drive the same path the dialog lands on.
     bool addTextForTest(const TextItem &item);
+    /// Test hook: the item `addText` would create, so a test can check the
+    /// default placement and size without opening the modal dialog.
+    TextItem newTextForTest() const;
 
 protected:
     void closeEvent(QCloseEvent *event) override;
@@ -675,6 +682,9 @@ private slots:
     /// The text layer. `Beszúrás -> Szöveg…` and the Elem tab's add button both
     /// land here; the dialog is the only place a text is created or edited.
     void addText();
+    /// The item `addText` starts the dialog with: the lower margin below the
+    /// content (or the lower third), 14 pt, the last family and colour.
+    TextItem newTextItem() const;
     /// Opens the same dialog for the selected text, so editing reuses it.
     void editSelectedText();
     /// Selects a text, or clears the overlay selection with an empty id.
@@ -690,9 +700,13 @@ private slots:
     /// clicked value is passed in rather than read back from the toggle states.
     void applyTextAlign(TextAlign align);
     void textSpacingChanged();
+    void textAngleChanged();
     void textOpacityChanged(int value);
     void flushTextOpacity();
     void cancelPendingTextOpacity();
+    /// Stops the typing debounce and rewrites the editor from the document, so
+    /// an undo or a page switch cannot leave a stale paragraph in the field.
+    void cancelPendingTextEdit();
     void deleteSelectedText();
     /// Moves the selected overlay (sticker or text) one real step in the shared
     /// stack, so raising a sticker above a text swaps them.
@@ -1051,9 +1065,11 @@ private:
     /// properties, so only the selected kind's controls are visible.
     QWidget *m_textAddPanel = nullptr;
     QWidget *m_textPanel = nullptr;
+    QPushButton *m_editTextButton = nullptr;
     QPlainTextEdit *m_textEditor = nullptr;
     QFontComboBox *m_textFontCombo = nullptr;
     QDoubleSpinBox *m_textSizeSpin = nullptr;
+    QDoubleSpinBox *m_textAngleSpin = nullptr;
     QToolButton *m_textBoldButton = nullptr;
     QToolButton *m_textItalicButton = nullptr;
     QToolButton *m_textUnderlineButton = nullptr;
@@ -1073,6 +1089,9 @@ private:
     /// The text opacity burst: the canvas follows live and one edit lands when
     /// the burst stops.
     QTimer *m_textOpacityTimer = nullptr;
+    /// The typing debounce: the canvas follows every keystroke and one edit
+    /// lands when the typing stops, so a paragraph is one undo step.
+    QTimer *m_textEditTimer = nullptr;
     std::optional<TextItem> m_pendingTextOpacity;
     QString m_selectedText;
     /// The last family, size and colour a text was created with, so a second
@@ -1118,6 +1137,8 @@ private:
     QLabel *m_autoHint = nullptr;
     QAction *m_undoAction = nullptr;
     QAction *m_redoAction = nullptr;
+    /// The visible way into the full text editor, next to the panel button.
+    QAction *m_editTextAction = nullptr;
     QTimer *m_resizeTimer = nullptr;
 
     bool m_syncing = false;

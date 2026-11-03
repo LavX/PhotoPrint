@@ -2061,5 +2061,13 @@
         <source>Szöveg: %1 / %2</source>
         <translation>टेक्स्ट: %1 / %2</translation>
     </message>
+    <message>
+        <source>Sorköz</source>
+        <translation>पंक्ति अंतराल</translation>
+    </message>
+    <message>
+        <source>Szöveg szerkesztése…</source>
+        <translation>टेक्स्ट संपादित करें…</translation>
+    </message>
 </context>
 </TS>

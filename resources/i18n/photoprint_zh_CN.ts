@@ -2047,5 +2047,13 @@
         <source>Szöveg: %1 / %2</source>
         <translation>文字：%1 / %2</translation>
     </message>
+    <message>
+        <source>Sorköz</source>
+        <translation>行距</translation>
+    </message>
+    <message>
+        <source>Szöveg szerkesztése…</source>
+        <translation>编辑文字…</translation>
+    </message>
 </context>
 </TS>

@@ -6,6 +6,7 @@
 #include "OverlayGeometry.h"
 #include "PageRenderer.h"
 #include "ProjectStore.h"
+#include "StickerAssets.h"
 #include "TextDialog.h"
 
 #include <QApplication>
@@ -26,6 +27,8 @@
 #include <QPlainTextEdit>
 #include <QProcess>
 #include <QPushButton>
+#include <QScrollArea>
+#include <QScrollBar>
 #include <QSettings>
 #include <QSlider>
 #include <QStatusBar>
@@ -303,6 +306,16 @@ bool loadDocument(MainWindow &window, const QTemporaryDir &dir, const DocumentSn
     return window.waitForPreview(15000);
 }
 
+/// True when the whole widget is inside the scroll area's viewport, not merely
+/// visible: a control below the fold is visible but unreachable.
+bool insideViewport(QScrollArea *scroll, QWidget *widget)
+{
+    if (!scroll || !widget || !widget->isVisible())
+        return false;
+    const QRect mapped(widget->mapTo(scroll->viewport(), QPoint(0, 0)), widget->size());
+    return scroll->viewport()->rect().contains(mapped);
+}
+
 } // namespace
 
 class TestPageText : public QObject
@@ -322,14 +335,20 @@ private slots:
     void textClipsAtThePageEdge();
     void textOverStickerAndStickerOverTextByZ();
     void sharedZReorderSwapsKinds();
+    void equalZPutsStickersBeforeTexts();
     void stickerRaiseCrossesTheText();
     void hitTestingFollowsTheRotatedBlock();
     void addTextPlacesAndSelects();
+    void newTextLandsInTheLowerMargin();
     void dragCommitsOneUndoStep();
+    void shortCaptionHandlesLeaveTheInteriorDraggable();
     void resizeChangesTheFontSize();
     void rotateHandleTurnsTheText();
     void nudgeIsOneUndoPerBurst();
     void textNudgeThenOpacityKeepsTheMove();
+    void opacityThenUndoKeepsTheUndo();
+    void typingUpdatesTheCanvasBeforeFocusLeaves();
+    void pageSwitchCommitsTheDirtyEditor();
     void deleteIsOneUndoStep();
     void dialogAddsEditsAndRefusesEmpty();
     void persistenceRoundTrips();
@@ -447,6 +466,17 @@ void TestPageText::sanitiserNormalisesText()
     QCOMPARE(sanitiseTexts(capped, QSizeF(210.0, 297.0)).size(), kMaxTextsPerPage);
     TextItem duplicate = makeText(QStringLiteral("x"), 10.0, 10.0);
     QCOMPARE(sanitiseTexts({duplicate, duplicate}, QSizeF(210.0, 297.0)).size(), 1);
+
+    // An empty id gets a fresh one, as the model rule says: a hand-edited or
+    // partially written file must not silently lose a caption.
+    TextItem noId = makeText(QStringLiteral("x"), 10.0, 10.0);
+    noId.id.clear();
+    const QList<TextItem> assigned = sanitiseTexts({noId}, QSizeF(210.0, 297.0));
+    QCOMPARE(assigned.size(), 1);
+    QVERIFY(!assigned.first().id.isEmpty());
+    // A second pass keeps the assigned id, so a repair is idempotent.
+    QCOMPARE(sanitiseTexts(assigned, QSizeF(210.0, 297.0)).first().id,
+             assigned.first().id);
 }
 
 void TestPageText::blockGeometryIsMeasuredAtTheReferencePpi()
@@ -728,6 +758,30 @@ void TestPageText::sharedZReorderSwapsKinds()
     QCOMPARE(controller.document().pages.first().stickers.first().z, 0);
 }
 
+void TestPageText::equalZPutsStickersBeforeTexts()
+{
+    // The documented tie break: at an equal z a sticker paints before a text, so
+    // the caption is on top. Document order then decides within each kind.
+    Page page = a4Page();
+    page.stickers.append(makeSticker(m_redPath, 105.0, 148.5, 40.0, 40.0, 5));
+    page.texts.append(makeText(QStringLiteral("Hello"), 105.0, 148.5, 24.0, 5));
+    const QList<OverlayGeometry::OverlayRef> order = OverlayGeometry::paintOrder(page);
+    QCOMPARE(order.size(), 2);
+    QCOMPARE(order.at(0).kind, OverlayGeometry::OverlayKind::Sticker);
+    QCOMPARE(order.at(1).kind, OverlayGeometry::OverlayKind::Text);
+
+    // Two texts at the same z keep document order.
+    Page twoTexts = a4Page();
+    TextItem first = makeText(QStringLiteral("first"), 105.0, 100.0, 12.0, 3);
+    TextItem second = makeText(QStringLiteral("second"), 105.0, 200.0, 12.0, 3);
+    twoTexts.texts = {first, second};
+    const QList<OverlayGeometry::OverlayRef> textOrder =
+        OverlayGeometry::paintOrder(twoTexts);
+    QCOMPARE(textOrder.size(), 2);
+    QCOMPARE(twoTexts.texts.at(textOrder.at(0).index).id, first.id);
+    QCOMPARE(twoTexts.texts.at(textOrder.at(1).index).id, second.id);
+}
+
 void TestPageText::stickerRaiseCrossesTheText()
 {
     MainWindow window;
@@ -829,6 +883,50 @@ void TestPageText::addTextPlacesAndSelects()
     QCOMPARE(window.document().pages.first().texts.size(), 1);
 }
 
+void TestPageText::newTextLandsInTheLowerMargin()
+{
+    // A page with a photo in the middle: the first caption goes below it, not on
+    // top of it, and starts at 14 pt.
+    DocumentSnapshot document;
+    Page page = a4Page();
+    Frame frame;
+    frame.id = QStringLiteral("frame-placement");
+    frame.sourcePath = m_photoPath;
+    frame.sourceSha256 = fileSha256(m_photoPath);
+    frame.cx = 105.0;
+    frame.cy = 120.0;
+    frame.width = 150.0;
+    frame.height = 100.0;
+    frame.fit = FitMode::Fill;
+    page.frames.append(frame);
+    document.pages.append(page);
+    document.currentPage = 0;
+
+    MainWindow window;
+    window.resize(1280, 800);
+    window.show();
+    QVERIFY(loadDocument(window, m_dir, document));
+    QTest::qWait(150);
+
+    const TextItem item = window.newTextForTest();
+    QCOMPARE(item.fontPt, 14.0);
+    QCOMPARE(item.cx, 105.0);
+    // The photo ends at 170 mm; the caption sits in the margin below it.
+    QVERIFY2(item.cy > 170.0,
+             qPrintable(QStringLiteral("caption at %1 mm").arg(item.cy)));
+    QVERIFY(item.cy < 297.0);
+
+    // A page with no content uses the lower third.
+    MainWindow empty;
+    empty.resize(1280, 800);
+    empty.show();
+    QTest::qWait(120);
+    const TextItem lower = empty.newTextForTest();
+    QCOMPARE(lower.fontPt, 14.0);
+    QVERIFY2(lower.cy > 297.0 * 0.6,
+             qPrintable(QStringLiteral("caption at %1 mm").arg(lower.cy)));
+}
+
 void TestPageText::dragCommitsOneUndoStep()
 {
     MainWindow window;
@@ -865,6 +963,59 @@ void TestPageText::dragCommitsOneUndoStep()
     QCOMPARE(restored.cy, start.cy);
 }
 
+void TestPageText::shortCaptionHandlesLeaveTheInteriorDraggable()
+{
+    MainWindow window;
+    window.resize(1280, 800);
+    window.show();
+    QTest::qWait(120);
+    // A one-word 12 pt caption: the default size, the one the handles used to
+    // cover completely.
+    TextItem item = makeText(QStringLiteral("Hi"), 105.0, 148.5, 12.0, 1);
+    QVERIFY(window.addTextForTest(item));
+    QTest::qWait(150);
+
+    auto *view = window.findChild<PageView *>();
+    QVERIFY(view);
+    const TextItem start = window.document().pages.first().texts.first();
+    const QPolygonF block = view->textQuad(start.id);
+    const QPolygonF ring = view->textHandleQuad(start.id);
+    QVERIFY(block.size() == 4);
+    QVERIFY(ring.size() == 4);
+
+    // The handles sit outside the block: every ring corner is outside the glyph
+    // block, so the words are not covered by their own furniture.
+    for (int i = 0; i < 4; ++i)
+        QVERIFY2(!block.containsPoint(ring.at(i), Qt::OddEvenFill),
+                 "a handle corner sits on the glyphs");
+
+    // The interior is always a move, even on a block narrower than the handle
+    // radius.
+    const QPointF centre = block.boundingRect().center();
+    const QPointF to = centre + QPointF(30.0, 20.0);
+    QTest::mousePress(view, Qt::LeftButton, Qt::NoModifier, centre.toPoint());
+    QTest::mouseMove(view, to.toPoint());
+    QTest::mouseRelease(view, Qt::LeftButton, Qt::NoModifier, to.toPoint());
+    QTest::qWait(150);
+
+    const TextItem moved = window.document().pages.first().texts.first();
+    QVERIFY2(moved.cx > start.cx, "the interior drag did not move the caption");
+    QVERIFY2(moved.cy > start.cy, "the interior drag did not move the caption");
+    QCOMPARE(moved.fontPt, start.fontPt);
+
+    // A ring corner still resizes.
+    const QPolygonF movedRing = view->textHandleQuad(moved.id);
+    const QPointF corner = movedRing.at(2);
+    const QPointF outward = corner + (corner - movedRing.boundingRect().center());
+    QTest::mousePress(view, Qt::LeftButton, Qt::NoModifier, corner.toPoint());
+    QTest::mouseMove(view, outward.toPoint());
+    QTest::mouseRelease(view, Qt::LeftButton, Qt::NoModifier, outward.toPoint());
+    QTest::qWait(150);
+
+    const TextItem resized = window.document().pages.first().texts.first();
+    QVERIFY2(resized.fontPt > moved.fontPt, "the ring corner did not resize");
+}
+
 void TestPageText::resizeChangesTheFontSize()
 {
     MainWindow window;
@@ -880,11 +1031,11 @@ void TestPageText::resizeChangesTheFontSize()
     const TextItem start = window.document().pages.first().texts.first();
     const int before = window.undoStackForTest()->count();
 
-    // The bottom-right corner of the block, pulled away from the centre.
-    const QPolygonF quad = view->textQuad(start.id);
-    QVERIFY(quad.size() == 4);
-    const QPointF centre = (quad.at(0) + quad.at(2)) / 2.0;
-    const QPointF corner = quad.at(2);
+    // The bottom-right corner of the handle ring, pulled away from the centre.
+    const QPolygonF ring = view->textHandleQuad(start.id);
+    QVERIFY(ring.size() == 4);
+    const QPointF centre = (ring.at(0) + ring.at(2)) / 2.0;
+    const QPointF corner = ring.at(2);
     const QPointF outward = corner + (corner - centre);
     QTest::mousePress(view, Qt::LeftButton, Qt::NoModifier, corner.toPoint());
     QTest::mouseMove(view, outward.toPoint());
@@ -916,9 +1067,9 @@ void TestPageText::rotateHandleTurnsTheText()
     const TextItem start = window.document().pages.first().texts.first();
     const int before = window.undoStackForTest()->count();
 
-    const QPolygonF quad = view->textQuad(start.id);
-    const QPointF topMid = (quad.at(0) + quad.at(1)) / 2.0;
-    const QPointF boxCentre = (quad.at(0) + quad.at(2)) / 2.0;
+    const QPolygonF ring = view->textHandleQuad(start.id);
+    const QPointF topMid = (ring.at(0) + ring.at(1)) / 2.0;
+    const QPointF boxCentre = (ring.at(0) + ring.at(2)) / 2.0;
     QPointF direction = topMid - boxCentre;
     const double length = std::hypot(direction.x(), direction.y());
     QVERIFY(length > 0.0);
@@ -1007,6 +1158,91 @@ void TestPageText::textNudgeThenOpacityKeepsTheMove()
     window.undoStackForTest()->undo();
     QTest::qWait(80);
     QCOMPARE(window.document().pages.first().texts.first().cx, startX);
+}
+
+void TestPageText::opacityThenUndoKeepsTheUndo()
+{
+    MainWindow window;
+    window.resize(1280, 800);
+    window.show();
+    QTest::qWait(120);
+    TextItem item = makeText(QStringLiteral("Hello"), 105.0, 148.5, 24.0, 1);
+    QVERIFY(window.addTextForTest(item));
+    QTest::qWait(120);
+
+    auto *slider = window.findChild<QSlider *>(QStringLiteral("textOpacitySlider"));
+    QVERIFY(slider);
+
+    // Land one opacity step so the undo has something to restore.
+    slider->setValue(40);
+    QTest::qWait(400);
+    QCOMPARE(window.document().pages.first().texts.first().opacity, 40);
+    const int before = window.undoStackForTest()->count();
+
+    // Start a second burst and undo inside the debounce window. The pending
+    // value must be cancelled, not republished over the undo.
+    slider->setValue(60);
+    QCOMPARE(window.document().pages.first().texts.first().opacity, 40);
+    window.undoStackForTest()->undo();
+    QTest::qWait(400);
+
+    QCOMPARE(window.document().pages.first().texts.first().opacity, 100);
+    QCOMPARE(window.undoStackForTest()->count(), before);
+}
+
+void TestPageText::typingUpdatesTheCanvasBeforeFocusLeaves()
+{
+    MainWindow window;
+    window.resize(1280, 800);
+    window.show();
+    QTest::qWait(120);
+    TextItem item = makeText(QStringLiteral("Hello"), 105.0, 148.5, 24.0, 1);
+    QVERIFY(window.addTextForTest(item));
+    QTest::qWait(150);
+
+    auto *view = window.findChild<PageView *>();
+    auto *editor = window.findChild<QPlainTextEdit *>(QStringLiteral("textEditor"));
+    QVERIFY(view);
+    QVERIFY(editor);
+    const QString textId = window.document().pages.first().texts.first().id;
+    const int before = window.undoStackForTest()->count();
+
+    // Type without leaving the field: the canvas follows immediately, and the
+    // debounce lands one undo step when the typing stops.
+    editor->setFocus();
+    editor->setPlainText(QStringLiteral("Nyár"));
+    const std::optional<TextItem> live = view->liveText(textId);
+    QVERIFY(live);
+    QCOMPARE(live->text, QStringLiteral("Nyár"));
+    QCOMPARE(window.document().pages.first().texts.first().text, QStringLiteral("Hello"));
+    QCOMPARE(window.undoStackForTest()->count(), before);
+
+    QTest::qWait(400);
+    QCOMPARE(window.document().pages.first().texts.first().text, QStringLiteral("Nyár"));
+    QCOMPARE(window.undoStackForTest()->count(), before + 1);
+}
+
+void TestPageText::pageSwitchCommitsTheDirtyEditor()
+{
+    MainWindow window;
+    window.resize(1280, 800);
+    window.show();
+    QTest::qWait(120);
+    TextItem item = makeText(QStringLiteral("Hello"), 105.0, 148.5, 24.0, 1);
+    QVERIFY(window.addTextForTest(item));
+    QTest::qWait(150);
+
+    auto *editor = window.findChild<QPlainTextEdit *>(QStringLiteral("textEditor"));
+    QVERIFY(editor);
+    editor->setPlainText(QStringLiteral("Nyár"));
+    // No wait: the debounce has not fired, so the editor is dirty.
+    QVERIFY(QMetaObject::invokeMethod(&window, "addPage", Qt::DirectConnection));
+    QTest::qWait(150);
+
+    // The paragraph landed on the page it was typed on, not on the new page.
+    QCOMPARE(window.document().pages.size(), 2);
+    QCOMPARE(window.document().pages.at(0).texts.first().text, QStringLiteral("Nyár"));
+    QVERIFY(window.document().pages.at(1).texts.isEmpty());
 }
 
 void TestPageText::deleteIsOneUndoStep()
@@ -1452,7 +1688,7 @@ void TestPageText::printMatchesTheScreenRender()
     item.opacity = 80;
     const DocumentSnapshot document = textDocument({item});
 
-    const double ppi = 150.0;
+    const double ppi = 300.0;
     ImageStore store;
     PageRenderer renderer(store);
     const auto rendered = renderer.renderPage(document, 0, ppi);
@@ -1506,7 +1742,7 @@ void TestPageText::pdfCarriesNoSelectableText()
     ImageStore store;
     PageRenderer renderer(store);
     RenderOptions options;
-    options.printPpi = 150.0;
+    options.printPpi = 300.0;
     const auto artifact = renderer.writePdf(document, pdfPath, {}, options);
     if (!artifact)
         QFAIL(qPrintable(artifact.error().message));
@@ -1541,13 +1777,47 @@ void TestPageText::largeFontKeepsElemReachable()
     auto *tabs = window.findChild<QTabWidget *>(QStringLiteral("inspectorTabs"));
     auto *panel = window.findChild<QWidget *>(QStringLiteral("textPanel"));
     auto *editor = window.findChild<QPlainTextEdit *>(QStringLiteral("textEditor"));
+    auto *editButton = window.findChild<QPushButton *>(QStringLiteral("editTextButton"));
+    auto *colour = window.findChild<QPushButton *>(QStringLiteral("textColorButton"));
+    auto *spacing = window.findChild<QDoubleSpinBox *>(QStringLiteral("textSpacingSpin"));
+    auto *opacity = window.findChild<QSlider *>(QStringLiteral("textOpacitySlider"));
+    auto *raise = window.findChild<QPushButton *>(QStringLiteral("textRaiseButton"));
+    auto *lower = window.findChild<QPushButton *>(QStringLiteral("textLowerButton"));
+    auto *remove = window.findChild<QPushButton *>(QStringLiteral("textDeleteButton"));
     QVERIFY(tabs);
     QVERIFY(panel);
     QVERIFY(editor);
+    QVERIFY(editButton);
+    QVERIFY(colour);
+    QVERIFY(spacing);
+    QVERIFY(opacity);
+    QVERIFY(raise);
+    QVERIFY(lower);
+    QVERIFY(remove);
     QCOMPARE(tabs->currentIndex(), 3);
     QVERIFY(panel->isVisible());
     QVERIFY(editor->isVisible());
     QVERIFY(tabs->tabBar()->count() == 4);
+
+    // The whole panel fits the contract viewport: the destructive action and the
+    // controls below it are the ones that used to fall off the fold.
+    auto *scroll = qobject_cast<QScrollArea *>(tabs->currentWidget());
+    QVERIFY(scroll);
+    QVERIFY2(scroll->widget()->sizeHint().height() <= scroll->viewport()->height() + 1,
+             qPrintable(QStringLiteral("the Elem panel needs %1 px in a %2 px viewport")
+                            .arg(scroll->widget()->sizeHint().height())
+                            .arg(scroll->viewport()->height())));
+    for (QWidget *control : {static_cast<QWidget *>(editButton),
+                             static_cast<QWidget *>(colour),
+                             static_cast<QWidget *>(spacing),
+                             static_cast<QWidget *>(opacity),
+                             static_cast<QWidget *>(raise),
+                             static_cast<QWidget *>(lower),
+                             static_cast<QWidget *>(remove)}) {
+        QVERIFY2(insideViewport(scroll, control),
+                 qPrintable(QStringLiteral("%1 is below the fold")
+                                .arg(control->objectName())));
+    }
     QVERIFY(window.grab().save(
         evidenceDir() + QStringLiteral("/ui-text-large-font.png")));
     QApplication::setFont(saved);
@@ -1555,22 +1825,31 @@ void TestPageText::largeFontKeepsElemReachable()
 
 void TestPageText::evidenceScreenshots()
 {
-    // A caption over a photograph: the slice's own promotional page.
+    // The headline case: a real photograph with a caption over it. The sample is
+    // the shipped harbour picture, not a solid test block.
+    const QString photoPath =
+        QStringLiteral(PHOTOPRINT_SOURCE_DIR "/resources/samples/effect-sample.jpg");
+    QVERIFY2(QFileInfo::exists(photoPath), qPrintable(photoPath));
+
     DocumentSnapshot document;
     Page page = a4Page();
     Frame frame;
     frame.id = QStringLiteral("frame-evidence");
-    frame.sourcePath = m_photoPath;
-    frame.sourceSha256 = fileSha256(m_photoPath);
+    frame.sourcePath = photoPath;
+    frame.sourceSha256 = fileSha256(photoPath);
     frame.cx = 105.0;
-    frame.cy = 120.0;
-    frame.width = 150.0;
-    frame.height = 100.0;
+    frame.cy = 110.0;
+    frame.width = 190.0;
+    frame.height = 200.0;
     frame.fit = FitMode::Fill;
     page.frames.append(frame);
-    TextItem caption = makeText(QStringLiteral("Nyár 2026"), 105.0, 200.0, 28.0, 1);
-    caption.color = qRgb(0x1a, 0x1a, 0x1a);
+    TextItem caption = makeText(QStringLiteral("Nyár 2026"), 105.0, 150.0, 36.0, 1);
+    caption.color = qRgb(0xff, 0xff, 0xff);
     page.texts.append(caption);
+    // The Hungarian double accents the raster path exists to protect.
+    TextItem accents = makeText(QStringLiteral("Árvíztűrő tükörfúrógép"), 105.0, 190.0, 18.0, 2);
+    accents.color = qRgb(0xff, 0xff, 0xff);
+    page.texts.append(accents);
     document.pages.append(page);
     document.currentPage = 0;
 
@@ -1581,11 +1860,14 @@ void TestPageText::evidenceScreenshots()
     QTest::qWait(250);
     QVERIFY(window.grab().save(evidenceDir() + QStringLiteral("/ui-text-on-photo.png")));
 
-    // A text and a sticker stacked: the shared z stack in one picture.
+    // A real built-in sticker and a caption together: the shared z stack in one
+    // picture, with the product's own artwork rather than a red test square.
     DocumentSnapshot stacked = document;
-    Sticker star = makeSticker(m_redPath, 150.0, 105.0, 55.0, 55.0, 2);
+    Sticker star = makeSticker(builtinStickerPath(QStringLiteral("star")), 150.0, 80.0,
+                               55.0, 55.0, 3);
+    star.imageSha256 = fileSha256(stickerSourcePath(star));
     stacked.pages.first().stickers = {star};
-    TextItem over = makeText(QStringLiteral("Csillag"), 150.0, 105.0, 20.0, 3);
+    TextItem over = makeText(QStringLiteral("Csillag"), 150.0, 80.0, 20.0, 4);
     over.color = qRgb(0xff, 0xff, 0xff);
     stacked.pages.first().texts = {over};
     MainWindow stackedWindow;
@@ -1596,10 +1878,23 @@ void TestPageText::evidenceScreenshots()
     QVERIFY(stackedWindow.grab().save(
         evidenceDir() + QStringLiteral("/ui-text-and-sticker.png")));
 
-    // The same page printed: the caption is on paper, and the PDF has no fonts.
+    // The dialog itself, with a white caption: the checkerboard preview is the
+    // only feedback while the user picks a colour, so it has to show white ink.
+    {
+        TextItem dialogItem = makeText(QStringLiteral("Nyár 2026"), 105.0, 150.0, 36.0);
+        dialogItem.color = qRgb(0xff, 0xff, 0xff);
+        TextDialog dialog(dialogItem);
+        dialog.show();
+        QTest::qWait(250);
+        QVERIFY(dialog.grab().save(
+            evidenceDir() + QStringLiteral("/ui-text-dialog.png")));
+        dialog.close();
+    }
+
+    // The same page printed at the resolution the app actually uses, not 150 ppi.
     ImageStore store;
     PageRenderer renderer(store);
-    const double ppi = 150.0;
+    const double ppi = 300.0;
     const QString pdfPath = evidenceDir() + QStringLiteral("/text-page.pdf");
     RenderOptions options;
     options.printPpi = ppi;
@@ -1617,6 +1912,27 @@ void TestPageText::evidenceScreenshots()
     const QImage printed(base + QStringLiteral(".png"));
     QVERIFY(!printed.isNull());
     QVERIFY(!inkBounds(printed).isEmpty());
+    // The caption is over the photograph, not on the paper below it: the probe
+    // at the caption's centre is not paper.
+    const QRgb overPhoto = probe(printed, 105.0, 150.0, ppi);
+    QVERIFY2(channelDistance(overPhoto, qRgb(255, 255, 255)) > 20,
+             qPrintable(QStringLiteral("the caption centre is paper: %1")
+                            .arg(describe(overPhoto))));
+
+    // A one-line manifest, so a reviewer knows what each file proves and at what
+    // resolution.
+    QFile manifest(evidenceDir() + QStringLiteral("/text-evidence.txt"));
+    if (manifest.open(QIODevice::WriteOnly | QIODevice::Text)) {
+        manifest.write(
+            "ui-text-on-photo.png      real photograph with a white caption over it\n"
+            "ui-text-and-sticker.png   built-in star sticker with a caption over it\n"
+            "ui-text-dialog.png        the text dialog, white caption on the checkerboard\n"
+            "text-page.pdf             300 ppi PDF of the caption over the photograph\n"
+            "text-page.png             pdftoppm render of that PDF at 300 ppi\n"
+            "text-print.pdf/png        rotated, semi-transparent caption at 300 ppi\n"
+            "text-no-fonts.pdf         the same page, no font object in the PDF\n");
+        manifest.close();
+    }
 }
 
 QTEST_MAIN(TestPageText)

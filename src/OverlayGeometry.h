@@ -65,10 +65,6 @@ QList<Sticker> stickersInPaintOrder(const Page &page);
 /// so the renderer can paint a fabricated snapshot without a `Page`.
 QList<Sticker> stickersInPaintOrder(const QList<Sticker> &stickers);
 
-/// The topmost sticker under a page point, or null. Iterates the paint order
-/// backwards, so the answer matches what the user can see.
-const Sticker *stickerAt(const Page &page, const QPointF &pageMm);
-
 /// The default box for a freshly added sticker: centred on the sheet, 25 % of
 /// the short side wide, height from the picture's pixel aspect. An empty pixel
 /// size gives a square, so a caller without decoded pixels still places
@@ -97,13 +93,6 @@ Sticker resizedSticker(const Sticker &sticker, const QPointF &pagePoint,
 /// what Shift does while dragging a frame handle.
 Sticker rotatedSticker(const Sticker &sticker, const QPointF &pagePoint, bool snap);
 
-/// Moves one sticker one step in paint order, towards the top (`delta` +1) or
-/// the bottom (-1), and renumbers every `z` to its position. The renumbering is
-/// what makes one press a real reorder even when several stickers share a `z`:
-/// moving one against a neighbour can never tie with it. Returns false when the
-/// sticker is already at that end.
-bool reorderSticker(QList<Sticker> &paintOrder, const QString &stickerId, int delta);
-
 // --- Text -----------------------------------------------------------------
 
 /// The font a text item is measured and drawn with. `ppi` is the resolution the
@@ -129,6 +118,11 @@ QRectF textBlockMm(const TextItem &item);
 /// bottom-left as seen before rotation. Used for the selection outline, the
 /// handles and the hit test.
 QPolygonF textQuadMm(const TextItem &item);
+
+/// The block expanded by @p marginMm on every side, rotated about the centre.
+/// The selection ring and the handles sit on this, outside the glyphs, so a
+/// short caption is never covered by its own furniture.
+QPolygonF textHandleQuadMm(const TextItem &item, double marginMm);
 
 /// True when a page point falls inside the rotated block.
 bool textContains(const TextItem &item, const QPointF &pageMm);

@@ -103,6 +103,19 @@ MESSAGES = {
         "ru": "Межстрочный интервал", "ja": "行間", "zh_CN": "行距",
         "hi": "पंक्ति अंतराल",
     },
+    "Sorköz": {
+        "en": "Line spacing", "de": "Zeilenabstand", "es": "Interlineado",
+        "fr": "Interligne", "it": "Interlinea", "pt": "Espaçamento entre linhas",
+        "ru": "Межстрочный интервал", "ja": "行間", "zh_CN": "行距",
+        "hi": "पंक्ति अंतराल",
+    },
+    "Szöveg szerkesztése…": {
+        "en": "Edit text…", "de": "Text bearbeiten…", "es": "Editar texto…",
+        "fr": "Modifier le texte…", "it": "Modifica testo…",
+        "pt": "Editar texto…", "ru": "Изменить текст…",
+        "ja": "テキストを編集…", "zh_CN": "编辑文字…",
+        "hi": "टेक्स्ट संपादित करें…",
+    },
     "Írj be legalább egy látható karaktert.": {
         "en": "Type at least one visible character.",
         "de": "Gib mindestens ein sichtbares Zeichen ein.",

@@ -87,22 +87,6 @@ QList<Sticker> stickersInPaintOrder(const QList<Sticker> &stickers)
     return ordered;
 }
 
-const Sticker *stickerAt(const Page &page, const QPointF &pageMm)
-{
-    QList<int> order;
-    order.reserve(page.stickers.size());
-    for (int i = 0; i < page.stickers.size(); ++i)
-        order.append(i);
-    std::stable_sort(order.begin(), order.end(), [&page](int a, int b) {
-        return page.stickers.at(a).z < page.stickers.at(b).z;
-    });
-    for (int i = int(order.size()) - 1; i >= 0; --i) {
-        const Sticker &sticker = page.stickers.at(order.at(i));
-        if (stickerContains(sticker, pageMm))
-            return &sticker;
-    }
-    return nullptr;
-}
 
 QSizeF defaultStickerSizeMm(const QSizeF &sheetMm, const QSize &pixels)
 {
@@ -212,28 +196,6 @@ Sticker rotatedSticker(const Sticker &sticker, const QPointF &pagePoint, bool sn
     return rotated;
 }
 
-bool reorderSticker(QList<Sticker> &paintOrder, const QString &stickerId, int delta)
-{
-    if (delta == 0)
-        return false;
-    int index = -1;
-    for (int i = 0; i < paintOrder.size(); ++i) {
-        if (paintOrder.at(i).id == stickerId) {
-            index = i;
-            break;
-        }
-    }
-    if (index < 0)
-        return false;
-    const int target = std::clamp(index + (delta > 0 ? 1 : -1), 0,
-                                  int(paintOrder.size()) - 1);
-    if (target == index)
-        return false;
-    paintOrder.move(index, target);
-    for (int i = 0; i < paintOrder.size(); ++i)
-        paintOrder[i].z = i;
-    return true;
-}
 
 // --- Text -----------------------------------------------------------------
 
@@ -290,6 +252,16 @@ QPolygonF textQuadMm(const TextItem &item)
         return {};
     return rotatedQuad(item.cx, item.cy, block.width() / 2.0, block.height() / 2.0,
                        item.angleDeg);
+}
+
+QPolygonF textHandleQuadMm(const TextItem &item, double marginMm)
+{
+    const QRectF block = textBlockMm(item);
+    if (block.isEmpty())
+        return {};
+    const double margin = std::max(0.0, marginMm);
+    return rotatedQuad(item.cx, item.cy, block.width() / 2.0 + margin,
+                       block.height() / 2.0 + margin, item.angleDeg);
 }
 
 bool textContains(const TextItem &item, const QPointF &pageMm)

@@ -2047,5 +2047,13 @@
         <source>Szöveg: %1 / %2</source>
         <translation>テキスト: %1 / %2</translation>
     </message>
+    <message>
+        <source>Sorköz</source>
+        <translation>行間</translation>
+    </message>
+    <message>
+        <source>Szöveg szerkesztése…</source>
+        <translation>テキストを編集…</translation>
+    </message>
 </context>
 </TS>

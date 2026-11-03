@@ -987,6 +987,13 @@ void TestI18n::everyCatalogueTranslatesTheTextMessages()
              QStringLiteral("Középre igazítás"),
              QStringLiteral("Jobbra igazítás"),
              QStringLiteral("Sormagasság"),
+             QStringLiteral("Sorköz"),
+             QStringLiteral("Szöveg szerkesztése…"),
+             QStringLiteral("Előtérbe"),
+             QStringLiteral("Háttérbe"),
+             QStringLiteral("Eltávolítás"),
+             QStringLiteral("Egy lépéssel előrébb."),
+             QStringLiteral("Egy lépéssel hátrébb."),
              QStringLiteral("Írj be legalább egy látható karaktert."),
              QStringLiteral("Ez a betűtípus ezen a gépen nincs meg, helyette a rendszer "
                             "betűtípusa látszik."),

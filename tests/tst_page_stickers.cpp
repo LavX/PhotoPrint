@@ -508,11 +508,9 @@ void TestPageStickers::raiseAndLowerChangeTheVisibleOrder()
     const int before = controller.undoStack()->count();
 
     // Raise the red one: one press, one real step, even though the two z values
-    // are adjacent. The helper renumbers every z to its position.
+    // are adjacent. The shared helper renumbers every z to its position.
     Page page = controller.document().pages.first();
-    QList<Sticker> order = OverlayGeometry::stickersInPaintOrder(page);
-    QVERIFY(OverlayGeometry::reorderSticker(order, red.id, 1));
-    page.stickers = order;
+    QVERIFY(OverlayGeometry::reorderOverlay(page, red.id, 1));
     QVERIFY(controller.publishPage(page, QStringLiteral("Rétegsorrend")).ok());
     QCOMPARE(controller.undoStack()->count(), before + 1);
 
@@ -529,9 +527,7 @@ void TestPageStickers::raiseAndLowerChangeTheVisibleOrder()
 
     // Lowering the top one is the same step in the other direction.
     Page lowered = controller.document().pages.first();
-    QList<Sticker> loweredOrder = OverlayGeometry::stickersInPaintOrder(lowered);
-    QVERIFY(OverlayGeometry::reorderSticker(loweredOrder, blue.id, -1));
-    lowered.stickers = loweredOrder;
+    QVERIFY(OverlayGeometry::reorderOverlay(lowered, blue.id, -1));
     QVERIFY(controller.publishPage(lowered, QStringLiteral("Rétegsorrend")).ok());
     const QImage afterLower = render(controller.document());
     QVERIFY2(channelDistance(probe(afterLower, 105.0, 148.5), qRgb(220, 30, 30)) <= 3,
@@ -551,10 +547,12 @@ void TestPageStickers::hitTestingFollowsTheRotatedBox()
     Sticker lower = makeSticker(m_redPath, 100.0, 100.0, 40.0, 40.0, 0);
     Sticker upper = makeSticker(m_redPath, 100.0, 100.0, 40.0, 40.0, 5);
     page.stickers = {lower, upper};
-    const Sticker *hit = OverlayGeometry::stickerAt(page, QPointF(100.0, 100.0));
+    const std::optional<OverlayGeometry::OverlayRef> hit =
+        OverlayGeometry::overlayAt(page, QPointF(100.0, 100.0));
     QVERIFY(hit);
-    QCOMPARE(hit->id, upper.id);
-    QVERIFY(!OverlayGeometry::stickerAt(page, QPointF(10.0, 10.0)));
+    QCOMPARE(hit->kind, OverlayGeometry::OverlayKind::Sticker);
+    QCOMPARE(page.stickers.at(hit->index).id, upper.id);
+    QVERIFY(!OverlayGeometry::overlayAt(page, QPointF(10.0, 10.0)));
 }
 
 void TestPageStickers::resizeKeepsTheAspectAndClamps()

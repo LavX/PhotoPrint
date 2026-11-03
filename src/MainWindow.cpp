@@ -27,6 +27,7 @@
 #include <QCheckBox>
 #include <QColorDialog>
 #include <QComboBox>
+#include <QContextMenuEvent>
 #include <QCoreApplication>
 #include <QDebug>
 #include <QDialog>
@@ -55,6 +56,7 @@
 #include <QLabel>
 #include <QLineEdit>
 #include <QListWidget>
+#include <QMenu>
 #include <QMenuBar>
 #include <QMessageBox>
 #include <QMimeData>
@@ -92,6 +94,11 @@ namespace {
 
 constexpr double kHandleHalfPx = 6.0;
 constexpr double kRotateOffsetPx = 30.0;
+/// How far outside a text block the selection ring and its handles sit. A
+/// caption is glyphs, not a picture: a handle on the block would cover the
+/// words, and on a short caption the four handles would leave no draggable
+/// interior at all.
+constexpr double kTextHandleMarginPx = 10.0;
 
 // Canvas raster policy. The composed page is a page-local bitmap: the view
 // transform (pan) never touches it; only the page content and the resolution
@@ -1080,6 +1087,20 @@ QPolygonF PageView::textQuad(const QString &textId) const
     return {};
 }
 
+QPolygonF PageView::textHandleQuad(const QString &textId) const
+{
+    if (textId.isEmpty())
+        return {};
+    const Page *page = currentPage();
+    if (!page)
+        return {};
+    for (const TextItem &text : page->texts) {
+        if (text.id == textId)
+            return textHandleQuadWidgetFor(text);
+    }
+    return {};
+}
+
 void PageView::previewText(const TextItem &text)
 {
     const TextItem *selected = selectedTextPtr();
@@ -1360,6 +1381,17 @@ QPolygonF PageView::textQuadWidgetFor(const TextItem &text) const
     return pageToWidget().map(OverlayGeometry::textQuadMm(text));
 }
 
+QPolygonF PageView::textHandleQuadWidgetFor(const TextItem &text) const
+{
+    const QTransform transform = pageToWidget();
+    const double scale = transform.m11();
+    // The ring is a fixed number of screen pixels outside the block, so it stays
+    // grabbable at every zoom. The transform is a uniform scale, so one axis is
+    // enough to turn pixels into millimetres.
+    const double marginMm = scale > 0.0 ? kTextHandleMarginPx / scale : 0.0;
+    return transform.map(OverlayGeometry::textHandleQuadMm(text, marginMm));
+}
+
 int PageView::hitStickerHandle(const QPointF &widgetPoint) const
 {
     const Sticker *sticker = selectedStickerPtr();
@@ -1382,32 +1414,18 @@ int PageView::hitStickerHandle(const QPointF &widgetPoint) const
     return -1;
 }
 
-int PageView::hitText(const QPointF &widgetPoint) const
-{
-    const Page *page = currentPage();
-    if (!page || page->texts.isEmpty())
-        return -1;
-    // The model owns the rule (the topmost rotated block wins); the view only
-    // converts the pointer to page millimetres.
-    const QPointF pagePoint = widgetToPage(widgetPoint);
-    const QList<OverlayGeometry::OverlayRef> order =
-        OverlayGeometry::paintOrder(page->stickers, page->texts);
-    for (int i = int(order.size()) - 1; i >= 0; --i) {
-        const OverlayGeometry::OverlayRef &ref = order.at(i);
-        if (ref.kind != OverlayGeometry::OverlayKind::Text)
-            continue;
-        if (OverlayGeometry::textContains(page->texts.at(ref.index), pagePoint))
-            return ref.index;
-    }
-    return -1;
-}
 
 int PageView::hitTextHandle(const QPointF &widgetPoint) const
 {
     const TextItem *text = selectedTextPtr();
     if (!text)
         return -1;
-    const QPolygonF quad = textQuadWidgetFor(*text);
+    // The interior is always a move. The handles live on a ring outside the
+    // block, so a short caption is never covered by its own furniture and its
+    // centre always drags instead of resizing.
+    if (OverlayGeometry::textContains(*text, widgetToPage(widgetPoint)))
+        return -1;
+    const QPolygonF quad = textHandleQuadWidgetFor(*text);
     if (quad.size() != 4)
         return -1;
     for (int i = 0; i < 4; ++i) {
@@ -2023,11 +2041,12 @@ void PageView::paintEvent(QPaintEvent *)
         return;
     }
 
-    // A text block's furniture: the same two-tone mark, on the rotated block
-    // rather than on a box, so the outline a person sees is the block that
-    // answers the pointer.
+    // A text block's furniture: the same two-tone mark, but on a ring outside
+    // the block. A caption is glyphs, not a picture, so a handle on the block
+    // would cover the words and a short caption would have no draggable
+    // interior at all.
     if (textLayer) {
-        const QPolygonF textOutline = textQuadWidgetFor(*textLayer);
+        const QPolygonF textOutline = textHandleQuadWidgetFor(*textLayer);
         if (textOutline.size() != 4) {
             drawFocusRing();
             return;
@@ -2972,6 +2991,43 @@ void PageView::mouseDoubleClickEvent(QMouseEvent *event)
             onCropModeChanged(true);
         update();
     }
+}
+
+void PageView::contextMenuEvent(QContextMenuEvent *event)
+{
+    const Page *page = currentPage();
+    if (!page) {
+        QWidget::contextMenuEvent(event);
+        return;
+    }
+    const std::optional<OverlayGeometry::OverlayRef> hit =
+        OverlayGeometry::overlayAt(*page, widgetToPage(event->pos()));
+    if (!hit || hit->kind != OverlayGeometry::OverlayKind::Text) {
+        QWidget::contextMenuEvent(event);
+        return;
+    }
+    const TextItem text = page->texts.at(hit->index);
+    // A right click selects the caption it lands on, so the menu and the panel
+    // talk about the same layer.
+    m_selectedId.clear();
+    m_selectedSlotId.clear();
+    m_selectedStickerId.clear();
+    setSelectedFrame(QString());
+    setSelectedSlot(QString());
+    setSelectedSticker(QString());
+    setSelectedText(text.id);
+    if (onStickerSelectionChanged)
+        onStickerSelectionChanged(QString());
+    if (onTextSelectionChanged)
+        onTextSelectionChanged(text.id);
+
+    QMenu menu(this);
+    QAction *edit = menu.addAction(
+        QCoreApplication::translate("PhotoPrint", "Szöveg szerkesztése…"));
+    QAction *chosen = menu.exec(event->globalPos());
+    if (chosen == edit && onTextEditRequested)
+        onTextEditRequested(text.id);
+    event->accept();
 }
 
 void PageView::dragEnterEvent(QDragEnterEvent *event)
@@ -4102,47 +4158,57 @@ void MainWindow::buildUi()
     elemLayout->addWidget(m_textAddPanel);
 
     // The selected text's own controls. Each one writes the whole page as one
-    // edit, so one action is one undo step, exactly like the sticker panel.
+    // edit, so one action is one undo step, exactly like the sticker panel. The
+    // fields share one grid with the labels beside them, and the actions share
+    // one row, so the whole panel fits 1280 x 720 at 1.35x without scrolling.
     m_textPanel = new QWidget(elemTab);
     m_textPanel->setObjectName(QStringLiteral("textPanel"));
     auto *textLayout = new QVBoxLayout(m_textPanel);
     textLayout->setContentsMargins(0, 0, 0, 0);
+    textLayout->setSpacing(6);
 
-    auto *textTitle =
-        new QLabel(QCoreApplication::translate("PhotoPrint", "Szöveg"), m_textPanel);
-    textTitle->setObjectName(QStringLiteral("textTitle"));
-    textTitle->setWordWrap(true);
-    QFont textTitleFont = textTitle->font();
-    textTitleFont.setWeight(QFont::DemiBold);
-    textTitle->setFont(textTitleFont);
-    textLayout->addWidget(textTitle);
+    // The visible way into the full editor. Double click and Enter stay as
+    // accelerators, but the contract forbids a hidden gesture as the only route.
+    m_editTextButton =
+        new QPushButton(QCoreApplication::translate("PhotoPrint", "Szöveg szerkesztése…"),
+                        m_textPanel);
+    m_editTextButton->setObjectName(QStringLiteral("editTextButton"));
+    m_editTextButton->setAccessibleName(
+        QCoreApplication::translate("PhotoPrint", "Szöveg szerkesztése…"));
+    m_editTextButton->setMinimumHeight(30);
+    textLayout->addWidget(m_editTextButton);
+    connect(m_editTextButton, &QPushButton::clicked, this, &MainWindow::editSelectedText);
 
     m_textEditor = new QPlainTextEdit(m_textPanel);
     m_textEditor->setObjectName(QStringLiteral("textEditor"));
     m_textEditor->setAccessibleName(QCoreApplication::translate("PhotoPrint", "A szöveg"));
-    m_textEditor->setMinimumHeight(64);
-    m_textEditor->setMaximumHeight(96);
+    m_textEditor->setFixedHeight(56);
     m_textEditor->setTabChangesFocus(true);
     m_textEditor->installEventFilter(this);
     textLayout->addWidget(m_textEditor);
     connect(m_textEditor, &QPlainTextEdit::textChanged, this,
             &MainWindow::textContentChanged);
 
+    auto *textFields = new QGridLayout;
+    textFields->setContentsMargins(0, 0, 0, 0);
+    textFields->setHorizontalSpacing(8);
+    textFields->setVerticalSpacing(4);
+
     auto *textFontLabel =
         new QLabel(QCoreApplication::translate("PhotoPrint", "Betűtípus"), m_textPanel);
-    textFontLabel->setWordWrap(true);
-    textLayout->addWidget(textFontLabel);
+    textFontLabel->setWordWrap(false);
+    textFields->addWidget(textFontLabel, 0, 0);
     m_textFontCombo = new QFontComboBox(m_textPanel);
     m_textFontCombo->setObjectName(QStringLiteral("textFontCombo"));
     m_textFontCombo->setAccessibleName(textFontLabel->text());
-    textLayout->addWidget(m_textFontCombo);
+    textFields->addWidget(m_textFontCombo, 0, 1);
     connect(m_textFontCombo, &QFontComboBox::currentFontChanged, this,
             [this] { textFontChanged(0); });
 
     auto *textSizeLabel =
         new QLabel(QCoreApplication::translate("PhotoPrint", "Betűméret"), m_textPanel);
-    textSizeLabel->setWordWrap(true);
-    textLayout->addWidget(textSizeLabel);
+    textSizeLabel->setWordWrap(false);
+    textFields->addWidget(textSizeLabel, 1, 0);
     m_textSizeSpin = new QDoubleSpinBox(m_textPanel);
     m_textSizeSpin->setObjectName(QStringLiteral("textSizeSpin"));
     m_textSizeSpin->setAccessibleName(textSizeLabel->text());
@@ -4150,13 +4216,30 @@ void MainWindow::buildUi()
     m_textSizeSpin->setRange(kMinFontPt, kMaxFontPt);
     m_textSizeSpin->setSingleStep(1.0);
     m_textSizeSpin->setSuffix(QStringLiteral(" pt"));
-    textLayout->addWidget(m_textSizeSpin);
+    textFields->addWidget(m_textSizeSpin, 1, 1);
     connect(m_textSizeSpin, &QDoubleSpinBox::editingFinished, this,
             &MainWindow::textSizeChanged);
 
-    // The style toggles and the three alignments share one row: they are the
-    // same kind of choice and the panel must stay short at a large font.
+    auto *textAngleLabel =
+        new QLabel(QCoreApplication::translate("PhotoPrint", "Elforgatás"), m_textPanel);
+    textAngleLabel->setWordWrap(false);
+    textFields->addWidget(textAngleLabel, 2, 0);
+    m_textAngleSpin = new QDoubleSpinBox(m_textPanel);
+    m_textAngleSpin->setObjectName(QStringLiteral("textAngleSpin"));
+    m_textAngleSpin->setAccessibleName(textAngleLabel->text());
+    m_textAngleSpin->setDecimals(1);
+    m_textAngleSpin->setRange(-180.0, 180.0);
+    m_textAngleSpin->setSingleStep(5.0);
+    m_textAngleSpin->setSuffix(QStringLiteral("°"));
+    textFields->addWidget(m_textAngleSpin, 2, 1);
+    connect(m_textAngleSpin, &QDoubleSpinBox::editingFinished, this,
+            &MainWindow::textAngleChanged);
+
+    // The style toggles, the three alignments and the colour share one row: they
+    // are the same kind of choice and the panel must stay short at a large font.
     auto *textStyleRow = new QHBoxLayout;
+    textStyleRow->setContentsMargins(0, 0, 0, 0);
+    textStyleRow->setSpacing(4);
     const auto makeTextToggle = [this](const QString &text, const QString &name,
                                        const QString &accessible) {
         auto *button = new QToolButton(m_textPanel);
@@ -4165,7 +4248,7 @@ void MainWindow::buildUi()
         button->setCheckable(true);
         button->setAccessibleName(accessible);
         button->setToolTip(accessible);
-        button->setMinimumSize(30, 26);
+        button->setMinimumSize(28, 26);
         return button;
     };
     m_textBoldButton = makeTextToggle(QStringLiteral("B"), QStringLiteral("textBoldButton"),
@@ -4187,12 +4270,19 @@ void MainWindow::buildUi()
     textStyleRow->addWidget(m_textBoldButton);
     textStyleRow->addWidget(m_textItalicButton);
     textStyleRow->addWidget(m_textUnderlineButton);
-    textStyleRow->addSpacing(8);
+    textStyleRow->addSpacing(6);
     textStyleRow->addWidget(m_textAlignLeftButton);
     textStyleRow->addWidget(m_textAlignCenterButton);
     textStyleRow->addWidget(m_textAlignRightButton);
     textStyleRow->addStretch(1);
-    textLayout->addLayout(textStyleRow);
+    m_textColorButton = new QPushButton(m_textPanel);
+    m_textColorButton->setObjectName(QStringLiteral("textColorButton"));
+    m_textColorButton->setAccessibleName(QCoreApplication::translate("PhotoPrint", "Szín"));
+    m_textColorButton->setToolTip(
+        QCoreApplication::translate("PhotoPrint", "Válassz színt a szövegnek."));
+    m_textColorButton->setFixedSize(40, 28);
+    textStyleRow->addWidget(m_textColorButton);
+    textFields->addLayout(textStyleRow, 3, 0, 1, 2);
     connect(m_textBoldButton, &QToolButton::toggled, this, &MainWindow::textStyleChanged);
     connect(m_textItalicButton, &QToolButton::toggled, this, &MainWindow::textStyleChanged);
     connect(m_textUnderlineButton, &QToolButton::toggled, this, &MainWindow::textStyleChanged);
@@ -4202,24 +4292,12 @@ void MainWindow::buildUi()
             [this] { applyTextAlign(TextAlign::Center); });
     connect(m_textAlignRightButton, &QToolButton::clicked, this,
             [this] { applyTextAlign(TextAlign::Right); });
-
-    auto *textColorLabel =
-        new QLabel(QCoreApplication::translate("PhotoPrint", "Szín"), m_textPanel);
-    textColorLabel->setWordWrap(true);
-    textLayout->addWidget(textColorLabel);
-    m_textColorButton = new QPushButton(m_textPanel);
-    m_textColorButton->setObjectName(QStringLiteral("textColorButton"));
-    m_textColorButton->setAccessibleName(textColorLabel->text());
-    m_textColorButton->setToolTip(
-        QCoreApplication::translate("PhotoPrint", "Válassz színt a szövegnek."));
-    m_textColorButton->setFixedHeight(30);
-    textLayout->addWidget(m_textColorButton);
     connect(m_textColorButton, &QPushButton::clicked, this, &MainWindow::chooseTextColor);
 
     auto *textSpacingLabel =
-        new QLabel(QCoreApplication::translate("PhotoPrint", "Sormagasság"), m_textPanel);
-    textSpacingLabel->setWordWrap(true);
-    textLayout->addWidget(textSpacingLabel);
+        new QLabel(QCoreApplication::translate("PhotoPrint", "Sorköz"), m_textPanel);
+    textSpacingLabel->setWordWrap(false);
+    textFields->addWidget(textSpacingLabel, 4, 0);
     m_textSpacingSpin = new QDoubleSpinBox(m_textPanel);
     m_textSpacingSpin->setObjectName(QStringLiteral("textSpacingSpin"));
     m_textSpacingSpin->setAccessibleName(textSpacingLabel->text());
@@ -4227,24 +4305,28 @@ void MainWindow::buildUi()
     m_textSpacingSpin->setRange(kMinLineSpacing * 100.0, kMaxLineSpacing * 100.0);
     m_textSpacingSpin->setSingleStep(5.0);
     m_textSpacingSpin->setSuffix(QStringLiteral(" %"));
-    textLayout->addWidget(m_textSpacingSpin);
+    textFields->addWidget(m_textSpacingSpin, 4, 1);
     connect(m_textSpacingSpin, &QDoubleSpinBox::editingFinished, this,
             &MainWindow::textSpacingChanged);
 
     auto *textOpacityLabel =
         new QLabel(QCoreApplication::translate("PhotoPrint", "Fedettség"), m_textPanel);
-    textOpacityLabel->setWordWrap(true);
-    textLayout->addWidget(textOpacityLabel);
+    textOpacityLabel->setWordWrap(false);
+    textFields->addWidget(textOpacityLabel, 5, 0);
+    auto *textOpacityRow = new QHBoxLayout;
+    textOpacityRow->setContentsMargins(0, 0, 0, 0);
     m_textOpacitySlider = new QSlider(Qt::Horizontal, m_textPanel);
     m_textOpacitySlider->setObjectName(QStringLiteral("textOpacitySlider"));
     m_textOpacitySlider->setAccessibleName(textOpacityLabel->text());
     m_textOpacitySlider->setRange(0, 100);
     m_textOpacitySlider->setTracking(true);
-    textLayout->addWidget(m_textOpacitySlider);
     m_textOpacityValue = new QLabel(QStringLiteral("100 %"), m_textPanel);
     m_textOpacityValue->setObjectName(QStringLiteral("textOpacityValue"));
+    m_textOpacityValue->setMinimumWidth(38);
     markSecondaryText(m_textOpacityValue);
-    textLayout->addWidget(m_textOpacityValue);
+    textOpacityRow->addWidget(m_textOpacitySlider, 1);
+    textOpacityRow->addWidget(m_textOpacityValue);
+    textFields->addLayout(textOpacityRow, 5, 1);
     connect(m_textOpacitySlider, &QSlider::valueChanged, this,
             &MainWindow::textOpacityChanged);
     connect(m_textOpacitySlider, &QSlider::sliderReleased, this,
@@ -4257,25 +4339,42 @@ void MainWindow::buildUi()
     }
     m_pendingTextOpacity.reset();
 
-    auto *textOrderRow = new QHBoxLayout;
+    // The typing debounce: one undo step per burst, like the opacity slider.
+    if (!m_textEditTimer) {
+        m_textEditTimer = new QTimer(this);
+        m_textEditTimer->setSingleShot(true);
+        m_textEditTimer->setInterval(kStyleDebounceMs);
+        connect(m_textEditTimer, &QTimer::timeout, this, &MainWindow::commitTextEditor);
+    }
+
+    textLayout->addLayout(textFields);
+
+    // The order and delete actions share one row, so the destructive action is
+    // never the one that falls below the fold.
+    auto *textActionRow = new QHBoxLayout;
+    textActionRow->setContentsMargins(0, 0, 0, 0);
     m_textRaiseButton =
-        new QPushButton(QCoreApplication::translate("PhotoPrint", "Előrébb"), m_textPanel);
+        new QPushButton(QCoreApplication::translate("PhotoPrint", "Előtérbe"), m_textPanel);
     m_textRaiseButton->setObjectName(QStringLiteral("textRaiseButton"));
+    m_textRaiseButton->setToolTip(
+        QCoreApplication::translate("PhotoPrint", "Egy lépéssel előrébb."));
     m_textLowerButton =
-        new QPushButton(QCoreApplication::translate("PhotoPrint", "Hátrébb"), m_textPanel);
+        new QPushButton(QCoreApplication::translate("PhotoPrint", "Háttérbe"), m_textPanel);
     m_textLowerButton->setObjectName(QStringLiteral("textLowerButton"));
-    textOrderRow->addWidget(m_textRaiseButton);
-    textOrderRow->addWidget(m_textLowerButton);
-    textLayout->addLayout(textOrderRow);
+    m_textLowerButton->setToolTip(
+        QCoreApplication::translate("PhotoPrint", "Egy lépéssel hátrébb."));
+    m_textDeleteButton =
+        new QPushButton(QCoreApplication::translate("PhotoPrint", "Eltávolítás"),
+                        m_textPanel);
+    m_textDeleteButton->setObjectName(QStringLiteral("textDeleteButton"));
+    textActionRow->addWidget(m_textRaiseButton);
+    textActionRow->addWidget(m_textLowerButton);
+    textActionRow->addWidget(m_textDeleteButton);
+    textLayout->addLayout(textActionRow);
     connect(m_textRaiseButton, &QPushButton::clicked, this,
             [this] { reorderOverlayLayer(1); });
     connect(m_textLowerButton, &QPushButton::clicked, this,
             [this] { reorderOverlayLayer(-1); });
-
-    m_textDeleteButton =
-        new QPushButton(QCoreApplication::translate("PhotoPrint", "Törlés"), m_textPanel);
-    m_textDeleteButton->setObjectName(QStringLiteral("textDeleteButton"));
-    textLayout->addWidget(m_textDeleteButton);
     connect(m_textDeleteButton, &QPushButton::clicked, this,
             &MainWindow::deleteSelectedText);
 
@@ -4956,6 +5055,15 @@ void MainWindow::buildMenus()
     remove->setShortcut(QKeySequence::Delete);
     connect(remove, &QAction::triggered, this, &MainWindow::deleteSelected);
 
+    // The visible way into the full text editor, next to the panel button. A
+    // double click and Enter stay as accelerators, but they are not the only
+    // route.
+    m_editTextAction =
+        editMenu->addAction(QCoreApplication::translate("PhotoPrint", "Szöveg szerkesztése…"));
+    m_editTextAction->setObjectName(QStringLiteral("editTextAction"));
+    m_editTextAction->setEnabled(false);
+    connect(m_editTextAction, &QAction::triggered, this, &MainWindow::editSelectedText);
+
     editMenu->addSeparator();
     QAction *templates =
         editMenu->addAction(QCoreApplication::translate("PhotoPrint", "Sablonok…"));
@@ -5108,9 +5216,11 @@ void MainWindow::rebuildUi()
     m_stickerPreviewPath.clear();
     m_textAddPanel = nullptr;
     m_textPanel = nullptr;
+    m_editTextButton = nullptr;
     m_textEditor = nullptr;
     m_textFontCombo = nullptr;
     m_textSizeSpin = nullptr;
+    m_textAngleSpin = nullptr;
     m_textBoldButton = nullptr;
     m_textItalicButton = nullptr;
     m_textUnderlineButton = nullptr;
@@ -5128,6 +5238,7 @@ void MainWindow::rebuildUi()
     m_textFontHint = nullptr;
     m_textOverflowHint = nullptr;
     m_textEditorDirty = false;
+    m_editTextAction = nullptr;
     m_slotSizeValue = nullptr;
     m_slotPositionValue = nullptr;
     m_slotStateValue = nullptr;
@@ -5657,6 +5768,10 @@ void MainWindow::onDocumentChanged()
     cancelPendingStyle();
     cancelPendingBackground();
     cancelPendingStickerOpacity();
+    cancelPendingTextOpacity();
+    // The same for a paragraph the editor has not committed yet: an undo must
+    // not be reverted by the typing debounce a moment later.
+    cancelPendingTextEdit();
     if (!m_restoringProject) {
         m_dirty = true;
         if (m_checkpointTimer)
@@ -6598,6 +6713,62 @@ bool MainWindow::addTextWithItem(const TextItem &item)
                         item.id);
 }
 
+TextItem MainWindow::newTextItem() const
+{
+    const DocumentSnapshot document = m_controller.document();
+    if (document.pages.isEmpty())
+        return {};
+    const Page &page = document.pages.at(document.currentPage);
+
+    // Default placement: the lower margin below the content, or the lower third
+    // when the content reaches the bottom. A caption on top of the photo in
+    // black at 12 pt is the first impression nobody wants. 14 pt is the default
+    // size; the last family, size and colour the user chose are remembered.
+    const QSizeF sheet = pageSizeMm(page);
+    double contentBottom = 0.0;
+    bool hasContent = false;
+    if (page.hasLayout()) {
+        for (const QRectF &cell : SlotGeometry::cellsMm(page)) {
+            contentBottom = std::max(contentBottom, cell.bottom());
+            hasContent = true;
+        }
+    }
+    for (const Frame &frame : page.frames) {
+        if (!LayoutEngine::validFrame(frame))
+            continue;
+        const QRectF box = PhotoItem::frameQuadMm(frame).boundingRect();
+        contentBottom = std::max(contentBottom, box.bottom());
+        hasContent = true;
+    }
+    const double centreY = hasContent && contentBottom < sheet.height() - 10.0
+        ? (contentBottom + sheet.height()) / 2.0
+        : sheet.height() * 5.0 / 6.0;
+
+    TextItem item;
+    item.id = makeId(QStringLiteral("text"));
+    item.cx = sheet.width() / 2.0;
+    item.cy = centreY;
+    item.fontFamily = m_lastTextFamily;
+    item.fontPt = m_lastTextPt > 0.0 ? m_lastTextPt : 14.0;
+    item.color = m_lastTextColor;
+    item.align = TextAlign::Center;
+    item.lineSpacing = 1.0;
+    int top = 0;
+    for (const Sticker &existing : page.stickers)
+        top = std::max(top, existing.z);
+    for (const TextItem &existing : page.texts)
+        top = std::max(top, existing.z);
+    // At the cap the new layer ties with the current top and wins by document
+    // order, so it still lands on top instead of being clamped below it.
+    item.z = std::min(top, kMaxTextZ - 1) + 1;
+    return item;
+}
+
+TextItem MainWindow::newTextForTest() const
+{
+    return newTextItem();
+}
+
 void MainWindow::addText()
 {
     const DocumentSnapshot document = m_controller.document();
@@ -6611,25 +6782,9 @@ void MainWindow::addText()
         return;
     }
 
-    // Default placement: centred on the sheet, 12 pt, the last family and colour
-    // the user chose, on top of the overlays already there. One edit, one undo
-    // step, and the new text is selected.
-    const QSizeF sheet = pageSizeMm(page);
-    TextItem item;
-    item.id = makeId(QStringLiteral("text"));
-    item.cx = sheet.width() / 2.0;
-    item.cy = sheet.height() / 2.0;
-    item.fontFamily = m_lastTextFamily;
-    item.fontPt = m_lastTextPt > 0.0 ? m_lastTextPt : 12.0;
-    item.color = m_lastTextColor;
-    item.align = TextAlign::Center;
-    item.lineSpacing = 1.0;
-    int top = 0;
-    for (const Sticker &existing : page.stickers)
-        top = std::max(top, existing.z);
-    for (const TextItem &existing : page.texts)
-        top = std::max(top, existing.z);
-    item.z = top + 1;
+    const TextItem item = newTextItem();
+    if (item.id.isEmpty())
+        return;
 
     TextDialog dialog(item, this);
     if (dialog.exec() != QDialog::Accepted)
@@ -6669,6 +6824,17 @@ void MainWindow::applyTextEdit(const TextItem &item)
 {
     // A panel action inside a nudge burst must not publish a stale position.
     flushPendingTextEdit();
+    TextItem edited = item;
+    // A panel action while the editor holds uncommitted typing must not drop the
+    // paragraph: the edit carries the typed text, in the same undo step.
+    if (m_textEditorDirty && m_textEditor && edited.id == m_selectedText) {
+        edited.text = m_textEditor->toPlainText();
+        edited.text.replace(QLatin1String("\r\n"), QLatin1String("\n"));
+        edited.text.replace(QLatin1Char('\r'), QLatin1Char('\n'));
+        m_textEditorDirty = false;
+        if (m_textEditTimer)
+            m_textEditTimer->stop();
+    }
     const DocumentSnapshot document = m_controller.document();
     if (document.pages.isEmpty())
         return;
@@ -6676,8 +6842,8 @@ void MainWindow::applyTextEdit(const TextItem &item)
     QList<TextItem> texts = page.texts;
     bool found = false;
     for (int i = 0; i < texts.size(); ++i) {
-        if (texts.at(i).id == item.id) {
-            texts[i] = item;
+        if (texts.at(i).id == edited.id) {
+            texts[i] = edited;
             found = true;
             break;
         }
@@ -6686,22 +6852,24 @@ void MainWindow::applyTextEdit(const TextItem &item)
         return;
     // An emptied text is not a layer: the sanitiser drops it, so the commit
     // deletes the item in the same undo step.
-    const bool emptied = item.text.trimmed().isEmpty();
+    const bool emptied = edited.text.trimmed().isEmpty();
     if (emptied) {
         for (int i = texts.size() - 1; i >= 0; --i) {
-            if (texts.at(i).id == item.id)
+            if (texts.at(i).id == edited.id)
                 texts.removeAt(i);
         }
         m_selectedText.clear();
     }
     publishTexts(texts, QCoreApplication::translate("PhotoPrint", "Szöveg"),
-                 emptied ? QString() : item.id);
+                 emptied ? QString() : edited.id);
     if (emptied)
         syncTextPanel();
 }
 
 void MainWindow::commitTextEditor()
 {
+    if (m_textEditTimer)
+        m_textEditTimer->stop();
     if (!m_textEditor || !m_textEditorDirty)
         return;
     const std::optional<TextItem> text = selectedText();
@@ -6710,9 +6878,32 @@ void MainWindow::commitTextEditor()
         return;
     TextItem edited = *text;
     edited.text = m_textEditor->toPlainText();
+    edited.text.replace(QLatin1String("\r\n"), QLatin1String("\n"));
+    edited.text.replace(QLatin1Char('\r'), QLatin1Char('\n'));
     if (edited.text == text->text)
         return;
     applyTextEdit(edited);
+}
+
+void MainWindow::cancelPendingTextEdit()
+{
+    if (m_textEditTimer)
+        m_textEditTimer->stop();
+    if (!m_textEditorDirty)
+        return;
+    m_textEditorDirty = false;
+    // The document is the truth again: an undo or a page switch must not leave
+    // a stale paragraph in the field.
+    if (!m_textEditor)
+        return;
+    const std::optional<TextItem> text = selectedText();
+    const QString wanted = text ? text->text : QString();
+    if (m_textEditor->toPlainText() == wanted)
+        return;
+    const bool wasSyncing = m_syncing;
+    m_syncing = true;
+    m_textEditor->setPlainText(wanted);
+    m_syncing = wasSyncing;
 }
 
 void MainWindow::textContentChanged()
@@ -6720,6 +6911,17 @@ void MainWindow::textContentChanged()
     if (m_syncing)
         return;
     m_textEditorDirty = true;
+    // The canvas follows every keystroke; the debounce lands one undo step when
+    // the typing stops, so a paragraph is one step and the field is never a
+    // control that does nothing visible.
+    const std::optional<TextItem> text = selectedText();
+    if (text && m_textEditor && m_pageView) {
+        TextItem preview = *text;
+        preview.text = m_textEditor->toPlainText();
+        m_pageView->previewText(preview);
+    }
+    if (m_textEditTimer)
+        m_textEditTimer->start();
 }
 
 void MainWindow::textFontChanged(int index)
@@ -6828,6 +7030,21 @@ void MainWindow::textSpacingChanged()
     updated.lineSpacing = std::clamp(m_textSpacingSpin->value() / 100.0, kMinLineSpacing,
                                      kMaxLineSpacing);
     if (updated.lineSpacing == text->lineSpacing)
+        return;
+    applyTextEdit(updated);
+}
+
+void MainWindow::textAngleChanged()
+{
+    if (m_syncing)
+        return;
+    flushPendingTextEdit();
+    const std::optional<TextItem> text = selectedText();
+    if (!text || !m_textAngleSpin)
+        return;
+    TextItem updated = *text;
+    updated.angleDeg = normalizedImageRotationDeg(m_textAngleSpin->value());
+    if (updated.angleDeg == text->angleDeg)
         return;
     applyTextEdit(updated);
 }
@@ -7078,6 +7295,8 @@ void MainWindow::syncFrameControls()
     m_fillButton->setEnabled(hasSelection);
     m_cropButton->setEnabled(hasSelection);
     m_deleteButton->setEnabled(hasSelection);
+    if (m_editTextAction)
+        m_editTextAction->setEnabled(!m_selectedText.isEmpty());
     m_forwardButton->setEnabled(hasSelection);
     m_backwardButton->setEnabled(hasSelection);
     m_autoCheck->setEnabled(hasSelection);
@@ -8117,6 +8336,15 @@ void MainWindow::saveSettings()
     settings.setValue(QStringLiteral("page/landscape"), m_landscape);
     if (!m_lastStickerDir.isEmpty())
         settings.setValue(QStringLiteral("ui/lastStickerDir"), m_lastStickerDir);
+    // The last caption style is remembered, so a second caption does not restart
+    // from the defaults. An empty family is the application font and is not
+    // written, so a project does not pin a family the next machine may lack.
+    if (!m_lastTextFamily.isEmpty())
+        settings.setValue(QStringLiteral("text/lastFamily"), m_lastTextFamily);
+    if (m_lastTextPt > 0.0)
+        settings.setValue(QStringLiteral("text/lastPt"), m_lastTextPt);
+    settings.setValue(QStringLiteral("text/lastColor"),
+                      QColor::fromRgba(m_lastTextColor).name());
 }
 
 void MainWindow::restoreSettings()
@@ -8131,6 +8359,11 @@ void MainWindow::restoreSettings()
     m_paperName = settings.value(QStringLiteral("paper/name"), QStringLiteral("A4")).toString();
     m_landscape = settings.value(QStringLiteral("page/landscape"), false).toBool();
     m_lastStickerDir = settings.value(QStringLiteral("ui/lastStickerDir")).toString();
+    m_lastTextFamily = settings.value(QStringLiteral("text/lastFamily")).toString();
+    m_lastTextPt = settings.value(QStringLiteral("text/lastPt"), 0.0).toDouble();
+    const QColor textColour(settings.value(QStringLiteral("text/lastColor")).toString());
+    if (textColour.isValid())
+        m_lastTextColor = 0xff000000u | (textColour.rgb() & 0x00ffffffu);
 
     rebuildPaperCombo(m_paperName);
     m_orientationCombo->blockSignals(true);
@@ -8152,9 +8385,13 @@ void MainWindow::savePdfAll()
 void MainWindow::pageSelected(int index)
 {
     flushSlotStyle();
+    // A paragraph typed into the Elem editor belongs to the page it was typed
+    // on: land it before the page changes, not on a FocusOut side effect.
+    commitTextEditor();
     m_selectedId.clear();
     m_selectedSlotId.clear();
     m_selectedSticker.clear();
+    m_selectedText.clear();
     m_controller.setCurrentPage(index);
     const DocumentSnapshot document = m_controller.document();
     if (index >= 0 && index < document.pages.size()) {
@@ -8167,10 +8404,12 @@ void MainWindow::pageSelected(int index)
 
 void MainWindow::addPage()
 {
+    commitTextEditor();
     m_controller.apply(AddPageEdit{m_controller.document().currentPage});
     m_selectedId.clear();
     m_selectedSlotId.clear();
     m_selectedSticker.clear();
+    m_selectedText.clear();
 }
 
 void MainWindow::duplicatePage()
@@ -9617,10 +9856,11 @@ void MainWindow::syncStickerPanel()
     const std::optional<Sticker> sticker = selectedSticker();
     const std::optional<TextItem> text = selectedText();
 
-    // The palette is always there while the page exists; the hint only
-    // explains the empty state, and the properties only show a selected layer.
+    // The palette is always there while the page exists, except while a caption
+    // is selected: the text panel needs the room, and the palette is not what
+    // the user is working on.
     if (m_stickerAddPanel)
-        m_stickerAddPanel->setVisible(page != nullptr);
+        m_stickerAddPanel->setVisible(page != nullptr && !text);
     m_stickerEmptyPanel->setVisible(page && !sticker && !text);
     m_stickerPanel->setVisible(sticker.has_value());
     if (!page) {
@@ -9769,6 +10009,8 @@ void MainWindow::syncTextPanel()
     }
     if (m_textSizeSpin)
         m_textSizeSpin->setValue(std::clamp(text->fontPt, kMinFontPt, kMaxFontPt));
+    if (m_textAngleSpin)
+        m_textAngleSpin->setValue(text->angleDeg);
     if (m_textBoldButton)
         m_textBoldButton->setChecked(text->bold);
     if (m_textItalicButton)
@@ -9835,6 +10077,13 @@ void MainWindow::syncTextPanel()
         m_textFontHint->setVisible(textFontMissing());
     if (m_textOverflowHint)
         m_textOverflowHint->setVisible(textOverflows());
+
+    // Selecting a caption on the canvas scrolls the tab to its controls, so the
+    // panel never opens on a row the user cannot see.
+    if (m_inspectorTabs) {
+        if (auto *scroll = qobject_cast<QScrollArea *>(m_inspectorTabs->currentWidget()))
+            scroll->ensureWidgetVisible(m_textPanel);
+    }
 }
 
 bool MainWindow::confirmCutGuides()

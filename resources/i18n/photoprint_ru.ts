@@ -2075,5 +2075,13 @@
         <source>Szöveg: %1 / %2</source>
         <translation>Текст: %1 из %2</translation>
     </message>
+    <message>
+        <source>Sorköz</source>
+        <translation>Межстрочный интервал</translation>
+    </message>
+    <message>
+        <source>Szöveg szerkesztése…</source>
+        <translation>Изменить текст…</translation>
+    </message>
 </context>
 </TS>
