@@ -5,7 +5,7 @@ cropping them, and printing them. It is built for people who do not want to
 learn image processing or printer technology: add photos, choose the paper,
 place them on the sheet, and print.
 
-![PhotoPrint arranging a photo on a 10 x 15 cm sheet](assets/screenshot.jpg)
+![PhotoPrint with a photo and a caption on an A4 sheet](assets/screenshot.jpg)
 
 Built with C++20 and Qt 6 Widgets. Colour conversion uses LittleCMS2, printing
 uses the existing CUPS queues, and photo filters/upscaling use ImageMagick's
@@ -18,7 +18,20 @@ MagickWand.
 - A white paper canvas with direct move, resize, rotate, fit/fill and a separate
   crop mode; keyboard nudging and undo/redo.
 - Multiple photos and pages, layer order, page copy/delete/reorder.
-- Photo-library sidebar, canvas and context-sensitive inspector.
+- Photo-library sidebar, canvas and a contextual inspector with Fotó, Hely, Lap
+  and Elem tabs, each showing only what applies to the current selection.
+- A page background of your choice: a solid colour, a two-colour gradient with
+  an angle, or a picture in fill, fit or tile mode, with adjustable opacity and
+  one click back to white. Gaps, margins and empty sections show it.
+- Stickers: twelve built-in shapes plus your own PNG, JPEG or WebP with
+  transparency. Move, resize, rotate, fade, reorder and delete them; the Elem
+  tab keeps the palette in reach.
+- Text: multi-line captions with font, size, colour, bold, italic, underline,
+  alignment, line spacing, rotation and opacity. Text and stickers share one
+  layer order above the photos, and both print exactly as previewed.
+- The left photo list is a library: a photo removed from the page stays there,
+  marked as unused, and can be dragged back or removed from the library. Drag
+  any thumbnail onto the page or into an empty section.
 - Automatic, conservative tone correction plus a manual brightness slider.
 - 120 effects in 12 categories with a preview browser, search and a strength
   slider. Looks are graded recipes, not single filter primitives; the browser

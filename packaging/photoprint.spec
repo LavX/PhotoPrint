@@ -1,5 +1,5 @@
 Name:           photoprint
-Version:        1.1.0
+Version:        1.2.0
 Release:        1%{?dist}
 Summary:        Simple local photo printing
 License:        MIT
@@ -79,6 +79,13 @@ install -D -m 0644 resources/photoprint.svg %{buildroot}%{_datadir}/icons/hicolo
 %{_datadir}/icons/hicolor/scalable/apps/photoprint.svg
 
 %changelog
+* Tue Nov 03 2026 Laszlo Toth <lavx@lavx.hu> - 1.2.0-1
+- Page background: solid colour, gradient or picture, with opacity
+- Stickers: twelve built-in shapes plus import, with a shared layer order
+- Text: multi-line captions with font, colour, alignment and rotation
+- Photo library keeps removed photos as unused and draggable
+- Crop handles work in crop mode; the clipped badge is gone
+
 * Mon Nov 02 2026 Laszlo Toth <lavx@lavx.hu> - 1.1.0-1
 - 120 photo effects with a preview browser
 - Slot-based layouts with borders, empty sections and drop targets
