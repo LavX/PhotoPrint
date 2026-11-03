@@ -120,9 +120,8 @@ bool isTechnicalOrBrand(const QString &text)
         return true;
     // The window title is the brand plus the project's file name, which is the
     // user's data and is not translated.
-    if (text.startsWith(QStringLiteral("PhotoPrint —"))
-        || text.startsWith(QStringLiteral("PhotoPrint *"))
-        || text.startsWith(QStringLiteral("PhotoPrint –"))) {
+    if (text.startsWith(QStringLiteral("PhotoPrint - "))
+        || text.startsWith(QStringLiteral("PhotoPrint *"))) {
         return true;
     }
 

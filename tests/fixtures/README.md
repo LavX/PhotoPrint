@@ -7,11 +7,11 @@ and only ever open it read-only; the hash is checked before and after use.
 
 Synthetic fixtures are generated at test time into a temporary directory:
 
-- `p3-fields.png` — four flat colour fields in Display P3, used to compare the
+- `p3-fields.png`: four flat colour fields in Display P3, used to compare the
   LittleCMS conversion against Qt's independent colour conversion and to prove
   the exported PDF carries converted sRGB pixels.
-- `plain.png` — no embedded profile, used to prove the documented sRGB fallback.
-- `base.jpg` / `broken-profile.jpg` — a JPEG with a syntactically present but
+- `plain.png`: no embedded profile, used to prove the documented sRGB fallback.
+- `base.jpg` / `broken-profile.jpg`: a JPEG with a syntically present but
   unparsable ICC APP2 segment, used to prove that a damaged profile never
   produces guessed colours.
 

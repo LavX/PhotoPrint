@@ -10876,7 +10876,7 @@ void MainWindow::updateTitle()
         const QString projectName = QFileInfo(m_projectPath).completeBaseName();
         if (!projectName.isEmpty()
             && projectName.compare(QStringLiteral("PhotoPrint"), Qt::CaseInsensitive) != 0)
-            title += QStringLiteral(" — ") + projectName;
+            title += QStringLiteral(" - ") + projectName;
     }
     if (m_dirty)
         title += QStringLiteral(" *");
