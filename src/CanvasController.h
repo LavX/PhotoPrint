@@ -93,6 +93,11 @@ struct ApplyLayoutEdit {
     int insertIndex = -1;
     int selectPage = -1;
     QString actionText;
+    /// When two edits share a non-empty key and nothing else pushed in between,
+    /// the controller folds them into one undo step. The typing debounce uses
+    /// this so a paragraph is one step; any other action pushes a command with
+    /// a different key (or none) and closes the session.
+    QString coalesceKey;
 };
 
 /// Checks an ApplyLayoutEdit against the document it will be applied to. The
@@ -148,7 +153,8 @@ public:
     /// cannot drift apart and a forgotten field cannot silently refuse the edit.
     /// Returns the validation error instead of dropping it.
     Result<void> publishPage(const Page &page,
-                             const QString &actionText = QString());
+                             const QString &actionText = QString(),
+                             const QString &coalesceKey = QString());
 
     QUndoStack *undoStack() const { return m_undo; }
     bool canUndo() const { return m_undo->canUndo(); }

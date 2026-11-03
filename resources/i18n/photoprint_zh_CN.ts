@@ -2055,5 +2055,25 @@
         <source>Szöveg szerkesztése…</source>
         <translation>编辑文字…</translation>
     </message>
+    <message>
+        <source>Szöveg szerkesztése</source>
+        <translation>编辑文字</translation>
+    </message>
+    <message>
+        <source>Igazítás</source>
+        <translation>对齐</translation>
+    </message>
+    <message>
+        <source>Balra</source>
+        <translation>左</translation>
+    </message>
+    <message>
+        <source>Középre</source>
+        <translation>居中</translation>
+    </message>
+    <message>
+        <source>Jobbra</source>
+        <translation>右</translation>
+    </message>
 </context>
 </TS>

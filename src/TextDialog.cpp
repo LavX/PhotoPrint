@@ -5,6 +5,7 @@
 
 #include <QApplication>
 #include <QColorDialog>
+#include <QComboBox>
 #include <QDialogButtonBox>
 #include <QDoubleSpinBox>
 #include <QFontComboBox>
@@ -46,11 +47,13 @@ QIcon colourSwatch(QRgb colour)
 
 } // namespace
 
-TextDialog::TextDialog(const TextItem &item, QWidget *parent)
+TextDialog::TextDialog(const TextItem &item, bool editing, QWidget *parent)
     : QDialog(parent), m_item(item)
 {
     setObjectName(QStringLiteral("textDialog"));
-    setWindowTitle(QCoreApplication::translate("PhotoPrint", "Szöveg a lapra"));
+    setWindowTitle(editing
+                       ? QCoreApplication::translate("PhotoPrint", "Szöveg szerkesztése")
+                       : QCoreApplication::translate("PhotoPrint", "Szöveg a lapra"));
     setModal(true);
     // The height follows the content, so a 1.35x system font grows the dialog
     // instead of squeezing the preview.
@@ -147,15 +150,19 @@ TextDialog::TextDialog(const TextItem &item, QWidget *parent)
     styleRow->addWidget(m_underlineButton);
     styleRow->addSpacing(12);
 
-    m_alignLeftButton = makeToggle(QStringLiteral("‹"), QStringLiteral("textDialogAlignLeftButton"),
-                                   QCoreApplication::translate("PhotoPrint", "Balra igazítás"));
-    m_alignCenterButton = makeToggle(QStringLiteral("≡"), QStringLiteral("textDialogAlignCenterButton"),
-                                     QCoreApplication::translate("PhotoPrint", "Középre igazítás"));
-    m_alignRightButton = makeToggle(QStringLiteral("›"), QStringLiteral("textDialogAlignRightButton"),
-                                    QCoreApplication::translate("PhotoPrint", "Jobbra igazítás"));
-    styleRow->addWidget(m_alignLeftButton);
-    styleRow->addWidget(m_alignCenterButton);
-    styleRow->addWidget(m_alignRightButton);
+    // A labelled combo, not three chevrons: the words say what the control does.
+    m_alignCombo = new QComboBox(this);
+    m_alignCombo->setObjectName(QStringLiteral("textDialogAlignCombo"));
+    m_alignCombo->setAccessibleName(
+        QCoreApplication::translate("PhotoPrint", "Igazítás"));
+    m_alignCombo->addItem(QCoreApplication::translate("PhotoPrint", "Balra"),
+                          int(TextAlign::Left));
+    m_alignCombo->addItem(QCoreApplication::translate("PhotoPrint", "Középre"),
+                          int(TextAlign::Center));
+    m_alignCombo->addItem(QCoreApplication::translate("PhotoPrint", "Jobbra"),
+                          int(TextAlign::Right));
+    m_alignCombo->setMinimumWidth(96);
+    styleRow->addWidget(m_alignCombo);
     styleRow->addStretch(1);
 
     m_colorButton = new QPushButton(this);
@@ -213,19 +220,10 @@ TextDialog::TextDialog(const TextItem &item, QWidget *parent)
     connect(m_boldButton, &QToolButton::toggled, this, [this] { updatePreview(); });
     connect(m_italicButton, &QToolButton::toggled, this, [this] { updatePreview(); });
     connect(m_underlineButton, &QToolButton::toggled, this, [this] { updatePreview(); });
-    connect(m_alignLeftButton, &QToolButton::clicked, this, [this] {
-        m_item.align = TextAlign::Left;
-        syncStyleButtons();
-        updatePreview();
-    });
-    connect(m_alignCenterButton, &QToolButton::clicked, this, [this] {
-        m_item.align = TextAlign::Center;
-        syncStyleButtons();
-        updatePreview();
-    });
-    connect(m_alignRightButton, &QToolButton::clicked, this, [this] {
-        m_item.align = TextAlign::Right;
-        syncStyleButtons();
+    connect(m_alignCombo, &QComboBox::currentIndexChanged, this, [this](int index) {
+        if (!m_alignCombo)
+            return;
+        m_item.align = static_cast<TextAlign>(m_alignCombo->itemData(index).toInt());
         updatePreview();
     });
     connect(m_colorButton, &QPushButton::clicked, this, &TextDialog::chooseColor);
@@ -274,9 +272,8 @@ void TextDialog::accept()
 
 void TextDialog::syncStyleButtons()
 {
-    m_alignLeftButton->setChecked(m_item.align == TextAlign::Left);
-    m_alignCenterButton->setChecked(m_item.align == TextAlign::Center);
-    m_alignRightButton->setChecked(m_item.align == TextAlign::Right);
+    if (m_alignCombo)
+        m_alignCombo->setCurrentIndex(std::clamp(int(m_item.align), 0, 2));
 }
 
 void TextDialog::chooseColor()
@@ -311,17 +308,17 @@ void TextDialog::updatePreview()
     // A checkerboard, not white: a white caption is the most common choice for
     // text over a photograph, and on a white plate it would look empty. The
     // pattern shows light and dark ink alike, and the border frames the plate.
-    pixmap.fill(QColor(0xf2, 0xf2, 0xf4));
+    pixmap.fill(QColor(0xf4, 0xf4, 0xf4));
     {
         QPainter plate(&pixmap);
         constexpr int square = 10;
         for (int y = 0; y < size.height(); y += square) {
             for (int x = 0; x < size.width(); x += square) {
                 if (((x / square) + (y / square)) % 2 == 0)
-                    plate.fillRect(QRect(x, y, square, square), QColor(0xd6, 0xd6, 0xda));
+                    plate.fillRect(QRect(x, y, square, square), QColor(0x80, 0x80, 0x80));
             }
         }
-        plate.setPen(QColor(0x9a, 0x9a, 0xa0));
+        plate.setPen(QColor(0x50, 0x50, 0x55));
         plate.setBrush(Qt::NoBrush);
         plate.drawRect(QRect(0, 0, size.width() - 1, size.height() - 1));
     }

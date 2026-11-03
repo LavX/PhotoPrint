@@ -284,6 +284,9 @@ private:
         Frame startFrame;
         Sticker startSticker;
         TextItem startText;
+        /// The distance from the block centre to the pointer when a text
+        /// resize started, so the size scales from the grabbed handle.
+        double startRadiusMm = 0.0;
         QSize pixels;
         bool changed = false;
     };
@@ -805,17 +808,19 @@ private:
     /// Applies a text list to the current page as one undo step and selects
     /// `selectId` when it is given.
     bool publishTexts(const QList<TextItem> &texts, const QString &actionText,
-                      const QString &selectId = QString());
+                      const QString &selectId = QString(),
+                      const QString &coalesceKey = QString());
     /// Places a text whose geometry is already decided: the dialog, the tests
     /// and the default placement all land here.
     bool addTextWithItem(const TextItem &item);
     /// Replaces the selected text with `item` as one undo step. An emptied text
     /// deletes the item in the same step, so the page never holds an invisible
     /// layer.
-    void applyTextEdit(const TextItem &item);
+    void applyTextEdit(const TextItem &item,
+                       const QString &coalesceKey = QString());
     /// Lands the editor's content as one edit. Called on focus out, on
     /// Ctrl+Enter and when the selection changes.
-    void commitTextEditor();
+    void commitTextEditor(bool fromDebounce = false);
     /// True when the stored family is not installed on this machine, so the
     /// panel can say that Qt substitutes it.
     bool textFontMissing() const;
@@ -1057,6 +1062,11 @@ private:
     QPushButton *m_stickerRelinkButton = nullptr;
     /// The notice bar's own line for a sticker that cannot be shown.
     QLabel *m_stickerNotice = nullptr;
+    /// The palette title and the one-line explanation under the nav row. Both
+    /// are hidden while a caption is selected, so the compact palette and the
+    /// text panel fit the contract viewport together.
+    QLabel *m_stickerHint = nullptr;
+    QLabel *m_stickerSetTitle = nullptr;
     /// The way in from that line: selects the first missing sticker, so the
     /// relink picker is one click away instead of three.
     QPushButton *m_stickerNoticeButton = nullptr;
@@ -1073,9 +1083,7 @@ private:
     QToolButton *m_textBoldButton = nullptr;
     QToolButton *m_textItalicButton = nullptr;
     QToolButton *m_textUnderlineButton = nullptr;
-    QToolButton *m_textAlignLeftButton = nullptr;
-    QToolButton *m_textAlignCenterButton = nullptr;
-    QToolButton *m_textAlignRightButton = nullptr;
+    QComboBox *m_textAlignCombo = nullptr;
     QPushButton *m_textColorButton = nullptr;
     QDoubleSpinBox *m_textSpacingSpin = nullptr;
     QSlider *m_textOpacitySlider = nullptr;
@@ -1099,6 +1107,9 @@ private:
     QString m_lastTextFamily;
     double m_lastTextPt = 0.0;
     QRgb m_lastTextColor = 0xff000000u;
+    /// The text whose panel was last scrolled into view, so a keystroke does not
+    /// fight a user who has scrolled the tab.
+    QString m_textPanelRevealedFor;
     /// True while the editor holds a change the document has not seen yet.
     bool m_textEditorDirty = false;
     /// The canvas layers of the current page's stickers, loaded by the preview

@@ -116,6 +116,34 @@ MESSAGES = {
         "ja": "テキストを編集…", "zh_CN": "编辑文字…",
         "hi": "टेक्स्ट संपादित करें…",
     },
+    "Szöveg szerkesztése": {
+        "en": "Edit text", "de": "Text bearbeiten", "es": "Editar texto",
+        "fr": "Modifier le texte", "it": "Modifica testo",
+        "pt": "Editar texto", "ru": "Изменить текст",
+        "ja": "テキストを編集", "zh_CN": "编辑文字",
+        "hi": "टेक्स्ट संपादित करें",
+    },
+    "Igazítás": {
+        "en": "Alignment", "de": "Ausrichtung", "es": "Alineación",
+        "fr": "Alignement", "it": "Allineamento", "pt": "Alinhamento",
+        "ru": "Выравнивание", "ja": "配置", "zh_CN": "对齐",
+        "hi": "संरेखण",
+    },
+    "Balra": {
+        "en": "Left", "de": "Links", "es": "Izquierda", "fr": "Gauche",
+        "it": "Sinistra", "pt": "Esquerda", "ru": "Слева", "ja": "左",
+        "zh_CN": "左", "hi": "बाएँ",
+    },
+    "Középre": {
+        "en": "Centre", "de": "Mitte", "es": "Centro", "fr": "Centre",
+        "it": "Centro", "pt": "Centro", "ru": "По центру", "ja": "中央",
+        "zh_CN": "居中", "hi": "मध्य",
+    },
+    "Jobbra": {
+        "en": "Right", "de": "Rechts", "es": "Derecha", "fr": "Droite",
+        "it": "Destra", "pt": "Direita", "ru": "Справа", "ja": "右",
+        "zh_CN": "右", "hi": "दाएँ",
+    },
     "Írj be legalább egy látható karaktert.": {
         "en": "Type at least one visible character.",
         "de": "Gib mindestens ein sichtbares Zeichen ein.",

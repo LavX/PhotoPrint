@@ -2069,5 +2069,25 @@
         <source>Szöveg szerkesztése…</source>
         <translation>टेक्स्ट संपादित करें…</translation>
     </message>
+    <message>
+        <source>Szöveg szerkesztése</source>
+        <translation>टेक्स्ट संपादित करें</translation>
+    </message>
+    <message>
+        <source>Igazítás</source>
+        <translation>संरेखण</translation>
+    </message>
+    <message>
+        <source>Balra</source>
+        <translation>बाएँ</translation>
+    </message>
+    <message>
+        <source>Középre</source>
+        <translation>मध्य</translation>
+    </message>
+    <message>
+        <source>Jobbra</source>
+        <translation>दाएँ</translation>
+    </message>
 </context>
 </TS>

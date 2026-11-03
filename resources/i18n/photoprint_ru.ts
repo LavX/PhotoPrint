@@ -2083,5 +2083,25 @@
         <source>Szöveg szerkesztése…</source>
         <translation>Изменить текст…</translation>
     </message>
+    <message>
+        <source>Szöveg szerkesztése</source>
+        <translation>Изменить текст</translation>
+    </message>
+    <message>
+        <source>Igazítás</source>
+        <translation>Выравнивание</translation>
+    </message>
+    <message>
+        <source>Balra</source>
+        <translation>Слева</translation>
+    </message>
+    <message>
+        <source>Középre</source>
+        <translation>По центру</translation>
+    </message>
+    <message>
+        <source>Jobbra</source>
+        <translation>Справа</translation>
+    </message>
 </context>
 </TS>

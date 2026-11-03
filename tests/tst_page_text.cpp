@@ -6,6 +6,7 @@
 #include "OverlayGeometry.h"
 #include "PageRenderer.h"
 #include "ProjectStore.h"
+#include "SlotGeometry.h"
 #include "StickerAssets.h"
 #include "TextDialog.h"
 
@@ -340,14 +341,19 @@ private slots:
     void hitTestingFollowsTheRotatedBlock();
     void addTextPlacesAndSelects();
     void newTextLandsInTheLowerMargin();
+    void newTextLandsBelowATemplate();
     void dragCommitsOneUndoStep();
     void shortCaptionHandlesLeaveTheInteriorDraggable();
+    void ringBandDragsTheCaptionNotThePhoto();
     void resizeChangesTheFontSize();
+    void resizeIsRelativeToTheGrab();
     void rotateHandleTurnsTheText();
     void nudgeIsOneUndoPerBurst();
     void textNudgeThenOpacityKeepsTheMove();
     void opacityThenUndoKeepsTheUndo();
     void typingUpdatesTheCanvasBeforeFocusLeaves();
+    void typingIsOneUndoStep();
+    void dialogOpensOnThePendingTyping();
     void pageSwitchCommitsTheDirtyEditor();
     void deleteIsOneUndoStep();
     void dialogAddsEditsAndRefusesEmpty();
@@ -927,6 +933,43 @@ void TestPageText::newTextLandsInTheLowerMargin()
              qPrintable(QStringLiteral("caption at %1 mm").arg(lower.cy)));
 }
 
+void TestPageText::newTextLandsBelowATemplate()
+{
+    // A template page fills the sheet with cells that end a few millimetres
+    // above the bottom edge. The caption belongs in that band, not on the
+    // bottom row of photographs.
+    DocumentSnapshot document;
+    Page page = a4Page();
+    page.slotList = {
+        Slot{QStringLiteral("slot-0"), QRectF(0.0, 0.0, 0.5, 0.5)},
+        Slot{QStringLiteral("slot-1"), QRectF(0.5, 0.0, 0.5, 0.5)},
+        Slot{QStringLiteral("slot-2"), QRectF(0.0, 0.5, 0.5, 0.5)},
+        Slot{QStringLiteral("slot-3"), QRectF(0.5, 0.5, 0.5, 0.5)},
+    };
+    page.layoutId = QStringLiteral("n04-grid-2x2");
+    document.pages.append(page);
+    document.currentPage = 0;
+
+    MainWindow window;
+    window.resize(1280, 800);
+    window.show();
+    QVERIFY(loadDocument(window, m_dir, document));
+    QTest::qWait(150);
+
+    double cellBottom = 0.0;
+    for (const QRectF &cell : SlotGeometry::cellsMm(page))
+        cellBottom = std::max(cellBottom, cell.bottom());
+    QVERIFY(cellBottom > 280.0);
+
+    const TextItem item = window.newTextForTest();
+    QCOMPARE(item.fontPt, 14.0);
+    QVERIFY2(item.cy > cellBottom,
+             qPrintable(QStringLiteral("caption at %1 mm, cells end at %2 mm")
+                            .arg(item.cy)
+                            .arg(cellBottom)));
+    QVERIFY(item.cy < 297.0);
+}
+
 void TestPageText::dragCommitsOneUndoStep()
 {
     MainWindow window;
@@ -1016,6 +1059,62 @@ void TestPageText::shortCaptionHandlesLeaveTheInteriorDraggable()
     QVERIFY2(resized.fontPt > moved.fontPt, "the ring corner did not resize");
 }
 
+void TestPageText::ringBandDragsTheCaptionNotThePhoto()
+{
+    // A photo under the caption: a drag that starts in the band between the
+    // glyphs and the selection ring must move the caption, never the photo.
+    DocumentSnapshot document;
+    Page page = a4Page();
+    Frame frame;
+    frame.id = QStringLiteral("frame-band");
+    frame.sourcePath = m_photoPath;
+    frame.sourceSha256 = fileSha256(m_photoPath);
+    frame.cx = 105.0;
+    frame.cy = 148.5;
+    frame.width = 150.0;
+    frame.height = 100.0;
+    frame.fit = FitMode::Fill;
+    page.frames.append(frame);
+    page.texts.append(makeText(QStringLiteral("Hi"), 105.0, 148.5, 12.0, 1));
+    document.pages.append(page);
+    document.currentPage = 0;
+
+    MainWindow window;
+    window.resize(1280, 800);
+    window.show();
+    QVERIFY(loadDocument(window, m_dir, document));
+    QTest::qWait(200);
+    const QString textId = window.document().pages.first().texts.first().id;
+    QVERIFY(QMetaObject::invokeMethod(&window, "selectText", Qt::DirectConnection,
+                                      Q_ARG(QString, textId)));
+    QTest::qWait(120);
+
+    auto *view = window.findChild<PageView *>();
+    QVERIFY(view);
+    const TextItem start = window.document().pages.first().texts.first();
+    const Frame startFrame = window.document().pages.first().frames.first();
+    const QPolygonF block = view->textQuad(textId);
+    const QPolygonF ring = view->textHandleQuad(textId);
+
+    // A point in the band: halfway from the block edge to the ring edge.
+    const QPointF blockRight = (block.at(1) + block.at(2)) / 2.0;
+    const QPointF ringRight = (ring.at(1) + ring.at(2)) / 2.0;
+    const QPointF band = (blockRight + ringRight) / 2.0;
+    QVERIFY(!block.containsPoint(band, Qt::OddEvenFill));
+    QVERIFY(ring.containsPoint(band, Qt::OddEvenFill));
+
+    QTest::mousePress(view, Qt::LeftButton, Qt::NoModifier, band.toPoint());
+    QTest::mouseMove(view, (band + QPointF(40.0, 0.0)).toPoint());
+    QTest::mouseRelease(view, Qt::LeftButton, Qt::NoModifier,
+                        (band + QPointF(40.0, 0.0)).toPoint());
+    QTest::qWait(150);
+
+    const Page after = window.document().pages.first();
+    QVERIFY2(after.texts.first().cx > start.cx, "the band drag did not move the caption");
+    QCOMPARE(after.frames.first().cx, startFrame.cx);
+    QCOMPARE(after.frames.first().cy, startFrame.cy);
+}
+
 void TestPageText::resizeChangesTheFontSize()
 {
     MainWindow window;
@@ -1050,6 +1149,59 @@ void TestPageText::resizeChangesTheFontSize()
     QCOMPARE(resized.cx, start.cx);
     QCOMPARE(resized.cy, start.cy);
     QCOMPARE(window.undoStackForTest()->count(), before + 1);
+}
+
+void TestPageText::resizeIsRelativeToTheGrab()
+{
+    // The handle sits outside the block, so the size must scale from the radius
+    // the pointer had on the handle, not from the block corner: otherwise the
+    // caption jumps the moment the corner is grabbed, by more at a smaller zoom.
+    for (const double zoom : {1.0, 0.5}) {
+        MainWindow window;
+        window.resize(1280, 800);
+        window.show();
+        QTest::qWait(120);
+        TextItem item = makeText(QStringLiteral("Nyár 2026"), 105.0, 148.5, 14.0, 1);
+        QVERIFY(window.addTextForTest(item));
+        QTest::qWait(150);
+        auto *view = window.findChild<PageView *>();
+        QVERIFY(view);
+        view->setViewZoom(zoom);
+        QTest::qWait(200);
+
+        const TextItem start = window.document().pages.first().texts.first();
+
+        // A 1 px move from the handle must not resize the caption.
+        const QPolygonF ring = view->textHandleQuad(start.id);
+        const QPointF corner = ring.at(2);
+        const QPointF onePixel = corner + QPointF(1.0, 0.0);
+        QTest::mousePress(view, Qt::LeftButton, Qt::NoModifier, corner.toPoint());
+        QTest::mouseMove(view, onePixel.toPoint());
+        QTest::mouseRelease(view, Qt::LeftButton, Qt::NoModifier, onePixel.toPoint());
+        QTest::qWait(150);
+        const TextItem nudged = window.document().pages.first().texts.first();
+        QVERIFY2(std::abs(nudged.fontPt - start.fontPt) <= start.fontPt * 0.1,
+                 qPrintable(QStringLiteral("at %1x, a 1 px drag changed %2 pt to %3 pt")
+                                .arg(zoom)
+                                .arg(start.fontPt)
+                                .arg(nudged.fontPt)));
+
+        // A drag to twice the reach doubles the size.
+        const QPolygonF ring2 = view->textHandleQuad(nudged.id);
+        const QPointF centre = (ring2.at(0) + ring2.at(2)) / 2.0;
+        const QPointF corner2 = ring2.at(2);
+        const QPointF doubled = centre + (corner2 - centre) * 2.0;
+        QTest::mousePress(view, Qt::LeftButton, Qt::NoModifier, corner2.toPoint());
+        QTest::mouseMove(view, doubled.toPoint());
+        QTest::mouseRelease(view, Qt::LeftButton, Qt::NoModifier, doubled.toPoint());
+        QTest::qWait(150);
+        const TextItem scaled = window.document().pages.first().texts.first();
+        QVERIFY2(std::abs(scaled.fontPt - nudged.fontPt * 2.0) <= nudged.fontPt * 0.1,
+                 qPrintable(QStringLiteral("at %1x, %2 pt at twice the reach became %3 pt")
+                                .arg(zoom)
+                                .arg(nudged.fontPt)
+                                .arg(scaled.fontPt)));
+    }
 }
 
 void TestPageText::rotateHandleTurnsTheText()
@@ -1177,17 +1329,21 @@ void TestPageText::opacityThenUndoKeepsTheUndo()
     slider->setValue(40);
     QTest::qWait(400);
     QCOMPARE(window.document().pages.first().texts.first().opacity, 40);
-    const int before = window.undoStackForTest()->count();
+    const int beforeIndex = window.undoStackForTest()->index();
 
     // Start a second burst and undo inside the debounce window. The pending
     // value must be cancelled, not republished over the undo.
     slider->setValue(60);
     QCOMPARE(window.document().pages.first().texts.first().opacity, 40);
     window.undoStackForTest()->undo();
+    // The document value is the assertion that matters: a stale republish would
+    // put 60 back. The index proves no extra step was pushed on top.
+    QCOMPARE(window.document().pages.first().texts.first().opacity, 100);
+    QCOMPARE(window.undoStackForTest()->index(), beforeIndex - 1);
     QTest::qWait(400);
 
     QCOMPARE(window.document().pages.first().texts.first().opacity, 100);
-    QCOMPARE(window.undoStackForTest()->count(), before);
+    QCOMPARE(window.undoStackForTest()->index(), beforeIndex - 1);
 }
 
 void TestPageText::typingUpdatesTheCanvasBeforeFocusLeaves()
@@ -1220,6 +1376,73 @@ void TestPageText::typingUpdatesTheCanvasBeforeFocusLeaves()
     QTest::qWait(400);
     QCOMPARE(window.document().pages.first().texts.first().text, QStringLiteral("Nyár"));
     QCOMPARE(window.undoStackForTest()->count(), before + 1);
+}
+
+void TestPageText::typingIsOneUndoStep()
+{
+    MainWindow window;
+    window.resize(1280, 800);
+    window.show();
+    QTest::qWait(120);
+    TextItem item = makeText(QStringLiteral("Hello"), 105.0, 148.5, 24.0, 1);
+    QVERIFY(window.addTextForTest(item));
+    QTest::qWait(150);
+
+    auto *editor = window.findChild<QPlainTextEdit *>(QStringLiteral("textEditor"));
+    QVERIFY(editor);
+    const QString textId = window.document().pages.first().texts.first().id;
+    const QString beforeText = window.document().pages.first().texts.first().text;
+
+    // Several debounce bursts in a row, as a person types with pauses.
+    for (const QString &typed : {QStringLiteral("N"), QStringLiteral("Ny"),
+                                 QStringLiteral("Nyár"), QStringLiteral("Nyár 2")}) {
+        editor->setPlainText(typed);
+        QTest::qWait(300);
+    }
+    QCOMPARE(window.document().pages.first().texts.first().text,
+             QStringLiteral("Nyár 2"));
+    QCOMPARE(window.document().pages.first().texts.first().id, textId);
+
+    // One undo restores the pre-typing text, not the previous keystroke.
+    window.undoStackForTest()->undo();
+    QTest::qWait(120);
+    QCOMPARE(window.document().pages.first().texts.first().text, beforeText);
+}
+
+void TestPageText::dialogOpensOnThePendingTyping()
+{
+    MainWindow window;
+    window.resize(1280, 800);
+    window.show();
+    QTest::qWait(120);
+    TextItem item = makeText(QStringLiteral("Hello"), 105.0, 148.5, 24.0, 1);
+    QVERIFY(window.addTextForTest(item));
+    QTest::qWait(150);
+
+    auto *editor = window.findChild<QPlainTextEdit *>(QStringLiteral("textEditor"));
+    QVERIFY(editor);
+    // Type in the panel without waiting for the debounce, then open the dialog
+    // from the menu path, which does not move focus.
+    editor->setPlainText(QStringLiteral("Panel text"));
+
+    QString seen;
+    QTimer::singleShot(120, [&] {
+        auto *dialog = qobject_cast<TextDialog *>(QApplication::activeModalWidget());
+        if (!dialog)
+            return;
+        auto *dialogEditor =
+            dialog->findChild<QPlainTextEdit *>(QStringLiteral("textDialogEditor"));
+        if (!dialogEditor)
+            return;
+        seen = dialogEditor->toPlainText();
+        dialogEditor->setPlainText(QStringLiteral("Dialog text"));
+        dialog->accept();
+    });
+    QVERIFY(QMetaObject::invokeMethod(&window, "editSelectedText", Qt::DirectConnection));
+
+    // The dialog opened on the pending panel typing, and its own edit landed.
+    QCOMPARE(seen, QStringLiteral("Panel text"));
+    QCOMPARE(window.document().pages.first().texts.first().text, QStringLiteral("Dialog text"));
 }
 
 void TestPageText::pageSwitchCommitsTheDirtyEditor()
@@ -1522,12 +1745,16 @@ void TestPageText::elemTabSwitchesBetweenKinds()
     auto *textPanel = window.findChild<QWidget *>(QStringLiteral("textPanel"));
     auto *textAddPanel = window.findChild<QWidget *>(QStringLiteral("textAddPanel"));
     auto *addTextButton = window.findChild<QPushButton *>(QStringLiteral("addTextButton"));
+    auto *addStickerButton = window.findChild<QPushButton *>(QStringLiteral("addStickerButton"));
+    auto *setGrid = window.findChild<QWidget *>(QStringLiteral("stickerSetGrid"));
     QVERIFY(tabs);
     QVERIFY(emptyPanel);
     QVERIFY(stickerPanel);
     QVERIFY(textPanel);
     QVERIFY(textAddPanel);
     QVERIFY(addTextButton);
+    QVERIFY(addStickerButton);
+    QVERIFY(setGrid);
 
     // Nothing selected: the empty state, both add buttons, neither property
     // panel.
@@ -1540,7 +1767,9 @@ void TestPageText::elemTabSwitchesBetweenKinds()
     QVERIFY(textAddPanel->isVisible());
     QVERIFY(addTextButton->isVisible());
 
-    // A text selected: the text properties, not the sticker ones.
+    // A text selected: the text properties, not the sticker ones. The text add
+    // row gives way to the properties, but the compact sticker palette stays so
+    // "caption then add a star" is still one click away.
     TextItem item = makeText(QStringLiteral("Hello"), 105.0, 148.5, 12.0, 1);
     QVERIFY(window.addTextForTest(item));
     QTest::qWait(120);
@@ -1548,7 +1777,9 @@ void TestPageText::elemTabSwitchesBetweenKinds()
     QVERIFY(!emptyPanel->isVisible());
     QVERIFY(!stickerPanel->isVisible());
     QVERIFY(textPanel->isVisible());
-    QVERIFY(textAddPanel->isVisible());
+    QVERIFY(!textAddPanel->isVisible());
+    QVERIFY(addStickerButton->isVisible());
+    QVERIFY(setGrid->isVisible());
 
     // A sticker selected: the sticker properties, not the text ones.
     QVERIFY(QMetaObject::invokeMethod(&window, "addStickerFromPath", Qt::DirectConnection,
@@ -1558,6 +1789,7 @@ void TestPageText::elemTabSwitchesBetweenKinds()
     QVERIFY(!emptyPanel->isVisible());
     QVERIFY(stickerPanel->isVisible());
     QVERIFY(!textPanel->isVisible());
+    QVERIFY(textAddPanel->isVisible());
 
     // Escape clears the selection: the empty state is ready again.
     auto *view = window.findChild<PageView *>();
@@ -1580,16 +1812,15 @@ void TestPageText::textPanelControlsWriteOneEdit()
     QTest::qWait(150);
 
     auto *view = window.findChild<PageView *>();
-    auto *right = window.findChild<QToolButton *>(QStringLiteral("textAlignRightButton"));
-    auto *left = window.findChild<QToolButton *>(QStringLiteral("textAlignLeftButton"));
+    auto *align = window.findChild<QComboBox *>(QStringLiteral("textAlignCombo"));
     auto *bold = window.findChild<QToolButton *>(QStringLiteral("textBoldButton"));
     auto *size = window.findChild<QDoubleSpinBox *>(QStringLiteral("textSizeSpin"));
     auto *spacing = window.findChild<QDoubleSpinBox *>(QStringLiteral("textSpacingSpin"));
     auto *opacity = window.findChild<QSlider *>(QStringLiteral("textOpacitySlider"));
     QVERIFY(view);
-    QVERIFY(right);
-    QVERIFY(left);
+    QVERIFY(align);
     QVERIFY(bold);
+    QCOMPARE(align->count(), 3);
     QVERIFY(size);
     QVERIFY(spacing);
     QVERIFY(opacity);
@@ -1597,13 +1828,13 @@ void TestPageText::textPanelControlsWriteOneEdit()
     const QString textId = window.document().pages.first().texts.first().id;
     int before = window.undoStackForTest()->count();
 
-    // The three alignment buttons are one choice: clicking right then left must
-    // land Right then Left, not read back a stale toggle state.
-    QTest::mouseClick(right, Qt::LeftButton);
+    // The labelled combo is one choice: picking Right then Left must land Right
+    // then Left, not read back a stale toggle state.
+    align->setCurrentIndex(2);
     QTest::qWait(100);
     QCOMPARE(window.document().pages.first().texts.first().align, TextAlign::Right);
     QCOMPARE(window.undoStackForTest()->count(), before + 1);
-    QTest::mouseClick(left, Qt::LeftButton);
+    align->setCurrentIndex(0);
     QTest::qWait(100);
     QCOMPARE(window.document().pages.first().texts.first().align, TextAlign::Left);
     QCOMPARE(window.undoStackForTest()->count(), before + 2);
@@ -1784,6 +2015,8 @@ void TestPageText::largeFontKeepsElemReachable()
     auto *raise = window.findChild<QPushButton *>(QStringLiteral("textRaiseButton"));
     auto *lower = window.findChild<QPushButton *>(QStringLiteral("textLowerButton"));
     auto *remove = window.findChild<QPushButton *>(QStringLiteral("textDeleteButton"));
+    auto *addSticker = window.findChild<QPushButton *>(QStringLiteral("addStickerButton"));
+    auto *setGrid = window.findChild<QWidget *>(QStringLiteral("stickerSetGrid"));
     QVERIFY(tabs);
     QVERIFY(panel);
     QVERIFY(editor);
@@ -1794,6 +2027,8 @@ void TestPageText::largeFontKeepsElemReachable()
     QVERIFY(raise);
     QVERIFY(lower);
     QVERIFY(remove);
+    QVERIFY(addSticker);
+    QVERIFY(setGrid);
     QCOMPARE(tabs->currentIndex(), 3);
     QVERIFY(panel->isVisible());
     QVERIFY(editor->isVisible());
@@ -1807,6 +2042,14 @@ void TestPageText::largeFontKeepsElemReachable()
              qPrintable(QStringLiteral("the Elem panel needs %1 px in a %2 px viewport")
                             .arg(scroll->widget()->sizeHint().height())
                             .arg(scroll->viewport()->height())));
+    // The compact palette stays reachable while a caption is selected: "caption
+    // then add a star" must be possible from the tab.
+    QVERIFY2(addSticker->isVisible(), "the sticker add button is hidden");
+    QVERIFY2(setGrid->isVisible(), "the sticker palette is hidden");
+    QCOMPARE(setGrid->findChildren<QToolButton *>().size(), 12);
+    QVERIFY2(insideViewport(scroll, addSticker), "the sticker add button is below the fold");
+    QVERIFY2(insideViewport(scroll, setGrid), "the sticker palette is below the fold");
+
     for (QWidget *control : {static_cast<QWidget *>(editButton),
                              static_cast<QWidget *>(colour),
                              static_cast<QWidget *>(spacing),
@@ -1929,8 +2172,10 @@ void TestPageText::evidenceScreenshots()
             "ui-text-dialog.png        the text dialog, white caption on the checkerboard\n"
             "text-page.pdf             300 ppi PDF of the caption over the photograph\n"
             "text-page.png             pdftoppm render of that PDF at 300 ppi\n"
-            "text-print.pdf/png        rotated, semi-transparent caption at 300 ppi\n"
-            "text-no-fonts.pdf         the same page, no font object in the PDF\n");
+            "text-print.pdf/png        #cc0000 at 80 % opacity, rotated 20 degrees, "
+            "300 ppi\n"
+            "text-no-fonts.pdf         a bare page with the same caption, no font "
+            "object in the PDF\n");
         manifest.close();
     }
 }

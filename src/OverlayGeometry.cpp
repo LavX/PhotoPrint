@@ -315,24 +315,29 @@ TextItem movedText(const TextItem &item, const QPointF &delta, const QSizeF &she
     return moved;
 }
 
-TextItem resizedText(const TextItem &item, const QPointF &pagePoint, const QSizeF &sheetMm)
+double textReachMm(const TextItem &item, const QPointF &pageMm)
 {
-    Q_UNUSED(sheetMm)
+    const QPointF local = toLocal(item.cx, item.cy, item.angleDeg, pageMm);
+    return std::hypot(local.x(), local.y());
+}
+
+TextItem resizedTextFromGrab(const TextItem &item, const QPointF &pagePoint,
+                             double grabRadiusMm)
+{
     TextItem resized = item;
-    const QRectF block = textBlockMm(item);
-    if (block.isEmpty())
+    // The handle sits outside the block, so the factor is measured from the
+    // radius the pointer had when it grabbed the handle, not from the block
+    // corner: otherwise the first pixel of the drag would already scale the
+    // caption. The block is derived from the font, so scaling the font is the
+    // whole resize.
+    if (!(grabRadiusMm > 0.0) || !std::isfinite(grabRadiusMm))
         return resized;
-    const QPointF local = toLocal(item.cx, item.cy, item.angleDeg, pagePoint);
-    const double start = std::hypot(block.width() / 2.0, block.height() / 2.0);
-    const double reach = std::hypot(local.x(), local.y());
-    if (!(start > 0.0) || !(reach > 0.0) || !std::isfinite(reach))
+    const double reach = textReachMm(item, pagePoint);
+    if (!(reach > 0.0) || !std::isfinite(reach))
         return resized;
-    const double factor = reach / start;
+    const double factor = reach / grabRadiusMm;
     if (!(factor > 0.0) || !std::isfinite(factor))
         return resized;
-    // The block is derived from the font, so scaling the font is the whole
-    // resize. The lower bound is the minimum block, not the bare 4 pt: a drag
-    // must not preview a size the commit would raise again.
     resized.fontPt = std::clamp(item.fontPt * factor, minimumFontPt(item), kMaxFontPt);
     return resized;
 }

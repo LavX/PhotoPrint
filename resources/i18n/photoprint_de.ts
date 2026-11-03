@@ -2069,5 +2069,25 @@
         <source>Szöveg szerkesztése…</source>
         <translation>Text bearbeiten…</translation>
     </message>
+    <message>
+        <source>Szöveg szerkesztése</source>
+        <translation>Text bearbeiten</translation>
+    </message>
+    <message>
+        <source>Igazítás</source>
+        <translation>Ausrichtung</translation>
+    </message>
+    <message>
+        <source>Balra</source>
+        <translation>Links</translation>
+    </message>
+    <message>
+        <source>Középre</source>
+        <translation>Mitte</translation>
+    </message>
+    <message>
+        <source>Jobbra</source>
+        <translation>Rechts</translation>
+    </message>
 </context>
 </TS>

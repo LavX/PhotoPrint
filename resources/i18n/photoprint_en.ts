@@ -2069,5 +2069,25 @@
         <source>Szöveg szerkesztése…</source>
         <translation>Edit text…</translation>
     </message>
+    <message>
+        <source>Szöveg szerkesztése</source>
+        <translation>Edit text</translation>
+    </message>
+    <message>
+        <source>Igazítás</source>
+        <translation>Alignment</translation>
+    </message>
+    <message>
+        <source>Balra</source>
+        <translation>Left</translation>
+    </message>
+    <message>
+        <source>Középre</source>
+        <translation>Centre</translation>
+    </message>
+    <message>
+        <source>Jobbra</source>
+        <translation>Right</translation>
+    </message>
 </context>
 </TS>

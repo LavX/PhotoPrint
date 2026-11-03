@@ -402,11 +402,27 @@ class SnapshotCommand : public QUndoCommand
 {
 public:
     SnapshotCommand(CanvasController *controller, DocumentSnapshot before, DocumentSnapshot after,
-                    const QString &text, QUndoCommand *parent = nullptr)
+                    const QString &text, const QString &coalesceKey = QString(),
+                    QUndoCommand *parent = nullptr)
         : QUndoCommand(parent), m_controller(controller), m_before(std::move(before)),
-          m_after(std::move(after))
+          m_after(std::move(after)), m_coalesceKey(coalesceKey)
     {
         setText(text);
+    }
+
+    /// A non-empty key makes consecutive edits with the same key fold into one
+    /// step: the typing debounce uses this so a paragraph is one undo.
+    int id() const override { return m_coalesceKey.isEmpty() ? -1 : 1; }
+
+    bool mergeWith(const QUndoCommand *other) override
+    {
+        const auto *next = static_cast<const SnapshotCommand *>(other);
+        if (m_coalesceKey.isEmpty() || next->m_coalesceKey != m_coalesceKey)
+            return false;
+        // Keep this command's "before" and take the newer "after", so one undo
+        // restores the state before the session started.
+        m_after = next->m_after;
+        return true;
     }
 
     void undo() override { m_controller->replaceSnapshot(m_before); }
@@ -416,6 +432,7 @@ private:
     CanvasController *m_controller;
     DocumentSnapshot m_before;
     DocumentSnapshot m_after;
+    QString m_coalesceKey;
 };
 
 class RemoveFrameCommand : public QUndoCommand
@@ -695,7 +712,8 @@ Result<void> CanvasController::apply(const DocumentEdit &edit)
                 const QString text = value.actionText.isEmpty()
                     ? QCoreApplication::translate("PhotoPrint", "Elrendezés")
                     : value.actionText;
-                m_undo->push(new SnapshotCommand(this, m_document, after, text));
+                m_undo->push(new SnapshotCommand(this, m_document, after, text,
+                                                 value.coalesceKey));
                 return Result<void>();
             } else if constexpr (std::is_same_v<T, SetPaperEdit>) {
                 if (value.pageIndex >= 0 && value.pageIndex < m_document.pages.size()
@@ -708,7 +726,8 @@ Result<void> CanvasController::apply(const DocumentEdit &edit)
         edit);
 }
 
-Result<void> CanvasController::publishPage(const Page &page, const QString &actionText)
+Result<void> CanvasController::publishPage(const Page &page, const QString &actionText,
+                                             const QString &coalesceKey)
 {
     if (page.id.isEmpty()) {
         return error(QStringLiteral("page-missing"),
@@ -737,6 +756,7 @@ Result<void> CanvasController::publishPage(const Page &page, const QString &acti
     edit.pages.append(change);
     edit.actionText = actionText;
     edit.selectPage = index;
+    edit.coalesceKey = coalesceKey;
     return apply(edit);
 }
 

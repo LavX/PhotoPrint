@@ -135,10 +135,16 @@ double minimumFontPt(const TextItem &item);
 /// Moves a text by a page-space delta and pulls its centre back onto the paper.
 TextItem movedText(const TextItem &item, const QPointF &delta, const QSizeF &sheetMm);
 
-/// Uniform resize about the centre: the distance from the centre sets the scale
-/// and the font size follows it, so the block keeps its shape. The size is
-/// clamped to the model's range and to the minimum block.
-TextItem resizedText(const TextItem &item, const QPointF &pagePoint, const QSizeF &sheetMm);
+/// The distance from the block centre to a page point, in the block's own
+/// frame. The resize gesture captures this at press, so the factor is measured
+/// from the handle the user grabbed rather than from the block corner.
+double textReachMm(const TextItem &item, const QPointF &pageMm);
+
+/// Uniform resize from the grab radius: `reach / grabRadiusMm` scales the font,
+/// so the first pixel of the drag does not jump the size. The size is clamped to
+/// the model's range and to the minimum block, so the block keeps its shape.
+TextItem resizedTextFromGrab(const TextItem &item, const QPointF &pagePoint,
+                             double grabRadiusMm);
 
 /// Turns a text towards the pointer, snapping to 15 degrees when `snap` is set.
 TextItem rotatedText(const TextItem &item, const QPointF &pagePoint, bool snap);

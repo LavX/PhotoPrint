@@ -4,6 +4,7 @@
 
 #include <QDialog>
 
+class QComboBox;
 class QDoubleSpinBox;
 class QFontComboBox;
 class QLabel;
@@ -22,7 +23,8 @@ class TextDialog : public QDialog
     Q_OBJECT
 
 public:
-    explicit TextDialog(const TextItem &item, QWidget *parent = nullptr);
+    explicit TextDialog(const TextItem &item, bool editing = false,
+                        QWidget *parent = nullptr);
 
     /// The edited item. The text is normalised ('\r\n' -> '\n') and the geometry
     /// is the one the dialog was built with.
@@ -48,9 +50,7 @@ private:
     QToolButton *m_boldButton = nullptr;
     QToolButton *m_italicButton = nullptr;
     QToolButton *m_underlineButton = nullptr;
-    QToolButton *m_alignLeftButton = nullptr;
-    QToolButton *m_alignCenterButton = nullptr;
-    QToolButton *m_alignRightButton = nullptr;
+    QComboBox *m_alignCombo = nullptr;
     QPushButton *m_colorButton = nullptr;
     QDoubleSpinBox *m_spacingSpin = nullptr;
     QLabel *m_preview = nullptr;
