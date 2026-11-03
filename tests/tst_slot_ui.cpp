@@ -604,6 +604,7 @@ private slots:
     void libraryDragMovesSwapsAndDetaches();
     void dragMovesTheFrameInsideItsSlot();
     void cropModePansTheImageInsideTheFrame();
+    void cropModeHandlesResizeRotateAndPan();
     void wheelOverASlotFrameZoomsThePage();
     void widthHeightAndAngleSpinsEditASlottedFrame();
     void canvasHandlesResizeAndTurnASlottedFrame();
@@ -1172,6 +1173,122 @@ void TestSlotUi::cropModePansTheImageInsideTheFrame()
     undoAction(window)->trigger();
     QTest::qWait(50);
     QVERIFY(window.document() == beforePan);
+}
+
+void TestSlotUi::cropModeHandlesResizeRotateAndPan()
+{
+    QTemporaryDir dir;
+    QVERIFY(dir.isValid());
+    const QString photo = makePhoto(dir.path(), QStringLiteral("crop-handles.png"),
+                                    QColor(80, 150, 200));
+    MainWindow window;
+    window.resize(1280, 800);
+    window.show();
+    QTest::qWait(100);
+    QVERIFY(loadDocument(window, dir, documentWithFreeFrames({photo}),
+                         QStringLiteral("crop-handles.ppj")));
+    auto *view = window.findChild<PageView *>();
+    QVERIFY(view);
+    QVERIFY(window.waitForPreview(15000));
+
+    const Frame original = window.document().pages.first().frames.first();
+    const QPointF centre = pageToWidget(*view, QPointF(original.cx, original.cy));
+    QTest::mouseClick(view, Qt::LeftButton, Qt::NoModifier, centre.toPoint());
+    QCOMPARE(view->selectedFrame(), original.id);
+    QTest::mouseDClick(view, Qt::LeftButton, Qt::NoModifier, centre.toPoint());
+    QVERIFY2(view->cropMode(), "a double click did not enter crop mode");
+
+    const auto cornerWidget = [&](const Frame &frame, int corner) {
+        const double sx = corner == 0 || corner == 3 ? -1.0 : 1.0;
+        const double sy = corner < 2 ? -1.0 : 1.0;
+        return pageToWidget(*view, QPointF(frame.cx + sx * frame.width / 2.0,
+                                           frame.cy + sy * frame.height / 2.0));
+    };
+    const auto rotateWidget = [&](const Frame &frame) {
+        const QPointF topLeft = cornerWidget(frame, 0);
+        const QPointF topRight = cornerWidget(frame, 1);
+        const QPointF frameCentre = pageToWidget(*view, QPointF(frame.cx, frame.cy));
+        const QPointF topMid = (topLeft + topRight) / 2.0;
+        QPointF direction = topMid - frameCentre;
+        const double length = std::hypot(direction.x(), direction.y());
+        if (length > 0.0)
+            direction /= length;
+        return topMid + direction * 30.0;
+    };
+
+    // The corner is a resize handle, and the pointer says so before the press.
+    const QPointF topLeft = cornerWidget(original, 0);
+    QTest::mouseMove(view, topLeft.toPoint());
+    QCOMPARE(view->cursor().shape(), Qt::SizeFDiagCursor);
+
+    // A corner press resizes the frame and stays in crop mode. It must not be
+    // taken as a pan: the crop centre and the zoom do not move.
+    const DocumentSnapshot beforeResize = window.document();
+    QTest::mousePress(view, Qt::LeftButton, Qt::NoModifier, topLeft.toPoint());
+    const QPointF outward = topLeft + QPointF(-28.0, -20.0);
+    QTest::mouseMove(view, outward.toPoint());
+    QTest::mouseRelease(view, Qt::LeftButton, Qt::NoModifier, outward.toPoint());
+    QTest::qWait(60);
+
+    Frame resized = window.document().pages.first().frames.first();
+    QVERIFY2(view->cropMode(), "resizing a corner left crop mode");
+    QVERIFY2(resized.width > original.width,
+             qPrintable(QStringLiteral("width %1 -> %2")
+                            .arg(original.width).arg(resized.width)));
+    QVERIFY2(resized.height > original.height,
+             qPrintable(QStringLiteral("height %1 -> %2")
+                            .arg(original.height).arg(resized.height)));
+    QCOMPARE(resized.cropCenter, original.cropCenter);
+    QCOMPARE(resized.zoom, original.zoom);
+
+    QAction *undo = undoAction(window);
+    QVERIFY(undo);
+    undo->trigger();
+    QTest::qWait(60);
+    QVERIFY(window.document() == beforeResize);
+
+    // The rotate handle turns the frame and stays in crop mode.
+    const Frame beforeRotate = window.document().pages.first().frames.first();
+    const QPointF rotate = rotateWidget(beforeRotate);
+    QTest::mousePress(view, Qt::LeftButton, Qt::NoModifier, rotate.toPoint());
+    const QPointF turned = rotate + QPointF(55.0, 25.0);
+    QTest::mouseMove(view, turned.toPoint());
+    QTest::mouseRelease(view, Qt::LeftButton, Qt::NoModifier, turned.toPoint());
+    QTest::qWait(60);
+
+    const Frame rotated = window.document().pages.first().frames.first();
+    QVERIFY2(view->cropMode(), "rotating left crop mode");
+    QVERIFY2(std::abs(rotated.angleDeg - beforeRotate.angleDeg) > 1.0,
+             qPrintable(QStringLiteral("angle %1 -> %2")
+                            .arg(beforeRotate.angleDeg).arg(rotated.angleDeg)));
+    QCOMPARE(rotated.width, beforeRotate.width);
+    QCOMPARE(rotated.height, beforeRotate.height);
+
+    undo->trigger();
+    QTest::qWait(60);
+    QVERIFY(window.document() == beforeResize);
+
+    // A press inside the frame, away from every handle, still pans the image.
+    const Frame beforePan = window.document().pages.first().frames.first();
+    const QPointF inside = pageToWidget(*view, QPointF(beforePan.cx, beforePan.cy));
+    QTest::mousePress(view, Qt::LeftButton, Qt::NoModifier, inside.toPoint());
+    QTest::mouseMove(view, (inside + QPointF(24.0, 12.0)).toPoint());
+    QTest::mouseRelease(view, Qt::LeftButton, Qt::NoModifier,
+                        (inside + QPointF(24.0, 12.0)).toPoint());
+    QTest::qWait(60);
+
+    const Frame panned = window.document().pages.first().frames.first();
+    QVERIFY2(view->cropMode(), "panning left crop mode");
+    QVERIFY2(panned.cropCenter != beforePan.cropCenter, "the image did not pan");
+    QCOMPARE(panned.width, beforePan.width);
+    QCOMPARE(panned.height, beforePan.height);
+
+    // A press outside the frame still leaves crop mode.
+    const QPointF outside = pageToWidget(*view, QPointF(2.0, 2.0));
+    QTest::mousePress(view, Qt::LeftButton, Qt::NoModifier, outside.toPoint());
+    QTest::mouseRelease(view, Qt::LeftButton, Qt::NoModifier, outside.toPoint());
+    QTest::qWait(40);
+    QVERIFY2(!view->cropMode(), "a press outside the frame did not leave crop mode");
 }
 
 void TestSlotUi::wheelOverASlotFrameZoomsThePage()

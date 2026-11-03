@@ -2190,37 +2190,11 @@ void PageView::paintEvent(QPaintEvent *)
     painter.setPen(outline);
     painter.drawPolygon(quad);
 
-    // Every frame keeps the original handles, slotted or free: the section's
-    // cell clips the photograph but does not take the frame's rectangle away
-    // from the user. The fill and the outline are theme-aware, and the outline
-    // is forced dark enough to stay visible on a light page; the light
-    // underlay keeps it visible on a dark one.
-    const QColor handleFill = palette().color(QPalette::Base);
-    const QColor handleOutline = handleOutlineColor();
-    painter.setPen(QPen(handleOutline, 1.2));
-    painter.setBrush(handleFill);
-    for (int i = 0; i < 4; ++i) {
-        const QPointF point = quad.at(i);
-        painter.drawRect(QRectF(point.x() - kHandleHalfPx, point.y() - kHandleHalfPx,
-                                kHandleHalfPx * 2.0, kHandleHalfPx * 2.0));
-    }
-
-    const QPointF center = pageToWidget().map(QPointF(frame->cx, frame->cy));
-    const QPointF topMid = (quad.at(0) + quad.at(1)) / 2.0;
-    QPointF direction = topMid - center;
-    const double length = std::hypot(direction.x(), direction.y());
-    if (length > 0.0)
-        direction /= length;
-    const QPointF rotate = topMid + direction * kRotateOffsetPx;
-    painter.setPen(QPen(handleOutline, 1.2));
-    painter.drawLine(topMid, rotate);
-    painter.setBrush(handleFill);
-    painter.drawEllipse(rotate, 5.0, 5.0);
-
     if (m_cropMode) {
         // The crop overlay marks the visible window, not the frame: a slotted
         // photograph is clipped to its cell, so the dim and the dashed outline
-        // follow the intersection of the frame and the cell.
+        // follow the intersection of the frame and the cell. It is painted
+        // before the handles, so the corners stay crisp above the dim.
         QPainterPath visible;
         if (!frame->slotId.isEmpty()) {
             if (const Page *page = currentPage()) {
@@ -2249,6 +2223,33 @@ void PageView::paintEvent(QPaintEvent *)
         painter.setBrush(Qt::NoBrush);
         painter.drawPath(visible);
     }
+
+    // Every frame keeps the original handles, slotted or free: the section's
+    // cell clips the photograph but does not take the frame's rectangle away
+    // from the user. The fill and the outline are theme-aware, and the outline
+    // is forced dark enough to stay visible on a light page; the light
+    // underlay keeps it visible on a dark one.
+    const QColor handleFill = palette().color(QPalette::Base);
+    const QColor handleOutline = handleOutlineColor();
+    painter.setPen(QPen(handleOutline, 1.2));
+    painter.setBrush(handleFill);
+    for (int i = 0; i < 4; ++i) {
+        const QPointF point = quad.at(i);
+        painter.drawRect(QRectF(point.x() - kHandleHalfPx, point.y() - kHandleHalfPx,
+                                kHandleHalfPx * 2.0, kHandleHalfPx * 2.0));
+    }
+
+    const QPointF center = pageToWidget().map(QPointF(frame->cx, frame->cy));
+    const QPointF topMid = (quad.at(0) + quad.at(1)) / 2.0;
+    QPointF direction = topMid - center;
+    const double length = std::hypot(direction.x(), direction.y());
+    if (length > 0.0)
+        direction /= length;
+    const QPointF rotate = topMid + direction * kRotateOffsetPx;
+    painter.setPen(QPen(handleOutline, 1.2));
+    painter.drawLine(topMid, rotate);
+    painter.setBrush(handleFill);
+    painter.drawEllipse(rotate, 5.0, 5.0);
 
     drawFocusRing();
 }
@@ -2495,10 +2496,24 @@ void PageView::mousePressEvent(QMouseEvent *event)
 
     if (m_cropMode) {
         const Frame *frame = selectedFramePtr();
-        if (frame && frameQuadWidget(*frame).containsPoint(event->position(), Qt::OddEvenFill)) {
-            beginDrag(DragKind::CropPan, -1, pagePoint, *frame);
-            event->accept();
-            return;
+        if (frame) {
+            // The handles are the crop window's own corners: a press on one
+            // resizes or turns the frame, exactly as it does outside crop mode.
+            // Checking them first is what makes the visible handles usable; a
+            // press inside the frame that misses every handle pans the image.
+            const int handle = hitHandle(event->position());
+            if (handle >= 0) {
+                beginDrag(handle == 4 ? DragKind::Rotate : DragKind::Resize, handle,
+                          pagePoint, *frame);
+                event->accept();
+                return;
+            }
+            if (frameQuadWidget(*frame).containsPoint(event->position(),
+                                                      Qt::OddEvenFill)) {
+                beginDrag(DragKind::CropPan, -1, pagePoint, *frame);
+                event->accept();
+                return;
+            }
         }
         m_cropMode = false;
         if (onCropModeExited)
@@ -2683,10 +2698,27 @@ void PageView::mouseMoveEvent(QMouseEvent *event)
     }
     if (m_drag.kind == DragKind::None) {
         const Frame *frame = selectedFramePtr();
-        if (frame && m_cropMode
-            && frameQuadWidget(*frame).containsPoint(event->position(), Qt::OddEvenFill)) {
-            setCursor(Qt::OpenHandCursor);
-            return;
+        if (frame && m_cropMode) {
+            // A corner is a resize handle, not the pan surface: the pointer has
+            // to say so before the press, or the user cannot tell the two apart.
+            const int handle = hitHandle(event->position());
+            if (handle >= 0) {
+                if (handle == 4) {
+                    setCursor(Qt::CrossCursor);
+                } else {
+                    const QPolygonF quad = frameQuadWidget(*frame);
+                    const QPointF centre = (quad.at(0) + quad.at(2)) / 2.0;
+                    const QPointF delta = quad.at(handle) - centre;
+                    const bool sameSign = (delta.x() >= 0.0) == (delta.y() >= 0.0);
+                    setCursor(sameSign ? Qt::SizeFDiagCursor : Qt::SizeBDiagCursor);
+                }
+                return;
+            }
+            if (frameQuadWidget(*frame).containsPoint(event->position(),
+                                                      Qt::OddEvenFill)) {
+                setCursor(Qt::OpenHandCursor);
+                return;
+            }
         }
         setCursor(Qt::ArrowCursor);
         return;
