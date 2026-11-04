@@ -1,0 +1,30 @@
+#!/usr/bin/make -f
+
+%:
+	dh $@ --buildsystem=cmake --builddirectory=build/deb
+
+override_dh_auto_configure:
+	dh_auto_configure -- -G Ninja
+
+override_dh_auto_build:
+	dh_auto_build -- -j$(shell nproc)
+
+override_dh_auto_test:
+	# The test suite expects a local sample photo that is not available in
+	# the packaging environment, so tests are skipped here. They run in CI.
+	@echo "Skipping tests: local sample photo not available in the build environment."
+
+override_dh_auto_install:
+	# No CMake install rules, so we install manually.
+	mkdir -p debian/photoprint/usr/bin
+	mkdir -p debian/photoprint/usr/share/photoprint
+	install -m 755 build/deb/photoprint debian/photoprint/usr/bin/photoprint
+	if [ -d build/deb/translations ]; then \
+		cp -a build/deb/translations debian/photoprint/usr/share/photoprint/; \
+	fi
+	if [ -d resources ]; then \
+		cp -a resources debian/photoprint/usr/share/photoprint/; \
+	fi
+	install -Dm644 resources/photoprint.desktop debian/photoprint/usr/share/applications/photoprint.desktop
+	install -Dm644 resources/photoprint.svg debian/photoprint/usr/share/icons/hicolor/scalable/apps/photoprint.svg
+	install -Dm644 resources/photoprint-256.png debian/photoprint/usr/share/icons/hicolor/256x256/apps/photoprint.png

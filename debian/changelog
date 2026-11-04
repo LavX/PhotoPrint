@@ -1,0 +1,5 @@
+photoprint (1.2.2) unstable; urgency=medium
+
+  * Initial Debian packaging of the 1.2.2 feature set.
+
+ -- LavX <lavx@users.noreply.github.com>  Tue, 03 Nov 2026 15:00:00 +0000

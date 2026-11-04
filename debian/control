@@ -1,0 +1,26 @@
+Source: photoprint
+Section: graphics
+Priority: optional
+Maintainer: LavX <lavx@users.noreply.github.com>
+Standards-Version: 4.6.2
+Build-Depends:
+ debhelper-compat (= 13),
+ cmake,
+ ninja-build,
+ g++,
+ qt6-base-dev,
+ qt6-tools-dev-tools,
+ liblcms2-dev,
+ libcups2-dev,
+ zlib1g-dev,
+ libmagickwand-6.q16-dev,
+ poppler-utils
+Homepage: https://github.com/LavX/PhotoPrint
+
+Package: photoprint
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends}
+Description: Arrange photos on paper and print through CUPS.
+ A local photo printing application built with Qt6 and CUPS.
+ It supports effects, layouts, batch sheets, stickers, and text.
+ It also supports papers in centimetres and keeps everything local.
