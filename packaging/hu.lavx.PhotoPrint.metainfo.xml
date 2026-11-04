@@ -23,10 +23,11 @@
   <releases>
     <release version="1.2.2" date="2026-11-04">
       <description>
-        <p>Packages for two more systems, and a cleaner window title.</p>
+        <p>Packages for two more systems, a cleaner window title, and one icon everywhere.</p>
         <ul>
           <li>A Debian (.deb) package and an Arch Linux PKGBUILD.</li>
           <li>An ARM64 build produced in a Fedora 44 aarch64 container.</li>
+          <li>The application icon adopts the striped mark the website uses, so the About dialog, the window and the desktop entry all match the site's brand.</li>
           <li>The window title uses a plain hyphen.</li>
           <li>Dropped the em dash from a Russian translation string.</li>
         </ul>
