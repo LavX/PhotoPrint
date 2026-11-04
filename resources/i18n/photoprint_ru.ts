@@ -1341,7 +1341,7 @@
     </message>
     <message>
         <source>A 35 × 45 mm az igazolványkép szokásos mérete. Ez az eszköz csak a helyét állítja be, azt nem ellenőrzi, hogy a fotó megfelel-e az előírásoknak.</source>
-        <translation>35 × 45 мм — обычный размер фотографии на документы. Этот инструмент только размещает копии и не проверяет, соответствует ли фото требованиям.</translation>
+        <translation>35 × 45 мм, обычный размер фотографии на документы. Этот инструмент только размещает копии и не проверяет, соответствует ли фото требованиям.</translation>
     </message>
     <message>
         <source>Térköz</source>
