@@ -1,5 +1,5 @@
 Name:           photoprint
-Version:        1.2.1
+Version:        1.2.2
 Release:        1%{?dist}
 Summary:        Simple local photo printing
 License:        MIT
@@ -79,6 +79,10 @@ install -D -m 0644 resources/photoprint.svg %{buildroot}%{_datadir}/icons/hicolo
 %{_datadir}/icons/hicolor/scalable/apps/photoprint.svg
 
 %changelog
+* Wed Nov 04 2026 Laszlo Toth <lavx@lavx.hu> - 1.2.2-1
+- Debian and Arch Linux packages, plus an ARM64 build
+- The window title uses a plain hyphen
+
 * Tue Nov 03 2026 Laszlo Toth <lavx@lavx.hu> - 1.2.1-1
 - Font pickers are closed lists instead of free text fields
 - An unknown font stored in a project is kept instead of replaced
