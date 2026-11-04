@@ -97,6 +97,21 @@ cmake --build --preset release
 ./build/release/photoprint
 ```
 
+## ARM64 build
+
+The ARM64 build runs inside a Fedora 44 aarch64 container, which works on
+x86_64 hosts through podman's qemu emulation:
+
+```bash
+./packaging/build-arm64.sh
+# build/release-arm64/photoprint (aarch64)
+```
+
+The container mounts the source at `/work` and builds into
+`build/release-arm64`, so the host x86_64 build in `build/release` is never
+touched. The ARM64 build directory is wiped inside the container before
+configuring, so a cache built with host paths cannot leak in.
+
 ## Tests
 
 ```bash
