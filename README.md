@@ -123,6 +123,16 @@ makepkg -si
 # photoprint-1.2.2-1-x86_64.pkg.tar.zst, then pacman installs it
 ```
 
+## Debian package
+
+The deb is built inside a Debian trixie container, because the Debian build
+dependencies (qt6-base-dev, libmagickwand-7) are not on the Fedora host:
+
+```bash
+./packaging/build-deb.sh
+# build/deb-out/photoprint_1.2.2_amd64.deb
+```
+
 ## Tests
 
 ```bash
