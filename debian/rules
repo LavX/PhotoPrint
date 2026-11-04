@@ -7,7 +7,9 @@ override_dh_auto_configure:
 	dh_auto_configure -- -G Ninja
 
 override_dh_auto_build:
-	dh_auto_build -- -j$(shell nproc)
+	# The configure step generates Ninja files, so the build step must invoke
+	# ninja directly; dh_auto_build would fall back to make.
+	cd build/deb && ninja -j$(shell nproc)
 
 override_dh_auto_test:
 	# The test suite expects a local sample photo that is not available in

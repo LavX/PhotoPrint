@@ -10,10 +10,12 @@ Build-Depends:
  g++,
  qt6-base-dev,
  qt6-tools-dev-tools,
+ qt6-l10n-tools,
+ libxkbcommon-dev,
  liblcms2-dev,
  libcups2-dev,
  zlib1g-dev,
- libmagickwand-6.q16-dev,
+ libmagickwand-7.q16-dev,
  poppler-utils
 Homepage: https://github.com/LavX/PhotoPrint
 

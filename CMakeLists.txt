@@ -10,7 +10,11 @@ set(CMAKE_AUTORCC ON)
 find_package(Qt6 6.5 REQUIRED COMPONENTS Widgets Gui Concurrent Test)
 find_package(ZLIB REQUIRED)
 
-find_program(LRELEASE_EXECUTABLE NAMES lrelease-qt6 lrelease-qt lrelease)
+# Debian ships lrelease in /usr/lib/qt6/bin without a PATH symlink; Fedora
+# installs lrelease-qt6 in /usr/bin. HINTS only applies when the normal
+# search paths come up empty.
+find_program(LRELEASE_EXECUTABLE NAMES lrelease-qt6 lrelease-qt lrelease
+  HINTS /usr/lib/qt6/bin /usr/lib64/qt6/bin)
 if(NOT LRELEASE_EXECUTABLE)
   message(FATAL_ERROR "lrelease from the Qt Linguist tools is required for the translations.")
 endif()
