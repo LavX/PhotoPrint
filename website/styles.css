@@ -557,7 +557,7 @@ code {
 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; }
-  .nav__links a, .logo polygon, .nav__burger, .lede__rise {
+  .nav__links a, .logo__mark, .nav__burger, .lede__rise {
     opacity: 1;
     transform: none;
   }

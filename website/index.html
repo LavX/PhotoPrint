@@ -166,19 +166,19 @@
   <section class="download" id="download" aria-labelledby="download-title">
     <div class="download__inner">
       <h2 id="download-title">Download PhotoPrint</h2>
-      <p class="download__lede">The current release is <strong>1.2.1</strong>, published on 3 November 2026. Every format below is the same application. <a class="text-link" href="https://github.com/LavX/PhotoPrint/releases/tag/v1.2.1">Release notes</a></p>
+      <p class="download__lede">The current release is <strong>1.2.2</strong>, published on 4 November 2026. Every format below is the same application. <a class="text-link" href="https://github.com/LavX/PhotoPrint/releases/tag/v1.2.2">Release notes</a></p>
 
       <div class="packages">
         <section class="package">
           <div class="package__body">
             <h3>AppImage</h3>
             <p>One file that runs on most 64-bit Linux desktops. No installation, no package manager.</p>
-            <pre><code>chmod +x PhotoPrint-1.2.1-x86_64.AppImage
-./PhotoPrint-1.2.1-x86_64.AppImage</code></pre>
+            <pre><code>chmod +x PhotoPrint-1.2.2-x86_64.AppImage
+./PhotoPrint-1.2.2-x86_64.AppImage</code></pre>
           </div>
           <div class="package__side">
             <span class="package__meta">48 MB · x86_64</span>
-            <a class="btn btn--nav" href="https://github.com/LavX/PhotoPrint/releases/download/v1.2.1/PhotoPrint-1.2.1-x86_64.AppImage" aria-label="Download the AppImage">
+            <a class="btn btn--nav" href="https://github.com/LavX/PhotoPrint/releases/download/v1.2.2/PhotoPrint-1.2.2-x86_64.AppImage" aria-label="Download the AppImage">
               <span class="btn__label">Download</span>
               <span class="btn__icon"><svg viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="M4 10h10.2M10.4 5.6 15.2 10l-4.8 4.4" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" /></svg></span>
             </a>
@@ -189,12 +189,12 @@
           <div class="package__body">
             <h3>Flatpak</h3>
             <p>Sandboxed, with the KDE 6.11 runtime. Fits GNOME and KDE systems that already use Flatpak.</p>
-            <pre><code>flatpak install --user PhotoPrint-1.2.1-x86_64.flatpak
+            <pre><code>flatpak install --user PhotoPrint-1.2.2-x86_64.flatpak
 flatpak run hu.lavx.PhotoPrint</code></pre>
           </div>
           <div class="package__side">
             <span class="package__meta">9.2 MB · x86_64</span>
-            <a class="btn btn--nav" href="https://github.com/LavX/PhotoPrint/releases/download/v1.2.1/PhotoPrint-1.2.1-x86_64.flatpak" aria-label="Download the Flatpak bundle">
+            <a class="btn btn--nav" href="https://github.com/LavX/PhotoPrint/releases/download/v1.2.2/PhotoPrint-1.2.2-x86_64.flatpak" aria-label="Download the Flatpak bundle">
               <span class="btn__label">Download</span>
               <span class="btn__icon"><svg viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="M4 10h10.2M10.4 5.6 15.2 10l-4.8 4.4" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" /></svg></span>
             </a>
@@ -205,11 +205,57 @@ flatpak run hu.lavx.PhotoPrint</code></pre>
           <div class="package__body">
             <h3>RPM</h3>
             <p>Native Fedora 44 package. Uses the distribution's Qt 6, ImageMagick and CUPS; dnf pulls in the rest.</p>
-            <pre><code>sudo dnf install photoprint-1.2.1-1.fc44.x86_64.rpm</code></pre>
+            <pre><code>sudo dnf install photoprint-1.2.2-1.fc44.x86_64.rpm</code></pre>
           </div>
           <div class="package__side">
             <span class="package__meta">1.8 MB · x86_64</span>
-            <a class="btn btn--nav" href="https://github.com/LavX/PhotoPrint/releases/download/v1.2.1/photoprint-1.2.1-1.fc44.x86_64.rpm" aria-label="Download the RPM package">
+            <a class="btn btn--nav" href="https://github.com/LavX/PhotoPrint/releases/download/v1.2.2/photoprint-1.2.2-1.fc44.x86_64.rpm" aria-label="Download the RPM package">
+              <span class="btn__label">Download</span>
+              <span class="btn__icon"><svg viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="M4 10h10.2M10.4 5.6 15.2 10l-4.8 4.4" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" /></svg></span>
+            </a>
+          </div>
+        </section>
+
+        <section class="package">
+          <div class="package__body">
+            <h3>Deb</h3>
+            <p>Native Debian and Ubuntu package, built for Debian trixie.</p>
+            <pre><code>sudo apt install ./photoprint_1.2.2_amd64.deb</code></pre>
+          </div>
+          <div class="package__side">
+            <span class="package__meta">1.8 MB · amd64</span>
+            <a class="btn btn--nav" href="https://github.com/LavX/PhotoPrint/releases/download/v1.2.2/photoprint_1.2.2_amd64.deb" aria-label="Download the deb package">
+              <span class="btn__label">Download</span>
+              <span class="btn__icon"><svg viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="M4 10h10.2M10.4 5.6 15.2 10l-4.8 4.4" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" /></svg></span>
+            </a>
+          </div>
+        </section>
+
+        <section class="package">
+          <div class="package__body">
+            <h3>Arch</h3>
+            <p>Build the tagged sources with the PKGBUILD from the packaging directory.</p>
+            <pre><code>cd packaging &amp;&amp; makepkg -si</code></pre>
+          </div>
+          <div class="package__side">
+            <span class="package__meta">from v1.2.2 · x86_64</span>
+            <a class="btn btn--nav" href="https://github.com/LavX/PhotoPrint/blob/master/packaging/PKGBUILD" aria-label="View the PKGBUILD">
+              <span class="btn__label">Download</span>
+              <span class="btn__icon"><svg viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="M4 10h10.2M10.4 5.6 15.2 10l-4.8 4.4" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" /></svg></span>
+            </a>
+          </div>
+        </section>
+
+        <section class="package">
+          <div class="package__body">
+            <h3>ARM64</h3>
+            <p>Unpacked tarball for 64-bit Arm boards and laptops, built with the release settings.</p>
+            <pre><code>tar -xf PhotoPrint-1.2.2-arm64.tar.gz
+./PhotoPrint-1.2.2-arm64/photoprint</code></pre>
+          </div>
+          <div class="package__side">
+            <span class="package__meta">2.1 MB · aarch64</span>
+            <a class="btn btn--nav" href="https://github.com/LavX/PhotoPrint/releases/download/v1.2.2/PhotoPrint-1.2.2-arm64.tar.gz" aria-label="Download the ARM64 tarball">
               <span class="btn__label">Download</span>
               <span class="btn__icon"><svg viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="M4 10h10.2M10.4 5.6 15.2 10l-4.8 4.4" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" /></svg></span>
             </a>
@@ -220,11 +266,13 @@ flatpak run hu.lavx.PhotoPrint</code></pre>
       <section class="download__section">
         <h3>Verify the download</h3>
         <p>Check a file against its published checksum:</p>
-        <pre><code>sha256sum PhotoPrint-1.2.1-x86_64.AppImage
-374b8388731a0dc39f7c642dc0c4c42aa8684748755794c94fb84fb170eb7bbe  PhotoPrint-1.2.1-x86_64.AppImage
-d19c9d05f1f0bda054a5815b39559bb6b967bb219c4a0dbf207081cff10e6ab4  photoprint-1.2.1-1.fc44.x86_64.rpm
-8e750259dad5c8d4b5d652f5002ef11b706812d17b4d9d095af566549ea64250  PhotoPrint-1.2.1-x86_64.flatpak</code></pre>
-        <p class="download__note">Or fetch <a class="text-link" href="https://github.com/LavX/PhotoPrint/releases/download/v1.2.1/SHA256SUMS">SHA256SUMS</a> and run <code>sha256sum -c SHA256SUMS</code>.</p>
+        <pre><code>sha256sum PhotoPrint-1.2.2-x86_64.AppImage
+a11df442fc7db6ef832b0246de0a1a9a558ce19a73336848cd3901aa778c82e9  PhotoPrint-1.2.2-x86_64.AppImage
+184fda11d122d0c3a731b4f0c72f8e6e6bb5a3c7001a4d5e79ca0575d1dd0506  PhotoPrint-1.2.2-x86_64.flatpak
+5c8227d0ee7421a47194e008fa86f1352193d93640f4aefc92f9a1c2e95ea581  photoprint-1.2.2-1.fc44.x86_64.rpm
+60b30186dc1a4029d7b41c9c2b2b65ade6540319e6ca2698f72f4bde56947ea5  photoprint_1.2.2_amd64.deb
+ad738c5866c696784fc7703b84f2248610e62705a90280d723a5d9369973cf40  PhotoPrint-1.2.2-arm64.tar.gz</code></pre>
+        <p class="download__note">Or fetch <a class="text-link" href="https://github.com/LavX/PhotoPrint/releases/download/v1.2.2/SHA256SUMS">SHA256SUMS</a> and run <code>sha256sum -c SHA256SUMS</code>.</p>
       </section>
 
       <section class="download__section">
@@ -232,6 +280,7 @@ d19c9d05f1f0bda054a5815b39559bb6b967bb219c4a0dbf207081cff10e6ab4  photoprint-1.2
         <ul class="requirements">
           <li>A 64-bit Linux desktop. Fedora 44 is the tested environment.</li>
           <li>AppImage: FUSE, which most distributions enable by default.</li>
+          <li>ARM64: any Linux distro with the Qt 6 and ImageMagick 7 libraries the README lists.</li>
           <li>Flatpak: the <code>org.kde.Platform//6.11</code> runtime from Flathub.</li>
           <li>Building from source: see the <a class="text-link" href="https://github.com/LavX/PhotoPrint#readme">README</a> for the Qt 6.5+, LittleCMS2, CUPS and ImageMagick 7 requirements.</li>
         </ul>
