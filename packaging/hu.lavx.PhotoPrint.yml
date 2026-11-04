@@ -71,3 +71,4 @@ modules:
       - sed -i 's|^Icon=.*|Icon=hu.lavx.PhotoPrint|' resources/photoprint.desktop
       - install -Dm644 resources/photoprint.desktop /app/share/applications/hu.lavx.PhotoPrint.desktop
       - install -Dm644 resources/photoprint.svg /app/share/icons/hicolor/scalable/apps/hu.lavx.PhotoPrint.svg
+      - install -Dm644 packaging/hu.lavx.PhotoPrint.metainfo.xml /app/share/metainfo/hu.lavx.PhotoPrint.metainfo.xml

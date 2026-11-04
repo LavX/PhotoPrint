@@ -1,0 +1,90 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>hu.lavx.PhotoPrint</id>
+  <metadata_license>MIT</metadata_license>
+  <project_license>MIT</project_license>
+  <name>PhotoPrint</name>
+  <summary>Arrange, crop and print photos on paper</summary>
+  <description>
+    <p>PhotoPrint arranges photos on paper, crops them and prints them through the CUPS queues already installed on the machine, without drivers or accounts. Paper sizes are in centimetres: A4, A5, A6, 9 x 13, 10 x 15, 13 x 18 and custom sizes.</p>
+    <p>Photos are placed on a white paper canvas with drag, resize and rotate handles, inside numbered sections of 55 collage layouts. A page can carry a background, stickers and multi-line text on layers above the photos, and everything is saved with the project.</p>
+    <p>Print matches the preview: 120 graded looks, eight quick filters and text are rasterised into the page image, and the print resolution follows the CUPS queue up to 1200 ppi. Batch portrait sheets at exact sizes such as 35 x 45 mm, and an interface translated into ten languages.</p>
+  </description>
+  <launchable type="desktop-id">hu.lavx.PhotoPrint.desktop</launchable>
+  <url type="homepage">https://github.com/LavX/PhotoPrint</url>
+  <url type="bugtracker">https://github.com/LavX/PhotoPrint/issues</url>
+  <developer translatable="no">
+    <name>Laszlo Toth</name>
+  </developer>
+  <content_rating type="oars-1.1"/>
+  <provides>
+    <binary>photoprint</binary>
+  </provides>
+  <releases>
+    <release version="1.2.2" date="2026-11-04">
+      <description>
+        <p>Packages for two more systems, and a cleaner window title.</p>
+        <ul>
+          <li>A Debian (.deb) package and an Arch Linux PKGBUILD.</li>
+          <li>An ARM64 build produced in a Fedora 44 aarch64 container.</li>
+          <li>The window title uses a plain hyphen.</li>
+          <li>Dropped the em dash from a Russian translation string.</li>
+        </ul>
+      </description>
+    </release>
+    <release version="1.2.1" date="2026-11-03">
+      <description>
+        <p>A small patch for text.</p>
+        <ul>
+          <li>The font pickers are closed lists of installed families instead of editable boxes.</li>
+          <li>A project storing a font this machine does not have keeps that name, and the dialog still reports it as missing.</li>
+        </ul>
+      </description>
+    </release>
+    <release version="1.2.0" date="2026-11-03">
+      <description>
+        <p>The page becomes a composition: a background, stickers and text, all saved with the project and printed exactly as previewed. The left list becomes a real photo library, and crop mode works again.</p>
+        <ul>
+          <li>Page background: a solid colour, a two-colour gradient with an angle, or a picture in fill, fit or tile mode, with adjustable opacity.</li>
+          <li>Stickers: twelve built-in shapes plus any PNG, JPEG or WebP with transparency, movable, resizable, rotatable and fadable.</li>
+          <li>Multi-line text captions with font, size, colour, alignment, spacing, rotation and opacity, rasterised into the page image so the print matches the preview.</li>
+          <li>The left photo list is a library: a photo removed from the page stays there as unused and can be dragged back.</li>
+          <li>Crop mode's corner handles resize, rotate and crop by panning and zooming inside a section.</li>
+        </ul>
+      </description>
+    </release>
+    <release version="1.1.0" date="2026-11-01">
+      <description>
+        <p>An effect browser, slot-based collage layouts and a batch portrait-sheet tool.</p>
+        <ul>
+          <li>120 graded looks in 12 categories with a preview browser, search, live strength and keyboard navigation.</li>
+          <li>55 layouts for 2 to 10 photos: applying one creates numbered sections that photos can be dropped into, panned and zoomed.</li>
+          <li>Batch portrait copies at 35 x 45 mm passport size and six other sizes, with a live fit count and optional cut guides.</li>
+          <li>Canvas composition is cached, so panning is about 1.4 ms per move, and PDF pages stream, so 100 copies peak around 114 MiB.</li>
+        </ul>
+      </description>
+    </release>
+    <release version="1.0.1" date="2026-10-30">
+      <description>
+        <p>A correctness and security release built from four rounds of independent review.</p>
+        <ul>
+          <li>Memory safety, project-file path containment, recovery, journal durability and print pipeline fixes.</li>
+          <li>Print resolution follows the CUPS queue up to 1200 ppi instead of a fixed 600.</li>
+          <li>Paper store and colour settings validate and clamp crafted values.</li>
+          <li>Plural forms and previously untranslated messages across ten locales.</li>
+        </ul>
+      </description>
+    </release>
+    <release version="1.0.0" date="2026-10-30">
+      <description>
+        <p>The first public release. It arranges family photos on paper, crops them, and prints them through the CUPS queue already installed, without drivers or accounts.</p>
+        <ul>
+          <li>Direct manipulation on a white paper canvas: move, resize, rotate, fit and fill, plus a separate crop mode with keyboard nudging and undo.</li>
+          <li>Photo library, canvas and inspector layout, with light and dark themes that follow the system.</li>
+          <li>Paper sizes in centimetres, saved custom sizes, and glossy, matte and plain paper types.</li>
+          <li>Eight filter presets with strength control and 2x Lanczos enlargement for print.</li>
+        </ul>
+      </description>
+    </release>
+  </releases>
+</component>

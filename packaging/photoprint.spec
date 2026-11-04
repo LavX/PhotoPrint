@@ -80,8 +80,9 @@ install -D -m 0644 resources/photoprint.svg %{buildroot}%{_datadir}/icons/hicolo
 
 %changelog
 * Wed Nov 04 2026 Laszlo Toth <lavx@lavx.hu> - 1.2.2-1
-- Debian and Arch Linux packages, plus an ARM64 build
+- Debian and Arch Linux packaging, plus an ARM64 build
 - The window title uses a plain hyphen
+- Dropped the em dash from a Russian translation string
 
 * Tue Nov 03 2026 Laszlo Toth <lavx@lavx.hu> - 1.2.1-1
 - Font pickers are closed lists instead of free text fields
