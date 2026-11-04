@@ -186,7 +186,7 @@ button { font: inherit; border: 0; border-radius: var(--radius); cursor: pointer
   gap: 10px;
   color: var(--text);
 }
-.logo__mark { display: block; width: clamp(30px, 3.2vw, 38px); height: auto; animation: mark-in 0.5s var(--ease) backwards; }
+.logo__mark { display: block; width: clamp(30px, 3.2vw, 38px); height: auto; }
 .logo__word {
   font-size: clamp(15px, 1.5vw, 17px);
   font-weight: 600;
@@ -194,6 +194,17 @@ button { font: inherit; border: 0; border-radius: var(--radius); cursor: pointer
   line-height: 1;
   white-space: nowrap;
 }
+.logo polygon {
+  transform-box: fill-box;
+  transform-origin: left center;
+  animation: mark-in 0.5s var(--ease) backwards;
+}
+.logo polygon:nth-child(1) { animation-delay: 0.04s; }
+.logo polygon:nth-child(2) { animation-delay: 0.09s; }
+.logo polygon:nth-child(3) { animation-delay: 0.14s; }
+.logo polygon:nth-child(4) { animation-delay: 0.19s; }
+.logo polygon:nth-child(5) { animation-delay: 0.24s; }
+.logo polygon:nth-child(6) { animation-delay: 0.29s; }
 .nav__actions .btn--nav { animation: wipe-right 0.65s var(--ease) 0.16s backwards; }
 
 .theme-toggle {
@@ -557,7 +568,7 @@ code {
 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; }
-  .nav__links a, .logo__mark, .nav__burger, .lede__rise {
+  .nav__links a, .logo polygon, .nav__burger, .lede__rise {
     opacity: 1;
     transform: none;
   }
