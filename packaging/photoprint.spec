@@ -81,6 +81,7 @@ install -D -m 0644 resources/photoprint.svg %{buildroot}%{_datadir}/icons/hicolo
 %changelog
 * Wed Nov 04 2026 Laszlo Toth <lavx@lavx.hu> - 1.2.2-1
 - Debian and Arch Linux packaging, plus an ARM64 build
+- The application icon adopts the striped mark the website uses, so the About dialog, the window and the desktop entry all match the site's brand
 - The window title uses a plain hyphen
 - Dropped the em dash from a Russian translation string
 
