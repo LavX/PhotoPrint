@@ -112,6 +112,17 @@ The container mounts the source at `/work` and builds into
 touched. The ARM64 build directory is wiped inside the container before
 configuring, so a cache built with host paths cannot leak in.
 
+## Arch Linux package
+
+The PKGBUILD builds the tagged sources from GitHub and installs the binary,
+desktop entry and icons. On any Arch system:
+
+```bash
+cd packaging
+makepkg -si
+# photoprint-1.2.2-1-x86_64.pkg.tar.zst, then pacman installs it
+```
+
 ## Tests
 
 ```bash
