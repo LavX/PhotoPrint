@@ -1,6 +1,7 @@
 <RCC>
   <qresource prefix="/icons">
     <file alias="photoprint.png">photoprint-256.png</file>
+    <file alias="photoprint.svg">photoprint.svg</file>
   </qresource>
   <qresource prefix="/effects">
     <file alias="catalogue.json">effects/catalogue.json</file>

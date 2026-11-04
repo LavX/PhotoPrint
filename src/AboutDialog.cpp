@@ -25,17 +25,35 @@ QPixmap drawnIcon(int size)
     pixmap.fill(Qt::transparent);
     QPainter painter(&pixmap);
     painter.setRenderHint(QPainter::Antialiasing);
+
+    // The mark's own 48x48 geometry, scaled to the requested size.
+    const double unit = size / 48.0;
     painter.setPen(Qt::NoPen);
-    painter.setBrush(QColor(0x2c, 0x6c, 0xd6));
-    painter.drawRoundedRect(QRectF(0, 0, size, size), size * 0.16, size * 0.16);
+    QLinearGradient tile(QPointF(2 * unit, 2 * unit), QPointF(46 * unit, 46 * unit));
+    tile.setColorAt(0, QColor(0x0a, 0x84, 0xff));
+    tile.setColorAt(1, QColor(0x00, 0x40, 0xb3));
+    painter.setBrush(tile);
+    painter.drawRoundedRect(QRectF(2 * unit, 2 * unit, 44 * unit, 44 * unit),
+                            11 * unit, 11 * unit);
     painter.setBrush(Qt::white);
-    const double inset = size * 0.19;
-    painter.drawRoundedRect(QRectF(inset, inset, size - 2 * inset, size - 2 * inset), 2, 2);
-    painter.setBrush(QColor(0x8f, 0xb7, 0xf0));
-    painter.drawRect(
-        QRectF(inset * 1.25, inset * 1.25, size - 3 * inset, (size - 3 * inset) * 0.62));
-    painter.setBrush(QColor(0xf2, 0xc1, 0x4e));
-    painter.drawEllipse(QPointF(size * 0.38, size * 0.41), size * 0.06, size * 0.06);
+    // The six stripes, in the untransformed coordinates the SVG lists them
+    // in; the mark places them with translate(7.75, 11.8) scale(0.78).
+    static const double kStripes[][8] = {
+        {12, 0, 30, 0, 33.2, 3.2, 15.2, 3.2},
+        {14.6, 5.6, 32.6, 5.6, 35.8, 8.8, 17.8, 8.8},
+        {17.2, 11.2, 35.2, 11.2, 38.4, 14.4, 20.4, 14.4},
+        {3.2, 16.8, 21.2, 16.8, 24.4, 20, 6.4, 20},
+        {5.8, 22.4, 23.8, 22.4, 27, 25.6, 9, 25.6},
+        {8.4, 28, 26.4, 28, 29.6, 31.2, 11.6, 31.2},
+    };
+    for (const auto &stripe : kStripes) {
+        QPolygonF polygon;
+        for (int i = 0; i < 4; ++i) {
+            polygon.append(QPointF(stripe[i * 2] * 0.78 * unit + 7.75 * unit,
+                                   stripe[i * 2 + 1] * 0.78 * unit + 11.8 * unit));
+        }
+        painter.drawPolygon(polygon);
+    }
     return pixmap;
 }
 
