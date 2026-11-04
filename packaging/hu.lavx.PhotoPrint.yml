@@ -61,7 +61,11 @@ modules:
           - .git
           - docs
           - planning
+          - planning-initial
           - assets
+          - website
+          - Testing
+          - test.ppj
     post-install:
       - install -Dm755 photoprint /app/bin/photoprint
       - sed -i 's|^Icon=.*|Icon=hu.lavx.PhotoPrint|' resources/photoprint.desktop
