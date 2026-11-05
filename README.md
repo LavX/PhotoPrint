@@ -71,12 +71,15 @@ MagickWand.
   (`MagickWand`).
 - Poppler command-line tools (`pdfinfo`, `pdftoppm`, `pdfimages`) for the
   PDF evidence tests.
+- `rsvg-convert` (`librsvg2-tools` on Fedora) for the packaging scripts,
+  which rasterize the app icon; ImageMagick's SVG path bakes an opaque
+  white background in unless `-background none` precedes the input file.
 
 Fedora development packages used here:
 
 ```bash
 sudo dnf install cmake ninja-build gcc-c++ qt6-qtbase-devel qt6-linguist \
-  lcms2-devel cups-devel zlib-devel ImageMagick-devel poppler-utils
+  lcms2-devel cups-devel zlib-devel ImageMagick-devel poppler-utils librsvg2-tools
 ```
 
 Package names differ on other distributions; the same libraries are required.

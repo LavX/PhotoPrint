@@ -256,12 +256,12 @@ chmod +x "$appdir/AppRun"
 icons_dir="$appdir/usr/share/icons/hicolor"
 for size in 16 22 24 32 48 64 128 256 512; do
     mkdir -p "$icons_dir/${size}x${size}/apps"
-    magick "$root/resources/photoprint.svg" -background none -resize "${size}x${size}" \
+    rsvg-convert -w "$size" -h "$size" "$root/resources/photoprint.svg" -o \
         "$icons_dir/${size}x${size}/apps/photoprint.png"
 done
 
 # AppImage root icon and .DirIcon.
-magick "$root/resources/photoprint.svg" -background none -resize 256x256 \
+rsvg-convert -w 256 -h 256 "$root/resources/photoprint.svg" -o \
     "$appdir/photoprint.png"
 ln -sf photoprint.png "$appdir/.DirIcon"
 
