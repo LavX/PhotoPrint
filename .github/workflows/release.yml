@@ -160,7 +160,7 @@ jobs:
               git cmake ninja-build gcc-c++ \
               qt6-qtbase-devel qt6-linguist \
               lcms2-devel cups-devel zlib-devel ImageMagick-devel \
-              librsvg2-tools poppler-utils curl
+              librsvg2-tools poppler-utils curl file
       - uses: actions/checkout@v5
       - name: Build the release binary
         run: |

@@ -387,7 +387,9 @@ void TestCanvasCache::dragComposesAtTheFittedScaleAndSettlesOnRelease()
     QTest::mouseMove(&view, end.toPoint());
     view.repaint();
     QTRY_COMPARE_WITH_TIMEOUT(view.compositionCount(), before + 1, 15000);
-    QVERIFY(!view.compositionPending());
+    // The drag move may arm a second coarse build while the first runs, so
+    // the queue can legitimately be busy here. What matters is that a fitted
+    // raster is installed; the size assert below checks exactly that.
 
     // Mid-drag the page is composed at the fitted scale, never at 200%.
     const QImage coarse = view.composedImage();
@@ -399,8 +401,10 @@ void TestCanvasCache::dragComposesAtTheFittedScaleAndSettlesOnRelease()
     QTest::mouseRelease(&view, Qt::LeftButton, Qt::NoModifier, end.toPoint());
     // The release schedules the full-scale rebuild instead of composing inline.
     QTRY_COMPARE_WITH_TIMEOUT(view.compositionCount(), before + 2, 15000);
-    settle(view);
-    QCOMPARE(view.composedImage().size(), target);
+    // The drag move may re-arm a coarse build that lands after the first one,
+    // so the count only proves a second build was armed. Wait for the raster
+    // itself to sharpen to the target instead of sampling after a fixed wait.
+    QTRY_COMPARE_WITH_TIMEOUT(view.composedImage().size(), target, 15000);
 }
 
 void TestCanvasCache::unrelatedRepaintsDoNotPostponeTheSettle()
