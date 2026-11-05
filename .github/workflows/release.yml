@@ -275,11 +275,7 @@ jobs:
     runs-on: ubuntu-24.04
     permissions:
       contents: write
-      pages: write
-      id-token: write
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
+      actions: write
     steps:
       - uses: actions/checkout@v5
         with:
@@ -289,19 +285,22 @@ jobs:
           path: dist
       - name: Rewrite the verify block
         run: python3 packaging/update-site-checksums.py dist
-      - name: Commit and push
+      - name: Commit, push and dispatch the deployment
         # A GITHUB_TOKEN push does not trigger the Pages deployment workflow,
-        # so this job deploys the page itself below instead of relying on the
-        # nested push event.
+        # and the github-pages environment only accepts deployments from the
+        # branches its policy allows, so the deployment is dispatched from the
+        # master checkout instead of running inline on the tag.
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           git config user.name "Laszlo Toth"
           git config user.email "lavx@lavx.hu"
           git add website/index.html
           git commit -m "Publish the release checksums on the site" || true
           git push origin master
-      - uses: actions/configure-pages@v5
-      - uses: actions/upload-pages-artifact@v3
-        with:
-          path: 'website'
-      - id: deployment
-        uses: actions/deploy-pages@v4
+          gh workflow run deploy-website.yml --ref master -R "${GITHUB_REPOSITORY}"
+          sleep 20
+          run_id=$(gh run list -R "${GITHUB_REPOSITORY}" \
+              --workflow=deploy-website.yml --limit 1 --json databaseId \
+              --jq '.[0].databaseId')
+          gh run watch "$run_id" -R "${GITHUB_REPOSITORY}" --exit-status
