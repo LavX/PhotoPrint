@@ -72,15 +72,18 @@ cd %{_builddir}/photoprint-build
 install -D -m 0755 %{_vpath_builddir}/photoprint %{buildroot}%{_bindir}/photoprint
 install -D -m 0644 resources/photoprint.desktop %{buildroot}%{_datadir}/applications/photoprint.desktop
 install -D -m 0644 resources/photoprint.svg %{buildroot}%{_datadir}/icons/hicolor/scalable/apps/photoprint.svg
+install -D -m 0644 resources/photoprint-256.png %{buildroot}%{_datadir}/icons/hicolor/256x256/apps/photoprint.png
 
 %files
 %{_bindir}/photoprint
 %{_datadir}/applications/photoprint.desktop
 %{_datadir}/icons/hicolor/scalable/apps/photoprint.svg
+%{_datadir}/icons/hicolor/256x256/apps/photoprint.png
 
 %changelog
 * Wed Nov 04 2026 Laszlo Toth <lavx@lavx.hu> - 1.2.2-1
 - Debian and Arch Linux packaging, plus an ARM64 build
+- The RPM ships a 256px hicolor PNG alongside the scalable SVG, like the other formats
 - The application icon adopts the striped mark the website uses, so the About dialog, the window and the desktop entry all match the site's brand
 - The window title uses a plain hyphen
 - Dropped the em dash from a Russian translation string
