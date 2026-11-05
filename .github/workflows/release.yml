@@ -261,10 +261,12 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release view "${GITHUB_REF_NAME}" || \
-              gh release create "${GITHUB_REF_NAME}" --verify-tag \
-                  --title "PhotoPrint ${GITHUB_REF_NAME#v}" --generate-notes
-          gh release upload "${GITHUB_REF_NAME}" --clobber flat/*
+          gh release view "${GITHUB_REF_NAME}" -R "${GITHUB_REPOSITORY}" || \
+              gh release create "${GITHUB_REF_NAME}" -R "${GITHUB_REPOSITORY}" \
+                  --verify-tag --title "PhotoPrint ${GITHUB_REF_NAME#v}" \
+                  --generate-notes
+          gh release upload "${GITHUB_REF_NAME}" -R "${GITHUB_REPOSITORY}" \
+              --clobber flat/*
 
   site:
     name: Publish checksums on the site
