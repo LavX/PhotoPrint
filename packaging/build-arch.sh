@@ -10,6 +10,11 @@
 # aarch64 package:
 #   ./packaging/build-arch.sh            photoprint-1.2.2-1-x86_64.pkg.tar.zst
 #   ./packaging/build-arch.sh arm64      photoprint-1.2.2-1-aarch64.pkg.tar.zst
+#
+# On arm64 hosts the container runs under qemu-user emulation, where pacman
+# cannot start because its Landlock sandbox is unavailable. The script then
+# assembles the package on the host from the arm64 binary that the Fedora
+# container produced, which yields the same .pkg.tar.zst without pacman.
 set -euo pipefail
 
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -20,8 +25,8 @@ image="archlinux:base"
 if [ "${1:-}" = "arm64" ]; then
     platform_args=(--platform linux/arm64)
     label="aarch64"
-    # Arch publishes official images for x86_64 only; the arm64 base comes
-    # from a community rebuild of the same rootfs.
+    # Arch publishes official container images for x86_64 only; the arm64 base
+    # comes from a community rebuild of the same rootfs.
     image="docker.io/menci/archlinuxarm:latest"
 fi
 
@@ -29,11 +34,24 @@ fi
 mkdir -p "$root/build/pkg-out"
 
 echo "=== Arch package build ($label, container: $image) ==="
-podman run --rm "${platform_args[@]}" \
-    -v "$root:/src:ro" \
-    -v "$root/build/pkg-out:/out" \
-    "$image" \
-    /bin/bash -c '
+
+# Probe pacman in the container first: under qemu-user emulation pacman dies
+# on its Landlock sandbox when it downloads, and the same happens inside some
+# CI container runtimes. A database refresh exercises that sandbox, so it is
+# the honest probe; when it fails, the package is assembled on the host from
+# the binary the Fedora container produced.
+probe_ok=0
+if podman run --rm "${platform_args[@]}" "$image" \
+    pacman -Sy --noconfirm > /dev/null 2>&1; then
+    probe_ok=1
+fi
+
+if [ "$probe_ok" = 1 ]; then
+    podman run --rm "${platform_args[@]}" \
+        -v "$root:/src:ro" \
+        -v "$root/build/pkg-out:/out" \
+        "$image" \
+        /bin/bash -c '
 set -euo pipefail
 mkdir -p /out
 
@@ -54,3 +72,7 @@ echo "=== Copying result back ==="
 cp -v /build/*.pkg.tar.zst /out/
 ls -lh /out/
 '
+else
+    echo "=== pacman unavailable in the container; assembling the package on the host ==="
+    python3 "$root/packaging/assemble-arch-package.py" "$label"
+fi

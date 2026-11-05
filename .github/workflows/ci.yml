@@ -19,7 +19,7 @@ jobs:
               qt6-qtbase-devel qt6-linguist \
               lcms2-devel cups-devel zlib-devel ImageMagick-devel \
               poppler-utils dejavu-sans-fonts
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: Recreate the sample photo the acceptance tests read
         # The real family photo never enters the repository; the tests only
         # need a 3072x4096 JPEG carrying the committed Display P3 profile.

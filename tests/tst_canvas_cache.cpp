@@ -542,8 +542,12 @@ void TestCanvasCache::cropPanUsesTheFittedScale()
     QTest::mouseRelease(&view, Qt::LeftButton, Qt::NoModifier,
                         (start + QPointF(15.0, 8.0)).toPoint());
     QTRY_COMPARE_WITH_TIMEOUT(view.compositionCount(), before + 2, 15000);
-    settle(view);
-    QCOMPARE(view.composedImage().size(), target);
+    // A crop drag can arm more than one coarse build: the move bumps the
+    // content revision while the first build is in flight, and the finish
+    // handler immediately re-arms at the fitted scale. The count above only
+    // proves a second build was armed, so wait for the raster itself to
+    // sharpen to the target rather than sampling it after a fixed delay.
+    QTRY_COMPARE_WITH_TIMEOUT(view.composedImage().size(), target, 15000);
 }
 
 

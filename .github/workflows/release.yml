@@ -21,7 +21,7 @@ jobs:
               qt6-qtbase-devel qt6-linguist \
               lcms2-devel cups-devel zlib-devel ImageMagick-devel \
               poppler-utils dejavu-sans-fonts
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: Recreate the sample photo the acceptance tests read
         run: |
           mkdir -p /home/lavx/Downloads
@@ -54,7 +54,7 @@ jobs:
               qt6-base-dev qt6-tools-dev-tools qt6-l10n-tools libxkbcommon-dev \
               liblcms2-dev libcups2-dev zlib1g-dev libmagickwand-7.q16-dev \
               poppler-utils
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: Build the package
         run: dpkg-buildpackage -us -uc -b
       - name: Stage the package
@@ -83,7 +83,7 @@ jobs:
               git rpm-build cmake cmake-rpm-macros ninja-build gcc-c++ \
               qt6-qtbase-devel qt6-linguist lcms2-devel cups-devel \
               zlib-devel ImageMagick-devel
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: Build the package
         run: |
           rpmbuild -bb packaging/photoprint.spec \
@@ -104,31 +104,46 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          # Arch publishes official container images for x86_64 only; the
-          # aarch64 package builds from a community rebuild of the same rootfs.
+          # Arch publishes official container images for x86_64 only. The
+          # aarch64 job builds the binary in a Fedora container and assembles
+          # the package with packaging/assemble-arch-package.py, because
+          # pacman's Landlock sandbox cannot run inside runner containers.
           - { arch: x86_64, runner: ubuntu-24.04, image: 'docker.io/library/archlinux:base' }
-          - { arch: aarch64, runner: ubuntu-24.04-arm, image: 'docker.io/menci/archlinuxarm:latest' }
+          - { arch: aarch64, runner: ubuntu-24.04-arm, image: 'registry.fedoraproject.org/fedora:44' }
     runs-on: ${{ matrix.runner }}
     container: ${{ matrix.image }}
     steps:
       - name: Install checkout and build dependencies
         run: |
-          pacman -Syu --noconfirm --needed \
-              base-devel git cmake ninja qt6-base qt6-tools \
-              lcms2 libcups imagemagick zlib
-      - uses: actions/checkout@v4
+          if [ "${{ matrix.arch }}" = x86_64 ]; then
+            pacman -Syu --noconfirm --needed \
+                base-devel git cmake ninja qt6-base qt6-tools \
+                lcms2 libcups imagemagick zlib
+          else
+            dnf install -y --setopt=install_weak_deps=False \
+                git cmake ninja-build gcc-c++ \
+                qt6-qtbase-devel qt6-linguist \
+                lcms2-devel cups-devel zlib-devel ImageMagick-devel zstd
+          fi
+      - uses: actions/checkout@v5
       - name: Build the package
-        # makepkg refuses to run as root, so it runs as a builder user and
-        # pulls the released tag from GitHub, exactly like a user build.
         run: |
-          useradd -m builder
-          mkdir -p /build
-          cp packaging/PKGBUILD /build/
-          chown -R builder:builder /build
-          su builder -c 'cd /build && makepkg -f --noconfirm'
-          mkdir -p out
-          cp /build/photoprint-*.pkg.tar.zst out/
-          rm -f out/photoprint-debug-*.pkg.tar.zst
+          if [ "${{ matrix.arch }}" = x86_64 ]; then
+            useradd -m builder
+            mkdir -p /build
+            cp packaging/PKGBUILD /build/
+            chown -R builder:builder /build
+            su builder -c 'cd /build && makepkg -f --noconfirm'
+            mkdir -p out
+            cp /build/photoprint-*.pkg.tar.zst out/
+            rm -f out/photoprint-debug-*.pkg.tar.zst
+          else
+            cmake -S . -B build/release-arm64 -G Ninja -DCMAKE_BUILD_TYPE=Release
+            cmake --build build/release-arm64
+            python3 packaging/assemble-arch-package.py aarch64
+            mkdir -p out
+            cp build/pkg-out/*.pkg.tar.zst out/
+          fi
       - uses: actions/upload-artifact@v4
         with:
           name: arch-${{ matrix.arch }}
@@ -146,7 +161,7 @@ jobs:
               qt6-qtbase-devel qt6-linguist \
               lcms2-devel cups-devel zlib-devel ImageMagick-devel \
               librsvg2-tools poppler-utils curl
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: Build the release binary
         run: |
           cmake --preset release
@@ -164,7 +179,7 @@ jobs:
     name: Flatpak
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: Install Flatpak tooling
         run: |
           sudo apt-get update -qq
@@ -202,7 +217,7 @@ jobs:
               git cmake ninja-build gcc-c++ \
               qt6-qtbase-devel qt6-linguist \
               lcms2-devel cups-devel zlib-devel ImageMagick-devel
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: Read the project version
         id: ver
         run: |
@@ -257,7 +272,7 @@ jobs:
     needs: [release]
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           ref: master
       - uses: actions/download-artifact@v4
