@@ -115,6 +115,19 @@ The container mounts the source at `/work` and builds into
 touched. The ARM64 build directory is wiped inside the container before
 configuring, so a cache built with host paths cannot leak in.
 
+The packaging scripts build the same way for the other formats:
+
+```bash
+./packaging/build-deb-arm64.sh
+# build/deb-out-arm64/photoprint_1.2.2_arm64.deb
+
+./packaging/build-rpm-arm64.sh
+# build/rpm-arm64/RPMS/aarch64/photoprint-1.2.2-1.fc44.aarch64.rpm
+
+./packaging/build-arch.sh arm64
+# build/pkg-out/photoprint-1.2.2-1-aarch64.pkg.tar.zst
+```
+
 ## Arch Linux package
 
 The PKGBUILD builds the tagged sources from GitHub and installs the binary,
@@ -124,6 +137,14 @@ desktop entry and icons. On any Arch system:
 cd packaging
 makepkg -si
 # photoprint-1.2.2-1-x86_64.pkg.tar.zst, then pacman installs it
+```
+
+On non-Arch hosts, such as the Fedora machine used for releases, the package
+is built inside an archlinux container with the same PKGBUILD:
+
+```bash
+./packaging/build-arch.sh
+# build/pkg-out/photoprint-1.2.2-1-x86_64.pkg.tar.zst
 ```
 
 ## Debian package
@@ -197,6 +218,22 @@ rpmbuild -bb packaging/photoprint.spec \
 The spec builds from the local source tree without network access. It is
 Fedora-specific; other distributions can build with CMake and package the
 result themselves.
+
+## Continuous integration and releases
+
+GitHub Actions builds every push and the release packages:
+
+- `ci.yml` builds the dev preset and runs the full test suite in a
+  `fedora:44` container, recreating the sample photo from the committed
+  Display P3 profile.
+- `release.yml`, on a `v*` tag or a manual dispatch, builds every package
+  on native runners: deb (amd64, arm64), RPM (x86_64, aarch64), Arch
+  (x86_64, aarch64), the AppImage, the Flatpak bundle and the ARM64
+  tarball. On a tag the artifacts are checksummed, uploaded to the
+  release, and the checksum table on the website is regenerated.
+
+The podman-based scripts in `packaging/` remain for local builds, but the
+runners are the source of the published artifacts.
 
 ## Platform notes
 

@@ -15,5 +15,11 @@ Synthetic fixtures are generated at test time into a temporary directory:
   unparsable ICC APP2 segment, used to prove that a damaged profile never
   produces guessed colours.
 
+One fixture is committed: `display-p3.icc`, the Display P3 ICC profile
+extracted from the real photo. CI and packaging containers recreate
+`/home/lavx/Downloads/IMG20260830150231.jpg` from it with ImageMagick
+(3072x4096, profile attached), so the acceptance tests run on machines
+where the personal photo does not exist.
+
 Generated fixtures are never committed. Exported PDF/PNG evidence goes to
 `build/evidence/` and stays out of Git as well.

@@ -1,0 +1,36 @@
+name: CI
+
+on:
+  push:
+    branches: [master]
+    tags: ['v*']
+  pull_request:
+
+jobs:
+  tests:
+    name: Test suite (Fedora 44)
+    runs-on: ubuntu-24.04
+    container: fedora:44
+    steps:
+      - name: Install checkout and build dependencies
+        run: |
+          dnf install -y --setopt=install_weak_deps=False \
+              git cmake ninja-build gcc-c++ \
+              qt6-qtbase-devel qt6-linguist \
+              lcms2-devel cups-devel zlib-devel ImageMagick-devel \
+              poppler-utils dejavu-sans-fonts
+      - uses: actions/checkout@v4
+      - name: Recreate the sample photo the acceptance tests read
+        # The real family photo never enters the repository; the tests only
+        # need a 3072x4096 JPEG carrying the committed Display P3 profile.
+        run: |
+          mkdir -p /home/lavx/Downloads
+          magick -size 3072x4096 gradient:blue-yellow \
+              -profile tests/fixtures/display-p3.icc \
+              /home/lavx/Downloads/IMG20260830150231.jpg
+      - name: Configure and build
+        run: |
+          cmake --preset dev
+          cmake --build --preset dev
+      - name: Test
+        run: ctest --preset dev

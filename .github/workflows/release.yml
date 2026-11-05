@@ -1,0 +1,274 @@
+name: Release packages
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  tests:
+    name: Test suite (Fedora 44)
+    runs-on: ubuntu-24.04
+    container: fedora:44
+    steps:
+      - name: Install checkout and build dependencies
+        run: |
+          dnf install -y --setopt=install_weak_deps=False \
+              git cmake ninja-build gcc-c++ \
+              qt6-qtbase-devel qt6-linguist \
+              lcms2-devel cups-devel zlib-devel ImageMagick-devel \
+              poppler-utils dejavu-sans-fonts
+      - uses: actions/checkout@v4
+      - name: Recreate the sample photo the acceptance tests read
+        run: |
+          mkdir -p /home/lavx/Downloads
+          magick -size 3072x4096 gradient:blue-yellow \
+              -profile tests/fixtures/display-p3.icc \
+              /home/lavx/Downloads/IMG20260830150231.jpg
+      - name: Configure and build
+        run: |
+          cmake --preset dev
+          cmake --build --preset dev
+      - name: Test
+        run: ctest --preset dev
+
+  deb:
+    name: deb ${{ matrix.arch }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { arch: amd64, runner: ubuntu-24.04 }
+          - { arch: arm64, runner: ubuntu-24.04-arm }
+    runs-on: ${{ matrix.runner }}
+    container: debian:trixie
+    steps:
+      - name: Install checkout and build dependencies
+        run: |
+          apt-get update -qq
+          apt-get install -y --no-install-recommends \
+              git ca-certificates build-essential debhelper cmake ninja-build \
+              qt6-base-dev qt6-tools-dev-tools qt6-l10n-tools libxkbcommon-dev \
+              liblcms2-dev libcups2-dev zlib1g-dev libmagickwand-7.q16-dev \
+              poppler-utils
+      - uses: actions/checkout@v4
+      - name: Build the package
+        run: dpkg-buildpackage -us -uc -b
+      - name: Stage the package
+        run: |
+          mkdir -p out
+          cp ../photoprint_[0-9]*.deb out/
+      - uses: actions/upload-artifact@v4
+        with:
+          name: deb-${{ matrix.arch }}
+          path: out/
+
+  rpm:
+    name: rpm ${{ matrix.arch }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { arch: x86_64, runner: ubuntu-24.04 }
+          - { arch: aarch64, runner: ubuntu-24.04-arm }
+    runs-on: ${{ matrix.runner }}
+    container: fedora:44
+    steps:
+      - name: Install checkout and build dependencies
+        run: |
+          dnf install -y --setopt=install_weak_deps=False \
+              git rpm-build cmake cmake-rpm-macros ninja-build gcc-c++ \
+              qt6-qtbase-devel qt6-linguist lcms2-devel cups-devel \
+              zlib-devel ImageMagick-devel
+      - uses: actions/checkout@v4
+      - name: Build the package
+        run: |
+          rpmbuild -bb packaging/photoprint.spec \
+              --define "_topdir $PWD/build/rpm" \
+              --define "photoprint_source $PWD"
+      - name: Stage the package
+        run: |
+          mkdir -p out
+          cp build/rpm/RPMS/*/photoprint-*.rpm out/
+      - uses: actions/upload-artifact@v4
+        with:
+          name: rpm-${{ matrix.arch }}
+          path: out/
+
+  arch:
+    name: arch ${{ matrix.arch }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Arch publishes official container images for x86_64 only; the
+          # aarch64 package builds from a community rebuild of the same rootfs.
+          - { arch: x86_64, runner: ubuntu-24.04, image: 'docker.io/library/archlinux:base' }
+          - { arch: aarch64, runner: ubuntu-24.04-arm, image: 'docker.io/menci/archlinuxarm:latest' }
+    runs-on: ${{ matrix.runner }}
+    container: ${{ matrix.image }}
+    steps:
+      - name: Install checkout and build dependencies
+        run: |
+          pacman -Syu --noconfirm --needed \
+              base-devel git cmake ninja qt6-base qt6-tools \
+              lcms2 libcups imagemagick zlib
+      - uses: actions/checkout@v4
+      - name: Build the package
+        # makepkg refuses to run as root, so it runs as a builder user and
+        # pulls the released tag from GitHub, exactly like a user build.
+        run: |
+          useradd -m builder
+          mkdir -p /build
+          cp packaging/PKGBUILD /build/
+          chown -R builder:builder /build
+          su builder -c 'cd /build && makepkg -f --noconfirm'
+          mkdir -p out
+          cp /build/photoprint-*.pkg.tar.zst out/
+          rm -f out/photoprint-debug-*.pkg.tar.zst
+      - uses: actions/upload-artifact@v4
+        with:
+          name: arch-${{ matrix.arch }}
+          path: out/
+
+  appimage:
+    name: AppImage
+    runs-on: ubuntu-24.04
+    container: fedora:44
+    steps:
+      - name: Install checkout and build dependencies
+        run: |
+          dnf install -y --setopt=install_weak_deps=False \
+              git cmake ninja-build gcc-c++ \
+              qt6-qtbase-devel qt6-linguist \
+              lcms2-devel cups-devel zlib-devel ImageMagick-devel \
+              librsvg2-tools poppler-utils curl
+      - uses: actions/checkout@v4
+      - name: Build the release binary
+        run: |
+          cmake --preset release
+          cmake --build --preset release
+      - name: Package
+        # The script downloads the pinned AppImage tools itself and sets
+        # APPIMAGE_EXTRACT_AND_RUN, so no FUSE is needed on the runner.
+        run: packaging/build-appimage.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: appimage
+          path: build/release/PhotoPrint-*-x86_64.AppImage
+
+  flatpak:
+    name: Flatpak
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Flatpak tooling
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y flatpak flatpak-builder
+      - name: Install the KDE runtime
+        run: |
+          flatpak remote-add --user --if-not-exists flathub \
+              https://flathub.org/repo/flathub.flatpakrepo
+          flatpak install --user -y --noninteractive \
+              flathub org.kde.Platform//6.11 org.kde.Sdk//6.11
+      - name: Read the project version
+        id: ver
+        run: |
+          echo "version=$(sed -n 's/^project(PhotoPrint VERSION \([0-9][0-9.]*\).*/\1/p' CMakeLists.txt)" >> "$GITHUB_OUTPUT"
+      - name: Build the bundle
+        run: |
+          flatpak-builder --force-clean --user --repo=build/flatpak-repo \
+              build/flatpak packaging/hu.lavx.PhotoPrint.yml
+          flatpak build-bundle build/flatpak-repo \
+              "build/PhotoPrint-${{ steps.ver.outputs.version }}-x86_64.flatpak" \
+              hu.lavx.PhotoPrint
+      - uses: actions/upload-artifact@v4
+        with:
+          name: flatpak
+          path: build/PhotoPrint-*-x86_64.flatpak
+
+  tarball:
+    name: ARM64 tarball
+    runs-on: ubuntu-24.04-arm
+    container: fedora:44
+    steps:
+      - name: Install checkout and build dependencies
+        run: |
+          dnf install -y --setopt=install_weak_deps=False \
+              git cmake ninja-build gcc-c++ \
+              qt6-qtbase-devel qt6-linguist \
+              lcms2-devel cups-devel zlib-devel ImageMagick-devel
+      - uses: actions/checkout@v4
+      - name: Read the project version
+        id: ver
+        run: |
+          echo "version=$(sed -n 's/^project(PhotoPrint VERSION \([0-9][0-9.]*\).*/\1/p' CMakeLists.txt)" >> "$GITHUB_OUTPUT"
+      - name: Build
+        run: |
+          cmake -S . -B build/release-arm64 -G Ninja -DCMAKE_BUILD_TYPE=Release
+          cmake --build build/release-arm64
+      - name: Package
+        run: |
+          v='${{ steps.ver.outputs.version }}'
+          mkdir -p "stage/PhotoPrint-$v-arm64"
+          cp build/release-arm64/photoprint LICENSE README.md \
+              resources/photoprint-256.png resources/photoprint.svg \
+              "stage/PhotoPrint-$v-arm64/"
+          mv "stage/PhotoPrint-$v-arm64/photoprint-256.png" \
+             "stage/PhotoPrint-$v-arm64/photoprint.png"
+          tar -C stage -czf "PhotoPrint-$v-arm64.tar.gz" "PhotoPrint-$v-arm64"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: tarball
+          path: PhotoPrint-*-arm64.tar.gz
+
+  release:
+    name: Upload to the release
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [tests, deb, rpm, arch, appimage, flatpak, tarball]
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+      - name: Flatten and checksum
+        run: |
+          mkdir -p flat
+          find dist -type f -exec cp {} flat/ \;
+          cd flat
+          sha256sum * > SHA256SUMS
+          cat SHA256SUMS
+      - name: Upload the assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release view "${GITHUB_REF_NAME}" || \
+              gh release create "${GITHUB_REF_NAME}" --verify-tag \
+                  --title "PhotoPrint ${GITHUB_REF_NAME#v}" --generate-notes
+          gh release upload "${GITHUB_REF_NAME}" --clobber flat/*
+
+  site:
+    name: Publish checksums on the site
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [release]
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: master
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+      - name: Rewrite the verify block
+        run: python3 packaging/update-site-checksums.py dist
+      - name: Commit and push
+        run: |
+          git config user.name "Laszlo Toth"
+          git config user.email "lavx@lavx.hu"
+          git add website/index.html
+          git commit -m "Publish the release checksums on the site" || true
+          git push origin master
